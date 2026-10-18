@@ -235,7 +235,8 @@
     "deleteNetwork": "Delete network",
     "editNetwork": "Edit network",
     "addMember": "Add member",
-    "editProperty": "Edit property"
+    "editProperty": "Edit property",
+    "removeOverride": "Remove overridden value"
   },
   "inspector": {
     "tab": {
@@ -492,6 +493,8 @@
     "sourceHint": "For now this is plain text: highlighting and checks arrive with the AWL editor.",
     "insertNetwork": "Insert network",
     "networkMenu": "Network menu",
+    "removeOverride": "Remove",
+    "removeOverrideLabel": "Remove the value of {{path}}",
     "deleteNetwork": "Delete network",
     "instanceFbMissing": "The instance DB refers to FB {{name}}, which does not exist",
     "problems": "Problems"

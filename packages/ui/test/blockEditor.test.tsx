@@ -1,6 +1,6 @@
 import { act, fireEvent, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { CodeBlock } from '@baaportal/project';
+import type { CodeBlock, InstanceDb } from '@baaportal/project';
 import { beginDrag, endDrag } from '../src/project/navigation/objectCommands';
 import type { RenderedApp } from './renderApp';
 import {
@@ -10,6 +10,7 @@ import {
   expander,
   fb,
   fc,
+  instanceDb,
   mem,
   udt,
   fakeDataTransfer,
@@ -132,6 +133,24 @@ describe('editor di blocco: interfaccia', () => {
     expect(
       document.getElementById(cell(a.id, 'type').getAttribute('aria-describedby')!),
     ).toHaveTextContent('Il tipo di dati non è ammesso qui.');
+  });
+
+  it("rinominare un ingresso dell'FB sposta i valori dei DB di istanza in un solo passo", async () => {
+    const speed = mem('speed', 'Int');
+    const f = fb('Nastro', { input: [speed] });
+    const i = instanceDb('Nastro_DB', 'Nastro');
+    i.overrides = { speed: '9' };
+    const app = await openEditor('block', f.id, (d) => void d.blocks.push(f, i));
+    const idb = () => dev(app).blocks.find((b) => b.id === i.id) as InstanceDb;
+    const before = past(app);
+    await app.user.click(cell(speed.id, 'name'));
+    await app.user.keyboard('{Enter}velocita{Enter}');
+    expect(block(app, f.id).interface.input[0]!.name).toBe('velocita');
+    expect(idb().overrides).toEqual({ velocita: '9' });
+    expect(past(app)).toBe(before + 1);
+    act(() => app.store.getState().undo());
+    expect(block(app, f.id).interface.input[0]!.name).toBe('speed');
+    expect(idb().overrides).toEqual({ speed: '9' });
   });
 
   it('nome doppio e valore errato sono segnati nelle celle', async () => {

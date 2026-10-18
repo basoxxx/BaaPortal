@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import {
   findDevice,
   memberAllowed,
+  renameMemberWithOverrides,
   uniqueName,
   type Member,
   type PlcDevice,
@@ -150,7 +151,11 @@ export function InterfaceTable({ deviceId, target, label, valueHeaderKey }: Prop
         )
         .map((d) => {
           const path = d.params?.path;
-          return `${diagnosticText(d, t)}${path ? ` (${path})` : ''}`;
+          return {
+            text: `${diagnosticText(d, t)}${path ? ` (${path})` : ''}`,
+            // Un valore su un percorso che non porta più a un membro non ha riga: si toglie da qui.
+            orphan: path !== undefined && d.params?.reason === 'PATH_NOT_FOUND' ? path : null,
+          };
         }),
     [diagnostics, target.id, t],
   );
@@ -230,7 +235,7 @@ export function InterfaceTable({ deviceId, target, label, valueHeaderKey }: Prop
       if (!row || typeof value !== 'string') return;
       const field = columnId === 'value' ? 'initial' : (columnId as 'name' | 'type' | 'comment');
       if (!row.editable[field]) return;
-      edit('history.editCell', (_dev, o) => {
+      edit('history.editCell', (dev, o) => {
         if (key === 'return') {
           if (o.kind === 'FC') o.block.interface.returnType = normalizeType(value);
           return;
@@ -246,13 +251,23 @@ export function InterfaceTable({ deviceId, target, label, valueHeaderKey }: Prop
         }
         const m = row.memberId ? findMember(o, row.memberId)?.member : undefined;
         if (!m) return;
-        if (field === 'name') m.name = value;
+        // I valori sostituiti altrove (DB di istanza, membri di questo tipo) seguono il nome.
+        if (field === 'name')
+          renameMemberWithOverrides(dev, { kind: target.kind, id: target.id }, m.id, value);
         else if (field === 'comment') m.comment = value;
         else applyType(m, value);
       });
       if (field === 'type' && isStructType(normalizeType(value))) expand(key);
     },
-    [byKey, edit, expand],
+    [byKey, edit, expand, target.kind, target.id],
+  );
+
+  const removeOrphan = useCallback(
+    (path: string) =>
+      edit('history.removeOverride', (_dev, o) => {
+        if (o.kind === 'IDB') delete o.db.overrides[path];
+      }),
+    [edit],
   );
 
   const addRow = useMemo<NonNullable<DataGridProps<InterfaceRow>['addRow']>>(
@@ -449,7 +464,19 @@ export function InterfaceTable({ deviceId, target, label, valueHeaderKey }: Prop
       {problems.length > 0 ? (
         <ul className="baa-block-problems" aria-label={t('block.problems')}>
           {problems.map((p, i) => (
-            <li key={i}>{p}</li>
+            <li key={i}>
+              {p.text}
+              {p.orphan !== null ? (
+                <button
+                  type="button"
+                  className="baa-block-problem-action"
+                  aria-label={t('block.removeOverrideLabel', { path: p.orphan })}
+                  onClick={() => removeOrphan(p.orphan!)}
+                >
+                  {t('block.removeOverride')}
+                </button>
+              ) : null}
+            </li>
           ))}
         </ul>
       ) : null}

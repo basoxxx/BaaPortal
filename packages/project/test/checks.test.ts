@@ -309,6 +309,9 @@ describe('checkDevice: valori e costanti', () => {
       ['VALUE_INVALID', 'Pos.X'],
       ['VALUE_INVALID', 'Pos.Z'],
     ]);
+    // Un percorso che non porta a un membro si distingue da un valore errato.
+    expect(ds[0]!.params?.reason).not.toBe('PATH_NOT_FOUND');
+    expect(ds[1]!.params?.reason).toBe('PATH_NOT_FOUND');
   });
 });
 

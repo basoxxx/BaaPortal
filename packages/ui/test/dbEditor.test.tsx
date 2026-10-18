@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { GlobalDb, InstanceDb } from '@baaportal/project';
 import {
@@ -94,6 +94,28 @@ describe('editor dei DB', () => {
     expect(screen.getByRole('list', { name: 'Problemi' })).toHaveTextContent(
       'Il valore non è valido per il tipo di dati. (speed)',
     );
+  });
+
+  it('DB di istanza: un valore rimasto su un membro che non esiste più si rimuove dai problemi', async () => {
+    const speed = mem('speed', 'Int');
+    const f = fb('Nastro', { input: [speed] });
+    const i = instanceDb('Nastro_DB', 'Nastro');
+    i.overrides = { speed: 'abc', vecchio: '3' };
+    const app = await openEditor('block', i.id, (p) => void p.blocks.push(f, i));
+    const problems = screen.getByRole('list', { name: 'Problemi' });
+    const items = within(problems).getAllByRole('listitem');
+    expect(items).toHaveLength(2);
+    // Un valore errato su un membro che esiste si corregge nella tabella: niente pulsante.
+    expect(within(items[0]!).queryByRole('button')).toBeNull();
+    const remove = within(items[1]!).getByRole('button', { name: 'Rimuovi il valore di vecchio' });
+    expect(remove).toHaveTextContent('Rimuovi');
+    const before = past(app);
+    await app.user.click(remove);
+    expect(db<InstanceDb>(app, i.id).overrides).toEqual({ speed: 'abc' });
+    expect(past(app)).toBe(before + 1);
+    expect(
+      within(screen.getByRole('list', { name: 'Problemi' })).getAllByRole('listitem'),
+    ).toHaveLength(1);
   });
 
   it("DB di istanza senza l'FB: riquadro d'errore e nessuna tabella", async () => {

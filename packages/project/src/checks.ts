@@ -473,7 +473,15 @@ function checkOverrides(
     const type = owner ? memberOverrideType(ctx, owner, roots, path) : typeAtPath(ctx, roots, path);
     const v = type ? parseLiteral(type, value) : undefined;
     if (!v || !v.ok) {
-      add(ctx, { severity: 'error', code: 'VALUE_INVALID', ref, field: 'value', params: { path } });
+      // PATH_NOT_FOUND: il percorso non porta a nessun membro (ad esempio dopo una rinomina).
+      const reason = v ? v.error : 'PATH_NOT_FOUND';
+      add(ctx, {
+        severity: 'error',
+        code: 'VALUE_INVALID',
+        ref,
+        field: 'value',
+        params: { path, reason },
+      });
     }
   }
 }

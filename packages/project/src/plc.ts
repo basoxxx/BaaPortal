@@ -1,5 +1,6 @@
 import { formatType, incrementName, parseType, sameName } from '@baaportal/s7-types';
 import { findOb, type CpuType } from '@baaportal/catalog';
+import { renameMemberWithOverrides } from './memberRename';
 import type {
   Block,
   BlockHeader,
@@ -250,15 +251,6 @@ function allMemberLists(device: PlcDevice): Member[][] {
   return [...device.blocks.flatMap(blockMemberLists), ...device.udts.map((u) => u.members)];
 }
 
-function findMemberIn(list: Member[], id: string): Member | undefined {
-  for (const m of list) {
-    if (m.id === id) return m;
-    const inner = m.members ? findMemberIn(m.members, id) : undefined;
-    if (inner) return inner;
-  }
-  return undefined;
-}
-
 // Sostituisce il nome del tipo con nome (anche come elemento di un Array); null se non c'è.
 function retype(type: string, oldName: string, newName: string): string | null {
   const parsed = parseType(type);
@@ -317,19 +309,12 @@ export function renameWithReferences(device: PlcDevice, ref: ObjectRef, newName:
       }
       return;
     }
-    case 'member': {
-      const owner =
-        ref.ownerKind === 'udt' ? findUdt(device, ref.ownerId) : findBlock(device, ref.ownerId);
-      if (!owner) return;
-      const lists =
-        ref.ownerKind === 'udt' ? [(owner as Udt).members] : blockMemberLists(owner as Block);
-      for (const l of lists) {
-        const m = findMemberIn(l, ref.memberId);
-        if (m) {
-          m.name = newName;
-          return;
-        }
-      }
-    }
+    case 'member':
+      renameMemberWithOverrides(
+        device,
+        { kind: ref.ownerKind, id: ref.ownerId },
+        ref.memberId,
+        newName,
+      );
   }
 }

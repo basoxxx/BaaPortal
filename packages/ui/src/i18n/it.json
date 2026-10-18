@@ -235,7 +235,8 @@
     "deleteNetwork": "Elimina segmento",
     "editNetwork": "Modifica segmento",
     "addMember": "Aggiungi membro",
-    "editProperty": "Modifica proprietà"
+    "editProperty": "Modifica proprietà",
+    "removeOverride": "Rimuovi valore sostituito"
   },
   "inspector": {
     "tab": {
@@ -492,6 +493,8 @@
     "sourceHint": "Per ora è solo testo: l'evidenziazione e i controlli arrivano con l'editor AWL.",
     "insertNetwork": "Inserisci segmento",
     "networkMenu": "Menu del segmento",
+    "removeOverride": "Rimuovi",
+    "removeOverrideLabel": "Rimuovi il valore di {{path}}",
     "deleteNetwork": "Elimina segmento",
     "instanceFbMissing": "Il DB di istanza si riferisce all'FB {{name}}, che non esiste",
     "problems": "Problemi"
