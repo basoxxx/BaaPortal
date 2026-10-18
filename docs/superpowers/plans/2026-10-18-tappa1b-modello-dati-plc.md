@@ -917,7 +917,7 @@ Regole:
 **Files:**
 - Create: `apps/desktop/src/main/recoveryStore.ts`
 - Modify: `packages/ui/src/bridge.ts`, `packages/ui/test/fakeBridge.ts`, `apps/desktop/src/{main/ipc.ts,main/index.ts,preload/index.ts,shared/rawBridge.ts,renderer/createBridge.ts}`
-- Test: `apps/desktop/test/recoveryStore.test.ts`, `apps/desktop/e2e/bridge.spec.ts` (esteso), `apps/desktop/e2e/window-guards.spec.ts` (esteso)
+- Test: `apps/desktop/test/recoveryStore.test.ts`, `apps/desktop/e2e/bridge.spec.ts` (esteso), `apps/desktop/e2e/window-guards.spec.ts` (esteso), `apps/desktop/e2e/helpers.ts` (`launchApp({ env })` per variabili d'ambiente in più; `userData` riutilizzabile con `launchApp({ userData })` per il Task 16)
 
 **Interfaces:**
 - Consumes: bridge e IPC del piano 1A (`registerIpc`, `toIpcResult`, `writeFileAtomic`, `isTrustedFrame`).
