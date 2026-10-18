@@ -169,17 +169,51 @@
     "commonData": "Dati di base comuni",
     "docSettings": "Impostazioni della documentazione",
     "languages": "Lingue e risorse",
-    "onlineAccess": "Accessi online"
+    "onlineAccess": "Accessi online",
+    "plc": {
+      "deviceConfig": "Configurazione dispositivi",
+      "onlineDiag": "Online e diagnostica",
+      "blocks": "Blocchi di programma",
+      "addBlock": "Aggiungi nuovo blocco",
+      "systemBlocks": "Blocchi di sistema",
+      "sources": "Sorgenti esterne",
+      "tags": "Variabili PLC",
+      "allTags": "Mostra tutte le variabili",
+      "addTagTable": "Aggiungi nuova tabella delle variabili",
+      "types": "Tipi di dati PLC",
+      "addUdt": "Aggiungi nuovo tipo di dati",
+      "watch": "Tabelle di controllo e forzamento",
+      "backup": "Backup online",
+      "progInfo": "Informazioni sul programma"
+    }
   },
   "navigation": {
     "referenceEmpty": "Nessun progetto di riferimento."
   },
   "details": {
-    "name": "Nome"
+    "name": "Nome",
+    "number": "Numero",
+    "type": "Tipo",
+    "language": "Linguaggio",
+    "tags": "Variabili",
+    "dataType": "Tipo di dati",
+    "address": "Indirizzo",
+    "tagComment": "Commento dei tag",
+    "blockKind": {
+      "OB": "OB",
+      "FB": "FB",
+      "FC": "FC",
+      "DB": "DB",
+      "IDB": "DB di istanza"
+    }
   },
   "history": {
     "author": "Autore del progetto",
-    "comment": "Commento del progetto"
+    "comment": "Commento del progetto",
+    "addDevice": "Aggiungi dispositivo",
+    "addBlock": "Aggiungi blocco",
+    "addTagTable": "Aggiungi tabella delle variabili",
+    "addUdt": "Aggiungi tipo di dati"
   },
   "inspector": {
     "tab": {
@@ -239,6 +273,81 @@
         "projectLibrary": "Libreria di progetto",
         "globalLibraries": "Librerie globali"
       }
+    }
+  },
+  "defaults": {
+    "plc": "PLC_1",
+    "defaultTagTable": "Tabella delle variabili standard",
+    "tagTable": "Tabella delle variabili_1",
+    "udt": "Tipo di dati utente_1",
+    "block": "Blocco_1",
+    "dataBlock": "Blocco_dati_1"
+  },
+  "dialog": {
+    "ok": "OK",
+    "cancel": "Annulla"
+  },
+  "addDevice": {
+    "title": "Aggiungi nuovo dispositivo",
+    "catalog": "Catalogo dei dispositivi",
+    "controllers": "Controllori",
+    "family": "SIMATIC S7-300",
+    "cpu": "CPU",
+    "group": {
+      "standard": "CPU standard",
+      "compact": "CPU compatte",
+      "failsafe": "CPU F"
+    },
+    "name": "Nome del dispositivo",
+    "cpuName": "CPU",
+    "orderNumber": "Numero di articolo",
+    "workMemory": "Memoria di lavoro",
+    "interfaces": "Interfacce",
+    "firmware": "Versione firmware",
+    "nameEmpty": "Inserisci un nome.",
+    "nameExists": "Esiste già un dispositivo con questo nome."
+  },
+  "addBlock": {
+    "title": "Aggiungi nuovo blocco",
+    "type": "Tipo",
+    "kind": {
+      "OB": "Blocco organizzativo",
+      "FB": "Blocco funzionale",
+      "FC": "Funzione",
+      "DB": "Blocco dati"
+    },
+    "name": "Nome",
+    "nameEmpty": "Inserisci un nome.",
+    "language": "Linguaggio",
+    "number": "Numero",
+    "auto": "Automatico",
+    "numberTaken": "Questo numero è già in uso.",
+    "numberRange": "Il numero deve essere compreso tra 1 e {{max}}.",
+    "numberNone": "Non ci sono numeri liberi.",
+    "event": "Evento",
+    "noEvent": "Tutti gli eventi disponibili sono già in uso.",
+    "dbKind": "Tipo di blocco dati",
+    "globalDb": "DB globale",
+    "instanceDb": "DB di istanza di",
+    "instanceOf": "Blocco funzionale",
+    "noFb": "Nel dispositivo non c'è nessun FB.",
+    "openAfter": "Aggiungi e apri",
+    "nameExists": "Il nome è già in uso."
+  },
+  "ob": {
+    "event": {
+      "1": "Ciclo del programma",
+      "10": "Allarme dall'orologio",
+      "20": "Allarme di ritardo",
+      "35": "Allarme ciclico",
+      "40": "Allarme di processo",
+      "80": "Errore di tempo",
+      "82": "Allarme di diagnostica",
+      "85": "Errore di esecuzione del programma",
+      "86": "Guasto del telaio di montaggio",
+      "100": "Riavvio (avviamento)",
+      "121": "Errore di programmazione",
+      "122": "Errore di accesso alla periferia"
     }
   }
 }

@@ -2,9 +2,20 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next';
 import { Icon } from '../../icons';
 import '../../icons/tree';
+import '../../icons/objects';
 import { useAppStore, useServices } from '../../state/AppContext';
-import type { TreeNodeId } from '../../state/store';
+import { runAddNode } from './addActions';
 import { buildTree, type TreeNode } from './treeModel';
+
+/** Antenati del nodo `id` (dalla radice), o null se il nodo non esiste. */
+function ancestorsOf(node: TreeNode, id: string): TreeNode[] | null {
+  if (node.id === id) return [];
+  for (const c of node.children) {
+    const inner = ancestorsOf(c, id);
+    if (inner) return [node, ...inner];
+  }
+  return null;
+}
 
 interface Row {
   node: TreeNode;
@@ -17,7 +28,7 @@ export function ProjectTree() {
   const { store } = useServices();
   const doc = useAppStore((s) => s.doc);
   const selection = useAppStore((s) => s.selection);
-  const [collapsed, setCollapsed] = useState<ReadonlySet<TreeNodeId>>(new Set());
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const focusPending = useRef(false);
   const treeRef = useRef<HTMLUListElement>(null);
 
@@ -33,6 +44,20 @@ export function ProjectTree() {
     return out;
   }, [project, onlineAccess, collapsed]);
 
+  // Un nodo selezionato da fuori (nuovo PLC, nuovo blocco) deve essere visibile: si aprono gli antenati.
+  useEffect(() => {
+    if (!selection || !project) return;
+    const up = ancestorsOf(project, selection);
+    if (!up) return;
+    setCollapsed((prev) => {
+      if (!up.some((n) => prev.has(n.id))) return prev;
+      const next = new Set(prev);
+      for (const n of up) next.delete(n.id);
+      return next;
+    });
+    // Solo al cambiare della selezione: chiudere a mano un ramo non deve riaprirlo.
+  }, [selection]);
+
   // Il focus segue la selezione quando questa cambia da tastiera.
   useEffect(() => {
     if (!focusPending.current || !selection) return;
@@ -43,7 +68,7 @@ export function ProjectTree() {
   const selectedVisible = rows.some((r) => r.node.id === selection);
   const tabbableId = selectedVisible ? selection : rows[0]?.node.id;
 
-  const pick = (id: TreeNodeId, viaKeyboard: boolean) => {
+  const pick = (id: string, viaKeyboard: boolean) => {
     focusPending.current = viaKeyboard;
     store.getState().select(id);
   };
@@ -87,6 +112,9 @@ export function ProjectTree() {
       case 'End':
         pick(rows[rows.length - 1]!.node.id, true);
         break;
+      case 'Enter':
+        if (!row.node.enabled || !runAddNode(store, row.node.id)) return;
+        break;
       default:
         return;
     }
@@ -110,7 +138,9 @@ export function ProjectTree() {
             className="baa-tree-node"
             style={{ paddingLeft: 6 + level * 16 }}
             onClick={() => pick(node.id, false)}
-            onDoubleClick={() => toggle(node)}
+            onDoubleClick={() => {
+              if (!node.enabled || !runAddNode(store, node.id)) toggle(node);
+            }}
             onKeyDown={(e) => onKeyDown(e, i)}
           >
             <span className="baa-tree-twist" aria-hidden="true">

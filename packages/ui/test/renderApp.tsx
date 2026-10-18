@@ -2,7 +2,8 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import { expect } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import type { StoreApi } from 'zustand/vanilla';
-import { createProject, writeBaap } from '@baaportal/project';
+import { findCpu } from '@baaportal/catalog';
+import { createPlcDevice, createProject, writeBaap } from '@baaportal/project';
 import { App } from '../src/App';
 import { initI18n } from '../src/i18n';
 import type { ProjectService } from '../src/services/projectService';
@@ -14,6 +15,8 @@ export const PROJECT_PATH = '/doc/BaaPortal/Linea 3.baap';
 export interface RenderAppOptions {
   view?: View;
   withProject?: boolean;
+  /** Il progetto contiene un PLC_1 (CPU 315-2 PN/DP) con id prevedibili. */
+  withPlc?: boolean;
   platform?: 'win32' | 'darwin' | 'linux';
 }
 
@@ -40,6 +43,19 @@ export async function renderApp(opts: RenderAppOptions = {}): Promise<RenderedAp
       { name: 'Linea 3', author: 'Mario', comment: '' },
       new Date('2026-01-01T00:00:00Z'),
     );
+    if (opts.withPlc) {
+      let n = 0;
+      project.devices.push(
+        createPlcDevice({
+          cpu: findCpu('cpu-315-2-pn-dp')!,
+          orderNumber: '6ES7 315-2EH14-0AB0',
+          firmware: 'V3.3',
+          name: 'PLC_1',
+          texts: { defaultTagTable: 'Tabella delle variabili standard' },
+          newId: () => `id${++n}`,
+        }),
+      );
+    }
     bridge.files.set(PROJECT_PATH, writeBaap(project, { appVersion: '0.1.0' }));
   }
 

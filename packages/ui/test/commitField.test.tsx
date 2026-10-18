@@ -150,3 +150,32 @@ describe('bozze in modifica e salvataggio/chiusura', () => {
     expect(bridge.closeConfirmed).toBe(false);
   });
 });
+
+describe('Esc nei campi a conferma', () => {
+  it("con modifiche pendenti ferma la propagazione; senza modifiche lascia passare l'evento", async () => {
+    const user = userEvent.setup();
+    const seen = vi.fn();
+    render(
+      <div onKeyDown={(e) => seen(e.key, e.defaultPrevented)}>
+        <CommitInput aria-label="Campo" value="x" onCommit={() => {}} />
+        <CommitTextarea aria-label="Note" value="n" onCommit={() => {}} />
+      </div>,
+    );
+    const input = screen.getByLabelText('Campo');
+    await user.click(input);
+    await user.type(input, 'z');
+    seen.mockClear();
+    await user.keyboard('{Escape}');
+    expect(seen).not.toHaveBeenCalled();
+    await user.keyboard('{Escape}');
+    expect(seen).toHaveBeenCalledWith('Escape', false);
+
+    const area = screen.getByLabelText('Note');
+    await user.click(area);
+    await user.type(area, 'k');
+    seen.mockClear();
+    await user.keyboard('{Escape}');
+    expect(area).toHaveValue('n');
+    expect(seen).not.toHaveBeenCalled();
+  });
+});

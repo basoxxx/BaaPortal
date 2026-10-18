@@ -169,17 +169,51 @@
     "commonData": "Common data",
     "docSettings": "Documentation settings",
     "languages": "Languages & resources",
-    "onlineAccess": "Online access"
+    "onlineAccess": "Online access",
+    "plc": {
+      "deviceConfig": "Device configuration",
+      "onlineDiag": "Online & diagnostics",
+      "blocks": "Program blocks",
+      "addBlock": "Add new block",
+      "systemBlocks": "System blocks",
+      "sources": "External source files",
+      "tags": "PLC tags",
+      "allTags": "Show all tags",
+      "addTagTable": "Add new tag table",
+      "types": "PLC data types",
+      "addUdt": "Add new data type",
+      "watch": "Watch and force tables",
+      "backup": "Online backups",
+      "progInfo": "Program info"
+    }
   },
   "navigation": {
     "referenceEmpty": "No reference projects."
   },
   "details": {
-    "name": "Name"
+    "name": "Name",
+    "number": "Number",
+    "type": "Type",
+    "language": "Language",
+    "tags": "Tags",
+    "dataType": "Data type",
+    "address": "Address",
+    "tagComment": "Tag comment",
+    "blockKind": {
+      "OB": "OB",
+      "FB": "FB",
+      "FC": "FC",
+      "DB": "DB",
+      "IDB": "Instance DB"
+    }
   },
   "history": {
     "author": "Project author",
-    "comment": "Project comment"
+    "comment": "Project comment",
+    "addDevice": "Add device",
+    "addBlock": "Add block",
+    "addTagTable": "Add tag table",
+    "addUdt": "Add data type"
   },
   "inspector": {
     "tab": {
@@ -239,6 +273,81 @@
         "projectLibrary": "Project library",
         "globalLibraries": "Global libraries"
       }
+    }
+  },
+  "defaults": {
+    "plc": "PLC_1",
+    "defaultTagTable": "Default tag table",
+    "tagTable": "Tag table_1",
+    "udt": "User data type_1",
+    "block": "Block_1",
+    "dataBlock": "Data_block_1"
+  },
+  "dialog": {
+    "ok": "OK",
+    "cancel": "Cancel"
+  },
+  "addDevice": {
+    "title": "Add new device",
+    "catalog": "Device catalog",
+    "controllers": "Controllers",
+    "family": "SIMATIC S7-300",
+    "cpu": "CPU",
+    "group": {
+      "standard": "Standard CPUs",
+      "compact": "Compact CPUs",
+      "failsafe": "Fail-safe CPUs"
+    },
+    "name": "Device name",
+    "cpuName": "CPU",
+    "orderNumber": "Order number",
+    "workMemory": "Work memory",
+    "interfaces": "Interfaces",
+    "firmware": "Firmware version",
+    "nameEmpty": "Enter a name.",
+    "nameExists": "A device with this name already exists."
+  },
+  "addBlock": {
+    "title": "Add new block",
+    "type": "Type",
+    "kind": {
+      "OB": "Organization block",
+      "FB": "Function block",
+      "FC": "Function",
+      "DB": "Data block"
+    },
+    "name": "Name",
+    "nameEmpty": "Enter a name.",
+    "language": "Language",
+    "number": "Number",
+    "auto": "Automatic",
+    "numberTaken": "This number is already in use.",
+    "numberRange": "The number must be between 1 and {{max}}.",
+    "numberNone": "There are no free numbers.",
+    "event": "Event",
+    "noEvent": "All available events are already in use.",
+    "dbKind": "Data block type",
+    "globalDb": "Global DB",
+    "instanceDb": "Instance DB of",
+    "instanceOf": "Function block",
+    "noFb": "The device has no FB.",
+    "openAfter": "Add new and open",
+    "nameExists": "This name is already in use."
+  },
+  "ob": {
+    "event": {
+      "1": "Program cycle",
+      "10": "Time-of-day interrupt",
+      "20": "Time-delay interrupt",
+      "35": "Cyclic interrupt",
+      "40": "Hardware interrupt",
+      "80": "Time error",
+      "82": "Diagnostic interrupt",
+      "85": "Program execution error",
+      "86": "Rack failure",
+      "100": "Restart (startup)",
+      "121": "Programming error",
+      "122": "I/O access error"
     }
   }
 }

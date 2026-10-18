@@ -8,14 +8,8 @@ export type View = 'portal' | 'project';
 export type PortalId = 'start' | 'devices' | 'plc' | 'online';
 export type StartAction =
   'open' | 'new' | 'migrate' | 'close' | 'firstSteps' | 'installed' | 'help' | 'language';
-export type TreeNodeId =
-  | 'project'
-  | 'add-device'
-  | 'devices-networks'
-  | 'common-data'
-  | 'doc-settings'
-  | 'languages'
-  | 'online-access';
+/** Finestra modale aperta sopra la vista corrente. */
+export type DialogState = { kind: 'addDevice' } | { kind: 'addBlock'; deviceId: string } | null;
 
 export interface OpenDoc {
   project: Project;
@@ -50,7 +44,9 @@ export interface AppState {
   /** Cresce a ogni documento caricato (apertura, creazione, chiusura); non cresce con il salvataggio. */
   docLoadId: number;
   history: { past: HistoryEntry[]; future: HistoryEntry[] };
-  selection: TreeNodeId | null;
+  /** Id del nodo selezionato nell'albero (vedi navigation/treeIds). */
+  selection: string | null;
+  dialog: DialogState;
   messages: InfoMessage[];
   status: { textKey: string; params?: Record<string, string> } | null;
   panels: Record<PanelName, PanelState>;
@@ -66,7 +62,9 @@ export interface AppState {
   redo(): void;
   /** Dopo un salvataggio: nessuna voce di cronologia. */
   markSaved(a: { filePath: string; revision: number; modifiedAt: string }): void;
-  select(id: TreeNodeId | null): void;
+  select(id: string | null): void;
+  openDialog(d: NonNullable<DialogState>): void;
+  closeDialog(): void;
   pushMessage(m: Omit<InfoMessage, 'id' | 'time' | 'date'>): void; // aggiorna anche status
   setPanel(name: PanelName, patch: Partial<PanelState>): void;
   setReferenceProjectsOpen(o: boolean): void;
@@ -97,6 +95,7 @@ export function createAppStore(now: () => Date = () => new Date()): StoreApi<App
     doc: null,
     docLoadId: 0,
     selection: null,
+    dialog: null,
     messages: [],
     status: null,
     panels: structuredClone(DEFAULT_PANELS),
@@ -111,6 +110,7 @@ export function createAppStore(now: () => Date = () => new Date()): StoreApi<App
       set((s) => ({
         doc: doc ? withDirty(doc) : null,
         docLoadId: s.docLoadId + 1,
+        dialog: null,
         history: { past: [], future: [] },
       }));
     },
@@ -173,6 +173,8 @@ export function createAppStore(now: () => Date = () => new Date()): StoreApi<App
           : s,
       ),
     select: (selection) => set({ selection }),
+    openDialog: (dialog) => set({ dialog }),
+    closeDialog: () => set({ dialog: null }),
     pushMessage: (m) =>
       set((s) => {
         const at = now();

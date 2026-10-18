@@ -20,7 +20,9 @@
     "jsdom": "^30.1.3"
   },
   "dependencies": {
+    "@baaportal/catalog": "*",
     "@baaportal/project": "*",
+    "@baaportal/s7-types": "*",
     "i18next": "^26.5.2",
     "immer": "^11.1.21",
     "react-i18next": "^17.1.0",

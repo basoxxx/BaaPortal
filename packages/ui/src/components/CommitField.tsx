@@ -53,6 +53,11 @@ export function CommitInput(
             e.preventDefault();
             commit();
           } else if (e.key === 'Escape') {
+            // Se c'era qualcosa da annullare, l'Esc è del campo: non deve chiudere un dialogo attorno.
+            if (d.draft !== p.value) {
+              e.preventDefault();
+              e.stopPropagation();
+            }
             d.setDraft(p.value);
           }
         }}
@@ -82,7 +87,13 @@ export function CommitTextarea(p: CommonProps & { rows?: number }): React.JSX.El
         d.leave();
       }}
       onKeyDown={(e) => {
-        if (e.key === 'Escape') d.setDraft(p.value);
+        if (e.key === 'Escape') {
+          if (d.draft !== p.value) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+          d.setDraft(p.value);
+        }
       }}
     />
   );

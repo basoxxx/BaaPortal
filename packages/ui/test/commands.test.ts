@@ -132,3 +132,48 @@ describe('annulla e ripeti', () => {
     expect(author()).toBe('A');
   });
 });
+
+describe('comandi Inserisci', () => {
+  const doc = (devices: boolean) => {
+    const project = createProject({ name: 'P', author: '', comment: '' }, new Date());
+    if (devices) {
+      for (const id of ['d1', 'd2']) {
+        project.devices.push({
+          id,
+          name: id,
+          cpu: { typeId: 'x', orderNumber: '', firmware: '' },
+        } as never);
+      }
+    }
+    return { project, filePath: '/p.baap', dirty: false, revision: 0, savedRevision: 0 };
+  };
+  const ctx = (store: ReturnType<typeof createAppStore>) =>
+    ({ store }) as unknown as CommandContext;
+
+  it('Nuovo dispositivo serve un progetto; Nuovo blocco serve almeno un PLC', () => {
+    const store = createAppStore();
+    expect(commands['insert.device'].isEnabled(store.getState())).toBe(false);
+    expect(commands['insert.block'].isEnabled(store.getState())).toBe(false);
+    store.getState().setDoc(doc(false));
+    expect(commands['insert.device'].isEnabled(store.getState())).toBe(true);
+    expect(commands['insert.block'].isEnabled(store.getState())).toBe(false);
+    store.getState().setDoc(doc(true));
+    expect(commands['insert.block'].isEnabled(store.getState())).toBe(true);
+  });
+
+  it('Nuovo blocco apre il dialogo sul PLC della selezione, altrimenti sul primo', () => {
+    const store = createAppStore();
+    store.getState().setDoc(doc(true));
+    void commands['insert.block'].run(ctx(store));
+    expect(store.getState().dialog).toEqual({ kind: 'addBlock', deviceId: 'd1' });
+    store.getState().closeDialog();
+    store.getState().select('plc:d2:blocks');
+    void commands['insert.block'].run(ctx(store));
+    expect(store.getState().dialog).toEqual({ kind: 'addBlock', deviceId: 'd2' });
+    store.getState().closeDialog();
+    void commands['insert.device'].run(ctx(store));
+    expect(store.getState().dialog).toEqual({ kind: 'addDevice' });
+    store.getState().setDoc(null);
+    expect(store.getState().dialog).toBeNull();
+  });
+});

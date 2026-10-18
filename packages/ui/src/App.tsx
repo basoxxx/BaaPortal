@@ -8,10 +8,12 @@ import { useShortcuts } from './commands/useShortcuts';
 import { i18next, initI18n, t } from './i18n';
 import { flushPendingEdits } from './flushPendingEdits';
 import { createProjectService } from './services/projectService';
+import { AddBlockDialog } from './project/dialogs/AddBlockDialog';
+import { AddDeviceDialog } from './project/dialogs/AddDeviceDialog';
 import { PortalView } from './portal/PortalView';
 import { ProjectView } from './project/ProjectView';
 import { loadLayout, saveLayout } from './project/layoutStorage';
-import { AppProvider, useAppStore, type AppServices } from './state/AppContext';
+import { AppProvider, useAppStore, useServices, type AppServices } from './state/AppContext';
 import { attachPortalReaction } from './state/portalReaction';
 import { createAppStore } from './state/store';
 import './theme/tokens.css';
@@ -34,10 +36,17 @@ function layoutStorage(): Storage | null {
 
 function Shell() {
   useShortcuts();
+  const { store } = useServices();
   const view = useAppStore((s) => s.view);
+  const dialog = useAppStore((s) => s.dialog);
+  const close = () => store.getState().closeDialog();
   return (
     <div data-testid="app-root" className="baa-app">
       {view === 'portal' ? <PortalView /> : <ProjectView />}
+      {dialog?.kind === 'addDevice' ? <AddDeviceDialog onClose={close} /> : null}
+      {dialog?.kind === 'addBlock' ? (
+        <AddBlockDialog deviceId={dialog.deviceId} onClose={close} />
+      ) : null}
     </div>
   );
 }

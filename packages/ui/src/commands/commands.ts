@@ -3,6 +3,7 @@ import type { BaaBridge } from '../bridge';
 import type { IconName } from '../icons';
 import type { ProjectService } from '../services/projectService';
 import type { AppState, PanelName } from '../state/store';
+import { targetPlcId } from '../project/navigation/treeIds';
 
 export type CommandId =
   | 'project.new'
@@ -68,6 +69,7 @@ export interface Command {
 }
 
 const hasDoc = (s: AppState) => s.doc !== null;
+const hasPlc = (s: AppState) => (s.doc?.project.devices.length ?? 0) > 0;
 const always = () => true;
 const never = () => false;
 const noop = () => {};
@@ -149,8 +151,18 @@ const list: Command[] = [
   panelToggle('view.inspector', 'inspector'),
   panelToggle('view.taskCards', 'taskCards'),
   def('view.portal', { isEnabled: always, run: ({ store }) => store.getState().setView('portal') }),
-  def('insert.device', { icon: 'treeAddDevice' }),
-  def('insert.block'),
+  def('insert.device', {
+    icon: 'treeAddDevice',
+    isEnabled: hasDoc,
+    run: ({ store }) => store.getState().openDialog({ kind: 'addDevice' }),
+  }),
+  def('insert.block', {
+    isEnabled: hasPlc,
+    run: ({ store }) => {
+      const deviceId = targetPlcId(store.getState());
+      if (deviceId) store.getState().openDialog({ kind: 'addBlock', deviceId });
+    },
+  }),
   def('online.goOnline', { icon: 'goOnline' }),
   def('online.goOffline', { icon: 'goOffline' }),
   def('online.simulation', { icon: 'simulation' }),

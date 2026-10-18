@@ -36,7 +36,7 @@ describe('vista portale: struttura', () => {
     expect(screen.getByTestId('action-help')).toBeDisabled();
   });
 
-  it('con progetto aperto gli altri portali sono attivi e mostrano la loro operazione disattivata', async () => {
+  it('con progetto aperto gli altri portali sono attivi: Aggiungi nuovo dispositivo è attivo, Aggiungi nuovo blocco solo con un PLC', async () => {
     const { user, store } = await renderApp({ withProject: true });
     expect(screen.getByTestId('portal-devices')).toBeEnabled();
     await user.click(screen.getByTestId('portal-devices'));
@@ -44,7 +44,9 @@ describe('vista portale: struttura', () => {
       'Apri la vista progetto',
       'Aggiungi nuovo dispositivo',
     ]);
-    expect(screen.getByRole('button', { name: 'Aggiungi nuovo dispositivo' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Aggiungi nuovo dispositivo' })).toBeEnabled();
+    await user.click(screen.getByTestId('portal-plc'));
+    expect(screen.getByRole('button', { name: 'Aggiungi nuovo blocco' })).toBeDisabled();
     await user.click(screen.getByRole('button', { name: 'Apri la vista progetto' }));
     expect(store.getState().view).toBe('project');
   });

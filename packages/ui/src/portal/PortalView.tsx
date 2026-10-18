@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import type { IconName } from '../icons';
 import { useAppStore, useServices } from '../state/AppContext';
 import type { PortalId, StartAction } from '../state/store';
+import { targetPlcId } from '../project/navigation/treeIds';
 import { ActionList, type ActionItem } from './ActionList';
 import { PortalList } from './PortalList';
 import { FirstStepsPane } from './selection/FirstStepsPane';
@@ -22,7 +23,7 @@ const START_ACTIONS: { id: StartAction; icon: IconName }[] = [
   { id: 'language', icon: 'actionLanguage' },
 ];
 
-/** Operazione disattivata in 1A di ciascun portale diverso da Avvio. */
+/** Operazione propria di ciascun portale diverso da Avvio. */
 const OTHER_PORTAL_ACTION: Record<Exclude<PortalId, 'start'>, string> = {
   devices: 'addDevice',
   plc: 'addBlock',
@@ -52,6 +53,7 @@ export function PortalView() {
   const doc = useAppStore((s) => s.doc);
   const storedPortal = useAppStore((s) => s.portal);
   const startAction = useAppStore((s) => s.startAction);
+  const hasPlc = (doc?.project.devices.length ?? 0) > 0;
   const portal: PortalId = doc ? storedPortal : 'start';
 
   const startItems: ActionItem[] = START_ACTIONS.map(({ id, icon }) => ({
@@ -69,7 +71,8 @@ export function PortalView() {
           {
             id: OTHER_PORTAL_ACTION[portal],
             label: t(`portal.action.${OTHER_PORTAL_ACTION[portal]}`),
-            disabled: true,
+            // I dispositivi accessibili restano per un'altra tappa; un blocco serve un PLC a cui aggiungerlo.
+            disabled: portal === 'online' || (portal === 'plc' && !hasPlc),
           },
         ];
 
@@ -84,6 +87,11 @@ export function PortalView() {
             if (id === 'close') void service.close();
             else if (portal === 'start') store.getState().setStartAction(id as StartAction);
             else if (id === 'openView') store.getState().setView('project');
+            else if (id === 'addDevice') store.getState().openDialog({ kind: 'addDevice' });
+            else if (id === 'addBlock') {
+              const deviceId = targetPlcId(store.getState());
+              if (deviceId) store.getState().openDialog({ kind: 'addBlock', deviceId });
+            }
           }}
         />
         <section className="baa-selection-pane" data-testid="selection-pane">

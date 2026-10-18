@@ -1,0 +1,160 @@
+import { act, screen, within } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
+import { createCodeBlock, findDevice } from '@baaportal/project';
+import { renderApp, type RenderedApp } from './renderApp';
+
+const PLC = 'id1';
+
+const openBlockDialog = async (app: RenderedApp) => {
+  await app.user.click(screen.getByRole('menuitem', { name: 'Inserisci' }));
+  await app.user.click(screen.getByRole('menuitem', { name: 'Nuovo blocco…' }));
+  return screen.getByRole('dialog', { name: 'Aggiungi nuovo blocco' });
+};
+const blocks = (app: RenderedApp) => findDevice(app.store.getState().doc!.project, PLC)!.blocks;
+const addBlock = (app: RenderedApp, b: ReturnType<typeof createCodeBlock>) =>
+  act(() => {
+    app.store.getState().edit('history.addBlock', (p) => {
+      findDevice(p, PLC)!.blocks.push(b);
+    });
+  });
+
+describe('Aggiungi nuovo blocco', () => {
+  it('FB: numero automatico 1, nome Blocco_1; con FB1 esistente → FB2, Blocco_2', async () => {
+    const app = await renderApp({ view: 'project', withProject: true, withPlc: true });
+    let dlg = await openBlockDialog(app);
+    await app.user.click(within(dlg).getByRole('radio', { name: /Blocco funzionale/ }));
+    expect(within(dlg).getByLabelText('Nome')).toHaveValue('Blocco_1');
+    expect(within(dlg).getByLabelText('Numero')).toHaveValue(1);
+    expect(within(dlg).getByLabelText('Numero')).toBeDisabled();
+    await app.user.click(within(dlg).getByTestId('dialog-ok'));
+
+    const fb = blocks(app).find((b) => b.kind === 'FB')!;
+    expect(fb).toMatchObject({ number: 1, name: 'Blocco_1', language: 'AWL' });
+    expect(app.store.getState().selection).toBe(`plc:${PLC}:block:${fb.id}`);
+    expect(app.store.getState().history.past).toHaveLength(1);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    dlg = await openBlockDialog(app);
+    await app.user.click(within(dlg).getByRole('radio', { name: /Blocco funzionale/ }));
+    expect(within(dlg).getByLabelText('Nome')).toHaveValue('Blocco_2');
+    expect(within(dlg).getByLabelText('Numero')).toHaveValue(2);
+  });
+
+  it('i linguaggi KOP, FUP e SCL sono visibili ma disattivati', async () => {
+    const app = await renderApp({ view: 'project', withProject: true, withPlc: true });
+    const dlg = await openBlockDialog(app);
+    const lang = within(dlg).getByLabelText('Linguaggio') as HTMLSelectElement;
+    expect([...lang.options].map((o) => [o.value, o.disabled])).toEqual([
+      ['AWL', false],
+      ['KOP', true],
+      ['FUP', true],
+      ['SCL', true],
+    ]);
+  });
+
+  it("OB: elenco senza OB1 già presente e solo OB della CPU; il nome viene dall'evento", async () => {
+    const app = await renderApp({ view: 'project', withProject: true, withPlc: true });
+    const dlg = await openBlockDialog(app);
+    await app.user.click(within(dlg).getByRole('radio', { name: /Blocco organizzativo/ }));
+    const ev = within(dlg).getByLabelText('Evento') as HTMLSelectElement;
+    const nums = [...ev.options].map((o) => Number(o.value));
+    // 315-2 PN/DP: 1, 10, 20, 35, 40, 80, 82, 85, 86, 100, 121, 122; OB1 c'è già.
+    expect(nums).toEqual([10, 20, 35, 40, 80, 82, 85, 86, 100, 121, 122]);
+    expect(within(dlg).getByLabelText('Nome')).toHaveValue("Allarme dall'orologio");
+    await app.user.selectOptions(ev, '35');
+    expect(within(dlg).getByLabelText('Nome')).toHaveValue('Schedulazione orologio');
+    expect(within(dlg).getByLabelText('Numero')).toHaveValue(35);
+    await app.user.click(within(dlg).getByTestId('dialog-ok'));
+    expect(blocks(app).find((b) => b.kind === 'OB' && b.number === 35)).toMatchObject({
+      name: 'Schedulazione orologio',
+    });
+  });
+
+  it('numero manuale doppio: messaggio e OK disattivato; fuori limite pure', async () => {
+    const app = await renderApp({ view: 'project', withProject: true, withPlc: true });
+    addBlock(app, createCodeBlock({ kind: 'FC', number: 1, name: 'Calcolo', language: 'AWL' }));
+    const dlg = await openBlockDialog(app);
+    await app.user.click(within(dlg).getByRole('radio', { name: /Funzione/ }));
+    await app.user.click(within(dlg).getByLabelText('Automatico'));
+    const num = within(dlg).getByLabelText('Numero');
+    expect(num).toHaveValue(2);
+    await app.user.clear(num);
+    await app.user.type(num, '1');
+    expect(within(dlg).getByRole('alert')).toHaveTextContent('Questo numero è già in uso.');
+    expect(within(dlg).getByTestId('dialog-ok')).toBeDisabled();
+    await app.user.clear(num);
+    await app.user.type(num, '99999');
+    expect(within(dlg).getByRole('alert')).toHaveTextContent('compreso tra 1 e');
+    expect(within(dlg).getByTestId('dialog-ok')).toBeDisabled();
+    await app.user.clear(num);
+    await app.user.type(num, '7');
+    expect(within(dlg).queryByRole('alert')).not.toBeInTheDocument();
+    await app.user.click(within(dlg).getByTestId('dialog-ok'));
+    expect(blocks(app).find((b) => b.name === 'Blocco_1')).toMatchObject({ kind: 'FC', number: 7 });
+  });
+
+  it('DB globale e DB di istanza: i DB e gli IDB condividono la numerazione', async () => {
+    const app = await renderApp({ view: 'project', withProject: true, withPlc: true });
+    addBlock(app, createCodeBlock({ kind: 'FB', number: 1, name: 'Nastro', language: 'AWL' }));
+    let dlg = await openBlockDialog(app);
+    await app.user.click(within(dlg).getByRole('radio', { name: /Blocco dati/ }));
+    expect(within(dlg).queryByLabelText('Linguaggio')).not.toBeInTheDocument();
+    expect(within(dlg).getByLabelText('Nome')).toHaveValue('Blocco_dati_1');
+    await app.user.click(within(dlg).getByTestId('dialog-ok'));
+    expect(blocks(app).find((b) => b.kind === 'DB')).toMatchObject({ number: 1 });
+
+    dlg = await openBlockDialog(app);
+    await app.user.click(within(dlg).getByRole('radio', { name: /Blocco dati/ }));
+    await app.user.click(within(dlg).getByRole('radio', { name: 'DB di istanza di' }));
+    expect(within(dlg).getByLabelText('Blocco funzionale')).toHaveValue('Nastro');
+    expect(within(dlg).getByLabelText('Nome')).toHaveValue('Nastro_DB');
+    expect(within(dlg).getByLabelText('Numero')).toHaveValue(2);
+    await app.user.click(within(dlg).getByTestId('dialog-ok'));
+    expect(blocks(app).find((b) => b.kind === 'IDB')).toMatchObject({
+      name: 'Nastro_DB',
+      instanceOf: 'Nastro',
+      number: 2,
+    });
+  });
+
+  it('DB di istanza senza FB: messaggio e OK disattivato', async () => {
+    const app = await renderApp({ view: 'project', withProject: true, withPlc: true });
+    const dlg = await openBlockDialog(app);
+    await app.user.click(within(dlg).getByRole('radio', { name: /Blocco dati/ }));
+    await app.user.click(within(dlg).getByRole('radio', { name: 'DB di istanza di' }));
+    expect(within(dlg).getByRole('alert')).toHaveTextContent('nessun FB');
+    expect(within(dlg).getByTestId('dialog-ok')).toBeDisabled();
+  });
+
+  it('un nome già usato da un simbolo disattiva OK; "Aggiungi e apri" è attivo per default', async () => {
+    const app = await renderApp({ view: 'project', withProject: true, withPlc: true });
+    const dlg = await openBlockDialog(app);
+    expect(within(dlg).getByLabelText('Aggiungi e apri')).toBeChecked();
+    const name = within(dlg).getByLabelText('Nome');
+    await app.user.clear(name);
+    await app.user.type(name, 'MAIN');
+    expect(within(dlg).getByRole('alert')).toHaveTextContent('Il nome è già in uso.');
+    expect(within(dlg).getByTestId('dialog-ok')).toBeDisabled();
+  });
+
+  it("dal nodo Aggiungi nuovo blocco dell'albero il blocco va nel PLC di quel nodo", async () => {
+    const app = await renderApp({ view: 'project', withProject: true, withPlc: true });
+    await app.user.dblClick(screen.getByTestId(`tree-node-plc:${PLC}:blocks-add`));
+    const dlg = screen.getByRole('dialog', { name: 'Aggiungi nuovo blocco' });
+    await app.user.click(within(dlg).getByTestId('dialog-ok'));
+    expect(blocks(app)).toHaveLength(2);
+    const added = blocks(app)[1]!;
+    expect(screen.getByTestId(`tree-node-plc:${PLC}:block:${added.id}`)).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+  });
+
+  it('Esc chiude senza modifiche', async () => {
+    const app = await renderApp({ view: 'project', withProject: true, withPlc: true });
+    await openBlockDialog(app);
+    await app.user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(blocks(app)).toHaveLength(1);
+  });
+});
