@@ -1,0 +1,240 @@
+{
+  "errors": {
+    "title": "Error",
+    "write": "Cannot write the file \"{{path}}\" (code {{code}}). Check permissions and free space, then try again.",
+    "read": "Cannot read the file \"{{path}}\" (code {{code}}).",
+    "pathNotAbsolute": "The path must be absolute (for example C:\\Projects or /Users/name/Projects).",
+    "fatal": "An unexpected error occurred. Restart BaaPortal; work you already saved is unaffected.",
+    "exists": "A project already exists at \"{{path}}\". Choose a different name or folder.",
+    "baap": {
+      "NOT_ZIP": "The file is not a valid BaaPortal project: its content is not a recognizable archive.",
+      "MISSING_MANIFEST": "The file is not a valid BaaPortal project: the descriptive section is missing.",
+      "INVALID_JSON": "The project file is damaged: its internal data cannot be read.",
+      "INVALID_SCHEMA": "The project file is damaged: its internal data does not have the expected structure.",
+      "NEWER_FORMAT": "This project was created with a newer version of BaaPortal. Update the application to open it."
+    },
+    "name": {
+      "EMPTY": "Enter a name for the project.",
+      "TOO_LONG": "The name is too long: use at most 128 characters.",
+      "INVALID_CHARS": "The name contains characters that are not allowed in file names.",
+      "RESERVED": "This name is reserved by the operating system: choose another one.",
+      "TRAILING_DOT_OR_SPACE": "The name cannot end with a dot or a space.",
+      "EXISTS": "A project with this name already exists in this folder."
+    }
+  },
+  "confirm": {
+    "unsaved": {
+      "title": "Unsaved changes",
+      "message": "The project \"{{name}}\" has unsaved changes. Do you want to save them before continuing?",
+      "yes": "Save",
+      "no": "Don't save",
+      "cancel": "Cancel"
+    }
+  },
+  "messages": {
+    "created": "Project \"{{name}}\" created.",
+    "opened": "Project \"{{name}}\" opened.",
+    "saved": "Project \"{{name}}\" saved.",
+    "recentMissing": "The project \"{{name}}\" was not found: it was removed from the list."
+  },
+  "commands": {
+    "project.new": "New…",
+    "project.open": "Open…",
+    "project.close": "Close",
+    "project.save": "Save",
+    "project.saveAs": "Save as…",
+    "project.archive": "Archive…",
+    "project.retrieve": "Retrieve archived project…",
+    "project.print": "Print…",
+    "project.printPreview": "Print preview…",
+    "project.exit": "Exit",
+    "edit.undo": "Undo",
+    "edit.redo": "Redo",
+    "edit.cut": "Cut",
+    "edit.copy": "Copy",
+    "edit.paste": "Paste",
+    "edit.delete": "Delete",
+    "edit.rename": "Rename",
+    "edit.findReplace": "Find and replace…",
+    "edit.selectAll": "Select all",
+    "edit.compile": "Compile",
+    "view.navigation": "Project navigation",
+    "view.details": "Details view",
+    "view.inspector": "Inspector window",
+    "view.taskCards": "Task cards",
+    "view.portal": "Portal view",
+    "insert.device": "New device…",
+    "insert.block": "New block…",
+    "online.goOnline": "Go online",
+    "online.goOffline": "Go offline",
+    "online.simulation": "Simulation",
+    "online.download": "Download to device",
+    "online.upload": "Upload from device…",
+    "online.accessibleDevices": "Accessible devices…",
+    "online.startCpu": "Start CPU",
+    "online.stopCpu": "Stop CPU",
+    "online.diagnostics": "Online and diagnostics",
+    "options.settings": "Settings",
+    "tools.crossReferences": "Cross-references",
+    "tools.callStructure": "Call structure",
+    "window.splitVertical": "Split work area vertically",
+    "window.splitHorizontal": "Split work area horizontally",
+    "window.closeAllEditors": "Close all editors",
+    "help.show": "Show help",
+    "help.about": "About BaaPortal"
+  },
+  "menu": {
+    "project": "Project",
+    "edit": "Edit",
+    "view": "View",
+    "insert": "Insert",
+    "online": "Online",
+    "options": "Options",
+    "tools": "Tools",
+    "window": "Window",
+    "help": "Help",
+    "recent": "Recent projects",
+    "noRecent": "(none)"
+  },
+  "panel": {
+    "navigation": "Project navigation",
+    "referenceProjects": "Reference projects",
+    "details": "Details view",
+    "inspector": "Inspector window",
+    "taskCards": "Task cards",
+    "collapse": "Close the panel",
+    "expand": "Open the panel",
+    "autoHide": "Hide automatically",
+    "pin": "Pin the panel",
+    "toggleReference": "Show or hide the reference projects"
+  },
+  "toolbar": {
+    "search": "Search"
+  },
+  "portal": {
+    "start": "Start",
+    "devices": "Devices & networks",
+    "plc": "PLC programming",
+    "online": "Online & diagnostics",
+    "action": {
+      "open": "Open existing project",
+      "new": "Create new project",
+      "migrate": "Migrate project",
+      "close": "Close project",
+      "firstSteps": "First steps",
+      "installed": "Installed software",
+      "help": "Help",
+      "language": "User interface language",
+      "openView": "Open the project view",
+      "addDevice": "Add new device",
+      "addBlock": "Add new block",
+      "accessibleDevices": "Accessible devices"
+    },
+    "projectView": "Project view",
+    "openProjectInfo": "Open project: {{path}}",
+    "browse": "Browse…",
+    "noProject": "No project is open.",
+    "new": {
+      "name": "Project name",
+      "path": "Path",
+      "author": "Author",
+      "comment": "Comment",
+      "create": "Create"
+    },
+    "open": {
+      "project": "Project",
+      "path": "Path",
+      "lastAccess": "Last accessed",
+      "notFound": "(not found)"
+    },
+    "firstSteps": {
+      "device": {
+        "title": "Configure a device",
+        "description": "Add the controller you want to program to the project."
+      },
+      "program": {
+        "title": "Write PLC program",
+        "description": "Create the blocks the controller uses to run the process."
+      },
+      "projectView": {
+        "title": "Open the project view",
+        "description": "Work on the devices, blocks and settings of the project."
+      }
+    }
+  },
+  "tree": {
+    "project": "Project",
+    "addDevice": "Add new device",
+    "devicesNetworks": "Devices & networks",
+    "commonData": "Common data",
+    "docSettings": "Documentation settings",
+    "languages": "Languages & resources",
+    "onlineAccess": "Online access"
+  },
+  "navigation": {
+    "referenceEmpty": "No reference projects."
+  },
+  "details": {
+    "name": "Name"
+  },
+  "inspector": {
+    "tab": {
+      "properties": "Properties",
+      "info": "Info",
+      "diagnostics": "Diagnostics"
+    },
+    "sub": {
+      "general": "General",
+      "crossRefs": "Cross-references",
+      "compile": "Compile"
+    },
+    "name": "Name",
+    "path": "Path",
+    "created": "Created on",
+    "modified": "Last modified",
+    "author": "Author",
+    "comment": "Comment",
+    "noProperties": "No properties available",
+    "diagnosticsEmpty": "No diagnostic information available.",
+    "crossRefsEmpty": "No cross-references to show.",
+    "compileEmpty": "No compilation results to show.",
+    "severity": "Severity",
+    "message": "Message",
+    "date": "Date",
+    "time": "Time",
+    "sev": {
+      "info": "Information",
+      "warning": "Warning",
+      "error": "Error"
+    }
+  },
+  "taskcards": {
+    "empty": "No items available in this section.",
+    "tab": {
+      "instructions": "Instructions",
+      "test": "Testing",
+      "tasks": "Tasks",
+      "libraries": "Libraries"
+    },
+    "section": {
+      "instructions": {
+        "favorites": "Favorites",
+        "basic": "Basic instructions",
+        "advanced": "Extended instructions",
+        "communication": "Communication",
+        "optional": "Optional packages"
+      },
+      "test": {
+        "cpuPanel": "CPU operator panel",
+        "callStack": "Call stack"
+      },
+      "tasks": {
+        "findReplace": "Find and replace"
+      },
+      "libraries": {
+        "projectLibrary": "Project library",
+        "globalLibraries": "Global libraries"
+      }
+    }
+  }
+}

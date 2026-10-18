@@ -1,0 +1,5 @@
+# Fine riga LF ovunque: su Windows git convertirebbe in CRLF e prettier (endOfLine lf) fallirebbe.
+* text=auto eol=lf
+*.png binary
+*.ico binary
+*.icns binary

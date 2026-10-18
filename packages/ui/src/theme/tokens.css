@@ -1,0 +1,18 @@
+:root {
+  --baa-portal-bg-start: #2b3a42;
+  --baa-portal-bg-end: #1d272d;
+  --baa-accent: #00a3a3;
+  --baa-accent-strong: #007f86;
+  --baa-panel-bg: #e9edf0;
+  --baa-panel-header: #d3dbe0;
+  --baa-surface: #ffffff;
+  --baa-border: #b7c3ca;
+  --baa-text: #1b262c;
+  --baa-text-muted: #5b6b74;
+  --baa-selection: #cfe8ec;
+  --baa-disabled: #9aa7ae;
+  --baa-online: #f29100;
+  --baa-font: 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  --baa-font-size: 12px;
+  --baa-row-height: 20px;
+}

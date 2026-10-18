@@ -1,0 +1,224 @@
+.baa-app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.baa-portal {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.baa-portal-columns {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 220px 300px 1fr;
+}
+
+.baa-portal-list {
+  background: linear-gradient(var(--baa-portal-bg-start), var(--baa-portal-bg-end));
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  padding-top: 8px;
+}
+.baa-portal-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: none;
+  border: 0;
+  border-left: 4px solid transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font-size: 14px;
+}
+.baa-portal-item[aria-current='true'] {
+  border-left-color: var(--baa-accent);
+  background: rgba(255, 255, 255, 0.08);
+}
+.baa-portal-item:disabled {
+  color: var(--baa-disabled);
+  cursor: default;
+}
+
+.baa-action-list {
+  background: var(--baa-panel-bg);
+  padding: 8px 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+.baa-action-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: none;
+  border: 0;
+  border-left: 3px solid transparent;
+  text-align: left;
+  cursor: pointer;
+  color: var(--baa-text);
+  font-size: 13px;
+}
+.baa-action-item[aria-current='true'] {
+  background: var(--baa-selection);
+  border-left-color: var(--baa-accent);
+}
+.baa-action-item:disabled {
+  color: var(--baa-disabled);
+  cursor: default;
+}
+
+.baa-selection-pane {
+  background: var(--baa-surface);
+  border-left: 1px solid var(--baa-border);
+  padding: 20px 24px;
+  overflow: auto;
+}
+.baa-selection-pane h2 {
+  margin: 0 0 16px;
+  font-size: 16px;
+  font-weight: 600;
+}
+.baa-selection-pane p {
+  margin: 0 0 12px;
+  color: var(--baa-text-muted);
+}
+
+.baa-field {
+  display: grid;
+  grid-template-columns: 130px 1fr auto;
+  gap: 4px 8px;
+  align-items: center;
+  margin-bottom: 10px;
+  max-width: 560px;
+}
+.baa-field > input,
+.baa-field > textarea {
+  grid-column: 2;
+  padding: 3px 6px;
+  font: inherit;
+  border: 1px solid var(--baa-border);
+}
+.baa-field > button {
+  grid-column: 3;
+}
+.baa-field-error {
+  grid-column: 2;
+  color: #b3261e;
+}
+.baa-btn {
+  padding: 4px 14px;
+  border: 1px solid var(--baa-border);
+  background: var(--baa-panel-header);
+  cursor: pointer;
+}
+.baa-btn:disabled {
+  color: var(--baa-disabled);
+  cursor: default;
+}
+.baa-btn-primary {
+  background: var(--baa-accent);
+  border-color: var(--baa-accent-strong);
+  color: #fff;
+}
+.baa-btn-primary:disabled {
+  background: var(--baa-panel-header);
+  color: var(--baa-disabled);
+  border-color: var(--baa-border);
+}
+
+.baa-recent {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 12px;
+}
+.baa-recent th {
+  text-align: left;
+  background: var(--baa-panel-header);
+  padding: 3px 8px;
+  font-weight: 600;
+}
+.baa-recent td {
+  padding: 3px 8px;
+  height: var(--baa-row-height);
+}
+.baa-recent tbody tr {
+  cursor: default;
+}
+.baa-recent tbody tr:hover {
+  background: var(--baa-selection);
+}
+.baa-recent tr[data-missing='true'] {
+  color: var(--baa-disabled);
+}
+.baa-notice {
+  color: #8a5a00;
+  margin-bottom: 12px;
+}
+
+.baa-tiles {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.baa-tile {
+  width: 180px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+  background: var(--baa-panel-bg);
+  border: 1px solid var(--baa-border);
+  cursor: pointer;
+  color: var(--baa-text);
+}
+.baa-tile:hover {
+  border-color: var(--baa-accent);
+}
+.baa-tile strong {
+  font-size: 13px;
+}
+.baa-tile span {
+  color: var(--baa-text-muted);
+}
+
+.baa-lang-options {
+  display: flex;
+  gap: 12px;
+}
+.baa-lang-options button[aria-pressed='true'] {
+  border-color: var(--baa-accent);
+  background: var(--baa-selection);
+}
+
+.baa-portal-footer {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 4px 12px;
+  min-height: 28px;
+  background: var(--baa-panel-header);
+  border-top: 1px solid var(--baa-border);
+}
+.baa-link {
+  background: none;
+  border: 0;
+  color: var(--baa-accent-strong);
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+.baa-portal-info {
+  color: var(--baa-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

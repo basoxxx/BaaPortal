@@ -1,0 +1,240 @@
+{
+  "errors": {
+    "title": "Errore",
+    "write": "Impossibile scrivere il file \"{{path}}\" (codice {{code}}). Controlla i permessi e lo spazio disponibile, poi riprova.",
+    "read": "Impossibile leggere il file \"{{path}}\" (codice {{code}}).",
+    "pathNotAbsolute": "Il percorso deve essere assoluto (ad esempio C:\\Progetti oppure /Users/nome/Progetti).",
+    "fatal": "Si è verificato un errore imprevisto. Riavvia BaaPortal; il lavoro già salvato non è stato toccato.",
+    "exists": "Esiste già un progetto in \"{{path}}\". Scegli un altro nome o un'altra cartella.",
+    "baap": {
+      "NOT_ZIP": "Il file non è un progetto BaaPortal valido: il contenuto non è un archivio riconoscibile.",
+      "MISSING_MANIFEST": "Il file non è un progetto BaaPortal valido: manca la sezione descrittiva.",
+      "INVALID_JSON": "Il file del progetto è danneggiato: i dati interni non sono leggibili.",
+      "INVALID_SCHEMA": "Il file del progetto è danneggiato: i dati interni non hanno la struttura prevista.",
+      "NEWER_FORMAT": "Il progetto è stato creato con una versione più recente di BaaPortal. Aggiorna l'applicazione per aprirlo."
+    },
+    "name": {
+      "EMPTY": "Inserisci un nome per il progetto.",
+      "TOO_LONG": "Il nome è troppo lungo: usa al massimo 128 caratteri.",
+      "INVALID_CHARS": "Il nome contiene caratteri non ammessi nei nomi di file.",
+      "RESERVED": "Questo nome è riservato dal sistema operativo: scegline un altro.",
+      "TRAILING_DOT_OR_SPACE": "Il nome non può terminare con un punto o uno spazio.",
+      "EXISTS": "Esiste già un progetto con questo nome in questa cartella."
+    }
+  },
+  "confirm": {
+    "unsaved": {
+      "title": "Modifiche non salvate",
+      "message": "Il progetto \"{{name}}\" contiene modifiche non salvate. Vuoi salvarle prima di continuare?",
+      "yes": "Salva",
+      "no": "Non salvare",
+      "cancel": "Annulla"
+    }
+  },
+  "messages": {
+    "created": "Progetto \"{{name}}\" creato.",
+    "opened": "Progetto \"{{name}}\" aperto.",
+    "saved": "Progetto \"{{name}}\" salvato.",
+    "recentMissing": "Il progetto \"{{name}}\" non è stato trovato: è stato tolto dall'elenco."
+  },
+  "commands": {
+    "project.new": "Nuovo…",
+    "project.open": "Apri…",
+    "project.close": "Chiudi",
+    "project.save": "Salva",
+    "project.saveAs": "Salva con nome…",
+    "project.archive": "Archivia…",
+    "project.retrieve": "Ritira archivio…",
+    "project.print": "Stampa…",
+    "project.printPreview": "Anteprima di stampa…",
+    "project.exit": "Esci",
+    "edit.undo": "Annulla",
+    "edit.redo": "Ripeti",
+    "edit.cut": "Taglia",
+    "edit.copy": "Copia",
+    "edit.paste": "Incolla",
+    "edit.delete": "Elimina",
+    "edit.rename": "Rinomina",
+    "edit.findReplace": "Trova e sostituisci…",
+    "edit.selectAll": "Seleziona tutto",
+    "edit.compile": "Compila",
+    "view.navigation": "Navigazione del progetto",
+    "view.details": "Vista dettagli",
+    "view.inspector": "Finestra di ispezione",
+    "view.taskCards": "Task card",
+    "view.portal": "Vista portale",
+    "insert.device": "Nuovo dispositivo…",
+    "insert.block": "Nuovo blocco…",
+    "online.goOnline": "Collegamento online",
+    "online.goOffline": "Interrompi collegamento online",
+    "online.simulation": "Simulazione",
+    "online.download": "Carica nel dispositivo",
+    "online.upload": "Carica dal dispositivo…",
+    "online.accessibleDevices": "Dispositivi accessibili…",
+    "online.startCpu": "Avvia CPU",
+    "online.stopCpu": "Arresta CPU",
+    "online.diagnostics": "Online e diagnostica",
+    "options.settings": "Impostazioni",
+    "tools.crossReferences": "Riferimenti incrociati",
+    "tools.callStructure": "Struttura di richiamo",
+    "window.splitVertical": "Dividi area di lavoro in verticale",
+    "window.splitHorizontal": "Dividi area di lavoro in orizzontale",
+    "window.closeAllEditors": "Chiudi tutti gli editor",
+    "help.show": "Visualizza la guida",
+    "help.about": "Informazioni su BaaPortal"
+  },
+  "menu": {
+    "project": "Progetto",
+    "edit": "Modifica",
+    "view": "Visualizza",
+    "insert": "Inserisci",
+    "online": "Online",
+    "options": "Opzioni",
+    "tools": "Strumenti",
+    "window": "Finestra",
+    "help": "Guida",
+    "recent": "Progetti recenti",
+    "noRecent": "(nessuno)"
+  },
+  "panel": {
+    "navigation": "Navigazione del progetto",
+    "referenceProjects": "Progetti di riferimento",
+    "details": "Vista dettagli",
+    "inspector": "Finestra di ispezione",
+    "taskCards": "Task card",
+    "collapse": "Chiudi il pannello",
+    "expand": "Apri il pannello",
+    "autoHide": "Nascondi automaticamente",
+    "pin": "Fissa il pannello",
+    "toggleReference": "Mostra o nascondi i progetti di riferimento"
+  },
+  "toolbar": {
+    "search": "Ricerca"
+  },
+  "portal": {
+    "start": "Avvio",
+    "devices": "Dispositivi e reti",
+    "plc": "Programmazione PLC",
+    "online": "Online e diagnostica",
+    "action": {
+      "open": "Apri progetto esistente",
+      "new": "Crea nuovo progetto",
+      "migrate": "Migra progetto",
+      "close": "Chiudi progetto",
+      "firstSteps": "Primi passi",
+      "installed": "Software installato",
+      "help": "Guida",
+      "language": "Lingua dell'interfaccia utente",
+      "openView": "Apri la vista progetto",
+      "addDevice": "Aggiungi nuovo dispositivo",
+      "addBlock": "Aggiungi nuovo blocco",
+      "accessibleDevices": "Dispositivi accessibili"
+    },
+    "projectView": "Vista progetto",
+    "openProjectInfo": "Progetto aperto: {{path}}",
+    "browse": "Sfoglia…",
+    "noProject": "Nessun progetto aperto.",
+    "new": {
+      "name": "Nome progetto",
+      "path": "Percorso",
+      "author": "Autore",
+      "comment": "Commento",
+      "create": "Crea"
+    },
+    "open": {
+      "project": "Progetto",
+      "path": "Percorso",
+      "lastAccess": "Ultimo accesso",
+      "notFound": "(non trovato)"
+    },
+    "firstSteps": {
+      "device": {
+        "title": "Configura un dispositivo",
+        "description": "Aggiungi al progetto il controllore da programmare."
+      },
+      "program": {
+        "title": "Scrivi programma PLC",
+        "description": "Crea i blocchi con cui il controllore esegue il processo."
+      },
+      "projectView": {
+        "title": "Apri la vista progetto",
+        "description": "Lavora su dispositivi, blocchi e impostazioni del progetto."
+      }
+    }
+  },
+  "tree": {
+    "project": "Progetto",
+    "addDevice": "Aggiungi nuovo dispositivo",
+    "devicesNetworks": "Dispositivi e reti",
+    "commonData": "Dati di base comuni",
+    "docSettings": "Impostazioni della documentazione",
+    "languages": "Lingue e risorse",
+    "onlineAccess": "Accessi online"
+  },
+  "navigation": {
+    "referenceEmpty": "Nessun progetto di riferimento."
+  },
+  "details": {
+    "name": "Nome"
+  },
+  "inspector": {
+    "tab": {
+      "properties": "Proprietà",
+      "info": "Informazioni",
+      "diagnostics": "Diagnostica"
+    },
+    "sub": {
+      "general": "Generale",
+      "crossRefs": "Riferimenti incrociati",
+      "compile": "Compila"
+    },
+    "name": "Nome",
+    "path": "Percorso",
+    "created": "Creato il",
+    "modified": "Ultima modifica",
+    "author": "Autore",
+    "comment": "Commento",
+    "noProperties": "Nessuna proprietà disponibile",
+    "diagnosticsEmpty": "Nessuna informazione diagnostica disponibile.",
+    "crossRefsEmpty": "Nessun riferimento incrociato da mostrare.",
+    "compileEmpty": "Nessun risultato di compilazione da mostrare.",
+    "severity": "Gravità",
+    "message": "Messaggio",
+    "date": "Data",
+    "time": "Ora",
+    "sev": {
+      "info": "Informazione",
+      "warning": "Avviso",
+      "error": "Errore"
+    }
+  },
+  "taskcards": {
+    "empty": "Nessun elemento disponibile in questa sezione.",
+    "tab": {
+      "instructions": "Istruzioni",
+      "test": "Test",
+      "tasks": "Task",
+      "libraries": "Librerie"
+    },
+    "section": {
+      "instructions": {
+        "favorites": "Preferiti",
+        "basic": "Istruzioni di base",
+        "advanced": "Istruzioni avanzate",
+        "communication": "Comunicazione",
+        "optional": "Pacchetti opzionali"
+      },
+      "test": {
+        "cpuPanel": "Pannello di comando CPU",
+        "callStack": "Stack di chiamata"
+      },
+      "tasks": {
+        "findReplace": "Trova e sostituisci"
+      },
+      "libraries": {
+        "projectLibrary": "Libreria di progetto",
+        "globalLibraries": "Librerie globali"
+      }
+    }
+  }
+}

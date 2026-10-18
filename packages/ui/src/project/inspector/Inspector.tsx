@@ -1,0 +1,86 @@
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { InfoMessages } from './InfoMessages';
+import { ProjectProperties } from './ProjectProperties';
+
+type Tab = 'properties' | 'info' | 'diagnostics';
+type SubTab = 'general' | 'crossRefs' | 'compile';
+const TABS: Tab[] = ['properties', 'info', 'diagnostics'];
+const SUBTABS: SubTab[] = ['general', 'crossRefs', 'compile'];
+
+export function Inspector() {
+  const { t } = useTranslation();
+  const [tab, setTab] = useState<Tab>('properties');
+  const [sub, setSub] = useState<SubTab>('general');
+  return (
+    <div className="baa-inspector">
+      <div role="tablist" className="baa-tabs" aria-label={t('panel.inspector')}>
+        {TABS.map((id) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            id={`inspector-tab-${id}`}
+            data-testid={`inspector-tab-${id}`}
+            aria-selected={tab === id}
+            aria-controls="inspector-panel"
+            className="baa-tab"
+            onClick={() => setTab(id)}
+          >
+            {t(`inspector.tab.${id}`)}
+          </button>
+        ))}
+      </div>
+      <div
+        role="tabpanel"
+        id="inspector-panel"
+        aria-labelledby={`inspector-tab-${tab}`}
+        className="baa-tabpanel"
+      >
+        {tab === 'properties' ? <ProjectProperties /> : null}
+        {tab === 'diagnostics' ? (
+          <p className="baa-placeholder">{t('inspector.diagnosticsEmpty')}</p>
+        ) : null}
+        {tab === 'info' ? (
+          <div className="baa-inspector">
+            <div
+              role="tablist"
+              className="baa-tabs baa-subtabs"
+              aria-label={t('inspector.tab.info')}
+            >
+              {SUBTABS.map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  id={`info-subtab-${id}`}
+                  data-testid={`info-subtab-${id}`}
+                  aria-selected={sub === id}
+                  aria-controls="info-subpanel"
+                  className="baa-tab"
+                  onClick={() => setSub(id)}
+                >
+                  {t(`inspector.sub.${id}`)}
+                </button>
+              ))}
+            </div>
+            <div
+              role="tabpanel"
+              id="info-subpanel"
+              aria-labelledby={`info-subtab-${sub}`}
+              className="baa-tabpanel"
+            >
+              {sub === 'general' ? <InfoMessages /> : null}
+              {sub === 'crossRefs' ? (
+                <p className="baa-placeholder">{t('inspector.crossRefsEmpty')}</p>
+              ) : null}
+              {sub === 'compile' ? (
+                <p className="baa-placeholder">{t('inspector.compileEmpty')}</p>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
