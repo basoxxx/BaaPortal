@@ -1,4 +1,10 @@
-import type { BaaBridge, ConfirmTexts, RecentEntry } from '../src/bridge';
+import type {
+  BaaBridge,
+  ConfirmTexts,
+  QuestionTexts,
+  RecentEntry,
+  RecoveryInfo,
+} from '../src/bridge';
 
 type Answer = 'save' | 'discard' | 'cancel';
 
@@ -11,6 +17,12 @@ export class FakeBridge implements BaaBridge {
   confirmTexts: ConfirmTexts[] = [];
   openDialogResults: (string | null)[] = [];
   saveDialogResults: (string | null)[] = [];
+  clipboard = '';
+  // Risposte a askQuestion, consumate una per chiamata; a coda vuota la risposta è sì (true).
+  questionAnswers: boolean[] = [];
+  questions: QuestionTexts[] = [];
+  recovery = new Map<string, { data: Uint8Array; info: RecoveryInfo }>();
+  testOverridesValue: { recoveryIntervalMs?: number } = {};
   title = '';
   closeConfirmed = false;
   readyCalls = 0;
@@ -105,6 +117,33 @@ export class FakeBridge implements BaaBridge {
   }
   rendererReady() {
     this.readyCalls++;
+  }
+  clipboardWriteText(text: string) {
+    this.clipboard = text;
+  }
+  async clipboardReadText() {
+    return this.clipboard;
+  }
+  async askQuestion(texts: QuestionTexts) {
+    this.questions.push(texts);
+    return this.questionAnswers.shift() ?? true;
+  }
+  async recoveryWrite(key: string, data: Uint8Array, info: RecoveryInfo) {
+    this.recovery.set(key, { data, info });
+  }
+  async recoveryList() {
+    return [...this.recovery].map(([key, v]) => ({ key, info: v.info }));
+  }
+  async recoveryRead(key: string) {
+    const r = this.recovery.get(key);
+    if (!r) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+    return r.data;
+  }
+  async recoveryDelete(key: string) {
+    this.recovery.delete(key);
+  }
+  async testOverrides() {
+    return this.testOverridesValue;
   }
 }
 

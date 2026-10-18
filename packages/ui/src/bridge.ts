@@ -13,6 +13,24 @@ export interface ConfirmTexts {
   cancel: string;
 }
 
+export interface QuestionTexts {
+  title: string;
+  message: string;
+  yes: string;
+  no: string;
+}
+
+export interface RecoveryInfo {
+  originalPath: string;
+  projectName: string;
+  savedAt: string;
+}
+
+export interface RecoveryEntry {
+  key: string;
+  info: RecoveryInfo;
+}
+
 export interface BaaBridge {
   platform: 'win32' | 'darwin' | 'linux';
   appVersion(): Promise<string>;
@@ -33,4 +51,12 @@ export interface BaaBridge {
   onCloseRequest(cb: () => void): () => void;
   closeWindowConfirmed(): void;
   rendererReady(): void; // sblocca le richieste di apertura in coda
+  clipboardWriteText(text: string): void;
+  clipboardReadText(): Promise<string>;
+  askQuestion(texts: QuestionTexts): Promise<boolean>; // finestra nativa, true = sì
+  recoveryWrite(key: string, data: Uint8Array, info: RecoveryInfo): Promise<void>;
+  recoveryList(): Promise<RecoveryEntry[]>;
+  recoveryRead(key: string): Promise<Uint8Array>;
+  recoveryDelete(key: string): Promise<void>;
+  testOverrides(): Promise<{ recoveryIntervalMs?: number }>; // sempre {} nelle build pacchettizzate
 }

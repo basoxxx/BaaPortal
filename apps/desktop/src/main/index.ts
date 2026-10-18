@@ -18,6 +18,8 @@ const trust: TrustOptions = {
   platform: process.platform as Platform,
 };
 
+const EDITOR_FRAME_NAME = /^baa-editor-[A-Za-z0-9-]+$/;
+
 let win: BrowserWindow | null = null;
 let allowClose = false;
 let rendererIsReady = false;
@@ -90,6 +92,8 @@ function createWindow(): void {
   });
   win.on('closed', () => {
     win = null;
+    // Le uniche altre finestre sono gli editor staccati: non sopravvivono alla principale.
+    for (const w of BrowserWindow.getAllWindows()) w.destroy();
   });
   // Solo un nuovo documento (es. ricarica) deve riannunciarsi: una navigazione bloccata da
   // will-navigate avvia comunque un caricamento ma lascia la pagina, e il renderer, com'erano.
@@ -103,7 +107,28 @@ function createWindow(): void {
   win.webContents.on('will-navigate', (e, url) => {
     if (!isTrustedUrl(url, trust)) e.preventDefault();
   });
-  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  // Unica eccezione: le finestre degli editor staccati (about:blank con nome baa-editor-*), che il
+  // renderer anima da sé. Electron riporta `window.open('', nome)` con url 'about:blank'.
+  win.webContents.setWindowOpenHandler(({ url, frameName }) =>
+    url === 'about:blank' && EDITOR_FRAME_NAME.test(frameName)
+      ? {
+          action: 'allow',
+          overrideBrowserWindowOptions: {
+            width: 1000,
+            height: 700,
+            minWidth: 480,
+            minHeight: 320,
+            title: 'BaaPortal',
+            autoHideMenuBar: true,
+          },
+        }
+      : { action: 'deny' },
+  );
+  win.webContents.on('did-create-window', (child) => {
+    child.setMenu(null);
+    child.webContents.on('will-navigate', (e) => e.preventDefault());
+    child.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  });
   if (devUrl) void win.loadURL(devUrl);
   else void win.loadFile(join(import.meta.dirname, '../renderer/index.html'));
 }

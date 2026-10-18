@@ -134,3 +134,67 @@ test('open-file (macOS) ripristina una finestra minimizzata e apre il file', asy
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+const windowCount = (app: Awaited<ReturnType<typeof launchApp>>['app']) =>
+  app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length);
+
+test('window.open about:blank con nome baa-editor-* apre una finestra; altri URL o nomi sono negati', async () => {
+  const { app, page } = await launchApp();
+  await page.evaluate(() => {
+    (window as unknown as Record<string, unknown>)['__w'] = window.open('', 'baa-editor-x');
+  });
+  await expect.poll(() => windowCount(app)).toBe(2);
+  await page.evaluate(() => {
+    (window as unknown as Record<string, unknown>)['__a'] = window.open('', 'altro');
+    (window as unknown as Record<string, unknown>)['__b'] = window.open(
+      'https://example.com',
+      'baa-editor-y',
+    );
+    (window as unknown as Record<string, unknown>)['__c'] = window.open('', 'baa-editor-x/../');
+  });
+  await page.waitForTimeout(500);
+  expect(await windowCount(app)).toBe(2);
+  // Chiudendo la principale (nessun documento aperto: nessuna conferma) si chiudono tutte.
+  // (getAllWindows() non garantisce l'ordine: la principale si prende dalla pagina)
+  const main = await app.browserWindow(page);
+  await main.evaluate((w) => w.close());
+  await expect.poll(() => windowCount(app).catch(() => 0)).toBe(0);
+});
+
+test('la finestra di un editor non può navigare né aprire altre finestre', async () => {
+  const { app, page } = await launchApp();
+  await page.evaluate(() => {
+    (window as unknown as Record<string, unknown>)['__w'] = window.open('', 'baa-editor-n');
+  });
+  await expect.poll(() => windowCount(app)).toBe(2);
+  const result = await page.evaluate(async () => {
+    const child = (window as unknown as { __w: Window }).__w;
+    child.location.href = 'https://example.com';
+    await new Promise((r) => setTimeout(r, 500));
+    const nested = child.open('about:blank', 'baa-editor-z');
+    return { href: child.location.href, nested: nested === null };
+  });
+  expect(result.href).toBe('about:blank');
+  await page.waitForTimeout(300);
+  expect(await windowCount(app)).toBe(2);
+  const main = await app.browserWindow(page);
+  const mainId = await main.evaluate((w) => w.id);
+  const childMenu = await app.evaluate(({ BrowserWindow }, id) => {
+    const child = BrowserWindow.getAllWindows().find((w) => w.id !== id);
+    return child?.isMenuBarVisible();
+  }, mainId);
+  // Su macOS il menu è dell'app, non della finestra: isMenuBarVisible non è significativo.
+  if (process.platform !== 'darwin') expect(childMenu).toBe(false);
+});
+
+test("chiudere una finestra editor non chiede conferma e lascia l'app aperta", async () => {
+  const { app, page } = await launchApp();
+  await stubMessageBox(app, 2);
+  await page.evaluate(() => {
+    (window as unknown as Record<string, unknown>)['__w'] = window.open('', 'baa-editor-c');
+  });
+  await expect.poll(() => windowCount(app)).toBe(2);
+  await page.evaluate(() => (window as unknown as { __w: Window }).__w.close());
+  await expect.poll(() => windowCount(app)).toBe(1);
+  expect(await shownDialogs(app)).toEqual([]);
+});

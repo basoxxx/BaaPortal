@@ -33,13 +33,22 @@ export const test = base.extend<{ closeLaunchedApps: void }>({
 export { expect } from '@playwright/test';
 
 /** `cwd`: cartella da cui avviare Electron; lo script principale `out/main/index.js` si risolve da lì. */
-export async function launchApp(opts: { args?: string[]; cwd?: string } = {}): Promise<Launched> {
-  const userData = mkdtempSync(join(tmpdir(), 'baa-userdata-'));
+export async function launchApp(
+  opts: {
+    args?: string[];
+    cwd?: string;
+    /** Variabili d'ambiente in più. */
+    env?: Record<string, string>;
+    /** userData esistente da riusare (invece di crearne uno); viene rimosso comunque a fine test. */
+    userData?: string;
+  } = {},
+): Promise<Launched> {
+  const userData = opts.userData ?? mkdtempSync(join(tmpdir(), 'baa-userdata-'));
   // Con un timeout proprio, un avvio bloccato fallisce riportando nel call log l'uscita del processo.
   const app = await _electron.launch({
     args: ['out/main/index.js', ...(opts.args ?? [])],
     cwd: opts.cwd,
-    env: { ...process.env, BAA_USER_DATA: userData },
+    env: { ...process.env, ...opts.env, BAA_USER_DATA: userData },
     timeout: 15_000,
   });
   // Uscita di main e renderer: compare nell'errore solo se l'app non arriva a mostrarsi.
