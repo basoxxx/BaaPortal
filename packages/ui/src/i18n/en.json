@@ -1,0 +1,75 @@
+{
+  "errors": {
+    "title": "Error",
+    "write": "Cannot write the file \"{{path}}\" (code {{code}}). Check permissions and free space, then try again.",
+    "read": "Cannot read the file \"{{path}}\" (code {{code}}).",
+    "exists": "A project already exists at \"{{path}}\". Choose a different name or folder.",
+    "baap": {
+      "NOT_ZIP": "The file is not a valid BaaPortal project: its content is not a recognizable archive.",
+      "MISSING_MANIFEST": "The file is not a valid BaaPortal project: the descriptive section is missing.",
+      "INVALID_JSON": "The project file is damaged: its internal data cannot be read.",
+      "INVALID_SCHEMA": "The project file is damaged: its internal data does not have the expected structure.",
+      "NEWER_FORMAT": "This project was created with a newer version of BaaPortal. Update the application to open it."
+    }
+  },
+  "confirm": {
+    "unsaved": {
+      "title": "Unsaved changes",
+      "message": "The project \"{{name}}\" has unsaved changes. Do you want to save them before continuing?",
+      "yes": "Save",
+      "no": "Don't save",
+      "cancel": "Cancel"
+    }
+  },
+  "messages": {
+    "created": "Project \"{{name}}\" created.",
+    "opened": "Project \"{{name}}\" opened.",
+    "saved": "Project \"{{name}}\" saved."
+  },
+  "commands": {
+    "project.new": "New…",
+    "project.open": "Open…",
+    "project.close": "Close",
+    "project.save": "Save",
+    "project.saveAs": "Save as…",
+    "project.archive": "Archive…",
+    "project.retrieve": "Retrieve archived project…",
+    "project.print": "Print…",
+    "project.printPreview": "Print preview…",
+    "project.exit": "Exit",
+    "edit.undo": "Undo",
+    "edit.redo": "Redo",
+    "edit.cut": "Cut",
+    "edit.copy": "Copy",
+    "edit.paste": "Paste",
+    "edit.delete": "Delete",
+    "edit.rename": "Rename",
+    "edit.findReplace": "Find and replace…",
+    "edit.selectAll": "Select all",
+    "edit.compile": "Compile",
+    "view.navigation": "Project navigation",
+    "view.details": "Details view",
+    "view.inspector": "Inspector window",
+    "view.taskCards": "Task cards",
+    "view.portal": "Portal view",
+    "insert.device": "New device…",
+    "insert.block": "New block…",
+    "online.goOnline": "Go online",
+    "online.goOffline": "Go offline",
+    "online.simulation": "Simulation",
+    "online.download": "Download to device",
+    "online.upload": "Upload from device…",
+    "online.accessibleDevices": "Accessible devices…",
+    "online.startCpu": "Start CPU",
+    "online.stopCpu": "Stop CPU",
+    "online.diagnostics": "Online and diagnostics",
+    "options.settings": "Settings",
+    "tools.crossReferences": "Cross-references",
+    "tools.callStructure": "Call structure",
+    "window.splitVertical": "Split work area vertically",
+    "window.splitHorizontal": "Split work area horizontally",
+    "window.closeAllEditors": "Close all editors",
+    "help.show": "Show help",
+    "help.about": "About BaaPortal"
+  }
+}

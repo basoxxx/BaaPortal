@@ -1,0 +1,75 @@
+{
+  "errors": {
+    "title": "Errore",
+    "write": "Impossibile scrivere il file \"{{path}}\" (codice {{code}}). Controlla i permessi e lo spazio disponibile, poi riprova.",
+    "read": "Impossibile leggere il file \"{{path}}\" (codice {{code}}).",
+    "exists": "Esiste già un progetto in \"{{path}}\". Scegli un altro nome o un'altra cartella.",
+    "baap": {
+      "NOT_ZIP": "Il file non è un progetto BaaPortal valido: il contenuto non è un archivio riconoscibile.",
+      "MISSING_MANIFEST": "Il file non è un progetto BaaPortal valido: manca la sezione descrittiva.",
+      "INVALID_JSON": "Il file del progetto è danneggiato: i dati interni non sono leggibili.",
+      "INVALID_SCHEMA": "Il file del progetto è danneggiato: i dati interni non hanno la struttura prevista.",
+      "NEWER_FORMAT": "Il progetto è stato creato con una versione più recente di BaaPortal. Aggiorna l'applicazione per aprirlo."
+    }
+  },
+  "confirm": {
+    "unsaved": {
+      "title": "Modifiche non salvate",
+      "message": "Il progetto \"{{name}}\" contiene modifiche non salvate. Vuoi salvarle prima di continuare?",
+      "yes": "Salva",
+      "no": "Non salvare",
+      "cancel": "Annulla"
+    }
+  },
+  "messages": {
+    "created": "Progetto \"{{name}}\" creato.",
+    "opened": "Progetto \"{{name}}\" aperto.",
+    "saved": "Progetto \"{{name}}\" salvato."
+  },
+  "commands": {
+    "project.new": "Nuovo…",
+    "project.open": "Apri…",
+    "project.close": "Chiudi",
+    "project.save": "Salva",
+    "project.saveAs": "Salva con nome…",
+    "project.archive": "Archivia…",
+    "project.retrieve": "Ritira archivio…",
+    "project.print": "Stampa…",
+    "project.printPreview": "Anteprima di stampa…",
+    "project.exit": "Esci",
+    "edit.undo": "Annulla",
+    "edit.redo": "Ripeti",
+    "edit.cut": "Taglia",
+    "edit.copy": "Copia",
+    "edit.paste": "Incolla",
+    "edit.delete": "Elimina",
+    "edit.rename": "Rinomina",
+    "edit.findReplace": "Trova e sostituisci…",
+    "edit.selectAll": "Seleziona tutto",
+    "edit.compile": "Compila",
+    "view.navigation": "Navigazione del progetto",
+    "view.details": "Vista dettagli",
+    "view.inspector": "Finestra di ispezione",
+    "view.taskCards": "Task card",
+    "view.portal": "Vista portale",
+    "insert.device": "Nuovo dispositivo…",
+    "insert.block": "Nuovo blocco…",
+    "online.goOnline": "Collegamento online",
+    "online.goOffline": "Interrompi collegamento online",
+    "online.simulation": "Simulazione",
+    "online.download": "Carica nel dispositivo",
+    "online.upload": "Carica dal dispositivo…",
+    "online.accessibleDevices": "Dispositivi accessibili…",
+    "online.startCpu": "Avvia CPU",
+    "online.stopCpu": "Arresta CPU",
+    "online.diagnostics": "Online e diagnostica",
+    "options.settings": "Impostazioni",
+    "tools.crossReferences": "Riferimenti incrociati",
+    "tools.callStructure": "Struttura di richiamo",
+    "window.splitVertical": "Dividi area di lavoro in verticale",
+    "window.splitHorizontal": "Dividi area di lavoro in orizzontale",
+    "window.closeAllEditors": "Chiudi tutti gli editor",
+    "help.show": "Visualizza la guida",
+    "help.about": "Informazioni su BaaPortal"
+  }
+}
