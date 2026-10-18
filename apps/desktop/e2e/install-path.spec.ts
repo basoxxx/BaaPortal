@@ -1,6 +1,7 @@
 import { cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { expect, launchApp, test } from './helpers';
 
 // Su Windows l'installazione per utente finisce sotto il nome dell'utente (spazi, accenti, apostrofi):
@@ -21,7 +22,8 @@ for (const [label, parts] of folders) {
         join(appDir, 'package.json'),
         JSON.stringify({ name: 'baaportal', version: '0.1.0', type: 'module' }),
       );
-      const { app, page } = await launchApp({ main: join(appDir, 'out', 'main', 'index.js') });
+      const { app, page } = await launchApp({ cwd: appDir });
+      expect(fileURLToPath(page.url())).toContain(join(...parts, 'out', 'renderer', 'index.html'));
 
       expect(await page.evaluate(() => window.baa.fileExists('nessun-file-qui.baap'))).toBe(false);
       expect(await page.evaluate(() => window.baa.recentList())).toEqual([]);
