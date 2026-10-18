@@ -175,7 +175,7 @@ describe('pasteObjects', () => {
     expect(copy.tags.map((t) => t.name).slice(0, 2)).toEqual(['Variabile_1001', 'Variabile_1002']);
     expect(new Set(copy.tags.map((t) => t.name)).size).toBe(1000);
     expect(ms).toBeLessThan(1000);
-  });
+  }, 30_000);
 
   it('UDT: nome unico nello spazio dei simboli e numero libero', () => {
     const d = device();

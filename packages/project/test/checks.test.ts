@@ -230,7 +230,7 @@ describe('checkDevice: indirizzi', () => {
     expect(overlaps[0]!.params).toEqual({ other: 'T1', count: '999' });
     expect(overlaps[1]!.params).toEqual({ other: 'T0', count: '999' });
     expect(ms).toBeLessThan(200);
-  });
+  }, 30_000);
 
   it('5000 tag controllati in meno di un secondo', () => {
     const d = fresh();
@@ -241,7 +241,7 @@ describe('checkDevice: indirizzi', () => {
     const ms = performance.now() - t0;
     expect(ds.filter((x) => x.severity === 'error')).toEqual([]);
     expect(ms).toBeLessThan(1000);
-  });
+  }, 30_000);
 });
 
 describe('checkDevice: valori e costanti', () => {

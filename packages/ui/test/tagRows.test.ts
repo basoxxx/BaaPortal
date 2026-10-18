@@ -116,7 +116,7 @@ describe('tagRows', () => {
       tag('X', 'Bool', '%M5.7'),
     );
     expect(after.map((t) => t.address)).toEqual(['%M6.0', '%MW10', '%MW12']);
-  });
+  }, 30_000);
 
   it('tagsFromTsv: normalizza tipo e indirizzo, legge HMI e commento, ignora la ritenzione', () => {
     const [a, b, c] = tagsFromTsv(

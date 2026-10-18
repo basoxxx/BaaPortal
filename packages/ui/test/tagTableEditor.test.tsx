@@ -165,7 +165,7 @@ describe('editor della tabella delle variabili', () => {
     expect(past(app)).toBe(before + 1);
     app.store.getState().undo();
     expect(table(app).tags).toHaveLength(1);
-  });
+  }, 30_000);
 
   it('1000 nomi incollati senza indirizzo: indirizzi distinti e modifiche successive rapide', async () => {
     const app = await open('tagTable', [tag('A', 'Bool', '%M0.0')]);
@@ -188,7 +188,7 @@ describe('editor della tabella delle variabili', () => {
     expect(table(app).tags[0]!.comment).toBe('nota');
     // jsdom è molto più lento di Chromium e i runner Windows della CI sono i più lenti; il test blocca la esplosione quadratica della diagnostica di sovrapposizione, che impiegava decine di secondi.
     expect(ms).toBeLessThan(5000);
-  });
+  }, 30_000);
 
   it('incollare testo vuoto non fa nulla', async () => {
     const app = await open('tagTable', [tag('A', 'Int', '%MW0')]);

@@ -1,15 +1,17 @@
-import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { ElectronApplication } from '@playwright/test';
 import {
   expect,
+  killAppTree,
   launchApp,
+  launchAppWithRetry,
   mainTitle,
   shownDialogs,
   test,
   windowCount,
   writeFixtureProject,
+  removeDir,
 } from './helpers';
 
 let tmp: string;
@@ -17,19 +19,8 @@ test.beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), 'baa-rec-'));
 });
 test.afterEach(() => {
-  rmSync(tmp, { recursive: true, force: true });
+  removeDir(tmp);
 });
-
-/** Termina il processo senza alcuna chiusura ordinata e aspetta che sia davvero uscito. */
-async function crash(app: ElectronApplication): Promise<void> {
-  const proc = app.process();
-  const exited = new Promise<void>((resolve) => {
-    if (proc.exitCode !== null || proc.signalCode !== null) resolve();
-    else proc.once('exit', () => resolve());
-  });
-  proc.kill('SIGKILL');
-  await exited;
-}
 
 test("dopo una chiusura anomala l'app offre il recupero e riapre il documento modificato", async () => {
   const file = join(tmp, 'cartella con spazi', 'Recupero àè.baap');
@@ -45,10 +36,10 @@ test("dopo una chiusura anomala l'app offre il recupero e riapre il documento mo
   const entries = () =>
     existsSync(recoveryDir) ? readdirSync(recoveryDir).filter((n) => n.endsWith('.json')) : [];
   await expect.poll(() => entries().length, { timeout: 15_000 }).toBe(1);
-  await crash(first.app);
+  await killAppTree(first.app);
 
   // Riavvio con lo stesso userData: la domanda compare e si risponde "Recupera"
-  const second = await launchApp({
+  const second = await launchAppWithRetry({
     userData: first.userData,
     env: { BAA_RECOVERY_MS: '500', BAA_DIALOG_RESPONSES: '[0, 2]' },
   });

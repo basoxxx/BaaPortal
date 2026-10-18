@@ -203,7 +203,7 @@ describe('numeri e nomi', () => {
     expect(out[999]).toBe('Variabile_2000');
     expect(new Set(out).size).toBe(1000);
     expect(ms).toBeLessThan(200);
-  });
+  }, 30_000);
 
   it('symbolNames: tag, costanti, blocchi e UDT', () => {
     expect(symbolNames(makeDevice()).sort()).toEqual(

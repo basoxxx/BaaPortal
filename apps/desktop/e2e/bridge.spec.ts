@@ -1,7 +1,15 @@
-import { chmodSync, mkdtempSync, rmSync } from 'node:fs';
+import { chmodSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { expect, launchApp, shownDialogs, stubMessageBox, test } from './helpers';
+import {
+  closeApp,
+  expect,
+  launchApp,
+  shownDialogs,
+  stubMessageBox,
+  test,
+  removeDir,
+} from './helpers';
 
 test('writeFileAtomic, readFile e fileExists funzionano attraverso il bridge', async () => {
   const { app, page } = await launchApp();
@@ -16,7 +24,7 @@ test('writeFileAtomic, readFile e fileExists funzionano attraverso il bridge', a
     expect(result).toEqual({ bytes: [1, 2, 3], exists: true });
   } finally {
     await app.close();
-    rmSync(dir, { recursive: true, force: true });
+    removeDir(dir);
   }
 });
 
@@ -44,7 +52,7 @@ test('writeFileAtomic in cartella di sola lettura rifiuta con code e message ori
   } finally {
     await app.close();
     chmodSync(dir, 0o755);
-    rmSync(dir, { recursive: true, force: true });
+    removeDir(dir);
   }
 });
 
@@ -118,10 +126,10 @@ test("testOverrides restituisce l'intervallo di BAA_RECOVERY_MS", async () => {
   expect(await a.page.evaluate(() => window.baa.testOverrides())).toEqual({
     recoveryIntervalMs: 500,
   });
-  await a.app.close();
+  await closeApp(a.app);
   const b = await launchApp();
   expect(await b.page.evaluate(() => window.baa.testOverrides())).toEqual({});
-  await b.app.close();
+  await closeApp(b.app);
   const c = await launchApp({ env: { BAA_RECOVERY_MS: 'abc' } });
   expect(await c.page.evaluate(() => window.baa.testOverrides())).toEqual({});
 });
@@ -135,7 +143,7 @@ test('un userData riusato con launchApp({ userData }) conserva i file di recuper
       savedAt: 's',
     }),
   );
-  await a.app.close();
+  await closeApp(a.app);
   const b = await launchApp({ userData: a.userData });
   expect((await b.page.evaluate(() => window.baa.recoveryList())).map((e) => e.key)).toEqual([
     'k2',

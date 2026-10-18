@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { readBaap } from '@baaportal/project';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -17,6 +17,7 @@ import {
   stubMessageBox,
   test,
   writeFixtureProject,
+  removeDir,
 } from './helpers';
 
 let tmp: string;
@@ -24,7 +25,7 @@ test.beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), 'baa-plc-'));
 });
 test.afterEach(() => {
-  rmSync(tmp, { recursive: true, force: true });
+  removeDir(tmp);
 });
 
 /** Griglia dell'editor attivo (la prima della pagina). */

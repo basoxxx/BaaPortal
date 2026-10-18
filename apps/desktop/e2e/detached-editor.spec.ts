@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { readBaap } from '@baaportal/project';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,6 +12,7 @@ import {
   test,
   windowCount,
   writeFixtureProject,
+  removeDir,
 } from './helpers';
 
 let tmp: string;
@@ -19,7 +20,7 @@ test.beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), 'baa-det-'));
 });
 test.afterEach(() => {
-  rmSync(tmp, { recursive: true, force: true });
+  removeDir(tmp);
 });
 
 /** Apre l'editor della tabella standard e lo stacca in una finestra separata; restituisce la nuova pagina. */

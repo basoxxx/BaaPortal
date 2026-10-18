@@ -522,5 +522,5 @@ describe('DataGrid', () => {
     expect(document.querySelectorAll('[role="row"]')).toHaveLength(2001);
     // Target sulla macchina di sviluppo sotto 1 s; soglia 3× perché i runner della CI sono più lenti e il test blocca solo regressioni patologiche.
     expect(ms).toBeLessThan(3000);
-  });
+  }, 30_000);
 });

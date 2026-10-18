@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import electronPath from 'electron';
 import {
   _electron,
@@ -27,6 +27,56 @@ export interface Launched {
 }
 
 const launched: Launched[] = [];
+// app.process() non è più utilizzabile dopo app.close(): il processo si conserva al lancio.
+const processes = new WeakMap<ElectronApplication, ChildProcess>();
+
+/**
+ * Rimuove una cartella temporanea. Su Windows i processi figli di Electron (GPU, utility) tengono
+ * aperti alcuni file di userData per un po' dopo la chiusura: rmSync riprova su EBUSY/EPERM/ENOTEMPTY.
+ * Se dopo tutti i tentativi la pulizia fallisce, avvisa senza far fallire la prova.
+ */
+export function removeDir(path: string): void {
+  try {
+    rmSync(path, { recursive: true, force: true, maxRetries: 10, retryDelay: 250 });
+  } catch (e) {
+    console.warn(`pulizia di ${path} non riuscita: ${String(e)}`);
+  }
+}
+
+/** Risolve quando il processo principale di Electron è uscito (o dopo `timeoutMs`). */
+export async function waitForExit(proc: ChildProcess, timeoutMs = 15_000): Promise<void> {
+  if (proc.exitCode !== null || proc.signalCode !== null) return;
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, timeoutMs);
+    proc.once('exit', () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
+/** Chiude l'app e aspetta l'uscita del processo principale: dopo, userData si può cancellare. */
+export async function closeApp(app: ElectronApplication): Promise<void> {
+  await app.close().catch(() => undefined);
+  const proc = processes.get(app);
+  if (proc) await waitForExit(proc);
+}
+
+/**
+ * Termina l'app senza alcuna chiusura ordinata e aspetta l'uscita del processo principale. Su Windows
+ * uccide l'intero albero: i figli (GPU, utility, renderer) altrimenti restano vivi e tengono il blocco
+ * di istanza unica e i file di userData, e la riapertura con lo stesso userData fallisce.
+ */
+export async function killAppTree(app: ElectronApplication): Promise<void> {
+  const proc = processes.get(app) ?? app.process();
+  const exited = waitForExit(proc);
+  if (process.platform === 'win32' && proc.pid !== undefined) {
+    spawnSync('taskkill', ['/PID', String(proc.pid), '/T', '/F']);
+  } else {
+    proc.kill('SIGKILL');
+  }
+  await exited;
+}
 
 /**
  * `test` di Playwright con una fixture automatica che, dopo ogni test (anche fallito), chiude le app
@@ -38,8 +88,8 @@ export const test = base.extend<{ closeLaunchedApps: void }>({
     async ({}, use) => {
       await use();
       for (const l of launched.splice(0)) {
-        await l.app.close().catch(() => undefined);
-        rmSync(l.userData, { recursive: true, force: true });
+        await closeApp(l.app);
+        removeDir(l.userData);
       }
     },
     { auto: true },
@@ -58,14 +108,23 @@ export async function launchApp(
     userData?: string;
   } = {},
 ): Promise<Launched> {
+  const created = opts.userData === undefined;
   const userData = opts.userData ?? mkdtempSync(join(tmpdir(), 'baa-userdata-'));
   // Con un timeout proprio, un avvio bloccato fallisce riportando nel call log l'uscita del processo.
-  const app = await _electron.launch({
-    args: ['out/main/index.js', ...(opts.args ?? [])],
-    cwd: opts.cwd,
-    env: { ...process.env, ...opts.env, BAA_USER_DATA: userData },
-    timeout: 15_000,
-  });
+  let app: ElectronApplication;
+  try {
+    app = await _electron.launch({
+      args: ['out/main/index.js', ...(opts.args ?? [])],
+      cwd: opts.cwd,
+      env: { ...process.env, ...opts.env, BAA_USER_DATA: userData },
+      timeout: 15_000,
+    });
+  } catch (e) {
+    // Un userData passato dal chiamante resta (serve ai tentativi successivi e lo pulisce la fixture).
+    if (created) removeDir(userData);
+    throw e;
+  }
+  processes.set(app, app.process());
   // Uscita di main e renderer: compare nell'errore solo se l'app non arriva a mostrarsi.
   const log: string[] = [];
   app.process().stdout?.on('data', (d) => log.push(`[main] ${String(d).trimEnd()}`));
@@ -87,13 +146,32 @@ export async function launchApp(
     );
   } catch (e) {
     if (!page) {
-      await app.close().catch(() => undefined);
-      rmSync(userData, { recursive: true, force: true });
+      await closeApp(app);
+      if (created) removeDir(userData);
     }
     const where = page ? `pagina: ${page.url()}` : 'nessuna finestra';
     throw new Error(`l'app non si è mostrata (${where})\n${log.join('\n')}`, { cause: e });
   }
   return { app, page, userData };
+}
+
+/**
+ * Come launchApp, ma riprova (3 tentativi) se l'avvio fallisce: dopo una chiusura anomala su Windows i
+ * processi figli possono tenere ancora per qualche istante il blocco di istanza unica di userData.
+ */
+export async function launchAppWithRetry(
+  opts: Parameters<typeof launchApp>[0] = {},
+  attempts = 3,
+  waitMs = 1_000,
+): Promise<Launched> {
+  for (let i = 1; ; i++) {
+    try {
+      return await launchApp(opts);
+    } catch (e) {
+      if (i >= attempts) throw e;
+      await new Promise((r) => setTimeout(r, waitMs));
+    }
+  }
 }
 
 /** Sostituisce i dialoghi nativi nel processo principale: ogni messaggio viene registrato in globalThis.__dialogs. */

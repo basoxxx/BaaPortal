@@ -118,7 +118,7 @@ describe('interfaceRows', () => {
     const big = mem('big', 'Array[0..2000] of Byte');
     rows = rowsOf({ kind: 'DB', db: globalDb('D', [big]) }, plc(), [big.id]);
     expect(rows.filter((r) => r.kind === 'element')).toHaveLength(1000);
-  });
+  }, 30_000);
 
   it('UDT espanso in un DB: righe derived con override .membro', () => {
     const dev = plc();

@@ -1,15 +1,15 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { writeBaap, createProject as newProject } from '@baaportal/project';
-import { expect, launchApp, spawnSecondInstance, test } from './helpers';
+import { expect, launchApp, spawnSecondInstance, test, removeDir } from './helpers';
 
 let tmp: string;
 test.beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), 'baa-single-'));
 });
 test.afterEach(() => {
-  rmSync(tmp, { recursive: true, force: true });
+  removeDir(tmp);
 });
 
 const title = (app: Awaited<ReturnType<typeof launchApp>>['app']) =>

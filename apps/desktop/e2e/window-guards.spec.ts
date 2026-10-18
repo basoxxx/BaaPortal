@@ -1,8 +1,16 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createProject as newProject, writeBaap } from '@baaportal/project';
-import { createProject, expect, launchApp, shownDialogs, stubMessageBox, test } from './helpers';
+import {
+  createProject,
+  expect,
+  launchApp,
+  shownDialogs,
+  stubMessageBox,
+  test,
+  removeDir,
+} from './helpers';
 
 const title = (app: Awaited<ReturnType<typeof launchApp>>['app']) =>
   app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getTitle());
@@ -43,7 +51,7 @@ test('dopo una navigazione bloccata la chiusura chiede ancora di salvare le modi
     await expect.poll(() => shownDialogs(app)).toHaveLength(1);
     expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(1);
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    removeDir(dir);
   }
 });
 
@@ -64,7 +72,7 @@ test('dopo una ricarica la pagina si riannuncia: la chiusura chiede di nuovo di 
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.close());
     await expect.poll(() => shownDialogs(app)).toHaveLength(1);
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    removeDir(dir);
   }
 });
 
@@ -149,7 +157,7 @@ test('open-file (macOS) ripristina una finestra minimizzata e apre il file', asy
       .toBe(false);
     await expect.poll(() => title(app)).toBe(`BaaPortal - ${file}`);
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    removeDir(dir);
   }
 });
 

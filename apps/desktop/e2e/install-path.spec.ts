@@ -1,8 +1,8 @@
-import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { expect, launchApp, test } from './helpers';
+import { expect, launchApp, test, removeDir } from './helpers';
 
 /** Copia ricorsiva: fs.cpSync di Node 22 su Windows storpia i percorsi di destinazione non ASCII. */
 function copyDir(from: string, to: string): void {
@@ -39,7 +39,7 @@ for (const [label, parts] of folders) {
       await expect(page.getByTestId('portal-start')).toBeVisible();
       await app.close();
     } finally {
-      rmSync(root, { recursive: true, force: true });
+      removeDir(root);
     }
   });
 }
