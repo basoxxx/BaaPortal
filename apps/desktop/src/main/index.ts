@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu } from 'electron';
 import { join } from 'node:path';
 import { registerIpc } from './ipc';
 
@@ -14,6 +14,34 @@ const isBaap = (p: string) => p.toLowerCase().endsWith('.baap');
 function requestOpen(path: string): void {
   if (rendererIsReady && win) win.webContents.send('app:open-file', path);
   else pendingOpen.push(path);
+}
+
+/**
+ * Il menu vero è quello nella finestra (renderer). Su macOS resta un menu nativo minimo con le voci
+ * standard dell'app e Modifica (taglia/copia/incolla nei campi di testo); altrove il menu nativo si toglie.
+ */
+function setupNativeMenu(): void {
+  if (process.platform !== 'darwin') {
+    Menu.setApplicationMenu(null);
+    return;
+  }
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate([
+      {
+        label: 'BaaPortal',
+        submenu: [{ label: 'Informazioni su BaaPortal', role: 'about' }, { type: 'separator' }, { label: 'Esci', role: 'quit' }],
+      },
+      {
+        label: 'Modifica',
+        submenu: [
+          { label: 'Taglia', role: 'cut' },
+          { label: 'Copia', role: 'copy' },
+          { label: 'Incolla', role: 'paste' },
+          { label: 'Seleziona tutto', role: 'selectAll' },
+        ],
+      },
+    ]),
+  );
 }
 
 function createWindow(): void {
@@ -82,5 +110,8 @@ if (!app.requestSingleInstanceLock()) {
     for (const p of pendingOpen.splice(0)) win?.webContents.send('app:open-file', p);
   });
 
-  void app.whenReady().then(createWindow);
+  void app.whenReady().then(() => {
+    setupNativeMenu();
+    createWindow();
+  });
 }

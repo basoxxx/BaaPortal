@@ -81,6 +81,34 @@
     "help.show": "Visualizza la guida",
     "help.about": "Informazioni su BaaPortal"
   },
+  "menu": {
+    "project": "Progetto",
+    "edit": "Modifica",
+    "view": "Visualizza",
+    "insert": "Inserisci",
+    "online": "Online",
+    "options": "Opzioni",
+    "tools": "Strumenti",
+    "window": "Finestra",
+    "help": "Guida",
+    "recent": "Progetti recenti",
+    "noRecent": "(nessuno)"
+  },
+  "panel": {
+    "navigation": "Navigazione del progetto",
+    "referenceProjects": "Progetti di riferimento",
+    "details": "Vista dettagli",
+    "inspector": "Finestra di ispezione",
+    "taskCards": "Task card",
+    "collapse": "Chiudi il pannello",
+    "expand": "Apri il pannello",
+    "autoHide": "Nascondi automaticamente",
+    "pin": "Fissa il pannello",
+    "toggleReference": "Mostra o nascondi i progetti di riferimento"
+  },
+  "toolbar": {
+    "search": "Ricerca"
+  },
   "portal": {
     "start": "Avvio",
     "devices": "Dispositivi e reti",

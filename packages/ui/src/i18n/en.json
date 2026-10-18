@@ -81,6 +81,34 @@
     "help.show": "Show help",
     "help.about": "About BaaPortal"
   },
+  "menu": {
+    "project": "Project",
+    "edit": "Edit",
+    "view": "View",
+    "insert": "Insert",
+    "online": "Online",
+    "options": "Options",
+    "tools": "Tools",
+    "window": "Window",
+    "help": "Help",
+    "recent": "Recent projects",
+    "noRecent": "(none)"
+  },
+  "panel": {
+    "navigation": "Project navigation",
+    "referenceProjects": "Reference projects",
+    "details": "Details view",
+    "inspector": "Inspector window",
+    "taskCards": "Task cards",
+    "collapse": "Close the panel",
+    "expand": "Open the panel",
+    "autoHide": "Hide automatically",
+    "pin": "Pin the panel",
+    "toggleReference": "Show or hide the reference projects"
+  },
+  "toolbar": {
+    "search": "Search"
+  },
   "portal": {
     "start": "Start",
     "devices": "Devices & networks",

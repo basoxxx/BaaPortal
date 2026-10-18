@@ -4,7 +4,7 @@ export type IconName =
   | 'portalStart' | 'portalDevices' | 'portalPlc' | 'portalOnline'
   | 'actionOpen' | 'actionNew' | 'actionMigrate' | 'actionClose' | 'actionFirstSteps' | 'actionInstalled' | 'actionHelp' | 'actionLanguage'
   | 'new' | 'open' | 'save' | 'print' | 'cut' | 'copy' | 'paste' | 'delete' | 'undo' | 'redo'
-  | 'compile' | 'download' | 'upload' | 'simulation' | 'goOnline' | 'goOffline' | 'accessibleDevices' | 'startCpu' | 'stopCpu' | 'splitWorkArea' | 'search'
+  | 'compile' | 'download' | 'upload' | 'simulation' | 'goOnline' | 'goOffline' | 'accessibleDevices' | 'startCpu' | 'stopCpu' | 'splitWorkArea' | 'search' | 'pin'
   | 'treeProject' | 'treeAddDevice' | 'treeDevicesNetworks' | 'treeCommonData' | 'treeDocSettings' | 'treeLanguages' | 'treeOnlineAccess';
 
 const registry = new Map<IconName, FC<{ size: number }>>();

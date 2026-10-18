@@ -7,6 +7,8 @@ import { useShortcuts } from './commands/useShortcuts';
 import { i18next, initI18n, t } from './i18n';
 import { createProjectService } from './services/projectService';
 import { PortalView } from './portal/PortalView';
+import { ProjectView } from './project/ProjectView';
+import { loadLayout, saveLayout } from './project/layoutStorage';
 import { AppProvider, useAppStore, type AppServices } from './state/AppContext';
 import { attachPortalReaction } from './state/portalReaction';
 import { createAppStore } from './state/store';
@@ -19,13 +21,21 @@ export interface AppProps {
   onReady?: (services: AppServices) => void;
 }
 
+/** localStorage può lanciare (dati del sito bloccati): in tal caso il layout non viene ricordato. */
+function layoutStorage(): Storage | null {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
 function Shell() {
   useShortcuts();
   const view = useAppStore((s) => s.view);
   return (
     <div data-testid="app-root" className="baa-app">
-      {/* La vista progetto arriva nel Task 5. */}
-      {view === 'portal' ? <PortalView /> : null}
+      {view === 'portal' ? <PortalView /> : <ProjectView />}
     </div>
   );
 }
@@ -40,10 +50,16 @@ export function App({ bridge, onReady }: AppProps) {
       const [appVersion] = await Promise.all([bridge.appVersion(), initI18n()]);
       if (cancelled) return;
       const store = createAppStore();
+      const storage = layoutStorage();
+      store.setState({ panels: loadLayout(storage) });
+      const detachLayout = store.subscribe((s, prev) => {
+        if (s.panels !== prev.panels) saveLayout(storage, s.panels);
+      });
       const service = createProjectService({ store, bridge, t, appVersion });
       const detachPortal = attachPortalReaction(store);
       dispose = () => {
         detachPortal();
+        detachLayout();
         service.dispose();
       };
       const services = { store, service, bridge };
