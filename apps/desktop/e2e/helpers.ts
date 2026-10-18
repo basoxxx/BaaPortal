@@ -32,11 +32,7 @@ export const test = base.extend<{ closeLaunchedApps: void }>({
 });
 export { expect } from '@playwright/test';
 
-/**
- * `cwd`: cartella da cui avviare Electron; lo script principale `out/main/index.js` si risolve da lì.
- * Su Windows Playwright avvia Electron tramite cmd.exe: un percorso con accenti o apostrofi sulla riga
- * di comando non arriva intatto, come cartella di lavoro sì.
- */
+/** `cwd`: cartella da cui avviare Electron; lo script principale `out/main/index.js` si risolve da lì. */
 export async function launchApp(opts: { args?: string[]; cwd?: string } = {}): Promise<Launched> {
   const userData = mkdtempSync(join(tmpdir(), 'baa-userdata-'));
   // Con un timeout proprio, un avvio bloccato fallisce riportando nel call log l'uscita del processo.

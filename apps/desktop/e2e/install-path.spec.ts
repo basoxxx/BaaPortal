@@ -1,8 +1,17 @@
-import { cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, launchApp, test } from './helpers';
+
+/** Copia ricorsiva: fs.cpSync di Node 22 su Windows storpia i percorsi di destinazione non ASCII. */
+function copyDir(from: string, to: string): void {
+  mkdirSync(to, { recursive: true });
+  for (const e of readdirSync(from, { withFileTypes: true })) {
+    if (e.isDirectory()) copyDir(join(from, e.name), join(to, e.name));
+    else copyFileSync(join(from, e.name), join(to, e.name));
+  }
+}
 
 // Su Windows l'installazione per utente finisce sotto il nome dell'utente (spazi, accenti, apostrofi):
 // la pagina caricata da quella cartella deve essere riconosciuta come l'app e poter usare i canali IPC.
@@ -17,7 +26,7 @@ for (const [label, parts] of folders) {
     const root = mkdtempSync(join(tmpdir(), 'baa-install-'));
     try {
       const appDir = join(root, ...parts);
-      cpSync('out', join(appDir, 'out'), { recursive: true });
+      copyDir('out', join(appDir, 'out'));
       writeFileSync(
         join(appDir, 'package.json'),
         JSON.stringify({ name: 'baaportal', version: '0.1.0', type: 'module' }),
