@@ -1,4 +1,4 @@
-import { act, render, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { expect } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import type { StoreApi } from 'zustand/vanilla';
@@ -60,5 +60,12 @@ export async function renderApp(opts: RenderAppOptions = {}): Promise<RenderedAp
       await service.open(PROJECT_PATH);
     });
   if (opts.view) act(() => store.getState().setView(opts.view!));
+  // La Shell viene montata fuori da act (i servizi sono pronti in modo asincrono) e può agganciarsi
+  // allo store dopo setView: si attende che la vista mostrata sia quella dello store.
+  await waitFor(() =>
+    expect(
+      screen.getByTestId(store.getState().view === 'portal' ? 'portal-list' : 'menu-bar'),
+    ).toBeInTheDocument(),
+  );
   return { store, bridge, service, user };
 }
