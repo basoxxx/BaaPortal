@@ -403,5 +403,13 @@
     "open": "Open",
     "addGroup": "Add new group",
     "properties": "Properties"
+  },
+  "grid": {
+    "addRow": "<Add>",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "rowNumber": "Row",
+    "fillHandle": "Fill handle",
+    "suggestions": "Suggestions"
   }
 }

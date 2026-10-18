@@ -403,5 +403,13 @@
     "open": "Apri",
     "addGroup": "Aggiungi nuovo gruppo",
     "properties": "Proprietà"
+  },
+  "grid": {
+    "addRow": "<Aggiungi>",
+    "expand": "Espandi",
+    "collapse": "Comprimi",
+    "rowNumber": "Riga",
+    "fillHandle": "Maniglia di riempimento",
+    "suggestions": "Suggerimenti"
   }
 }

@@ -16,6 +16,7 @@ import { ContextMenu, type ContextMenuItem } from '../../components/ContextMenu'
 import { peekClipboardPayload } from '../../services/clipboard';
 import { useAppStore, useServices } from '../../state/AppContext';
 import type { EditAction } from '../../state/store';
+import { useEditTarget } from '../../state/useEditTarget';
 import { areaOfItem, isStandardTable } from '../objectActions';
 import { editorOfNode } from '../../state/workArea';
 import { runAddNode } from './addActions';
@@ -39,7 +40,6 @@ import { RenameInput } from './RenameInput';
 import { buildTree, type TreeNode } from './treeModel';
 
 const TARGET_ID = 'tree';
-const MENUS_SELECTOR = '[role="menu"],[role="menubar"]';
 
 /** Antenati del nodo `id` (dalla radice), o null se il nodo non esiste. */
 function ancestorsOf(node: TreeNode, id: string): TreeNode[] | null {
@@ -72,7 +72,6 @@ export function ProjectTree() {
   const [renaming, setRenaming] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
-  const [hasFocus, setHasFocus] = useState(false);
   const [, setClipboardTick] = useState(0);
 
   const { project, onlineAccess } = useMemo(() => buildTree(doc), [doc]);
@@ -137,7 +136,6 @@ export function ProjectTree() {
       clip.items.some((i) => areaOfItem(i) === pasteTarget.area),
     selectAll: selection !== null,
   };
-  const canKey = JSON.stringify(can);
 
   const selectAll = () => {
     const row = rows.find((r) => r.node.id === selection);
@@ -168,33 +166,8 @@ export function ProjectTree() {
         selectAll();
     }
   };
-  // Il bersaglio dei comandi chiama sempre la versione più recente di `run`.
-  const runRef = useRef(run);
-  runRef.current = run;
-
   // Con il focus nell'albero (o nel menu che ne è partito) i comandi di Modifica agiscono qui.
-  useEffect(() => {
-    const s = store.getState();
-    if (hasFocus) s.setEditTarget({ id: TARGET_ID, can, run: (a) => runRef.current(a) });
-    else if (s.editTarget?.id === TARGET_ID) s.setEditTarget(null);
-    // `can` cambia solo se cambia canKey.
-  }, [hasFocus, canKey, store]);
-  useEffect(
-    () => () => {
-      if (store.getState().editTarget?.id === TARGET_ID) store.getState().setEditTarget(null);
-    },
-    [store],
-  );
-  // Il focus che passa a un altro elemento (non ai menu) toglie la destinazione.
-  useEffect(() => {
-    if (!hasFocus) return;
-    const onFocusIn = (e: FocusEvent) => {
-      const el = e.target as Element | null;
-      if (el && !treeRef.current?.contains(el) && !el.closest(MENUS_SELECTOR)) setHasFocus(false);
-    };
-    document.addEventListener('focusin', onFocusIn);
-    return () => document.removeEventListener('focusin', onFocusIn);
-  }, [hasFocus]);
+  const focusProps = useEditTarget(store, TARGET_ID, treeRef, can, run);
 
   // Finita la rinomina il focus torna al nodo.
   const wasRenaming = useRef(false);
@@ -246,7 +219,7 @@ export function ProjectTree() {
   };
 
   const menuItems = (nodeId: string): ContextMenuItem[] => {
-    const act = (a: EditAction) => () => void runRef.current(a);
+    const act = (a: EditAction) => () => void run(a);
     const group = containerOf(doc, nodeId);
     return [
       {
@@ -373,12 +346,8 @@ export function ProjectTree() {
         aria-multiselectable="true"
         className="baa-tree"
         ref={treeRef}
-        onFocus={() => setHasFocus(true)}
-        onBlur={(e) => {
-          const next = e.relatedTarget as Element | null;
-          if (next && (treeRef.current?.contains(next) || next.closest(MENUS_SELECTOR))) return;
-          setHasFocus(false);
-        }}
+        onFocus={focusProps.onFocus}
+        onBlur={focusProps.onBlur}
       >
         {rows.map(({ node, level }, i) => {
           const hasKids = node.children.length > 0;
