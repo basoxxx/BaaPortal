@@ -21,6 +21,12 @@ describe('catalogo CPU e OB', () => {
     expect(findCpu('__proto__')).toBeUndefined();
     expect(findCpuByOrderNumber('constructor')).toBeUndefined();
   });
+  it("i numeri d'articolo sono unici in tutto il catalogo", () => {
+    const all = CPU_CATALOG.flatMap((c) =>
+      c.versions.map((v) => v.orderNumber.replace(/\s+/g, '')),
+    );
+    expect(new Set(all).size).toBe(all.length);
+  });
   it('CPU 315-2 PN/DP', () => {
     const { cpu } = findCpuByOrderNumber('6ES7 315-2EH14-0AB0')!;
     expect(cpu).toMatchObject({

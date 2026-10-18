@@ -9,7 +9,10 @@ const MANUALS = `${MAN_2011}; ${MAN_2008}`;
 const sheet = (mlfb: string, url: string) => `Siemens data sheet ${mlfb} (${url})`;
 
 // Valori comuni alle versioni V3.x dei manuali 03/2011 e dei data sheet delle CPU F.
-const LOCAL_V3 = 32768; // 32 KB per livello di esecuzione
+// Dati locali per classe di priorità: verificato CPU per CPU nel manuale 03/2011, voce "Local data /
+// Per priority class, max." delle tabelle dati tecnici di tutte e 12 le CPU V3.x (cap. 8 e 9): sempre
+// 32 KB (2048 byte per blocco). I valori inferiori (256/510/1024 byte) sono delle versioni V2.x (manuale 2008).
+const LOCAL_V3 = 32768;
 const MAX_DB = 16000; // numeri DB 1..16000
 const MAX_FB_FC = 7999; // numeri FB/FC 0..7999
 
