@@ -1,9 +1,8 @@
-import { expect, test } from '@playwright/test';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { writeBaap, createProject as newProject } from '@baaportal/project';
-import { launchApp, spawnSecondInstance } from './helpers';
+import { expect, launchApp, spawnSecondInstance, test } from './helpers';
 
 let tmp: string;
 test.beforeEach(() => {

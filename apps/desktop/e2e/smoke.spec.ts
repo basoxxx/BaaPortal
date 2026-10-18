@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { launchApp } from './helpers';
+import { expect, launchApp, test } from './helpers';
 
 test("l'app si avvia con titolo BaaPortal e bridge disponibile", async () => {
   const { app, page } = await launchApp();

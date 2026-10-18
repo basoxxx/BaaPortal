@@ -1,8 +1,7 @@
-import { expect, test } from '@playwright/test';
 import { chmodSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { launchApp } from './helpers';
+import { expect, launchApp, test } from './helpers';
 
 test('writeFileAtomic, readFile e fileExists funzionano attraverso il bridge', async () => {
   const { app, page } = await launchApp();

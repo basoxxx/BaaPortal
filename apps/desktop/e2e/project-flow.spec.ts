@@ -1,13 +1,14 @@
-import { expect, test } from '@playwright/test';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   createProject,
+  expect,
   launchApp,
   shownDialogs,
   spawnSecondInstance,
   stubMessageBox,
+  test,
 } from './helpers';
 
 const mod = process.platform === 'darwin' ? 'Meta' : 'Control';

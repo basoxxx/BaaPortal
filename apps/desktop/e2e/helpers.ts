@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import electronPath from 'electron';
-import { _electron, test, type ElectronApplication, type Page } from '@playwright/test';
+import { _electron, test as base, type ElectronApplication, type Page } from '@playwright/test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -13,18 +13,30 @@ export interface Launched {
 
 const launched: Launched[] = [];
 
-// Chiude le app lanciate (anche se il test fallisce) e rimuove gli userData temporanei.
-test.afterEach(async () => {
-  for (const l of launched.splice(0)) {
-    await l.app.close().catch(() => undefined);
-    rmSync(l.userData, { recursive: true, force: true });
-  }
+/**
+ * `test` di Playwright con una fixture automatica che, dopo ogni test (anche fallito), chiude le app
+ * lanciate e rimuove i loro userData temporanei. Gli spec devono importare `test` da qui: un
+ * afterEach a livello di modulo si aggancerebbe solo al primo file che importa questo helper.
+ */
+export const test = base.extend<{ closeLaunchedApps: void }>({
+  closeLaunchedApps: [
+    async ({}, use) => {
+      await use();
+      for (const l of launched.splice(0)) {
+        await l.app.close().catch(() => undefined);
+        rmSync(l.userData, { recursive: true, force: true });
+      }
+    },
+    { auto: true },
+  ],
 });
+export { expect } from '@playwright/test';
 
-export async function launchApp(opts: { args?: string[] } = {}): Promise<Launched> {
+/** `main`: script principale da avviare (predefinito: la build in out/). */
+export async function launchApp(opts: { args?: string[]; main?: string } = {}): Promise<Launched> {
   const userData = mkdtempSync(join(tmpdir(), 'baa-userdata-'));
   const app = await _electron.launch({
-    args: ['out/main/index.js', ...(opts.args ?? [])],
+    args: [opts.main ?? 'out/main/index.js', ...(opts.args ?? [])],
     env: { ...process.env, BAA_USER_DATA: userData },
   });
   const page = await app.firstWindow();
