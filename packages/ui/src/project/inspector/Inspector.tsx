@@ -1,16 +1,19 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useAppStore, useServices } from '../../state/AppContext';
+import type { InspectorTab } from '../../state/store';
 import { InfoMessages } from './InfoMessages';
 import { ProjectProperties } from './ProjectProperties';
 
-type Tab = 'properties' | 'info' | 'diagnostics';
 type SubTab = 'general' | 'crossRefs' | 'compile';
-const TABS: Tab[] = ['properties', 'info', 'diagnostics'];
+const TABS: InspectorTab[] = ['properties', 'info', 'diagnostics'];
 const SUBTABS: SubTab[] = ['general', 'crossRefs', 'compile'];
 
 export function Inspector() {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<Tab>('properties');
+  const { store } = useServices();
+  const tab = useAppStore((s) => s.inspectorTab);
+  const setTab = (id: InspectorTab) => store.getState().setInspectorTab(id);
   const [sub, setSub] = useState<SubTab>('general');
   return (
     <div className="baa-inspector">

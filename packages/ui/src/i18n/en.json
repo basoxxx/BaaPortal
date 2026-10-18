@@ -35,7 +35,9 @@
     "created": "Project \"{{name}}\" created.",
     "opened": "Project \"{{name}}\" opened.",
     "saved": "Project \"{{name}}\" saved.",
-    "recentMissing": "The project \"{{name}}\" was not found: it was removed from the list."
+    "recentMissing": "The project \"{{name}}\" was not found: it was removed from the list.",
+    "standardTableLocked": "The default tag table cannot be deleted.",
+    "pasteNoNumber": "No free number: {{count}} objects were not pasted."
   },
   "commands": {
     "project.new": "New…",
@@ -213,7 +215,13 @@
     "addDevice": "Add device",
     "addBlock": "Add block",
     "addTagTable": "Add tag table",
-    "addUdt": "Add data type"
+    "addUdt": "Add data type",
+    "paste": "Paste objects",
+    "move": "Move objects",
+    "delete": "Delete objects",
+    "rename": "Rename",
+    "addGroup": "Add group",
+    "moveTags": "Move tags"
   },
   "inspector": {
     "tab": {
@@ -295,7 +303,8 @@
       "100": "Startup",
       "121": "Programming error",
       "122": "IO access error"
-    }
+    },
+    "group": "Group_1"
   },
   "dialog": {
     "ok": "OK",
@@ -363,5 +372,19 @@
       "121": "Programming error",
       "122": "I/O access error"
     }
+  },
+  "objects": {
+    "deleteTitle": "Delete",
+    "deleteMessage": "Delete the selected objects?",
+    "deleteMore": "and {{count}} more",
+    "yes": "Yes",
+    "no": "No",
+    "renameLabel": "New name",
+    "errInvalid": "The name is not valid.",
+    "errDuplicate": "The name is already in use.",
+    "menuLabel": "Context menu",
+    "open": "Open",
+    "addGroup": "Add new group",
+    "properties": "Properties"
   }
 }

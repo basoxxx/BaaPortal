@@ -337,6 +337,32 @@
 .baa-tree-node[aria-selected='true'] {
   background: var(--baa-selection);
 }
+.baa-tree-node {
+  position: relative;
+}
+.baa-tree-node.baa-drop-target {
+  outline: 1px dashed var(--baa-accent);
+  outline-offset: -1px;
+  background: var(--baa-selection);
+}
+.baa-rename-input {
+  height: calc(var(--baa-row-height) - 4px);
+  padding: 0 2px;
+  font: inherit;
+}
+.baa-rename-error {
+  position: absolute;
+  top: 100%;
+  left: 28px;
+  z-index: 20;
+  padding: 1px 6px;
+  background: var(--baa-surface);
+  border: 1px solid var(--baa-border);
+  color: var(--baa-error, #c00);
+}
+.baa-context-menu {
+  z-index: 40;
+}
 .baa-tree-node:focus-visible {
   outline: 1px solid var(--baa-accent);
   outline-offset: -1px;

@@ -73,13 +73,31 @@ test('il rilascio di un file sulla finestra non lo apre nel renderer', async () 
   const prevented = await page.evaluate(() => {
     const results: boolean[] = [];
     for (const type of ['dragover', 'drop']) {
-      const ev = new Event(type, { cancelable: true, bubbles: true });
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(new File(['x'], 'a.txt'));
+      const ev = new DragEvent(type, { cancelable: true, bubbles: true, dataTransfer });
       document.body.dispatchEvent(ev);
       results.push(ev.defaultPrevented);
     }
     return results;
   });
   expect(prevented).toEqual([true, true]);
+});
+
+test('il trascinamento di solo testo non viene bloccato dalla protezione dei file', async () => {
+  const { page } = await launchApp();
+  const prevented = await page.evaluate(() => {
+    const results: boolean[] = [];
+    for (const type of ['dragover', 'drop']) {
+      const dataTransfer = new DataTransfer();
+      dataTransfer.setData('text/plain', 'Nastro');
+      const ev = new DragEvent(type, { cancelable: true, bubbles: true, dataTransfer });
+      document.body.dispatchEvent(ev);
+      results.push(ev.defaultPrevented);
+    }
+    return results;
+  });
+  expect(prevented).toEqual([false, false]);
 });
 
 test('un renderer in crash non impedisce di chiudere la finestra', async () => {

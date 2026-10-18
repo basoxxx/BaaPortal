@@ -11,6 +11,15 @@ export type StartAction =
 /** Finestra modale aperta sopra la vista corrente. */
 export type DialogState = { kind: 'addDevice' } | { kind: 'addBlock'; deviceId: string } | null;
 
+export type EditAction = 'cut' | 'copy' | 'paste' | 'delete' | 'rename' | 'selectAll';
+/** Chi riceve i comandi del menu Modifica: l'elemento (albero, griglia…) che ha il focus. */
+export interface EditTarget {
+  id: string;
+  can: Partial<Record<EditAction, boolean>>;
+  run(action: EditAction): void | Promise<void>;
+}
+export type InspectorTab = 'properties' | 'info' | 'diagnostics';
+
 export interface OpenDoc {
   project: Project;
   filePath: string;
@@ -47,6 +56,8 @@ export interface AppState {
   /** Id del nodo selezionato nell'albero (vedi navigation/treeIds). */
   selection: string | null;
   dialog: DialogState;
+  editTarget: EditTarget | null;
+  inspectorTab: InspectorTab;
   messages: InfoMessage[];
   status: { textKey: string; params?: Record<string, string> } | null;
   panels: Record<PanelName, PanelState>;
@@ -65,6 +76,8 @@ export interface AppState {
   select(id: string | null): void;
   openDialog(d: NonNullable<DialogState>): void;
   closeDialog(): void;
+  setEditTarget(t: EditTarget | null): void;
+  setInspectorTab(t: InspectorTab): void;
   pushMessage(m: Omit<InfoMessage, 'id' | 'time' | 'date'>): void; // aggiorna anche status
   setPanel(name: PanelName, patch: Partial<PanelState>): void;
   setReferenceProjectsOpen(o: boolean): void;
@@ -96,6 +109,8 @@ export function createAppStore(now: () => Date = () => new Date()): StoreApi<App
     docLoadId: 0,
     selection: null,
     dialog: null,
+    editTarget: null,
+    inspectorTab: 'properties',
     messages: [],
     status: null,
     panels: structuredClone(DEFAULT_PANELS),
@@ -175,6 +190,8 @@ export function createAppStore(now: () => Date = () => new Date()): StoreApi<App
     select: (selection) => set({ selection }),
     openDialog: (dialog) => set({ dialog }),
     closeDialog: () => set({ dialog: null }),
+    setEditTarget: (editTarget) => set({ editTarget }),
+    setInspectorTab: (inspectorTab) => set({ inspectorTab }),
     pushMessage: (m) =>
       set((s) => {
         const at = now();

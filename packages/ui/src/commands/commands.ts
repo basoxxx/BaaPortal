@@ -2,7 +2,7 @@ import type { StoreApi } from 'zustand/vanilla';
 import type { BaaBridge } from '../bridge';
 import type { IconName } from '../icons';
 import type { ProjectService } from '../services/projectService';
-import type { AppState, PanelName } from '../state/store';
+import type { AppState, EditAction, PanelName } from '../state/store';
 import { targetPlcId } from '../project/navigation/treeIds';
 
 export type CommandId =
@@ -87,6 +87,23 @@ function panelToggle(id: CommandId, panel: PanelName): Command {
   });
 }
 
+/** Comando di Modifica: agisce sull'elemento col focus (`editTarget`) se questo lo permette. */
+function editCommand(
+  id: CommandId,
+  action: EditAction,
+  shortcut: string,
+  icon?: IconName,
+): Command {
+  return def(id, {
+    ...(icon ? { icon } : {}),
+    shortcut,
+    isEnabled: (s) => !!s.editTarget?.can[action],
+    run: async ({ store }) => {
+      await store.getState().editTarget?.run(action);
+    },
+  });
+}
+
 const list: Command[] = [
   def('project.new', {
     icon: 'new',
@@ -138,13 +155,13 @@ const list: Command[] = [
     isEnabled: (s) => s.history.future.length > 0,
     run: ({ store }) => store.getState().redo(),
   }),
-  def('edit.cut', { icon: 'cut' }),
-  def('edit.copy', { icon: 'copy' }),
-  def('edit.paste', { icon: 'paste' }),
-  def('edit.delete', { icon: 'delete' }),
-  def('edit.rename'),
+  editCommand('edit.cut', 'cut', 'Mod+X', 'cut'),
+  editCommand('edit.copy', 'copy', 'Mod+C', 'copy'),
+  editCommand('edit.paste', 'paste', 'Mod+V', 'paste'),
+  editCommand('edit.delete', 'delete', 'Delete', 'delete'),
+  editCommand('edit.rename', 'rename', 'F2'),
   def('edit.findReplace', { icon: 'search' }),
-  def('edit.selectAll'),
+  editCommand('edit.selectAll', 'selectAll', 'Mod+A'),
   def('edit.compile', { icon: 'compile' }),
   panelToggle('view.navigation', 'navigation'),
   panelToggle('view.details', 'details'),

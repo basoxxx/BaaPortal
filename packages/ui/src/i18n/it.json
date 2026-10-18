@@ -35,7 +35,9 @@
     "created": "Progetto \"{{name}}\" creato.",
     "opened": "Progetto \"{{name}}\" aperto.",
     "saved": "Progetto \"{{name}}\" salvato.",
-    "recentMissing": "Il progetto \"{{name}}\" non è stato trovato: è stato tolto dall'elenco."
+    "recentMissing": "Il progetto \"{{name}}\" non è stato trovato: è stato tolto dall'elenco.",
+    "standardTableLocked": "La Tabella delle variabili standard non può essere eliminata.",
+    "pasteNoNumber": "Nessun numero libero: {{count}} oggetti non sono stati incollati."
   },
   "commands": {
     "project.new": "Nuovo…",
@@ -213,7 +215,13 @@
     "addDevice": "Aggiungi dispositivo",
     "addBlock": "Aggiungi blocco",
     "addTagTable": "Aggiungi tabella delle variabili",
-    "addUdt": "Aggiungi tipo di dati"
+    "addUdt": "Aggiungi tipo di dati",
+    "paste": "Incolla oggetti",
+    "move": "Sposta oggetti",
+    "delete": "Elimina oggetti",
+    "rename": "Rinomina",
+    "addGroup": "Aggiungi gruppo",
+    "moveTags": "Sposta variabili"
   },
   "inspector": {
     "tab": {
@@ -295,7 +303,8 @@
       "100": "Nuovo avviamento",
       "121": "Errore di programmazione",
       "122": "Errore di accesso alla periferia"
-    }
+    },
+    "group": "Gruppo_1"
   },
   "dialog": {
     "ok": "OK",
@@ -363,5 +372,19 @@
       "121": "Errore di programmazione",
       "122": "Errore di accesso alla periferia"
     }
+  },
+  "objects": {
+    "deleteTitle": "Elimina",
+    "deleteMessage": "Eliminare gli oggetti selezionati?",
+    "deleteMore": "e altri {{count}}",
+    "yes": "Sì",
+    "no": "No",
+    "renameLabel": "Nuovo nome",
+    "errInvalid": "Il nome non è valido.",
+    "errDuplicate": "Il nome è già in uso.",
+    "menuLabel": "Menu contestuale",
+    "open": "Apri",
+    "addGroup": "Aggiungi nuovo gruppo",
+    "properties": "Proprietà"
   }
 }

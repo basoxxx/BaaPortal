@@ -10,8 +10,13 @@ declare global {
   }
 }
 
-// Un file rilasciato sulla finestra non deve far navigare la pagina altrove.
-for (const type of ['dragover', 'drop']) document.addEventListener(type, (e) => e.preventDefault());
+// Un file rilasciato sulla finestra non deve far navigare la pagina altrove. Il testo e i dati
+// dell'app (albero, dettagli) si trascinano normalmente: si blocca solo ciò che porta file.
+for (const type of ['dragover', 'drop']) {
+  document.addEventListener(type, (e) => {
+    if ((e as DragEvent).dataTransfer?.types.includes('Files')) e.preventDefault();
+  });
+}
 
 window.baa = createBridge(window.baaRaw);
 

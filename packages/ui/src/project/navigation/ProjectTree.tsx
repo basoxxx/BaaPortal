@@ -1,11 +1,43 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type KeyboardEvent,
+  type MouseEvent,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { Icon } from '../../icons';
 import '../../icons/tree';
 import '../../icons/objects';
+import { ContextMenu, type ContextMenuItem } from '../../components/ContextMenu';
+import { peekClipboardPayload } from '../../services/clipboard';
 import { useAppStore, useServices } from '../../state/AppContext';
+import type { EditAction } from '../../state/store';
+import { areaOfItem } from '../objectActions';
 import { runAddNode } from './addActions';
+import {
+  addGroupAt,
+  beginDrag,
+  checkRename,
+  containerOf,
+  copyNodes,
+  deleteNodes,
+  dropOn,
+  dropVerdict,
+  endDrag,
+  groupsOfNodes,
+  pasteAt,
+  refsOfNodes,
+  renameInfo,
+  renameNode,
+} from './objectCommands';
+import { RenameInput } from './RenameInput';
 import { buildTree, type TreeNode } from './treeModel';
+
+const TARGET_ID = 'tree';
+const MENUS_SELECTOR = '[role="menu"],[role="menubar"]';
 
 /** Antenati del nodo `id` (dalla radice), o null se il nodo non esiste. */
 function ancestorsOf(node: TreeNode, id: string): TreeNode[] | null {
@@ -31,6 +63,15 @@ export function ProjectTree() {
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const focusPending = useRef(false);
   const treeRef = useRef<HTMLUListElement>(null);
+  const { bridge } = useServices();
+  // Selezione multipla (locale all'albero): il nodo attivo è comunque `selection`.
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
+  const anchor = useRef<string | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const [hasFocus, setHasFocus] = useState(false);
+  const [, setClipboardTick] = useState(0);
 
   const { project, onlineAccess } = useMemo(() => buildTree(doc), [doc]);
   const rows = useMemo(() => {
@@ -68,9 +109,183 @@ export function ProjectTree() {
   const selectedVisible = rows.some((r) => r.node.id === selection);
   const tabbableId = selectedVisible ? selection : rows[0]?.node.id;
 
+  const selected = useMemo<ReadonlySet<string>>(
+    () => (selection && picked.has(selection) ? picked : new Set(selection ? [selection] : [])),
+    [picked, selection],
+  );
+  const selectedIds = [...selected];
+  const objectRefs = refsOfNodes(selectedIds);
+  const groups = groupsOfNodes(selectedIds);
+  const clip = peekClipboardPayload();
+  const pasteTarget = selection ? containerOf(doc, selection) : null;
+  const can: Partial<Record<EditAction, boolean>> = {
+    cut: objectRefs.length > 0,
+    copy: objectRefs.length > 0,
+    delete: objectRefs.length > 0 || groups.length > 0,
+    rename: selectedIds.length === 1 && renameInfo(doc, selectedIds[0]!) !== null,
+    paste:
+      clip?.kind === 'objects' &&
+      !!pasteTarget &&
+      clip.items.some((i) => areaOfItem(i) === pasteTarget.area),
+    selectAll: selection !== null,
+  };
+  const canKey = JSON.stringify(can);
+
+  const selectAll = () => {
+    const row = rows.find((r) => r.node.id === selection);
+    if (!row) return;
+    const siblings = rows.filter((r) => r.parent === row.parent).map((r) => r.node.id);
+    setPicked(
+      new Set(siblings.filter((id) => refsOfNodes([id]).length + groupsOfNodes([id]).length > 0)),
+    );
+  };
+  const run = (action: EditAction): void | Promise<void> => {
+    const ctx = { store, bridge };
+    switch (action) {
+      case 'copy':
+      case 'cut':
+        copyNodes(ctx, selectedIds, action === 'cut');
+        setClipboardTick((n) => n + 1);
+        return;
+      case 'paste':
+        return selection
+          ? pasteAt(ctx, selection).then(() => setClipboardTick((n) => n + 1))
+          : undefined;
+      case 'delete':
+        return deleteNodes(ctx, selectedIds);
+      case 'rename':
+        if (selection && can.rename) setRenaming(selection);
+        return;
+      case 'selectAll':
+        selectAll();
+    }
+  };
+  // Il bersaglio dei comandi chiama sempre la versione più recente di `run`.
+  const runRef = useRef(run);
+  runRef.current = run;
+
+  // Con il focus nell'albero (o nel menu che ne è partito) i comandi di Modifica agiscono qui.
+  useEffect(() => {
+    const s = store.getState();
+    if (hasFocus) s.setEditTarget({ id: TARGET_ID, can, run: (a) => runRef.current(a) });
+    else if (s.editTarget?.id === TARGET_ID) s.setEditTarget(null);
+    // `can` cambia solo se cambia canKey.
+  }, [hasFocus, canKey, store]);
+  useEffect(
+    () => () => {
+      if (store.getState().editTarget?.id === TARGET_ID) store.getState().setEditTarget(null);
+    },
+    [store],
+  );
+  // Il focus che passa a un altro elemento (non ai menu) toglie la destinazione.
+  useEffect(() => {
+    if (!hasFocus) return;
+    const onFocusIn = (e: FocusEvent) => {
+      const el = e.target as Element | null;
+      if (el && !treeRef.current?.contains(el) && !el.closest(MENUS_SELECTOR)) setHasFocus(false);
+    };
+    document.addEventListener('focusin', onFocusIn);
+    return () => document.removeEventListener('focusin', onFocusIn);
+  }, [hasFocus]);
+
+  // Finita la rinomina il focus torna al nodo.
+  const wasRenaming = useRef(false);
+  useEffect(() => {
+    if (renaming === null && wasRenaming.current) focusNode(selection);
+    wasRenaming.current = renaming !== null;
+  }, [renaming]);
+
+  function focusNode(id: string | null) {
+    if (id) treeRef.current?.querySelector<HTMLElement>(`[data-testid="tree-node-${id}"]`)?.focus();
+  }
+
   const pick = (id: string, viaKeyboard: boolean) => {
     focusPending.current = viaKeyboard;
+    anchor.current = id;
+    setPicked(new Set([id]));
     store.getState().select(id);
+  };
+
+  const onNodeClick = (e: MouseEvent, node: TreeNode) => {
+    const ctrl = e.ctrlKey || e.metaKey;
+    const from = anchor.current ? rows.findIndex((r) => r.node.id === anchor.current) : -1;
+    if (e.shiftKey && from >= 0) {
+      const to = rows.findIndex((r) => r.node.id === node.id);
+      const [lo, hi] = from < to ? [from, to] : [to, from];
+      setPicked(new Set(rows.slice(lo, hi + 1).map((r) => r.node.id)));
+      store.getState().select(node.id);
+    } else if (ctrl) {
+      const next = new Set(selected);
+      if (next.has(node.id) && next.size > 1) next.delete(node.id);
+      else next.add(node.id);
+      anchor.current = node.id;
+      setPicked(next);
+      store.getState().select(next.has(node.id) ? node.id : [...next].pop()!);
+    } else pick(node.id, false);
+  };
+
+  const openMenuAt = (nodeId: string, x: number, y: number) => {
+    if (!selected.has(nodeId)) pick(nodeId, false);
+    setMenu({ x, y, nodeId });
+  };
+
+  const menuItems = (nodeId: string): ContextMenuItem[] => {
+    const act = (a: EditAction) => () => void runRef.current(a);
+    const group = containerOf(doc, nodeId);
+    return [
+      { id: 'open', label: t('objects.open'), disabled: true, run: () => {} },
+      {
+        id: 'cut',
+        label: t('commands.edit.cut'),
+        disabled: !can.cut,
+        separator: true,
+        run: act('cut'),
+      },
+      { id: 'copy', label: t('commands.edit.copy'), disabled: !can.copy, run: act('copy') },
+      { id: 'paste', label: t('commands.edit.paste'), disabled: !can.paste, run: act('paste') },
+      { id: 'delete', label: t('commands.edit.delete'), disabled: !can.delete, run: act('delete') },
+      { id: 'rename', label: t('commands.edit.rename'), disabled: !can.rename, run: act('rename') },
+      {
+        id: 'addGroup',
+        label: t('objects.addGroup'),
+        disabled: !group?.isContainer,
+        separator: true,
+        run: () => {
+          const id = addGroupAt(store, nodeId);
+          if (!id) return;
+          pick(id, false);
+          setRenaming(id);
+        },
+      },
+      {
+        id: 'properties',
+        label: t('objects.properties'),
+        separator: true,
+        run: () => {
+          pick(nodeId, false);
+          store.getState().setInspectorTab('properties');
+          store.getState().setPanel('inspector', { open: true });
+        },
+      },
+    ];
+  };
+
+  const onDragStart = (e: DragEvent, node: TreeNode) => {
+    const ids_ = selected.has(node.id) ? [...selected] : [node.id];
+    const refs = refsOfNodes(ids_).filter((r) => r.deviceId === node.ref?.deviceId);
+    if (refs.length === 0) return e.preventDefault();
+    beginDrag(e.dataTransfer, doc, refs[0]!.deviceId, refs);
+  };
+  const onDragOver = (e: DragEvent, node: TreeNode) => {
+    const verdict = dropVerdict(doc, node.id);
+    if (verdict) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = verdict;
+      setDropTarget(node.id);
+    } else {
+      e.dataTransfer.dropEffect = 'none';
+      setDropTarget((cur) => (cur === node.id ? null : cur));
+    }
   };
   const toggle = (node: TreeNode, open?: boolean) => {
     if (node.children.length === 0) return;
@@ -87,6 +302,13 @@ export function ProjectTree() {
     const row = rows[index]!;
     const hasKids = row.node.children.length > 0;
     const isOpen = !collapsed.has(row.node.id);
+    if ((e.key === 'F10' && e.shiftKey) || e.key === 'ContextMenu') {
+      const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      openMenuAt(row.node.id, r.left + 24, r.bottom);
+      e.preventDefault();
+      e.stopPropagation(); // la barra dei menu apre il primo menu con F10
+      return;
+    }
     switch (e.key) {
       case 'ArrowDown': {
         const n = rows[index + 1];
@@ -122,35 +344,92 @@ export function ProjectTree() {
   };
 
   return (
-    <ul role="tree" aria-label={t('panel.navigation')} className="baa-tree" ref={treeRef}>
-      {rows.map(({ node, level }, i) => {
-        const hasKids = node.children.length > 0;
-        return (
-          <li
-            key={node.id}
-            role="treeitem"
-            data-testid={`tree-node-${node.id}`}
-            aria-level={level + 1}
-            aria-selected={selection === node.id}
-            aria-expanded={hasKids ? !collapsed.has(node.id) : undefined}
-            aria-disabled={node.enabled ? undefined : true}
-            tabIndex={node.id === tabbableId ? 0 : -1}
-            className="baa-tree-node"
-            style={{ paddingLeft: 6 + level * 16 }}
-            onClick={() => pick(node.id, false)}
-            onDoubleClick={() => {
-              if (!node.enabled || !runAddNode(store, node.id)) toggle(node);
-            }}
-            onKeyDown={(e) => onKeyDown(e, i)}
-          >
-            <span className="baa-tree-twist" aria-hidden="true">
-              {hasKids ? (collapsed.has(node.id) ? '▸' : '▾') : ''}
-            </span>
-            <Icon name={node.icon} size={16} />
-            <span className="baa-tree-label">{node.label ?? t(node.labelKey)}</span>
-          </li>
-        );
-      })}
-    </ul>
+    <>
+      <ul
+        role="tree"
+        aria-label={t('panel.navigation')}
+        aria-multiselectable="true"
+        className="baa-tree"
+        ref={treeRef}
+        onFocus={() => setHasFocus(true)}
+        onBlur={(e) => {
+          const next = e.relatedTarget as Element | null;
+          if (next && (treeRef.current?.contains(next) || next.closest(MENUS_SELECTOR))) return;
+          setHasFocus(false);
+        }}
+      >
+        {rows.map(({ node, level }, i) => {
+          const hasKids = node.children.length > 0;
+          const draggable = !!node.ref && node.ref.kind !== 'device' && renaming !== node.id;
+          return (
+            <li
+              key={node.id}
+              role="treeitem"
+              data-testid={`tree-node-${node.id}`}
+              aria-level={level + 1}
+              aria-selected={selected.has(node.id)}
+              aria-expanded={hasKids ? !collapsed.has(node.id) : undefined}
+              aria-disabled={node.enabled ? undefined : true}
+              tabIndex={node.id === tabbableId ? 0 : -1}
+              className={`baa-tree-node${dropTarget === node.id ? ' baa-drop-target' : ''}`}
+              style={{ paddingLeft: 6 + level * 16 }}
+              draggable={draggable || undefined}
+              onClick={(e) => onNodeClick(e, node)}
+              onDoubleClick={() => {
+                if (!node.enabled || !runAddNode(store, node.id)) toggle(node);
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                openMenuAt(node.id, e.clientX, e.clientY);
+              }}
+              onKeyDown={(e) => onKeyDown(e, i)}
+              onDragStart={(e) => onDragStart(e, node)}
+              onDragEnd={() => {
+                endDrag();
+                setDropTarget(null);
+              }}
+              onDragOver={(e) => onDragOver(e, node)}
+              onDragLeave={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                  setDropTarget((cur) => (cur === node.id ? null : cur));
+                }
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDropTarget(null);
+                dropOn(store, node.id);
+              }}
+            >
+              <span className="baa-tree-twist" aria-hidden="true">
+                {hasKids ? (collapsed.has(node.id) ? '▸' : '▾') : ''}
+              </span>
+              <Icon name={node.icon} size={16} />
+              {renaming === node.id ? (
+                <RenameInput
+                  initial={renameInfo(doc, node.id)?.name ?? ''}
+                  check={(name) => checkRename(doc, node.id, name)}
+                  onCommit={(name) => void renameNode(store, node.id, name)}
+                  onDone={() => setRenaming(null)}
+                />
+              ) : (
+                <span className="baa-tree-label">{node.label ?? t(node.labelKey)}</span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {menu ? (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          label={t('objects.menuLabel')}
+          items={menuItems(menu.nodeId)}
+          onClose={() => {
+            setMenu(null);
+            focusNode(menu.nodeId);
+          }}
+        />
+      ) : null}
+    </>
   );
 }

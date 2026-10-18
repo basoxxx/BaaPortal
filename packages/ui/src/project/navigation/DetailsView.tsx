@@ -6,6 +6,7 @@ import '../../icons/tree';
 import '../../icons/objects';
 import { useAppStore } from '../../state/AppContext';
 import type { OpenDoc } from '../../state/store';
+import { beginDrag, endDrag } from './objectCommands';
 import { parseNodeId } from './treeIds';
 import { buildTree, type TreeNode } from './treeModel';
 
@@ -122,6 +123,9 @@ function buildTable(
   return { columns: ['details.name'], rows: children.map((c) => plain(c, t)) };
 }
 
+/** Righe che si possono trascinare sull'albero. */
+const DRAGGABLE: ReadonlySet<string> = new Set(['block', 'udt', 'tagTable', 'tag']);
+
 export function DetailsView() {
   const { t } = useTranslation();
   const doc = useAppStore((s) => s.doc);
@@ -144,8 +148,12 @@ export function DetailsView() {
             key={r.key}
             data-testid="details-row"
             aria-disabled={r.enabled ? undefined : true}
-            // Il trascinamento vero e proprio è del Task 9.
-            draggable={r.ref ? true : undefined}
+            draggable={r.ref && DRAGGABLE.has(r.ref.kind) ? true : undefined}
+            onDragStart={(e) => {
+              if (!r.ref || !DRAGGABLE.has(r.ref.kind) || !('deviceId' in r.ref)) return;
+              beginDrag(e.dataTransfer, doc, r.ref.deviceId, [r.ref]);
+            }}
+            onDragEnd={endDrag}
           >
             {r.cells.map((cell, i) => (
               <td key={i}>
