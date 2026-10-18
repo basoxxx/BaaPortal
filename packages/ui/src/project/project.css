@@ -701,3 +701,38 @@
   align-self: flex-start;
   padding: 2px 10px;
 }
+
+/* Pannelli delle proprietà: sezioni comprimibili */
+.baa-prop-note {
+  margin: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--baa-border);
+  background: var(--baa-panel-bg);
+}
+.baa-prop-head {
+  margin: 0;
+  font-size: 1em;
+}
+.baa-prop-head button {
+  font: inherit;
+  font-weight: 600;
+  width: 100%;
+  text-align: left;
+  padding: 3px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--baa-border);
+  background: var(--baa-panel-bg);
+  color: var(--baa-text);
+  cursor: pointer;
+}
+.baa-props input[type='checkbox'] {
+  justify-self: start;
+}
+.baa-field-hint {
+  grid-column: 2;
+  color: var(--baa-text-muted);
+  font-size: 0.9em;
+}
+.baa-prop-auto {
+  justify-self: start;
+}

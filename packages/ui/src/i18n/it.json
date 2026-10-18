@@ -232,7 +232,8 @@
     "addNetwork": "Inserisci segmento",
     "deleteNetwork": "Elimina segmento",
     "editNetwork": "Modifica segmento",
-    "addMember": "Aggiungi membro"
+    "addMember": "Aggiungi membro",
+    "editProperty": "Modifica proprietà"
   },
   "inspector": {
     "tab": {
@@ -491,5 +492,50 @@
     "deleteNetwork": "Elimina segmento",
     "instanceFbMissing": "Il DB di istanza si riferisce all'FB {{name}}, che non esiste",
     "problems": "Problemi"
+  },
+  "props": {
+    "banner": "Queste proprietà servono al simulatore e ai controlli offline. Fino alla tappa 6 non vengono caricate nel PLC.",
+    "integer": "Inserisci un numero intero.",
+    "section": {
+      "general": "Generale",
+      "pn": "Interfaccia PROFINET",
+      "mpi": "Interfaccia MPI",
+      "dp": "Interfaccia DP",
+      "cycle": "Ciclo",
+      "clock": "Merker di clock",
+      "retentivity": "Ritenzione",
+      "schedule": "Schedulazione orologio",
+      "info": "Informazioni",
+      "attributes": "Attributi"
+    },
+    "orderNumber": "Numero di articolo",
+    "firmware": "Versione firmware",
+    "ip": "Indirizzo IP",
+    "mask": "Maschera di sottorete",
+    "useRouter": "Utilizza router",
+    "router": "Indirizzo router",
+    "mpiAddress": "Indirizzo MPI",
+    "dpAddress": "Indirizzo DP",
+    "maxCycle": "Tempo di ciclo massimo (ms)",
+    "minCycle": "Tempo di ciclo minimo (ms)",
+    "commLoad": "Carico del ciclo dovuto alla comunicazione (%)",
+    "clockEnabled": "Attiva",
+    "clockByte": "Byte di memoria",
+    "retM": "Numero di byte di merker a partire da MB0",
+    "retT": "Numero di temporizzatori S7 a partire da T0",
+    "retC": "Numero di contatori S7 a partire da C0",
+    "ob35": "Periodo OB35 (ms)",
+    "title": "Titolo",
+    "version": "Versione",
+    "family": "Famiglia",
+    "headerName": "Nome nell'intestazione",
+    "knowHow": "Protezione know-how",
+    "knowHowHint": "Il contrassegno viene scritto nel blocco caricato: chi lo apre con altri strumenti vede solo l'interfaccia.",
+    "unlinked": "Solo nella memoria di caricamento",
+    "readOnly": "Protetto da scrittura nel dispositivo",
+    "nonRetain": "Non ritentivo",
+    "group": "Gruppo",
+    "tagCount": "Numero di variabili",
+    "constantCount": "Numero di costanti"
   }
 }

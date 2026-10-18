@@ -232,7 +232,8 @@
     "addNetwork": "Insert network",
     "deleteNetwork": "Delete network",
     "editNetwork": "Edit network",
-    "addMember": "Add member"
+    "addMember": "Add member",
+    "editProperty": "Edit property"
   },
   "inspector": {
     "tab": {
@@ -491,5 +492,50 @@
     "deleteNetwork": "Delete network",
     "instanceFbMissing": "The instance DB refers to FB {{name}}, which does not exist",
     "problems": "Problems"
+  },
+  "props": {
+    "banner": "These properties are used by the simulator and the offline checks. Until stage 6 they are not downloaded to the PLC.",
+    "integer": "Enter a whole number.",
+    "section": {
+      "general": "General",
+      "pn": "PROFINET interface",
+      "mpi": "MPI interface",
+      "dp": "DP interface",
+      "cycle": "Cycle",
+      "clock": "Clock memory",
+      "retentivity": "Retentivity",
+      "schedule": "Clock scheduling",
+      "info": "Information",
+      "attributes": "Attributes"
+    },
+    "orderNumber": "Order number",
+    "firmware": "Firmware version",
+    "ip": "IP address",
+    "mask": "Subnet mask",
+    "useRouter": "Use router",
+    "router": "Router address",
+    "mpiAddress": "MPI address",
+    "dpAddress": "DP address",
+    "maxCycle": "Maximum cycle time (ms)",
+    "minCycle": "Minimum cycle time (ms)",
+    "commLoad": "Cycle load due to communication (%)",
+    "clockEnabled": "Enable",
+    "clockByte": "Memory byte",
+    "retM": "Number of memory bytes from MB0",
+    "retT": "Number of S7 timers from T0",
+    "retC": "Number of S7 counters from C0",
+    "ob35": "OB35 period (ms)",
+    "title": "Title",
+    "version": "Version",
+    "family": "Family",
+    "headerName": "Name in the header",
+    "knowHow": "Know-how protection",
+    "knowHowHint": "The flag is written into the downloaded block: anyone opening it with other tools sees only the interface.",
+    "unlinked": "Only in load memory",
+    "readOnly": "Write-protected in the device",
+    "nonRetain": "Non-retentive",
+    "group": "Group",
+    "tagCount": "Number of tags",
+    "constantCount": "Number of constants"
   }
 }

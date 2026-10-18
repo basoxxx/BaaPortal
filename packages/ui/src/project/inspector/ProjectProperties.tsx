@@ -14,11 +14,9 @@ export function ProjectProperties() {
   const { t } = useTranslation();
   const { store } = useServices();
   const doc = useAppStore((s) => s.doc);
-  const selection = useAppStore((s) => s.selection);
   const fmt = useDateTimeFormat();
   const uid = useId();
-  if (selection !== 'project' || !doc)
-    return <p className="baa-placeholder">{t('inspector.noProperties')}</p>;
+  if (!doc) return <p className="baa-placeholder">{t('inspector.noProperties')}</p>;
   const m = doc.project.meta;
   const ro = (key: string, label: string, value: string) => (
     <>

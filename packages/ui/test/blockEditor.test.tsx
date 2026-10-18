@@ -333,7 +333,11 @@ describe('editor di blocco: intestazione e segmenti', () => {
       screen.getByRole('textbox', { name: 'Titolo del blocco' }),
       'Nastro 1{Enter}',
     );
-    await app.user.type(screen.getByRole('textbox', { name: 'Commento' }), 'nota');
+    // Con il blocco selezionato anche la finestra di ispezione ha un campo Commento.
+    const editorComment = screen
+      .getAllByRole('textbox', { name: 'Commento' })
+      .find((el) => !el.closest('.baa-inspector'))!;
+    await app.user.type(editorComment, 'nota');
     await app.user.tab();
     expect(block(app, f.id).header).toMatchObject({ title: 'Nastro 1', comment: 'nota' });
     expect(past(app)).toBe(before + 2);
