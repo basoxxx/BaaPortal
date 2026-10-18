@@ -76,7 +76,7 @@ function BlockForm({
 
   const defaultName =
     kind === 'OB'
-      ? (findOb(obNumber ?? 0)?.defaultName ?? '')
+      ? t(`defaults.ob.${obNumber}`, { defaultValue: findOb(obNumber ?? 0)?.defaultName ?? '' })
       : isInstance
         ? `${instanceFb?.name ?? ''}_DB`
         : t(kind === 'DB' ? 'defaults.dataBlock' : 'defaults.block');

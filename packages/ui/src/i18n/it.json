@@ -281,7 +281,21 @@
     "tagTable": "Tabella delle variabili_1",
     "udt": "Tipo di dati utente_1",
     "block": "Blocco_1",
-    "dataBlock": "Blocco_dati_1"
+    "dataBlock": "Blocco_dati_1",
+    "ob": {
+      "1": "Main",
+      "10": "Allarme dall'orologio",
+      "20": "Allarme di ritardo",
+      "35": "Schedulazione orologio",
+      "40": "Allarme di processo",
+      "80": "Errore di tempo",
+      "82": "Allarme di diagnostica",
+      "85": "Errore di esecuzione del programma",
+      "86": "Guasto del telaio di montaggio",
+      "100": "Nuovo avviamento",
+      "121": "Errore di programmazione",
+      "122": "Errore di accesso alla periferia"
+    }
   },
   "dialog": {
     "ok": "OK",

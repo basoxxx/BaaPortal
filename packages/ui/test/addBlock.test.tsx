@@ -1,6 +1,7 @@
 import { act, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { createCodeBlock, findDevice } from '@baaportal/project';
+import { initI18n } from '../src/i18n';
 import { renderApp, type RenderedApp } from './renderApp';
 
 const PLC = 'id1';
@@ -68,6 +69,21 @@ describe('Aggiungi nuovo blocco', () => {
     expect(blocks(app).find((b) => b.kind === 'OB' && b.number === 35)).toMatchObject({
       name: 'Schedulazione orologio',
     });
+  });
+
+  it("con l'interfaccia in inglese il nome predefinito dell'OB è inglese", async () => {
+    const app = await renderApp({ view: 'project', withProject: true, withPlc: true });
+    await act(async () => {
+      await initI18n('en');
+    });
+    await app.user.click(screen.getByRole('menuitem', { name: 'Insert' }));
+    await app.user.click(screen.getByRole('menuitem', { name: 'New block…' }));
+    const dlg = screen.getByRole('dialog');
+    await app.user.click(within(dlg).getByRole('radio', { name: /Organization block/ }));
+    expect(within(dlg).getByLabelText('Name')).toHaveValue('Time of day');
+    await app.user.click(within(dlg).getByTestId('dialog-ok'));
+    expect(blocks(app).find((b) => b.number === 10)).toMatchObject({ name: 'Time of day' });
+    await initI18n('it');
   });
 
   it('numero manuale doppio: messaggio e OK disattivato; fuori limite pure', async () => {

@@ -281,7 +281,21 @@
     "tagTable": "Tag table_1",
     "udt": "User data type_1",
     "block": "Block_1",
-    "dataBlock": "Data_block_1"
+    "dataBlock": "Data_block_1",
+    "ob": {
+      "1": "Main",
+      "10": "Time of day",
+      "20": "Time delay interrupt",
+      "35": "Cyclic interrupt",
+      "40": "Hardware interrupt",
+      "80": "Time error interrupt",
+      "82": "Diagnostic error interrupt",
+      "85": "Program execution error",
+      "86": "Rack failure",
+      "100": "Startup",
+      "121": "Programming error",
+      "122": "IO access error"
+    }
   },
   "dialog": {
     "ok": "OK",
