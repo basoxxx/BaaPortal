@@ -456,6 +456,7 @@
     "ADDRESS_TYPE_MISMATCH": "L'indirizzo non è adatto al tipo di dati.",
     "ADDRESS_OUT_OF_RANGE": "L'indirizzo è fuori dai limiti della CPU.",
     "ADDRESS_OVERLAP": "L'indirizzo si sovrappone a {{other}}",
+    "ADDRESS_OVERLAP_other": "L'indirizzo si sovrappone a {{count}} variabili, fra cui {{other}}",
     "VALUE_INVALID": "Il valore non è valido per il tipo di dati.",
     "NUMBER_DUPLICATE": "Il numero è già in uso.",
     "NUMBER_OUT_OF_RANGE": "Il numero è fuori intervallo.",

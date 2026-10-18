@@ -160,6 +160,78 @@ describe('checkDevice: indirizzi', () => {
     ]);
   });
 
+  it('sovrapposizione con più tag: un solo avviso per tag, con il primo nome e il conteggio', () => {
+    const d = fresh();
+    d.tagTables[0]!.tags.push(
+      tag('A', 'Byte', '%MB0'),
+      tag('B', 'Bool', '%M0.1'),
+      tag('C', 'Bool', '%M0.2'),
+      tag('D', 'Bool', '%M1.0'),
+    );
+    expect(checkDevice(d, cpu).map((x) => [x.code, x.params?.other, x.params?.count])).toEqual([
+      ['ADDRESS_OVERLAP', 'B', '2'],
+      ['ADDRESS_OVERLAP', 'A', '1'],
+      ['ADDRESS_OVERLAP', 'A', '1'],
+    ]);
+  });
+
+  it('sovrapposizione: conteggio e primo nome uguali a quelli del confronto coppia per coppia', () => {
+    let seed = 7;
+    const rnd = (n: number) => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed % n;
+    };
+    const shapes: [string, (b: number) => string, number][] = [
+      ['Bool', (b) => `%M${b}.${rnd(8)}`, 1],
+      ['Byte', (b) => `%MB${b}`, 8],
+      ['Int', (b) => `%MW${b}`, 16],
+      ['DInt', (b) => `%MD${b}`, 32],
+      ['Bool', (b) => `%I${b}.${rnd(8)}`, 1],
+    ];
+    const d = fresh();
+    for (let i = 0; i < 300; i++) {
+      const [type, address] = shapes[rnd(shapes.length)]!;
+      d.tagTables[0]!.tags.push(tag(`T${i}`, type, address(rnd(40))));
+    }
+    const range = (t: Tag) => {
+      const m = /^%([MI])(?:([BWD])?)(\d+)(?:\.(\d))?$/.exec(t.address)!;
+      const width = m[2] === 'B' ? 8 : m[2] === 'W' ? 16 : m[2] === 'D' ? 32 : 1;
+      const from = Number(m[3]) * 8 + Number(m[4] ?? 0);
+      return { area: m[1]!, from, to: from + width - 1 };
+    };
+    const tags = d.tagTables[0]!.tags;
+    const order = tags
+      .map((t, i) => ({ t, i, ...range(t) }))
+      .sort((x, y) =>
+        x.area === y.area ? x.from - y.from || x.i - y.i : x.area < y.area ? -1 : 1,
+      );
+    const expected = tags.flatMap((t) => {
+      const r = range(t);
+      const others = order.filter(
+        (o) => o.t !== t && o.area === r.area && o.from <= r.to && o.to >= r.from,
+      );
+      return others.length > 0 ? [[t.id, others[0]!.t.name, String(others.length)]] : [];
+    });
+    const got = checkDevice(d, cpu)
+      .filter((x) => x.code === 'ADDRESS_OVERLAP')
+      .map((x) => [x.ref.kind === 'tag' ? x.ref.id : '', x.params?.other, x.params?.count]);
+    expect(expected.length).toBeGreaterThan(50);
+    expect(got).toEqual(expected);
+  });
+
+  it('1000 tag tutti a %M0.0: al massimo un avviso per tag, in meno di 200 ms', () => {
+    const d = fresh();
+    for (let i = 0; i < 1000; i++) d.tagTables[0]!.tags.push(tag(`T${i}`, 'Bool', '%M0.0'));
+    const t0 = performance.now();
+    const ds = checkDevice(d, cpu);
+    const ms = performance.now() - t0;
+    const overlaps = ds.filter((x) => x.code === 'ADDRESS_OVERLAP');
+    expect(overlaps).toHaveLength(1000);
+    expect(overlaps[0]!.params).toEqual({ other: 'T1', count: '999' });
+    expect(overlaps[1]!.params).toEqual({ other: 'T0', count: '999' });
+    expect(ms).toBeLessThan(200);
+  });
+
   it('5000 tag controllati in meno di un secondo', () => {
     const d = fresh();
     for (let i = 0; i < 5000; i++)

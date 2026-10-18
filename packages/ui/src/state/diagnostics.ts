@@ -25,7 +25,12 @@ export function useDeviceDiagnostics(deviceId: string): Diagnostic[] {
 }
 
 export function diagnosticText(d: Diagnostic, t: TFunction): string {
-  return t(`diag.${d.code}`, d.params);
+  // Il conteggio arriva come testo: i18next sceglie la forma plurale solo con un numero.
+  const count = d.params?.count;
+  return t(
+    `diag.${d.code}`,
+    count === undefined ? d.params : { ...d.params, count: Number(count) },
+  );
 }
 
 /**

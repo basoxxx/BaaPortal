@@ -208,7 +208,7 @@ export function TagsView({ deviceId, tableId }: Props) {
 
   const onPaste = useCallback<NonNullable<DataGridProps<TagRow>['onPaste']>>(
     (text, payload, atKey) => {
-      let make: (taken: string[]) => Tag[];
+      let make: (taken: string[], prev: Tag | undefined) => Tag[];
       if (payload) {
         // Righe di altro genere (o oggetti dell'albero) qui non si incollano.
         if (payload.kind !== 'rows' || payload.rowKind !== 'tag') return;
@@ -216,7 +216,7 @@ export function TagsView({ deviceId, tableId }: Props) {
       } else {
         if (text.trim() === '') return;
         const parsed = parseTsv(text);
-        make = (taken) => tagsFromTsv(parsed, taken, newId);
+        make = (taken, prev) => tagsFromTsv(parsed, taken, newId, prev);
       }
       edit('history.pasteRows', (dev) => {
         // Dopo la riga attiva, nella sua tabella; senza riga attiva in fondo alla tabella standard.
@@ -224,8 +224,9 @@ export function TagsView({ deviceId, tableId }: Props) {
         const table =
           at?.table ?? (tableId === null ? dev.tagTables[0] : findTagTable(dev, tableId));
         if (!table) return;
-        const fresh = make(symbolNames(dev));
-        if (fresh.length > 0) table.tags.splice(at ? at.index + 1 : table.tags.length, 0, ...fresh);
+        const index = at ? at.index + 1 : table.tags.length;
+        const fresh = make(symbolNames(dev), table.tags[index - 1]);
+        if (fresh.length > 0) table.tags.splice(index, 0, ...fresh);
       });
     },
     [edit, tableId],

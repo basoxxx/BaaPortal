@@ -91,6 +91,33 @@ describe('tagRows', () => {
     ]);
   });
 
+  it('tagsFromTsv: senza indirizzo si prosegue dopo la riga precedente (o il tag prima del punto di incolla)', () => {
+    const names = Array.from({ length: 1000 }, (_, i) => [`Nome${i}`]);
+    const out = tagsFromTsv(names, [], seq());
+    expect(out.slice(0, 10).map((t) => t.address)).toEqual([
+      '%M0.0',
+      '%M0.1',
+      '%M0.2',
+      '%M0.3',
+      '%M0.4',
+      '%M0.5',
+      '%M0.6',
+      '%M0.7',
+      '%M1.0',
+      '%M1.1',
+    ]);
+    expect(new Set(out.map((t) => t.address)).size).toBe(1000);
+    expect(out[999]!.address).toBe('%M124.7');
+    // Dopo un tag esistente si continua dal suo indirizzo; un indirizzo esplicito resta com'è.
+    const after = tagsFromTsv(
+      parseTsv('A\nB\tInt\t%MW10\nC\tInt'),
+      [],
+      seq(),
+      tag('X', 'Bool', '%M5.7'),
+    );
+    expect(after.map((t) => t.address)).toEqual(['%M6.0', '%MW10', '%MW12']);
+  });
+
   it('tagsFromTsv: normalizza tipo e indirizzo, legge HMI e commento, ignora la ritenzione', () => {
     const [a, b, c] = tagsFromTsv(
       parseTsv(

@@ -57,7 +57,7 @@ const BASE_ADDRESS = new Map<string, string>([
   ['Counter', '%C0'],
 ]);
 
-/** Indirizzo che segue quello del precedente se è compatibile col tipo, altrimenti il primo libero per il tipo. */
+/** Indirizzo che segue quello del precedente se è compatibile col tipo, altrimenti quello di base del tipo. */
 export function addressAfter(prev: Tag | undefined, type: string): string {
   const t = parseType(type);
   if (!t.ok) return DEFAULT_ADDRESS;
@@ -112,21 +112,29 @@ const cell = (row: string[], i: number): string | undefined => {
   return v === undefined || v === '' ? undefined : v;
 };
 
-/** Colonne nell'ordine visibile: Nome, Tipo di dati, Indirizzo, Ritenzione (ignorata), HMI, Commento. */
-export function tagsFromTsv(rows: string[][], taken: string[], newId: NewId): Tag[] {
+/**
+ * Colonne nell'ordine visibile: Nome, Tipo di dati, Indirizzo, Ritenzione (ignorata), HMI, Commento.
+ * Senza indirizzo si prosegue dopo la riga precedente (la prima dopo `prev`, il tag prima del punto
+ * di incolla), come nella riga "<Aggiungi>".
+ */
+export function tagsFromTsv(rows: string[][], taken: string[], newId: NewId, prev?: Tag): Tag[] {
   const unique = namer(taken);
+  let before = prev;
   return rows.map((r) => {
     const name = r[0] ?? '';
-    const type = cell(r, 1);
+    const cellType = cell(r, 1);
     const address = cell(r, 2);
-    return {
+    const type = cellType === undefined ? DEFAULT_TYPE : normalizeType(cellType);
+    const tag: Tag = {
       id: newId(),
       name: name === '' ? '' : unique(name),
-      type: type === undefined ? DEFAULT_TYPE : normalizeType(type),
-      address: address === undefined ? DEFAULT_ADDRESS : normalizeAddress(address),
+      type,
+      address: address === undefined ? addressAfter(before, type) : normalizeAddress(address),
       hmi: parseFlag(r[4]),
       comment: r[5] ?? '',
     };
+    before = tag;
+    return tag;
   });
 }
 

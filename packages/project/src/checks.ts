@@ -305,27 +305,53 @@ function checkTag(ctx: Ctx, table: TagTable, tag: Tag, placed: Placed[]): void {
   placed.push({ tag, ...addressBitRange(a.address) });
 }
 
-// Ordina per area e inizio e scorre: ogni coppia sovrapposta è visitata una volta.
-function overlapsByTag(placed: Placed[]): Map<Tag, string[]> {
-  const sorted = [...placed].sort((x, y) =>
-    x.area === y.area ? x.from - y.from : x.area < y.area ? -1 : 1,
-  );
-  const others = new Map<Tag, string[]>();
-  const push = (t: Tag, other: string): void => {
-    const list = others.get(t);
-    if (list) list.push(other);
-    else others.set(t, [other]);
-  };
-  for (let i = 0; i < sorted.length; i++) {
-    const a = sorted[i] as Placed;
-    for (let j = i + 1; j < sorted.length; j++) {
-      const b = sorted[j] as Placed;
-      if (b.area !== a.area || b.from > a.to) break;
-      push(a.tag, b.tag.name);
-      push(b.tag, a.tag.name);
-    }
+interface Overlap {
+  /** Il primo, in ordine di indirizzo, fra i tag che si sovrappongono. */
+  other: string;
+  count: number;
+}
+
+// Quanti elementi ordinati sono < x (lower) o <= x (upper).
+function bound(sorted: number[], x: number, upper: boolean): number {
+  let lo = 0;
+  let hi = sorted.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    const v = sorted[mid] as number;
+    if (v < x || (upper && v === x)) lo = mid + 1;
+    else hi = mid;
   }
-  return others;
+  return lo;
+}
+
+// Per area, in ordine di inizio. I sovrapposti a un tag sono quelli che iniziano entro la sua fine
+// meno quelli che finiscono prima del suo inizio: si contano senza elencare le coppie, così mille
+// tag allo stesso indirizzo non producono un milione di avvisi.
+function overlapsByTag(placed: Placed[]): Map<Tag, Overlap> {
+  const byArea = new Map<string, Placed[]>();
+  for (const p of placed) {
+    const list = byArea.get(p.area);
+    if (list) list.push(p);
+    else byArea.set(p.area, [p]);
+  }
+  const out = new Map<Tag, Overlap>();
+  for (const list of byArea.values()) {
+    const sorted = [...list].sort((x, y) => x.from - y.from);
+    const froms = sorted.map((p) => p.from);
+    const tos = sorted.map((p) => p.to).sort((x, y) => x - y);
+    // Fine massima fra i primi i+1: il primo indice che arriva all'inizio di un tag è il primo
+    // che lo sovrappone (se non è il tag stesso, che allora ha davanti solo il successivo).
+    const maxTo: number[] = [];
+    for (const p of sorted) maxTo.push(Math.max(p.to, maxTo[maxTo.length - 1] ?? p.to));
+    sorted.forEach((p, i) => {
+      const count = bound(froms, p.to, true) - bound(tos, p.from, false) - 1;
+      if (count <= 0) return;
+      const k = bound(maxTo, p.from, false);
+      const first = k < i ? sorted[k] : sorted[i + 1];
+      if (first) out.set(p.tag, { other: first.tag.name, count });
+    });
+  }
+  return out;
 }
 
 function checkTagTables(ctx: Ctx): void {
@@ -366,19 +392,18 @@ function checkTagTables(ctx: Ctx): void {
       }
     }
   }
-  const others = overlapsByTag(placed);
+  const overlaps = overlapsByTag(placed);
   for (const table of device.tagTables) {
     for (const tag of table.tags) {
-      const ref: ObjectRef = { kind: 'tag', deviceId: device.id, tableId: table.id, id: tag.id };
-      for (const other of others.get(tag) ?? []) {
-        add(ctx, {
-          severity: 'warning',
-          code: 'ADDRESS_OVERLAP',
-          ref,
-          field: 'address',
-          params: { other },
-        });
-      }
+      const o = overlaps.get(tag);
+      if (!o) continue;
+      add(ctx, {
+        severity: 'warning',
+        code: 'ADDRESS_OVERLAP',
+        ref: { kind: 'tag', deviceId: device.id, tableId: table.id, id: tag.id },
+        field: 'address',
+        params: { other: o.other, count: String(o.count) },
+      });
     }
   }
 }

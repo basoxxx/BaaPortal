@@ -167,6 +167,28 @@ describe('editor della tabella delle variabili', () => {
     expect(table(app).tags).toHaveLength(1);
   });
 
+  it('1000 nomi incollati senza indirizzo: indirizzi distinti e modifiche successive rapide', async () => {
+    const app = await open('tagTable', [tag('A', 'Bool', '%M0.0')]);
+    app.bridge.clipboard = Array.from({ length: 1000 }, (_, i) => `N${i}`).join('\r\n');
+    await app.user.click(cell('t-A', 'name'));
+    await app.user.keyboard('{Control>}v{/Control}');
+    await waitFor(() => expect(table(app).tags).toHaveLength(1001));
+    const addresses = table(app).tags.map((t) => t.address);
+    expect(addresses.slice(0, 3)).toEqual(['%M0.0', '%M0.1', '%M0.2']);
+    expect(new Set(addresses).size).toBe(1001);
+    // Una modifica dopo l'incolla resta rapida (soglia larga: jsdom disegna 1000 righe).
+    const c = cell('t-A', 'comment');
+    act(() => c.focus());
+    fireEvent.keyDown(c, { key: 'Enter' });
+    const input = c.querySelector('input')!;
+    fireEvent.change(input, { target: { value: 'nota' } });
+    const t0 = performance.now();
+    fireEvent.keyDown(input, { key: 'Enter' });
+    const ms = performance.now() - t0;
+    expect(table(app).tags[0]!.comment).toBe('nota');
+    expect(ms).toBeLessThan(1500);
+  });
+
   it('incollare testo vuoto non fa nulla', async () => {
     const app = await open('tagTable', [tag('A', 'Int', '%MW0')]);
     app.bridge.clipboard = '  \r\n';
