@@ -176,12 +176,14 @@ export function writeBaap(project: Project, opts: { appVersion: string }): Uint8
     }),
     [PROJECT_FILE]: toJson({
       ...projectRest,
-      devices: devices.map((d) => ({ id: d.id, name: d.name })),
+      devices: devices.map((d) => ({ ...d.listExtras, id: d.id, name: d.name })),
     }),
   };
   for (const device of devices) {
     const dir = deviceDir(device.id);
     const { tagTables, udts, blocks, ...deviceRest } = device;
+    // Le chiavi della voce di project.json restano lì.
+    delete deviceRest.listExtras;
     files[`${dir}/device.json`] = toJson({
       ...deviceRest,
       tagTables: tagTables.map((t) => t.id),
@@ -306,7 +308,11 @@ export function readBaap(bytes: Uint8Array): Project {
   const devices = listed.map((l) => {
     if (ids.has(l.id)) throw invalid();
     ids.add(l.id);
-    return readDevice(files, l.id);
+    const device = readDevice(files, l.id);
+    // La voce dell'elenco ripete id e nome; le altre chiavi (di versioni più recenti) si conservano.
+    const extras = Object.entries(l).filter(([k]) => k !== 'id' && k !== 'name');
+    if (extras.length > 0) device.listExtras = Object.fromEntries(extras);
+    return device;
   });
   return { ...rest, devices } as Project;
 }

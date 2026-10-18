@@ -153,6 +153,39 @@ describe('Aggiungi nuovo blocco', () => {
     expect(within(dlg).getByTestId('dialog-ok')).toBeDisabled();
   });
 
+  it('con il dialogo aperto le scorciatoie globali non agiscono (Mod+Z non annulla, Mod+S non salva)', async () => {
+    const app = await renderApp({ view: 'project', withProject: true, withPlc: true });
+    addBlock(app, createCodeBlock({ kind: 'FC', number: 1, name: 'Calcolo', language: 'AWL' }));
+    const saved = app.bridge.files.get('/doc/BaaPortal/Linea 3.baap');
+    const dlg = await openBlockDialog(app);
+    await app.user.click(within(dlg).getByTestId('dialog-cancel'));
+    const again = await openBlockDialog(app);
+    act(() => within(again).getByTestId('dialog-cancel').focus());
+    await app.user.keyboard('{Control>}z{/Control}');
+    expect(blocks(app)).toHaveLength(2);
+    act(() => within(again).getByLabelText('Nome').focus());
+    await app.user.keyboard('{Control>}s{/Control}');
+    await new Promise((r) => setTimeout(r, 20));
+    expect(app.bridge.files.get('/doc/BaaPortal/Linea 3.baap')).toBe(saved);
+    expect(app.store.getState().doc!.dirty).toBe(true);
+    // Chiuso il dialogo tornano a funzionare.
+    await app.user.click(within(again).getByTestId('dialog-cancel'));
+    await app.user.keyboard('{Control>}z{/Control}');
+    expect(blocks(app)).toHaveLength(1);
+  });
+
+  it('un nome non valido (con le virgolette) disattiva OK con il messaggio della rinomina', async () => {
+    const app = await renderApp({ view: 'project', withProject: true, withPlc: true });
+    const dlg = await openBlockDialog(app);
+    const name = within(dlg).getByLabelText('Nome');
+    await app.user.clear(name);
+    await app.user.type(name, 'a"b');
+    expect(within(dlg).getByRole('alert')).toHaveTextContent('Il nome non è valido.');
+    expect(within(dlg).getByTestId('dialog-ok')).toBeDisabled();
+    await app.user.keyboard('{Enter}');
+    expect(blocks(app)).toHaveLength(1);
+  });
+
   it("dal nodo Aggiungi nuovo blocco dell'albero il blocco va nel PLC di quel nodo", async () => {
     const app = await renderApp({ view: 'project', withProject: true, withPlc: true });
     await app.user.dblClick(screen.getByTestId(`tree-node-plc:${PLC}:blocks-add`));

@@ -11,6 +11,7 @@ import {
   type PointerEvent,
 } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { BaaBridge } from '../bridge';
 import { copyToClipboard, readClipboard, type ClipboardPayload } from '../services/clipboard';
 import { useServices } from '../state/AppContext';
 import type { EditAction } from '../state/store';
@@ -67,7 +68,6 @@ export interface DataGridProps<R> {
   cellClassName?(row: R, columnId: string): string | undefined;
 }
 
-const TARGET_ID = 'grid';
 const PAGE = 10;
 const INDENT = 16;
 const NO_ROWS: never[] = [];
@@ -86,6 +86,13 @@ interface Editing {
 }
 
 const addKey = (i: number) => `\u0000add:${i}`;
+
+/** AltGr su Windows (Ctrl+Alt) e Opzione su macOS scrivono caratteri come @ # [ ]: non sono scorciatoie. */
+function typesText(e: KeyboardEvent, platform: BaaBridge['platform']): boolean {
+  if (e.key.length !== 1 || e.metaKey) return false;
+  if (e.getModifierState('AltGraph')) return true;
+  return platform === 'darwin' ? e.altKey && !e.ctrlKey : e.ctrlKey && e.altKey;
+}
 
 export function DataGrid<R>(props: DataGridProps<R>) {
   const {
@@ -205,7 +212,8 @@ export function DataGrid<R>(props: DataGridProps<R>) {
     }
   };
   // Il bersaglio non vale durante la modifica: lì Mod+C/V spettano al campo di testo.
-  const focusProps = useEditTarget(store, TARGET_ID, gridRef, can, run, editing !== null);
+  // Un id per griglia: con i riquadri divisi due griglie non devono togliersi la destinazione.
+  const focusProps = useEditTarget(store, `grid${uid}`, gridRef, can, run, editing !== null);
 
   const cellEl = useCallback((key: string, col: number): HTMLElement | null => {
     const colEl = (r: Element) => r.querySelectorAll<HTMLElement>('[data-col-id]')[col] ?? null;
@@ -340,7 +348,8 @@ export function DataGrid<R>(props: DataGridProps<R>) {
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
     if (target.tagName === 'INPUT' || !resolved || !activeItem) return;
-    if (e.ctrlKey || e.metaKey || e.altKey || colOf(target) < 0) return;
+    if ((e.ctrlKey || e.metaKey || e.altKey) && !typesText(e, bridge.platform)) return;
+    if (colOf(target) < 0) return;
     const { idx, col } = resolved;
     const c = columns[col]!;
     const first = col === 0;

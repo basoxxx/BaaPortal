@@ -62,6 +62,18 @@ describe('Aggiungi nuovo dispositivo', () => {
     expect(within(dlg).getByRole('alert')).toHaveTextContent('Inserisci un nome');
   });
 
+  it('un nome non valido (con le virgolette) disattiva OK con il messaggio della rinomina', async () => {
+    const { user, store } = await renderApp({ view: 'project', withProject: true });
+    const dlg = await openViaMenu(user);
+    const name = within(dlg).getByLabelText('Nome del dispositivo');
+    await user.clear(name);
+    await user.type(name, 'a"b');
+    expect(within(dlg).getByRole('alert')).toHaveTextContent('Il nome non è valido.');
+    expect(within(dlg).getByTestId('dialog-ok')).toBeDisabled();
+    await user.keyboard('{Enter}');
+    expect(store.getState().doc!.project.devices).toHaveLength(0);
+  });
+
   it('Esc e Annulla chiudono senza modificare; Invio conferma', async () => {
     const { user, store } = await renderApp({ view: 'project', withProject: true });
     await openViaMenu(user);

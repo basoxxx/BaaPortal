@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 
 import { useTranslation } from 'react-i18next';
 import { CPU_CATALOG, findCpu, type CpuType } from '@baaportal/catalog';
 import { createPlcDevice, uniqueName } from '@baaportal/project';
-import { sameName } from '@baaportal/s7-types';
+import { sameName, validateS7Name } from '@baaportal/s7-types';
 import { Dialog } from '../../components/Dialog';
 import { Icon } from '../../icons';
 import '../../icons/objects';
@@ -80,12 +80,15 @@ export function AddDeviceDialog({ onClose }: { onClose(): void }) {
   const fw = firmwareList.includes(firmware) ? firmware : (firmwareList[0] ?? '');
 
   const trimmed = name.trim();
+  // Stesse regole della rinomina nell'albero e nella finestra di ispezione.
   const nameError =
     trimmed === ''
       ? t('addDevice.nameEmpty')
-      : devices.some((d) => sameName(d.name, trimmed))
-        ? t('addDevice.nameExists')
-        : null;
+      : !validateS7Name(trimmed).ok
+        ? t('objects.errInvalid')
+        : devices.some((d) => sameName(d.name, trimmed))
+          ? t('addDevice.nameExists')
+          : null;
 
   const focusPending = useRef(false);
   const treeRef = useRef<HTMLUListElement>(null);

@@ -14,7 +14,7 @@ import {
   type ObjectRef,
   type PlcDevice,
 } from '@baaportal/project';
-import { sameName } from '@baaportal/s7-types';
+import { sameName, validateS7Name } from '@baaportal/s7-types';
 import { Dialog } from '../../components/Dialog';
 import { useAppStore, useServices } from '../../state/AppContext';
 import { ids as nodeIds } from '../navigation/treeIds';
@@ -111,12 +111,15 @@ function BlockForm({
     }
   }
 
+  // Stesse regole della rinomina nell'albero e nella finestra di ispezione.
   const nameError =
     trimmed === ''
       ? t('addBlock.nameEmpty')
-      : taken.some((n) => sameName(n, trimmed))
-        ? t('addBlock.nameExists')
-        : null;
+      : !validateS7Name(trimmed).ok
+        ? t('objects.errInvalid')
+        : taken.some((n) => sameName(n, trimmed))
+          ? t('addBlock.nameExists')
+          : null;
   const missing =
     kind === 'OB' ? events.length === 0 : isInstance ? instanceFb === undefined : false;
   const invalid = nameError !== null || numberError !== null || number === null || missing;

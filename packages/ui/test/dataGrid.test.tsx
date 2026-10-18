@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { DataGrid, type DataGridProps, type GridColumn } from '../src/grid/DataGrid';
@@ -134,6 +134,57 @@ describe('DataGrid', () => {
     expect(screen.getByRole('textbox')).toHaveValue('M');
     await user.keyboard('otore{Enter}');
     expect(props.onCommit).toHaveBeenCalledWith('r1', 'name', 'Motore');
+  });
+
+  it('AltGr (tastiera italiana) e Opzione su macOS scrivono un carattere: la modifica inizia', async () => {
+    const { user, bridge } = setup();
+    const typeAt = (init: KeyboardEventInit & { modifierAltGraph?: boolean }) => {
+      fireEvent.keyDown(cell('r1', 'name'), init);
+      const box = screen.queryByRole('textbox') as HTMLInputElement | null;
+      const value = box?.value ?? null;
+      if (box) fireEvent.keyDown(box, { key: 'Escape' });
+      return value;
+    };
+    await user.click(cell('r1', 'name'));
+    // Windows: AltGr arriva come Ctrl+Alt, con o senza lo stato AltGraph.
+    expect(typeAt({ key: '@', ctrlKey: true, altKey: true, modifierAltGraph: true })).toBe('@');
+    expect(typeAt({ key: '#', ctrlKey: true, altKey: true })).toBe('#');
+    // Le scorciatoie restano scorciatoie.
+    expect(typeAt({ key: 'c', ctrlKey: true })).toBeNull();
+    expect(typeAt({ key: 'x', altKey: true })).toBeNull();
+    bridge.platform = 'darwin';
+    expect(typeAt({ key: '[', altKey: true })).toBe('[');
+    expect(typeAt({ key: 'z', metaKey: true })).toBeNull();
+    expect(typeAt({ key: 'a', ctrlKey: true, altKey: true })).toBeNull();
+  });
+
+  it('due griglie (riquadri divisi) non si tolgono a vicenda la destinazione di Modifica', () => {
+    const store = createAppStore();
+    const bridge = new FakeBridge();
+    const grid = (label: string) => (
+      <DataGrid<Row>
+        label={label}
+        rows={makeRows(2)}
+        rowKey={(r) => r.key}
+        columns={columns}
+        onCommit={() => undefined}
+      />
+    );
+    render(
+      <AppProvider value={{ store, bridge, service: null as never }}>
+        {grid('Prima')}
+        {grid('Seconda')}
+      </AppProvider>,
+    );
+    const nameCell = (label: string) =>
+      within(screen.getByRole('grid', { name: label })).getAllByRole('gridcell')[0]!;
+    act(() => nameCell('Seconda').focus());
+    const second = store.getState().editTarget;
+    expect(second).not.toBeNull();
+    // Il focus passa alla griglia che viene prima: la seconda non deve togliere la destinazione nuova.
+    act(() => nameCell('Prima').focus());
+    expect(store.getState().editTarget).not.toBeNull();
+    expect(store.getState().editTarget?.id).not.toBe(second?.id);
   });
 
   it('nessuna chiamata se il valore non cambia', async () => {

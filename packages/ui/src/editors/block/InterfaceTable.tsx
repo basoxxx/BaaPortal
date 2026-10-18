@@ -33,6 +33,7 @@ import {
   removeMembers,
   setOverride,
   setRecord,
+  siblingNames,
 } from './interfaceEdit';
 import {
   addSlots,
@@ -375,7 +376,7 @@ export function InterfaceTable({ deviceId, target, label, valueHeaderKey }: Prop
           index = list?.length ?? 0;
         }
         if (!list) return;
-        const fresh = make(interfaceNames(o));
+        const fresh = make(siblingNames(o, list));
         if (fresh.length > 0) list.splice(index, 0, ...fresh);
       });
     },

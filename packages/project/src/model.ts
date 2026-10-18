@@ -143,6 +143,8 @@ export interface PlcDevice {
   blocks: Block[];
   /** Percorsi di gruppo, es. 'A' e 'A/B'. */
   groups: { blocks: string[]; tags: string[]; types: string[] };
+  /** Chiavi sconosciute della voce del dispositivo in project.json: si riscrivono com'erano. */
+  listExtras?: Record<string, unknown>;
 }
 
 export interface Project {

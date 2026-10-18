@@ -79,7 +79,15 @@ function setupNativeMenu(): void {
       },
       {
         label: 'Modifica',
+        // Annulla e Ripeti nativi servono ai campi di testo: su macOS Cmd+Z nei campi funziona solo
+        // tramite il menu. Il tasto arriva prima alla pagina: fuori dai campi il renderer annulla il
+        // progetto e chiama preventDefault, così il menu non lo riceve e non c'è doppio annullamento;
+        // se la pagina non lo gestisce, l'annullamento nativo fuori da un campo modificabile non fa
+        // nulla. Scelte dal menu con il mouse, le voci agiscono solo sul campo con il focus.
         submenu: [
+          { label: 'Annulla', role: 'undo' },
+          { label: 'Ripeti', role: 'redo' },
+          { type: 'separator' },
           { label: 'Taglia', role: 'cut' },
           { label: 'Copia', role: 'copy' },
           { label: 'Incolla', role: 'paste' },

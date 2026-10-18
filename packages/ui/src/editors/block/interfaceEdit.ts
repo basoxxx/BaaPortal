@@ -87,6 +87,11 @@ export function interfaceNames(owner: InterfaceOwner): string[] {
   return topLists(owner).flatMap((l) => l.map((m) => m.name));
 }
 
+/** Nomi con cui un membro nuovo di `list` non deve coincidere: al primo livello tutte le sezioni, in una struct i fratelli. */
+export function siblingNames(owner: InterfaceOwner, list: Member[]): string[] {
+  return topLists(owner).includes(list) ? interfaceNames(owner) : list.map((m) => m.name);
+}
+
 export function isStructType(text: string): boolean {
   const p = parseType(text);
   if (!p.ok) return false;

@@ -5,6 +5,8 @@ import { commands, matchShortcut, type CommandContext } from './commands';
 /** Esegue il comando associato al tasto premuto; true se un comando è partito. */
 export function handleShortcutKeydown(e: KeyboardEvent, ctx: CommandContext): boolean {
   if (e.repeat) return false;
+  // Un dialogo modale aperto tiene per sé la tastiera: nessun comando globale.
+  if (ctx.store.getState().dialog !== null) return false;
   const target = e.target as HTMLElement | null;
   const inField = target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA';
   for (const cmd of Object.values(commands)) {

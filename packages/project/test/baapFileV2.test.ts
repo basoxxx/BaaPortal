@@ -139,6 +139,27 @@ describe('file .baap formato 2', () => {
     expect(code(bytes(f))).toBe('INVALID_SCHEMA');
   });
 
+  it('le chiavi sconosciute delle voci devices[] di project.json si conservano', () => {
+    const p = makeProject();
+    const d = p.devices[0]!;
+    const f = baseFiles(p);
+    const proj = json(f, 'project.json');
+    proj.devices[0].kind = 'plc';
+    proj.devices[0].extra = { a: 1 };
+    put(f, 'project.json', proj);
+    const once = readBaap(bytes(f));
+    const out = unzipSync(writeBaap(once, { appVersion: 'x' }));
+    expect(json(out, 'project.json').devices).toEqual([
+      { kind: 'plc', extra: { a: 1 }, id: d.id, name: 'PLC_1' },
+    ]);
+    // Restano nella voce dell'elenco, non nel file del dispositivo.
+    const devJson = json(out, `plc/${d.id}/device.json`);
+    expect(devJson).not.toHaveProperty('kind');
+    expect(devJson).not.toHaveProperty('extra');
+    const twice = readBaap(zipSync(out));
+    expect(twice).toEqual(once);
+  });
+
   it('kind sconosciuto → INVALID_SCHEMA', () => {
     const p = makeProject();
     const d = p.devices[0]!;

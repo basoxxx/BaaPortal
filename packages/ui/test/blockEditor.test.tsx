@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { CodeBlock, InstanceDb } from '@baaportal/project';
 import { beginDrag, endDrag } from '../src/project/navigation/objectCommands';
@@ -151,6 +151,23 @@ describe('editor di blocco: interfaccia', () => {
     act(() => app.store.getState().undo());
     expect(block(app, f.id).interface.input[0]!.name).toBe('speed');
     expect(idb().overrides).toEqual({ speed: '9' });
+  });
+
+  it('incollare in una struct rende unici i nomi fra i membri della struct', async () => {
+    const st = mem('S', 'Struct', { members: [mem('a', 'Int')] });
+    const f = fb('Nastro', { input: [mem('x', 'Int')], static: [st] });
+    const app = await openEditor('block', f.id, (d) => void d.blocks.push(f));
+    await app.user.click(expander(st.id));
+    await app.user.click(cell('m-a', 'name'));
+    app.bridge.clipboard = 'a\tInt\r\nx\tInt';
+    await app.user.keyboard('{Control>}v{/Control}');
+    await waitFor(() =>
+      expect(block(app, f.id).interface.static[0]!.members!.map((m) => m.name)).toEqual([
+        'a',
+        'a_1',
+        'x',
+      ]),
+    );
   });
 
   it('nome doppio e valore errato sono segnati nelle celle', async () => {
