@@ -11,7 +11,13 @@ export const PORTALS: { id: PortalId; icon: IconName }[] = [
   { id: 'online', icon: 'portalOnline' },
 ];
 
-export function PortalList({ current, onSelect }: { current: PortalId; onSelect(p: PortalId): void }) {
+export function PortalList({
+  current,
+  onSelect,
+}: {
+  current: PortalId;
+  onSelect(p: PortalId): void;
+}) {
   const { t } = useTranslation();
   const hasDoc = useAppStore((s) => s.doc !== null);
   return (

@@ -18,7 +18,12 @@ const title = (app: Awaited<ReturnType<typeof launchApp>>['app']) =>
 
 test("aprire un .baap con l'app già aperta lo apre nella finestra esistente", async () => {
   const file = join(tmp, 'progetto.baap');
-  writeFileSync(file, writeBaap(newProject({ name: 'Progetto', author: 'x', comment: '' }, new Date()), { appVersion: '0.1.0' }));
+  writeFileSync(
+    file,
+    writeBaap(newProject({ name: 'Progetto', author: 'x', comment: '' }, new Date()), {
+      appVersion: '0.1.0',
+    }),
+  );
   const { app, userData } = await launchApp();
   expect(await spawnSecondInstance(userData, file)).toBe(0);
   await expect.poll(() => title(app)).toBe(`BaaPortal - ${file}`);
@@ -28,7 +33,12 @@ test("aprire un .baap con l'app già aperta lo apre nella finestra esistente", a
 
 test("un .baap passato alla riga di comando all'avvio si apre da solo", async () => {
   const file = join(tmp, 'avvio.baap');
-  writeFileSync(file, writeBaap(newProject({ name: 'Avvio', author: 'x', comment: '' }, new Date()), { appVersion: '0.1.0' }));
+  writeFileSync(
+    file,
+    writeBaap(newProject({ name: 'Avvio', author: 'x', comment: '' }, new Date()), {
+      appVersion: '0.1.0',
+    }),
+  );
   const { app } = await launchApp({ args: [file] });
   await expect.poll(() => title(app)).toBe(`BaaPortal - ${file}`);
   await app.close();

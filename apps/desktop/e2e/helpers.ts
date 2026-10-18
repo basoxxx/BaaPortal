@@ -31,7 +31,9 @@ export async function launchApp(opts: { args?: string[] } = {}): Promise<Launche
   // firstWindow() risolve alla creazione della finestra, prima che il modulo del renderer sia
   // eseguito: senza questa attesa window.baa e la UI possono ancora non esistere.
   await page.waitForFunction(
-    () => typeof (window as { baa?: unknown }).baa === 'object' && !!document.querySelector('#root > *'),
+    () =>
+      typeof (window as { baa?: unknown }).baa === 'object' &&
+      !!document.querySelector('#root > *'),
   );
   const result = { app, page, userData };
   launched.push(result);

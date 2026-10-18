@@ -5,7 +5,8 @@ import { useAppStore, useServices } from '../../state/AppContext';
 export function useDateTimeFormat() {
   const { i18n } = useTranslation();
   const locale = i18n.language.startsWith('it') ? 'it-IT' : 'en-GB';
-  return (d: Date) => new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'medium' }).format(d);
+  return (d: Date) =>
+    new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'medium' }).format(d);
 }
 
 export function ProjectProperties() {
@@ -15,7 +16,8 @@ export function ProjectProperties() {
   const selection = useAppStore((s) => s.selection);
   const fmt = useDateTimeFormat();
   const uid = useId();
-  if (selection !== 'project' || !doc) return <p className="baa-placeholder">{t('inspector.noProperties')}</p>;
+  if (selection !== 'project' || !doc)
+    return <p className="baa-placeholder">{t('inspector.noProperties')}</p>;
   const m = doc.project.meta;
   const ro = (key: string, label: string, value: string) => (
     <>

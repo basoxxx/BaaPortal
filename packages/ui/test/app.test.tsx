@@ -6,7 +6,11 @@ import { FakeBridge } from './fakeBridge';
 
 it('App attende la versione, poi si registra una sola volta anche in StrictMode', async () => {
   const bridge = new FakeBridge();
-  const { unmount } = render(<StrictMode><App bridge={bridge} /></StrictMode>);
+  const { unmount } = render(
+    <StrictMode>
+      <App bridge={bridge} />
+    </StrictMode>,
+  );
   expect(screen.queryByTestId('app-root')).toBeNull();
   expect(await screen.findByTestId('app-root')).toBeInTheDocument();
   expect(bridge.listenerCount).toBe(2);

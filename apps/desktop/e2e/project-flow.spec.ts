@@ -2,7 +2,13 @@ import { expect, test } from '@playwright/test';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createProject, launchApp, shownDialogs, spawnSecondInstance, stubMessageBox } from './helpers';
+import {
+  createProject,
+  launchApp,
+  shownDialogs,
+  spawnSecondInstance,
+  stubMessageBox,
+} from './helpers';
 
 const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
 let tmp: string;
@@ -29,18 +35,27 @@ test('crea, modifica, salva, chiude e riapre dai recenti, con nome non ASCII in 
   const author = page.getByTestId('panel-inspector').getByLabel('Autore');
   await author.fill('Collaudo');
   await page.keyboard.press(`${mod}+s`);
-  await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getTitle())).toBe(`BaaPortal - ${file}`);
+  await expect
+    .poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getTitle()))
+    .toBe(`BaaPortal - ${file}`);
 
-  await page.getByTestId('menu-bar').getByRole('menuitem', { name: 'Progetto', exact: true }).click();
+  await page
+    .getByTestId('menu-bar')
+    .getByRole('menuitem', { name: 'Progetto', exact: true })
+    .click();
   await page.getByRole('menuitem', { name: 'Chiudi', exact: true }).click();
-  await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getTitle())).toBe('BaaPortal');
+  await expect
+    .poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getTitle()))
+    .toBe('BaaPortal');
   expect(await shownDialogs(app)).toEqual([]); // salvato: nessuna richiesta di conferma
 
   await page.getByTestId('portal-start').click();
   await page.getByTestId('action-open').click();
   await page.getByTestId('selection-pane').getByRole('row').nth(1).dblclick();
 
-  await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getTitle())).toBe(`BaaPortal - ${file}`);
+  await expect
+    .poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getTitle()))
+    .toBe(`BaaPortal - ${file}`);
   await page.getByTestId('link-project-view').click();
   await page.getByTestId('tree-node-project').click();
   await expect(page.getByTestId('panel-inspector').getByLabel('Autore')).toHaveValue('Collaudo');
@@ -76,7 +91,9 @@ test("file .baap danneggiato: messaggio d'errore e app utilizzabile", async () =
 
   await expect.poll(() => shownDialogs(app)).toHaveLength(1);
   expect((await shownDialogs(app))[0]).toContain('non è un progetto BaaPortal valido');
-  expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getTitle())).toBe('BaaPortal');
+  expect(
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getTitle()),
+  ).toBe('BaaPortal');
 
   await createProject(page, 'Dopo', join(tmp, 'ok'));
   await expect(page.getByTestId('open-project-info')).toContainText('Dopo.baap');

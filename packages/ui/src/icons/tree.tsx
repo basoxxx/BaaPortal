@@ -64,4 +64,5 @@ const shapes: Partial<Record<IconName, ReactNode>> = {
   ),
 };
 
-for (const [name, node] of Object.entries(shapes) as [IconName, ReactNode][]) registerIcon(name, make(node));
+for (const [name, node] of Object.entries(shapes) as [IconName, ReactNode][])
+  registerIcon(name, make(node));

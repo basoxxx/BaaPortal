@@ -62,7 +62,11 @@ describe('comandi', () => {
 
   it('project.exit esegue handleCloseRequest', async () => {
     let called = 0;
-    const service = { handleCloseRequest: async () => { called++; } } as never;
+    const service = {
+      handleCloseRequest: async () => {
+        called++;
+      },
+    } as never;
     await commands['project.exit'].run({ store: createAppStore(), service, bridge: {} as never });
     expect(called).toBe(1);
   });

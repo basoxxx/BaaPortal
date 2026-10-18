@@ -3,7 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { renderApp } from './renderApp';
 
 const SECTIONS = {
-  instructions: ['Preferiti', 'Istruzioni di base', 'Istruzioni avanzate', 'Comunicazione', 'Pacchetti opzionali'],
+  instructions: [
+    'Preferiti',
+    'Istruzioni di base',
+    'Istruzioni avanzate',
+    'Comunicazione',
+    'Pacchetti opzionali',
+  ],
   test: ['Pannello di comando CPU', 'Stack di chiamata'],
   tasks: ['Trova e sostituisci'],
   libraries: ['Libreria di progetto', 'Librerie globali'],
@@ -25,7 +31,9 @@ describe('task card', () => {
       await user.click(screen.getByTestId(`taskcard-tab-${id}`));
       expect(store.getState().taskCard).toBe(id);
       expect(screen.getByTestId(`taskcard-tab-${id}`)).toHaveAttribute('aria-selected', 'true');
-      expect(screen.getAllByRole('button', { expanded: true }).map((b) => b.textContent)).toEqual([...SECTIONS[id]]);
+      expect(screen.getAllByRole('button', { expanded: true }).map((b) => b.textContent)).toEqual([
+        ...SECTIONS[id],
+      ]);
     }
   });
 
@@ -33,7 +41,10 @@ describe('task card', () => {
     const { user } = await renderApp({ view: 'project', withProject: true });
     expect(screen.getAllByText('Nessun elemento disponibile in questa sezione.')).toHaveLength(5);
     await user.click(screen.getByRole('button', { name: 'Preferiti' }));
-    expect(screen.getByRole('button', { name: 'Preferiti' })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('button', { name: 'Preferiti' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
     expect(screen.getAllByText('Nessun elemento disponibile in questa sezione.')).toHaveLength(4);
   });
 });

@@ -6,7 +6,11 @@ import { useAppStore, useServices } from '../../state/AppContext';
 import type { TreeNodeId } from '../../state/store';
 import { buildTree, type TreeNode } from './treeModel';
 
-interface Row { node: TreeNode; level: number; parent: TreeNode | null }
+interface Row {
+  node: TreeNode;
+  level: number;
+  parent: TreeNode | null;
+}
 
 export function ProjectTree() {
   const { t } = useTranslation();
@@ -109,7 +113,9 @@ export function ProjectTree() {
             onDoubleClick={() => toggle(node)}
             onKeyDown={(e) => onKeyDown(e, i)}
           >
-            <span className="baa-tree-twist" aria-hidden="true">{hasKids ? (collapsed.has(node.id) ? '▸' : '▾') : ''}</span>
+            <span className="baa-tree-twist" aria-hidden="true">
+              {hasKids ? (collapsed.has(node.id) ? '▸' : '▾') : ''}
+            </span>
             <Icon name={node.icon} size={16} />
             <span className="baa-tree-label">{node.label ?? t(node.labelKey)}</span>
           </li>

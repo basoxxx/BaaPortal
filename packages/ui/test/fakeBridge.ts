@@ -33,11 +33,21 @@ export class FakeBridge implements BaaBridge {
     return this.openCbs.size + this.closeCbs.size;
   }
 
-  async appVersion() { return '0.1.0'; }
-  async defaultProjectDir() { return '/doc/BaaPortal'; }
-  async showOpenProjectDialog() { return this.openDialogResults.shift() ?? null; }
-  async showSaveProjectDialog() { return this.saveDialogResults.shift() ?? null; }
-  async showSelectFolderDialog() { return null; }
+  async appVersion() {
+    return '0.1.0';
+  }
+  async defaultProjectDir() {
+    return '/doc/BaaPortal';
+  }
+  async showOpenProjectDialog() {
+    return this.openDialogResults.shift() ?? null;
+  }
+  async showSaveProjectDialog() {
+    return this.saveDialogResults.shift() ?? null;
+  }
+  async showSelectFolderDialog() {
+    return null;
+  }
   async readFile(path: string) {
     const f = this.files.get(path);
     if (!f) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
@@ -51,32 +61,51 @@ export class FakeBridge implements BaaBridge {
     }
     this.files.set(path, data);
   }
-  async fileExists(path: string) { return this.files.has(path); }
-  async recentList() { return this.recent; }
+  async fileExists(path: string) {
+    return this.files.has(path);
+  }
+  async recentList() {
+    return this.recent;
+  }
   async recentAdd(path: string, name: string) {
-    this.recent = [{ path, name, lastOpened: '', exists: true }, ...this.recent.filter((r) => r.path !== path)];
+    this.recent = [
+      { path, name, lastOpened: '', exists: true },
+      ...this.recent.filter((r) => r.path !== path),
+    ];
     return this.recent;
   }
   async recentRemove(path: string) {
     this.recent = this.recent.filter((r) => r.path !== path);
     return this.recent;
   }
-  setWindowTitle(title: string) { this.title = title; }
+  setWindowTitle(title: string) {
+    this.title = title;
+  }
   async confirmUnsaved(texts: ConfirmTexts): Promise<Answer> {
     this.confirmTexts.push(texts);
     return this.confirmAnswers.shift() ?? 'cancel';
   }
-  async showError(title: string, message: string) { this.errors.push({ title, message }); }
+  async showError(title: string, message: string) {
+    this.errors.push({ title, message });
+  }
   onOpenFileRequest(cb: (p: string) => void) {
     this.openCbs.add(cb);
-    return () => { this.openCbs.delete(cb); };
+    return () => {
+      this.openCbs.delete(cb);
+    };
   }
   onCloseRequest(cb: () => void) {
     this.closeCbs.add(cb);
-    return () => { this.closeCbs.delete(cb); };
+    return () => {
+      this.closeCbs.delete(cb);
+    };
   }
-  closeWindowConfirmed() { this.closeConfirmed = true; }
-  rendererReady() { this.readyCalls++; }
+  closeWindowConfirmed() {
+    this.closeConfirmed = true;
+  }
+  rendererReady() {
+    this.readyCalls++;
+  }
 }
 
 export async function flush(): Promise<void> {

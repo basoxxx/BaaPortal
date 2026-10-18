@@ -13,7 +13,13 @@ export function LanguagePane() {
       <h2>{t('portal.action.language')}</h2>
       <div className="baa-lang-options">
         {LANGS.map(({ id, label }) => (
-          <button key={id} type="button" className="baa-btn" aria-pressed={i18n.language === id} onClick={() => void setLanguage(id)}>
+          <button
+            key={id}
+            type="button"
+            className="baa-btn"
+            aria-pressed={i18n.language === id}
+            onClick={() => void setLanguage(id)}
+          >
             {label}
           </button>
         ))}

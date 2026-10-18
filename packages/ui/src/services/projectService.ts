@@ -11,10 +11,17 @@ import {
 import type { BaaBridge } from '../bridge';
 import type { AppState } from '../state/store';
 
-export type CreateResult = { ok: true } | { ok: false; error: 'EXISTS' | 'WRITE_FAILED' | 'CANCELED' | 'INVALID_PATH' | 'INVALID_NAME' };
+export type CreateResult =
+  | { ok: true }
+  | { ok: false; error: 'EXISTS' | 'WRITE_FAILED' | 'CANCELED' | 'INVALID_PATH' | 'INVALID_NAME' };
 
 export interface ProjectService {
-  createNew(input: { name: string; dir: string; author: string; comment: string }): Promise<CreateResult>;
+  createNew(input: {
+    name: string;
+    dir: string;
+    author: string;
+    comment: string;
+  }): Promise<CreateResult>;
   openFromDialog(): Promise<boolean>;
   open(path: string): Promise<boolean>;
   save(): Promise<boolean>;
@@ -57,7 +64,9 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
   const showError = (message: string) => bridge.showError(t('errors.title'), message);
 
   const announce = (key: 'created' | 'opened' | 'saved', name: string) =>
-    store.getState().pushMessage({ severity: 'info', textKey: `messages.${key}`, params: { name } });
+    store
+      .getState()
+      .pushMessage({ severity: 'info', textKey: `messages.${key}`, params: { name } });
 
   async function writeProject(project: Project, path: string): Promise<boolean> {
     try {
@@ -93,7 +102,12 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
     return true;
   }
 
-  async function createNew(input: { name: string; dir: string; author: string; comment: string }): Promise<CreateResult> {
+  async function createNew(input: {
+    name: string;
+    dir: string;
+    author: string;
+    comment: string;
+  }): Promise<CreateResult> {
     const nameCheck = validateProjectName(input.name);
     if (!nameCheck.ok) {
       await showError(t(`errors.name.${nameCheck.reason}`));
@@ -109,7 +123,10 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
       await showError(t('errors.exists', { path }));
       return { ok: false, error: 'EXISTS' };
     }
-    const project = createProject({ name: input.name, author: input.author, comment: input.comment }, now());
+    const project = createProject(
+      { name: input.name, author: input.author, comment: input.comment },
+      now(),
+    );
     if (!(await writeProject(project, path))) return { ok: false, error: 'WRITE_FAILED' };
     store.getState().setDoc({ project, filePath: path, dirty: false });
     await addRecentBestEffort(path, project.meta.name);
@@ -146,7 +163,10 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
     const doc = before.doc;
     if (!doc) return false;
     const loadId = before.docLoadId;
-    const project: Project = { ...doc.project, meta: { ...doc.project.meta, modifiedAt: now().toISOString() } };
+    const project: Project = {
+      ...doc.project,
+      meta: { ...doc.project.meta, modifiedAt: now().toISOString() },
+    };
     if (!(await writeProject(project, path))) return false;
     // Durante la scrittura l'utente può aver modificato o sostituito il documento.
     const cur = store.getState();
@@ -171,7 +191,11 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
     const waited = queued > 0;
     queued++;
     const run = chain.then(() => fn(waited));
-    chain = run.catch(() => undefined).finally(() => { queued--; });
+    chain = run
+      .catch(() => undefined)
+      .finally(() => {
+        queued--;
+      });
     return run;
   }
 

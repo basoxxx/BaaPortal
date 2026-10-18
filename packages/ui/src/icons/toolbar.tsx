@@ -29,7 +29,9 @@ const shapes: Partial<Record<IconName, ReactNode>> = {
       <path d="M9.5 1.5V5H13M8.5 8v4M6.5 10h4" />
     </>
   ),
-  open: <path d="M1.5 4.5a1 1 0 0 1 1-1h3.5l1.5 1.5h6a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z" />,
+  open: (
+    <path d="M1.5 4.5a1 1 0 0 1 1-1h3.5l1.5 1.5h6a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z" />
+  ),
   save: (
     <>
       <path d="M2.5 2.5h9l2 2v9h-11z" />
@@ -128,4 +130,5 @@ const shapes: Partial<Record<IconName, ReactNode>> = {
   ),
 };
 
-for (const [name, children] of Object.entries(shapes)) registerIcon(name as IconName, make(children));
+for (const [name, children] of Object.entries(shapes))
+  registerIcon(name as IconName, make(children));

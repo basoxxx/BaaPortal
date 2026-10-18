@@ -7,20 +7,31 @@ import itTexts from '../src/i18n/it.json';
 import { t } from '../src/i18n';
 import { PROJECT_PATH, renderApp } from './renderApp';
 
-const names = (el: HTMLElement) => within(el).getAllByRole('button').map((b) => b.textContent);
+const names = (el: HTMLElement) =>
+  within(el)
+    .getAllByRole('button')
+    .map((b) => b.textContent);
 
 describe('vista portale: struttura', () => {
   it('senza progetto solo Avvio è attivo', async () => {
     await renderApp();
     expect(screen.getByTestId('portal-start')).toBeEnabled();
-    for (const p of ['devices', 'plc', 'online']) expect(screen.getByTestId(`portal-${p}`)).toBeDisabled();
+    for (const p of ['devices', 'plc', 'online'])
+      expect(screen.getByTestId(`portal-${p}`)).toBeDisabled();
   });
 
   it("Avvio elenca le operazioni nell'ordine della spec", async () => {
     await renderApp();
     expect(names(screen.getByTestId('action-list'))).toEqual([
-      'Apri progetto esistente', 'Crea nuovo progetto', 'Migra progetto', 'Chiudi progetto',
-      'Primi passi', 'Software installato', 'Guida', "Lingua dell'interfaccia utente"]);
+      'Apri progetto esistente',
+      'Crea nuovo progetto',
+      'Migra progetto',
+      'Chiudi progetto',
+      'Primi passi',
+      'Software installato',
+      'Guida',
+      "Lingua dell'interfaccia utente",
+    ]);
     expect(screen.getByTestId('action-migrate')).toBeDisabled();
     expect(screen.getByTestId('action-help')).toBeDisabled();
   });
@@ -29,7 +40,10 @@ describe('vista portale: struttura', () => {
     const { user, store } = await renderApp({ withProject: true });
     expect(screen.getByTestId('portal-devices')).toBeEnabled();
     await user.click(screen.getByTestId('portal-devices'));
-    expect(names(screen.getByTestId('action-list'))).toEqual(['Apri la vista progetto', 'Aggiungi nuovo dispositivo']);
+    expect(names(screen.getByTestId('action-list'))).toEqual([
+      'Apri la vista progetto',
+      'Aggiungi nuovo dispositivo',
+    ]);
     expect(screen.getByRole('button', { name: 'Aggiungi nuovo dispositivo' })).toBeDisabled();
     await user.click(screen.getByRole('button', { name: 'Apri la vista progetto' }));
     expect(store.getState().view).toBe('project');
@@ -43,7 +57,9 @@ describe('vista portale: struttura', () => {
 
   it('open-project-info mostra il percorso del progetto aperto', async () => {
     await renderApp({ withProject: true });
-    expect(screen.getByTestId('open-project-info')).toHaveTextContent(`Progetto aperto: ${PROJECT_PATH}`);
+    expect(screen.getByTestId('open-project-info')).toHaveTextContent(
+      `Progetto aperto: ${PROJECT_PATH}`,
+    );
   });
 });
 
@@ -80,8 +96,17 @@ describe('Crea nuovo progetto', () => {
 
   it('ogni motivo di validateProjectName ha un testo in it e en', () => {
     const samples = ['', 'x'.repeat(500), 'a/b', 'CON', 'a.'];
-    const reasons = samples.map((n) => { const r = validateProjectName(n); return r.ok ? null : r.reason; });
-    expect([...reasons].sort()).toEqual(['EMPTY', 'INVALID_CHARS', 'RESERVED', 'TOO_LONG', 'TRAILING_DOT_OR_SPACE']);
+    const reasons = samples.map((n) => {
+      const r = validateProjectName(n);
+      return r.ok ? null : r.reason;
+    });
+    expect([...reasons].sort()).toEqual([
+      'EMPTY',
+      'INVALID_CHARS',
+      'RESERVED',
+      'TOO_LONG',
+      'TRAILING_DOT_OR_SPACE',
+    ]);
     for (const r of reasons) {
       expect((itTexts.errors.name as Record<string, string>)[r!]).toBeTruthy();
       expect((enTexts.errors.name as Record<string, string>)[r!]).toBeTruthy();
@@ -156,7 +181,7 @@ describe('Crea nuovo progetto', () => {
     expect(store.getState().portal).toBe('plc');
   });
 
-  it('con EXISTS compare l\'errore sotto il campo Nome', async () => {
+  it("con EXISTS compare l'errore sotto il campo Nome", async () => {
     const { user, bridge } = await renderApp();
     await user.click(screen.getByTestId('action-new'));
     await screen.findByDisplayValue('Progetto1');
@@ -171,7 +196,9 @@ describe('Apri progetto esistente', () => {
     const { user, bridge, store } = await renderApp();
     const project = createProject({ name: 'Linea 3', author: '', comment: '' }, new Date());
     bridge.files.set(PROJECT_PATH, writeBaap(project, { appVersion: '0.1.0' }));
-    bridge.recent = [{ path: PROJECT_PATH, name: 'Linea 3', lastOpened: '2026-01-01T10:00:00Z', exists: true }];
+    bridge.recent = [
+      { path: PROJECT_PATH, name: 'Linea 3', lastOpened: '2026-01-01T10:00:00Z', exists: true },
+    ];
     await user.click(screen.getByTestId('action-new'));
     await user.click(screen.getByTestId('action-open'));
     const row = await screen.findByText('Linea 3');
@@ -206,15 +233,23 @@ describe('Apri progetto esistente', () => {
     const { bridge, store } = await renderApp({ withProject: false });
     const project = createProject({ name: 'Linea 3', author: '', comment: '' }, new Date());
     bridge.files.set(PROJECT_PATH, writeBaap(project, { appVersion: '0.1.0' }));
-    await act(async () => { await bridge.emitOpenFile(PROJECT_PATH); });
-    expect(store.getState()).toMatchObject({ view: 'portal', portal: 'start', startAction: 'firstSteps' });
+    await act(async () => {
+      await bridge.emitOpenFile(PROJECT_PATH);
+    });
+    expect(store.getState()).toMatchObject({
+      view: 'portal',
+      portal: 'start',
+      startAction: 'firstSteps',
+    });
   });
 
-  it('in vista progetto un\'apertura resta nella vista progetto', async () => {
+  it("in vista progetto un'apertura resta nella vista progetto", async () => {
     const { bridge, store } = await renderApp({ view: 'project' });
     const project = createProject({ name: 'Linea 3', author: '', comment: '' }, new Date());
     bridge.files.set(PROJECT_PATH, writeBaap(project, { appVersion: '0.1.0' }));
-    await act(async () => { await bridge.emitOpenFile(PROJECT_PATH); });
+    await act(async () => {
+      await bridge.emitOpenFile(PROJECT_PATH);
+    });
     expect(store.getState()).toMatchObject({ view: 'project', startAction: 'open' });
   });
 });
@@ -225,7 +260,11 @@ describe('altre operazioni', () => {
     expect(store.getState().startAction).toBe('firstSteps');
     await user.click(screen.getByTestId('action-close'));
     await waitFor(() => expect(store.getState().doc).toBeNull());
-    expect(store.getState()).toMatchObject({ view: 'portal', portal: 'start', startAction: 'open' });
+    expect(store.getState()).toMatchObject({
+      view: 'portal',
+      portal: 'start',
+      startAction: 'open',
+    });
   });
 
   it('Chiudi progetto con modifiche non salvate passa dalla conferma di service.close()', async () => {
@@ -238,15 +277,24 @@ describe('altre operazioni', () => {
 
   it('project.close dalla vista progetto porta al portale su Avvio > Apri', async () => {
     const { store, service, bridge } = await renderApp({ withProject: true, view: 'project' });
-    await act(async () => { await commands['project.close'].run({ store, service, bridge }); });
-    expect(store.getState()).toMatchObject({ view: 'portal', portal: 'start', startAction: 'open', doc: null });
+    await act(async () => {
+      await commands['project.close'].run({ store, service, bridge });
+    });
+    expect(store.getState()).toMatchObject({
+      view: 'portal',
+      portal: 'start',
+      startAction: 'open',
+      doc: null,
+    });
   });
 
   it('Salva con nome nel portale non salta a Primi passi', async () => {
     const { store, service, bridge } = await renderApp({ withProject: true });
     act(() => store.getState().setStartAction('installed'));
     bridge.saveDialogResults.push('/doc/BaaPortal/Altro.baap');
-    await act(async () => { await service.saveAs(); });
+    await act(async () => {
+      await service.saveAs();
+    });
     expect(store.getState().doc?.filePath).toBe('/doc/BaaPortal/Altro.baap');
     expect(store.getState().startAction).toBe('installed');
   });

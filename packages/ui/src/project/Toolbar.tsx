@@ -12,7 +12,13 @@ const GROUPS: CommandId[][] = [
   ['edit.cut', 'edit.copy', 'edit.paste', 'edit.delete'],
   ['edit.undo', 'edit.redo'],
   ['edit.compile', 'online.download', 'online.upload', 'online.simulation'],
-  ['online.goOnline', 'online.goOffline', 'online.accessibleDevices', 'online.startCpu', 'online.stopCpu'],
+  [
+    'online.goOnline',
+    'online.goOffline',
+    'online.accessibleDevices',
+    'online.startCpu',
+    'online.stopCpu',
+  ],
   ['window.splitVertical'],
 ];
 
@@ -25,7 +31,9 @@ export function Toolbar() {
     <div role="toolbar" data-testid="toolbar" className="baa-toolbar">
       {GROUPS.map((group, gi) => (
         <Fragment key={gi}>
-          {gi > 0 ? <span role="separator" aria-orientation="vertical" className="baa-toolbar-sep" /> : null}
+          {gi > 0 ? (
+            <span role="separator" aria-orientation="vertical" className="baa-toolbar-sep" />
+          ) : null}
           {group.map((id) => {
             const cmd = commands[id];
             const label = t(cmd.labelKey);
@@ -37,7 +45,11 @@ export function Toolbar() {
                 className="baa-toolbar-btn"
                 aria-label={label}
                 aria-pressed={checked}
-                title={cmd.shortcut ? `${label} (${shortcutLabel(cmd.shortcut, ctx.bridge.platform)})` : label}
+                title={
+                  cmd.shortcut
+                    ? `${label} (${shortcutLabel(cmd.shortcut, ctx.bridge.platform)})`
+                    : label
+                }
                 disabled={!cmd.isEnabled(appState)}
                 onClick={() => void cmd.run(ctx)}
               >

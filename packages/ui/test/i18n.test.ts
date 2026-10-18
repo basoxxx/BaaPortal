@@ -8,7 +8,10 @@ function flat(obj: unknown, prefix = ''): [string, string][] {
     typeof v === 'string' ? [[prefix + k, v] as [string, string]] : flat(v, prefix + k + '.'),
   );
 }
-const flatKeys = (o: unknown) => flat(o).map(([k]) => k).sort();
+const flatKeys = (o: unknown) =>
+  flat(o)
+    .map(([k]) => k)
+    .sort();
 const flatValues = (o: unknown) => flat(o).map(([, v]) => v);
 
 describe('i18n', () => {

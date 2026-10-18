@@ -12,10 +12,17 @@ export interface TreeNode {
 }
 
 const leaf = (id: TreeNodeId, labelKey: string, icon: IconName, enabled = true): TreeNode => ({
-  id, labelKey, icon, enabled, children: [],
+  id,
+  labelKey,
+  icon,
+  enabled,
+  children: [],
 });
 
-export function buildTree(doc: OpenDoc | null): { project: TreeNode | null; onlineAccess: TreeNode } {
+export function buildTree(doc: OpenDoc | null): {
+  project: TreeNode | null;
+  onlineAccess: TreeNode;
+} {
   const onlineAccess = leaf('online-access', 'tree.onlineAccess', 'treeOnlineAccess');
   if (!doc) return { project: null, onlineAccess };
   return {

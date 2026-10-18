@@ -43,11 +43,20 @@ export function NewProjectPane() {
       if (!touched.current.dir) setDir(defaultDir);
       if (!touched.current.name) setName(`Progetto${n}`);
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [bridge]);
 
   const check = validateProjectName(name);
-  const nameError = name === '' && !touched.current.name ? null : exists ? t('errors.name.EXISTS') : check.ok ? null : t(`errors.name.${check.reason}`);
+  const nameError =
+    name === '' && !touched.current.name
+      ? null
+      : exists
+        ? t('errors.name.EXISTS')
+        : check.ok
+          ? null
+          : t(`errors.name.${check.reason}`);
   const dirError = dir.trim() !== '' && !isAbsolutePath(dir) ? t('errors.pathNotAbsolute') : null;
   const canCreate = check.ok && dir.trim() !== '' && dirError === null && !exists;
 
@@ -74,15 +83,37 @@ export function NewProjectPane() {
         <input
           id="np-name"
           value={name}
-          onChange={(e) => { touched.current.name = true; setName(e.target.value); setExists(false); }}
+          onChange={(e) => {
+            touched.current.name = true;
+            setName(e.target.value);
+            setExists(false);
+          }}
         />
-        {nameError ? <div className="baa-field-error" role="alert">{nameError}</div> : null}
+        {nameError ? (
+          <div className="baa-field-error" role="alert">
+            {nameError}
+          </div>
+        ) : null}
       </div>
       <div className="baa-field">
         <label htmlFor="np-dir">{t('portal.new.path')}</label>
-        <input id="np-dir" value={dir} onChange={(e) => { touched.current.dir = true; setDir(e.target.value); setExists(false); }} />
-        <button type="button" className="baa-btn" onClick={() => void browse()}>{t('portal.browse')}</button>
-        {dirError ? <div className="baa-field-error" role="alert">{dirError}</div> : null}
+        <input
+          id="np-dir"
+          value={dir}
+          onChange={(e) => {
+            touched.current.dir = true;
+            setDir(e.target.value);
+            setExists(false);
+          }}
+        />
+        <button type="button" className="baa-btn" onClick={() => void browse()}>
+          {t('portal.browse')}
+        </button>
+        {dirError ? (
+          <div className="baa-field-error" role="alert">
+            {dirError}
+          </div>
+        ) : null}
       </div>
       <div className="baa-field">
         <label htmlFor="np-author">{t('portal.new.author')}</label>
@@ -90,9 +121,19 @@ export function NewProjectPane() {
       </div>
       <div className="baa-field">
         <label htmlFor="np-comment">{t('portal.new.comment')}</label>
-        <textarea id="np-comment" rows={3} value={comment} onChange={(e) => setComment(e.target.value)} />
+        <textarea
+          id="np-comment"
+          rows={3}
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+        />
       </div>
-      <button type="button" className="baa-btn baa-btn-primary" disabled={!canCreate} onClick={() => void create()}>
+      <button
+        type="button"
+        className="baa-btn baa-btn-primary"
+        disabled={!canCreate}
+        onClick={() => void create()}
+      >
         {t('portal.new.create')}
       </button>
     </>

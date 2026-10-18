@@ -10,8 +10,12 @@ export function InstalledSoftwarePane() {
   const [appVersion, setAppVersion] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
-    void bridge.appVersion().then((v) => { if (!cancelled) setAppVersion(v); });
-    return () => { cancelled = true; };
+    void bridge.appVersion().then((v) => {
+      if (!cancelled) setAppVersion(v);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [bridge]);
   const rows = [
     ...(appVersion ? [`BaaPortal ${appVersion}`] : []),
@@ -22,7 +26,9 @@ export function InstalledSoftwarePane() {
     <>
       <h2>{t('portal.action.installed')}</h2>
       <ul>
-        {rows.map((r) => <li key={r}>{r}</li>)}
+        {rows.map((r) => (
+          <li key={r}>{r}</li>
+        ))}
       </ul>
     </>
   );

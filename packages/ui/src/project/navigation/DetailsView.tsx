@@ -21,17 +21,24 @@ export function DetailsView() {
   const selection = useAppStore((s) => s.selection);
   const children = useMemo(() => {
     const { project, onlineAccess } = buildTree(doc);
-    return (find(project, selection ?? '') ?? (selection === onlineAccess.id ? onlineAccess : null))?.children ?? [];
+    return (
+      (find(project, selection ?? '') ?? (selection === onlineAccess.id ? onlineAccess : null))
+        ?.children ?? []
+    );
   }, [doc, selection]);
   return (
     <table className="baa-table">
       <thead>
-        <tr><th scope="col">{t('details.name')}</th></tr>
+        <tr>
+          <th scope="col">{t('details.name')}</th>
+        </tr>
       </thead>
       <tbody>
         {children.map((c) => (
           <tr key={c.id} data-testid="details-row" aria-disabled={c.enabled ? undefined : true}>
-            <td><Icon name={c.icon} size={16} /> {c.label ?? t(c.labelKey)}</td>
+            <td>
+              <Icon name={c.icon} size={16} /> {c.label ?? t(c.labelKey)}
+            </td>
           </tr>
         ))}
       </tbody>

@@ -2,14 +2,15 @@ import { act, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { renderApp } from './renderApp';
 
-
 describe('albero del progetto', () => {
   it('è un tree con nodi, etichette italiane e sezione Progetti di riferimento vuota', async () => {
     const { user, store } = await renderApp({ view: 'project', withProject: true });
     const tree = screen.getByRole('tree');
     expect(within(tree).getAllByRole('treeitem')).toHaveLength(7);
     expect(screen.getByTestId('tree-node-project')).toHaveTextContent('Linea 3');
-    expect(screen.getByTestId('tree-node-add-device')).toHaveTextContent('Aggiungi nuovo dispositivo');
+    expect(screen.getByTestId('tree-node-add-device')).toHaveTextContent(
+      'Aggiungi nuovo dispositivo',
+    );
     expect(screen.getByTestId('tree-node-online-access')).toHaveTextContent('Accessi online');
     expect(screen.getByTestId('tree-node-add-device')).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByTestId('tree-node-project')).toHaveAttribute('aria-expanded', 'true');
@@ -60,7 +61,9 @@ describe('albero del progetto', () => {
   it('roving tabindex: solo il nodo selezionato è nella sequenza di tabulazione', async () => {
     const { user } = await renderApp({ view: 'project', withProject: true });
     await user.click(screen.getByTestId('tree-node-languages'));
-    const tabbable = screen.getAllByRole('treeitem').filter((n) => n.getAttribute('tabindex') === '0');
+    const tabbable = screen
+      .getAllByRole('treeitem')
+      .filter((n) => n.getAttribute('tabindex') === '0');
     expect(tabbable).toHaveLength(1);
     expect(tabbable[0]).toBe(screen.getByTestId('tree-node-languages'));
     expect(screen.getByTestId('tree-node-languages')).toHaveFocus();
@@ -80,4 +83,3 @@ describe('vista dettagli', () => {
     expect(screen.queryAllByTestId('details-row')).toHaveLength(0);
   });
 });
-

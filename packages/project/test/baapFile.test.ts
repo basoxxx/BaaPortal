@@ -68,7 +68,13 @@ describe('file .baap', () => {
         'project.json': strToU8(
           JSON.stringify({
             formatVersion: 1,
-            meta: { name: 'X', author: '', comment: '', createdAt: 'ieri', modifiedAt: now.toISOString() },
+            meta: {
+              name: 'X',
+              author: '',
+              comment: '',
+              createdAt: 'ieri',
+              modifiedAt: now.toISOString(),
+            },
           }),
         ),
       }),
@@ -80,7 +86,13 @@ describe('file .baap', () => {
         'project.json': strToU8(
           JSON.stringify({
             formatVersion: 1,
-            meta: { name: 'X', author: '', comment: '', createdAt: now.toISOString(), modifiedAt: '' },
+            meta: {
+              name: 'X',
+              author: '',
+              comment: '',
+              createdAt: now.toISOString(),
+              modifiedAt: '',
+            },
           }),
         ),
       }),

@@ -5,15 +5,50 @@ import type { ProjectService } from '../services/projectService';
 import type { AppState, PanelName } from '../state/store';
 
 export type CommandId =
-  | 'project.new' | 'project.open' | 'project.close' | 'project.save' | 'project.saveAs' | 'project.archive' | 'project.retrieve'
-  | 'project.print' | 'project.printPreview' | 'project.exit'
-  | 'edit.undo' | 'edit.redo' | 'edit.cut' | 'edit.copy' | 'edit.paste' | 'edit.delete' | 'edit.rename' | 'edit.findReplace' | 'edit.selectAll' | 'edit.compile'
-  | 'view.navigation' | 'view.details' | 'view.inspector' | 'view.taskCards' | 'view.portal'
-  | 'insert.device' | 'insert.block'
-  | 'online.goOnline' | 'online.goOffline' | 'online.simulation' | 'online.download' | 'online.upload' | 'online.accessibleDevices' | 'online.startCpu' | 'online.stopCpu' | 'online.diagnostics'
-  | 'options.settings' | 'tools.crossReferences' | 'tools.callStructure'
-  | 'window.splitVertical' | 'window.splitHorizontal' | 'window.closeAllEditors'
-  | 'help.show' | 'help.about';
+  | 'project.new'
+  | 'project.open'
+  | 'project.close'
+  | 'project.save'
+  | 'project.saveAs'
+  | 'project.archive'
+  | 'project.retrieve'
+  | 'project.print'
+  | 'project.printPreview'
+  | 'project.exit'
+  | 'edit.undo'
+  | 'edit.redo'
+  | 'edit.cut'
+  | 'edit.copy'
+  | 'edit.paste'
+  | 'edit.delete'
+  | 'edit.rename'
+  | 'edit.findReplace'
+  | 'edit.selectAll'
+  | 'edit.compile'
+  | 'view.navigation'
+  | 'view.details'
+  | 'view.inspector'
+  | 'view.taskCards'
+  | 'view.portal'
+  | 'insert.device'
+  | 'insert.block'
+  | 'online.goOnline'
+  | 'online.goOffline'
+  | 'online.simulation'
+  | 'online.download'
+  | 'online.upload'
+  | 'online.accessibleDevices'
+  | 'online.startCpu'
+  | 'online.stopCpu'
+  | 'online.diagnostics'
+  | 'options.settings'
+  | 'tools.crossReferences'
+  | 'tools.callStructure'
+  | 'window.splitVertical'
+  | 'window.splitHorizontal'
+  | 'window.closeAllEditors'
+  | 'help.show'
+  | 'help.about';
 
 export interface CommandContext {
   store: StoreApi<AppState>;
@@ -44,7 +79,8 @@ function panelToggle(id: CommandId, panel: PanelName): Command {
   return def(id, {
     isEnabled: always,
     isChecked: (s) => s.panels[panel].open,
-    run: ({ store }) => store.getState().setPanel(panel, { open: !store.getState().panels[panel].open }),
+    run: ({ store }) =>
+      store.getState().setPanel(panel, { open: !store.getState().panels[panel].open }),
   });
 }
 
@@ -70,8 +106,17 @@ const list: Command[] = [
     isEnabled: hasDoc,
     run: async ({ service }) => void (await service.close()),
   }),
-  def('project.save', { icon: 'save', shortcut: 'Mod+S', isEnabled: hasDoc, run: async ({ service }) => void (await service.save()) }),
-  def('project.saveAs', { shortcut: 'Mod+Shift+S', isEnabled: hasDoc, run: async ({ service }) => void (await service.saveAs()) }),
+  def('project.save', {
+    icon: 'save',
+    shortcut: 'Mod+S',
+    isEnabled: hasDoc,
+    run: async ({ service }) => void (await service.save()),
+  }),
+  def('project.saveAs', {
+    shortcut: 'Mod+Shift+S',
+    isEnabled: hasDoc,
+    run: async ({ service }) => void (await service.saveAs()),
+  }),
   def('project.archive'),
   def('project.retrieve'),
   def('project.print', { icon: 'print' }),
@@ -121,10 +166,17 @@ const list: Command[] = [
   }),
 ];
 
-export const commands = Object.fromEntries(list.map((c) => [c.id, c])) as Record<CommandId, Command>;
+export const commands = Object.fromEntries(list.map((c) => [c.id, c])) as Record<
+  CommandId,
+  Command
+>;
 
 /** Confronta un evento di tastiera con una scorciatoia tipo 'Mod+Shift+S'. Mod = Cmd su macOS, Ctrl altrove. */
-export function matchShortcut(e: KeyboardEvent, shortcut: string, platform: BaaBridge['platform']): boolean {
+export function matchShortcut(
+  e: KeyboardEvent,
+  shortcut: string,
+  platform: BaaBridge['platform'],
+): boolean {
   const parts = shortcut.split('+');
   const key = parts[parts.length - 1]!.toLowerCase();
   const mods = new Set(parts.slice(0, -1));

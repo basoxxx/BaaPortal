@@ -8,8 +8,19 @@ const menuTitles = () => within(screen.getByTestId('menu-bar')).getAllByRole('me
 describe('vista progetto: struttura', () => {
   it('ci sono tutti gli elementi della vista progetto', async () => {
     await renderApp({ view: 'project', withProject: true });
-    for (const id of ['menu-bar', 'toolbar', 'panel-navigation', 'panel-reference-projects', 'panel-details', 'work-area',
-      'panel-inspector', 'link-portal-view', 'editor-bar', 'status-bar', 'panel-task-cards']) {
+    for (const id of [
+      'menu-bar',
+      'toolbar',
+      'panel-navigation',
+      'panel-reference-projects',
+      'panel-details',
+      'work-area',
+      'panel-inspector',
+      'link-portal-view',
+      'editor-bar',
+      'status-bar',
+      'panel-task-cards',
+    ]) {
       expect(screen.getByTestId(id)).toBeInTheDocument();
     }
     expect(screen.getAllByTestId(/^splitter-/).length).toBeGreaterThanOrEqual(4);
@@ -17,20 +28,44 @@ describe('vista progetto: struttura', () => {
 
   it("i menu sono nell'ordine di TIA Portal", async () => {
     await renderApp({ view: 'project', withProject: true });
-    expect(menuTitles().map((m) => m.textContent)).toEqual(
-      ['Progetto', 'Modifica', 'Visualizza', 'Inserisci', 'Online', 'Opzioni', 'Strumenti', 'Finestra', 'Guida']);
+    expect(menuTitles().map((m) => m.textContent)).toEqual([
+      'Progetto',
+      'Modifica',
+      'Visualizza',
+      'Inserisci',
+      'Online',
+      'Opzioni',
+      'Strumenti',
+      'Finestra',
+      'Guida',
+    ]);
   });
 
-  it('la barra degli strumenti ha i comandi nell\'ordine della spec e il campo Ricerca disattivato', async () => {
+  it("la barra degli strumenti ha i comandi nell'ordine della spec e il campo Ricerca disattivato", async () => {
     await renderApp({ view: 'project', withProject: true });
     const tb = within(screen.getByTestId('toolbar'));
     expect(tb.getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual([
-      'Nuovo…', 'Apri…', 'Salva', 'Stampa…',
-      'Taglia', 'Copia', 'Incolla', 'Elimina',
-      'Annulla', 'Ripeti',
-      'Compila', 'Carica nel dispositivo', 'Carica dal dispositivo…', 'Simulazione',
-      'Collegamento online', 'Interrompi collegamento online', 'Dispositivi accessibili…', 'Avvia CPU', 'Arresta CPU',
-      'Dividi area di lavoro in verticale']);
+      'Nuovo…',
+      'Apri…',
+      'Salva',
+      'Stampa…',
+      'Taglia',
+      'Copia',
+      'Incolla',
+      'Elimina',
+      'Annulla',
+      'Ripeti',
+      'Compila',
+      'Carica nel dispositivo',
+      'Carica dal dispositivo…',
+      'Simulazione',
+      'Collegamento online',
+      'Interrompi collegamento online',
+      'Dispositivi accessibili…',
+      'Avvia CPU',
+      'Arresta CPU',
+      'Dividi area di lavoro in verticale',
+    ]);
     expect(tb.getByRole('button', { name: 'Salva' })).toBeEnabled();
     expect(tb.getByRole('button', { name: 'Taglia' })).toBeDisabled();
     expect(tb.getByRole('searchbox')).toBeDisabled();
@@ -41,14 +76,23 @@ describe('vista progetto: menu', () => {
   it('menu Progetto: Salva attivo con progetto, Archivia disattivato', async () => {
     const { user } = await renderApp({ view: 'project', withProject: true });
     await user.click(screen.getByRole('menuitem', { name: 'Progetto' }));
-    expect(screen.getByRole('menuitem', { name: 'Salva' })).not.toHaveAttribute('aria-disabled', 'true');
-    expect(screen.getByRole('menuitem', { name: 'Archivia…' })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('menuitem', { name: 'Salva' })).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.getByRole('menuitem', { name: 'Archivia…' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
   });
 
   it('senza progetto Salva è disattivato', async () => {
     const { user } = await renderApp({ view: 'project' });
     await user.click(screen.getByRole('menuitem', { name: 'Progetto' }));
-    expect(screen.getByRole('menuitem', { name: 'Salva' })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('menuitem', { name: 'Salva' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
   });
 
   it('Progetti recenti elenca i recenti e apre quello cliccato', async () => {
@@ -70,9 +114,15 @@ describe('vista progetto: menu', () => {
     await user.keyboard('{F10}');
     expect(screen.getByRole('menu')).toBeInTheDocument();
     await user.keyboard('{ArrowRight}');
-    expect(screen.getByRole('menuitem', { name: 'Modifica' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('menuitem', { name: 'Modifica' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
     await user.keyboard('{ArrowRight}{ArrowRight}');
-    expect(screen.getByRole('menuitem', { name: 'Inserisci' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('menuitem', { name: 'Inserisci' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
     await user.keyboard('{F10}{ArrowRight}{ArrowRight}{ArrowDown}{Enter}');
@@ -83,7 +133,10 @@ describe('vista progetto: menu', () => {
   it('Visualizza: Vista portale e voci con spunta', async () => {
     const { user, store } = await renderApp({ view: 'project', withProject: true });
     await user.click(screen.getByRole('menuitem', { name: 'Visualizza' }));
-    expect(screen.getByRole('menuitemcheckbox', { name: 'Finestra di ispezione' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('menuitemcheckbox', { name: 'Finestra di ispezione' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
     await user.click(screen.getByRole('menuitem', { name: 'Vista portale' }));
     expect(store.getState().view).toBe('portal');
   });
@@ -105,7 +158,11 @@ describe('vista progetto: scorciatoie', () => {
     ['win32', '{Control>}s{/Control}'],
     ['darwin', '{Meta>}s{/Meta}'],
   ] as const)('Mod+S salva su %s', async (platform, keys) => {
-    const { user, store, bridge } = await renderApp({ view: 'project', withProject: true, platform });
+    const { user, store, bridge } = await renderApp({
+      view: 'project',
+      withProject: true,
+      platform,
+    });
     act(() => store.getState().setDoc({ ...store.getState().doc!, dirty: true }));
     const before = bridge.files.get(PROJECT_PATH);
     await user.keyboard(keys);
@@ -145,7 +202,7 @@ describe('vista progetto: scorciatoie', () => {
 });
 
 describe('vista progetto: pannelli', () => {
-  it("la freccia chiude il pannello e un clic sulla barretta lo riapre", async () => {
+  it('la freccia chiude il pannello e un clic sulla barretta lo riapre', async () => {
     const { user, store } = await renderApp({ view: 'project', withProject: true });
     await user.click(screen.getByTestId('collapse-taskCards'));
     expect(store.getState().panels.taskCards.open).toBe(false);
@@ -170,7 +227,7 @@ describe('vista progetto: pannelli', () => {
     expect(screen.queryByTestId('panel-navigation')).not.toBeInTheDocument();
   });
 
-  it('Progetti di riferimento si apre e si chiude dall\'intestazione', async () => {
+  it("Progetti di riferimento si apre e si chiude dall'intestazione", async () => {
     const { user, store } = await renderApp({ view: 'project', withProject: true });
     expect(store.getState().referenceProjectsOpen).toBe(false);
     await user.click(screen.getByTestId('toggle-reference-projects'));
@@ -194,7 +251,11 @@ describe('vista progetto: collegamenti', () => {
 
   it("la barra di stato mostra l'ultimo messaggio", async () => {
     const { store } = await renderApp({ view: 'project', withProject: true });
-    act(() => store.getState().pushMessage({ severity: 'info', textKey: 'messages.saved', params: { name: 'Prova' } }));
+    act(() =>
+      store
+        .getState()
+        .pushMessage({ severity: 'info', textKey: 'messages.saved', params: { name: 'Prova' } }),
+    );
     expect(screen.getByTestId('status-bar')).toHaveTextContent('Progetto "Prova" salvato.');
   });
 });

@@ -45,7 +45,11 @@ function setupNativeMenu(): void {
     Menu.buildFromTemplate([
       {
         label: 'BaaPortal',
-        submenu: [{ label: 'Informazioni su BaaPortal', role: 'about' }, { type: 'separator' }, { label: 'Esci', role: 'quit' }],
+        submenu: [
+          { label: 'Informazioni su BaaPortal', role: 'about' },
+          { type: 'separator' },
+          { label: 'Esci', role: 'quit' },
+        ],
       },
       {
         label: 'Modifica',

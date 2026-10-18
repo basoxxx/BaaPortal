@@ -36,16 +36,29 @@ export async function renderApp(opts: RenderAppOptions = {}): Promise<RenderedAp
   const bridge = new FakeBridge();
   if (opts.platform) bridge.platform = opts.platform;
   if (opts.withProject) {
-    const project = createProject({ name: 'Linea 3', author: 'Mario', comment: '' }, new Date('2026-01-01T00:00:00Z'));
+    const project = createProject(
+      { name: 'Linea 3', author: 'Mario', comment: '' },
+      new Date('2026-01-01T00:00:00Z'),
+    );
     bridge.files.set(PROJECT_PATH, writeBaap(project, { appVersion: '0.1.0' }));
   }
 
   let services: { store: StoreApi<AppState>; service: ProjectService } | null = null;
   const user = userEvent.setup();
-  render(<App bridge={bridge} onReady={(s) => { services = s; }} />);
+  render(
+    <App
+      bridge={bridge}
+      onReady={(s) => {
+        services = s;
+      }}
+    />,
+  );
   await waitFor(() => expect(services).not.toBeNull());
   const { store, service } = services!;
-  if (opts.withProject) await act(async () => { await service.open(PROJECT_PATH); });
+  if (opts.withProject)
+    await act(async () => {
+      await service.open(PROJECT_PATH);
+    });
   if (opts.view) act(() => store.getState().setView(opts.view!));
   return { store, bridge, service, user };
 }

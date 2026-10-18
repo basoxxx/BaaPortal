@@ -95,7 +95,12 @@ function Strip({
 }
 
 function ResizeHandle({ id, vertical }: { id: string; vertical?: boolean }) {
-  return <Separator data-testid={`splitter-${id}`} className={`baa-splitter ${vertical ? 'baa-splitter-v' : 'baa-splitter-h'}`} />;
+  return (
+    <Separator
+      data-testid={`splitter-${id}`}
+      className={`baa-splitter ${vertical ? 'baa-splitter-v' : 'baa-splitter-h'}`}
+    />
+  );
 }
 
 export function PanelLayout(props: PanelLayoutProps) {
@@ -108,15 +113,16 @@ export function PanelLayout(props: PanelLayoutProps) {
   const docked = (n: PanelName) => panels[n].open && panels[n].pinned;
   const stripped = (n: PanelName) => !docked(n);
 
-  const persist = (names: PanelName[]) => (layout: Layout, meta: { isUserInteraction: boolean }) => {
-    if (!meta.isUserInteraction) return;
-    for (const n of names) {
-      const v = layout[n];
-      if (v === undefined) continue;
-      const size = Math.min(MAX_SIZE, Math.max(MIN_SIZE, Math.round(v)));
-      if (size !== store.getState().panels[n].size) store.getState().setPanel(n, { size });
-    }
-  };
+  const persist =
+    (names: PanelName[]) => (layout: Layout, meta: { isUserInteraction: boolean }) => {
+      if (!meta.isUserInteraction) return;
+      for (const n of names) {
+        const v = layout[n];
+        if (v === undefined) continue;
+        const size = Math.min(MAX_SIZE, Math.max(MIN_SIZE, Math.round(v)));
+        if (size !== store.getState().panels[n].size) store.getState().setPanel(n, { size });
+      }
+    };
   const leaveStrip = (e: MouseEvent) => {
     const to = e.relatedTarget;
     if (!(to instanceof Element && to.closest('[data-flyout]'))) setFlyout(null);
@@ -126,7 +132,12 @@ export function PanelLayout(props: PanelLayoutProps) {
   );
   const flyoutOf = (n: PanelName, content: ReactNode) =>
     flyout === n && panels[n].open && !panels[n].pinned ? (
-      <div data-flyout data-testid={`flyout-${n}`} className={`baa-flyout baa-flyout-${EDGE[n]}`} onMouseLeave={() => setFlyout(null)}>
+      <div
+        data-flyout
+        data-testid={`flyout-${n}`}
+        className={`baa-flyout baa-flyout-${EDGE[n]}`}
+        onMouseLeave={() => setFlyout(null)}
+      >
         <PanelFrame name={n}>{content}</PanelFrame>
       </div>
     ) : null;
@@ -159,53 +170,73 @@ export function PanelLayout(props: PanelLayoutProps) {
         <Group orientation="horizontal" id="baa-h" onLayoutChanged={persist(['taskCards'])}>
           {leftVisible ? (
             <>
-          <Panel id="left" defaultSize="18%" minSize="10%">
-            <Group orientation="vertical" id="baa-left" onLayoutChanged={persist(['navigation', 'details'])}>
-              {docked('navigation') ? (
-                <>
-                  <Panel id="navigation" defaultSize={`${panels.navigation.size}%`} minSize="8%">
-                    <PanelFrame name="navigation">{props.navigation}</PanelFrame>
+              <Panel id="left" defaultSize="18%" minSize="10%">
+                <Group
+                  orientation="vertical"
+                  id="baa-left"
+                  onLayoutChanged={persist(['navigation', 'details'])}
+                >
+                  {docked('navigation') ? (
+                    <>
+                      <Panel
+                        id="navigation"
+                        defaultSize={`${panels.navigation.size}%`}
+                        minSize="8%"
+                      >
+                        <PanelFrame name="navigation">{props.navigation}</PanelFrame>
+                      </Panel>
+                      <ResizeHandle id="navigation" vertical />
+                    </>
+                  ) : null}
+                  <Panel
+                    id="reference"
+                    minSize={refOpen ? '8%' : '26px'}
+                    maxSize={refOpen ? '100%' : '26px'}
+                  >
+                    <section className="baa-panel" data-testid="panel-reference-projects">
+                      <header className="baa-panel-header">
+                        <h2>{t('panel.referenceProjects')}</h2>
+                        <button
+                          type="button"
+                          data-testid="toggle-reference-projects"
+                          className="baa-panel-btn"
+                          aria-expanded={refOpen}
+                          aria-label={t('panel.toggleReference')}
+                          title={t('panel.toggleReference')}
+                          onClick={() => store.getState().setReferenceProjectsOpen(!refOpen)}
+                        >
+                          <span aria-hidden="true">{refOpen ? '⌃' : '⌄'}</span>
+                        </button>
+                      </header>
+                      {refOpen ? (
+                        <div className="baa-panel-body">{props.referenceProjects}</div>
+                      ) : null}
+                    </section>
                   </Panel>
-                  <ResizeHandle id="navigation" vertical />
-                </>
-              ) : null}
-              <Panel id="reference" minSize={refOpen ? '8%' : '26px'} maxSize={refOpen ? '100%' : '26px'}>
-                <section className="baa-panel" data-testid="panel-reference-projects">
-                  <header className="baa-panel-header">
-                    <h2>{t('panel.referenceProjects')}</h2>
-                    <button
-                      type="button"
-                      data-testid="toggle-reference-projects"
-                      className="baa-panel-btn"
-                      aria-expanded={refOpen}
-                      aria-label={t('panel.toggleReference')}
-                      title={t('panel.toggleReference')}
-                      onClick={() => store.getState().setReferenceProjectsOpen(!refOpen)}
-                    >
-                      <span aria-hidden="true">{refOpen ? '⌃' : '⌄'}</span>
-                    </button>
-                  </header>
-                  {refOpen ? <div className="baa-panel-body">{props.referenceProjects}</div> : null}
-                </section>
+                  {docked('details') ? (
+                    <>
+                      <ResizeHandle id="details" vertical />
+                      <Panel id="details" defaultSize={`${panels.details.size}%`} minSize="8%">
+                        <PanelFrame name="details">{props.details}</PanelFrame>
+                      </Panel>
+                    </>
+                  ) : null}
+                </Group>
               </Panel>
-              {docked('details') ? (
-                <>
-                  <ResizeHandle id="details" vertical />
-                  <Panel id="details" defaultSize={`${panels.details.size}%`} minSize="8%">
-                    <PanelFrame name="details">{props.details}</PanelFrame>
-                  </Panel>
-                </>
-              ) : null}
-            </Group>
-          </Panel>
-          <ResizeHandle id="left" />
+              <ResizeHandle id="left" />
             </>
           ) : null}
           <Panel id="center" minSize="30%">
             <div className="baa-center">
-              <Group orientation="vertical" id="baa-center" onLayoutChanged={persist(['inspector'])}>
+              <Group
+                orientation="vertical"
+                id="baa-center"
+                onLayoutChanged={persist(['inspector'])}
+              >
                 <Panel id="work" minSize="20%">
-                  <div data-testid="work-area" className="baa-work-area">{props.workArea}</div>
+                  <div data-testid="work-area" className="baa-work-area">
+                    {props.workArea}
+                  </div>
                 </Panel>
                 {docked('inspector') ? (
                   <>

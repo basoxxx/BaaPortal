@@ -31,12 +31,23 @@ export function Inspector() {
           </button>
         ))}
       </div>
-      <div role="tabpanel" id="inspector-panel" aria-labelledby={`inspector-tab-${tab}`} className="baa-tabpanel">
+      <div
+        role="tabpanel"
+        id="inspector-panel"
+        aria-labelledby={`inspector-tab-${tab}`}
+        className="baa-tabpanel"
+      >
         {tab === 'properties' ? <ProjectProperties /> : null}
-        {tab === 'diagnostics' ? <p className="baa-placeholder">{t('inspector.diagnosticsEmpty')}</p> : null}
+        {tab === 'diagnostics' ? (
+          <p className="baa-placeholder">{t('inspector.diagnosticsEmpty')}</p>
+        ) : null}
         {tab === 'info' ? (
           <div className="baa-inspector">
-            <div role="tablist" className="baa-tabs baa-subtabs" aria-label={t('inspector.tab.info')}>
+            <div
+              role="tablist"
+              className="baa-tabs baa-subtabs"
+              aria-label={t('inspector.tab.info')}
+            >
               {SUBTABS.map((id) => (
                 <button
                   key={id}
@@ -53,10 +64,19 @@ export function Inspector() {
                 </button>
               ))}
             </div>
-            <div role="tabpanel" id="info-subpanel" aria-labelledby={`info-subtab-${sub}`} className="baa-tabpanel">
+            <div
+              role="tabpanel"
+              id="info-subpanel"
+              aria-labelledby={`info-subtab-${sub}`}
+              className="baa-tabpanel"
+            >
               {sub === 'general' ? <InfoMessages /> : null}
-              {sub === 'crossRefs' ? <p className="baa-placeholder">{t('inspector.crossRefsEmpty')}</p> : null}
-              {sub === 'compile' ? <p className="baa-placeholder">{t('inspector.compileEmpty')}</p> : null}
+              {sub === 'crossRefs' ? (
+                <p className="baa-placeholder">{t('inspector.crossRefsEmpty')}</p>
+              ) : null}
+              {sub === 'compile' ? (
+                <p className="baa-placeholder">{t('inspector.compileEmpty')}</p>
+              ) : null}
             </div>
           </div>
         ) : null}

@@ -107,8 +107,7 @@ export function MenuBar() {
         if (entries[active] === 'recent') {
           setSubOpen(true);
           setSubActive(0);
-        }
-        else move(1);
+        } else move(1);
         break;
       case 'ArrowLeft':
         e.preventDefault();
@@ -133,7 +132,8 @@ export function MenuBar() {
   };
 
   const renderItem = (entry: MenuEntry, index: number) => {
-    if (entry === 'sep') return <div key={`sep-${index}`} role="separator" className="baa-menu-sep" />;
+    if (entry === 'sep')
+      return <div key={`sep-${index}`} role="separator" className="baa-menu-sep" />;
     const navIndex = entries.indexOf(entry);
     if (entry === 'recent') {
       return (
@@ -158,7 +158,14 @@ export function MenuBar() {
           {subOpen ? (
             <div role="menu" className="baa-menu baa-menu-sub" data-testid="menu-recent">
               {recent.length === 0 ? (
-                <button type="button" role="menuitem" aria-disabled="true" data-sub-index={0} tabIndex={-1} className="baa-menu-item">
+                <button
+                  type="button"
+                  role="menuitem"
+                  aria-disabled="true"
+                  data-sub-index={0}
+                  tabIndex={-1}
+                  className="baa-menu-item"
+                >
                   {t('menu.noRecent')}
                 </button>
               ) : (
@@ -201,15 +208,27 @@ export function MenuBar() {
         onClick={() => activate(cmd)}
         onMouseEnter={() => setSubOpen(false)}
       >
-        <span aria-hidden="true" className="baa-menu-check">{checked ? '✓' : ''}</span>
+        <span aria-hidden="true" className="baa-menu-check">
+          {checked ? '✓' : ''}
+        </span>
         <span>{t(cmd.labelKey)}</span>
-        {cmd.shortcut ? <span aria-hidden="true" className="baa-menu-shortcut">{shortcutLabel(cmd.shortcut, ctx.bridge.platform)}</span> : null}
+        {cmd.shortcut ? (
+          <span aria-hidden="true" className="baa-menu-shortcut">
+            {shortcutLabel(cmd.shortcut, ctx.bridge.platform)}
+          </span>
+        ) : null}
       </button>
     );
   };
 
   return (
-    <div ref={rootRef} role="menubar" data-testid="menu-bar" className="baa-menubar" onKeyDown={onKeyDown}>
+    <div
+      ref={rootRef}
+      role="menubar"
+      data-testid="menu-bar"
+      className="baa-menubar"
+      onKeyDown={onKeyDown}
+    >
       {MENUS.map((menu, i) => (
         <div key={menu.id} className="baa-menu-wrap">
           <button
@@ -221,7 +240,9 @@ export function MenuBar() {
             tabIndex={open === i && active < 0 ? 0 : -1}
             className="baa-menubar-title"
             onClick={() => (open === i ? close() : (setOpen(i), setActive(-1)))}
-            onMouseEnter={() => open !== null && open !== i && (setOpen(i), setActive(-1), setSubOpen(false))}
+            onMouseEnter={() =>
+              open !== null && open !== i && (setOpen(i), setActive(-1), setSubOpen(false))
+            }
           >
             {t(`menu.${menu.id}`)}
           </button>
@@ -240,6 +261,20 @@ export function shortcutLabel(shortcut: string, platform: string): string {
   const mac = platform === 'darwin';
   return shortcut
     .split('+')
-    .map((p) => (p === 'Mod' ? (mac ? '⌘' : 'Ctrl') : p === 'Shift' ? (mac ? '⇧' : 'Shift') : p === 'Alt' ? (mac ? '⌥' : 'Alt') : p.toUpperCase()))
+    .map((p) =>
+      p === 'Mod'
+        ? mac
+          ? '⌘'
+          : 'Ctrl'
+        : p === 'Shift'
+          ? mac
+            ? '⇧'
+            : 'Shift'
+          : p === 'Alt'
+            ? mac
+              ? '⌥'
+              : 'Alt'
+            : p.toUpperCase(),
+    )
     .join(mac ? '' : '+');
 }

@@ -13,7 +13,7 @@ function Bomb(): never {
   throw new RangeError('Invalid time value');
 }
 
-it("ErrorBoundary mostra un messaggio invece di una finestra vuota", () => {
+it('ErrorBoundary mostra un messaggio invece di una finestra vuota', () => {
   render(
     <ErrorBoundary>
       <Bomb />

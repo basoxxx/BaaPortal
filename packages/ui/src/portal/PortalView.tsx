@@ -31,12 +31,18 @@ const OTHER_PORTAL_ACTION: Record<Exclude<PortalId, 'start'>, string> = {
 
 function SelectionPane({ action }: { action: StartAction }) {
   switch (action) {
-    case 'open': return <OpenProjectPane />;
-    case 'new': return <NewProjectPane />;
-    case 'firstSteps': return <FirstStepsPane />;
-    case 'installed': return <InstalledSoftwarePane />;
-    case 'language': return <LanguagePane />;
-    default: return null;
+    case 'open':
+      return <OpenProjectPane />;
+    case 'new':
+      return <NewProjectPane />;
+    case 'firstSteps':
+      return <FirstStepsPane />;
+    case 'installed':
+      return <InstalledSoftwarePane />;
+    case 'language':
+      return <LanguagePane />;
+    default:
+      return null;
   }
 }
 
@@ -52,14 +58,19 @@ export function PortalView() {
     id,
     icon,
     label: t(`portal.action.${id}`),
-    disabled: id === 'migrate' || id === 'help' || ((id === 'close' || id === 'firstSteps') && !doc),
+    disabled:
+      id === 'migrate' || id === 'help' || ((id === 'close' || id === 'firstSteps') && !doc),
   }));
   const otherItems: ActionItem[] =
     portal === 'start'
       ? []
       : [
           { id: 'openView', label: t('portal.action.openView') },
-          { id: OTHER_PORTAL_ACTION[portal], label: t(`portal.action.${OTHER_PORTAL_ACTION[portal]}`), disabled: true },
+          {
+            id: OTHER_PORTAL_ACTION[portal],
+            label: t(`portal.action.${OTHER_PORTAL_ACTION[portal]}`),
+            disabled: true,
+          },
         ];
 
   return (
@@ -80,7 +91,12 @@ export function PortalView() {
         </section>
       </div>
       <footer className="baa-portal-footer">
-        <button type="button" className="baa-link" data-testid="link-project-view" onClick={() => store.getState().setView('project')}>
+        <button
+          type="button"
+          className="baa-link"
+          data-testid="link-project-view"
+          onClick={() => store.getState().setView('project')}
+        >
           {t('portal.projectView')}
         </button>
         <span className="baa-portal-info" data-testid="open-project-info">

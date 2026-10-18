@@ -29,9 +29,13 @@ export function loadLayout(storage: Storage | null): Record<PanelName, PanelStat
   } catch {
     parsed = null;
   }
-  const src = typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : {};
+  const src =
+    typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : {};
   return Object.fromEntries(
-    NAMES.map((n) => [n, validPanel(src[n]) ? { ...(src[n] as PanelState) } : { ...DEFAULT_PANELS[n] }]),
+    NAMES.map((n) => [
+      n,
+      validPanel(src[n]) ? { ...(src[n] as PanelState) } : { ...DEFAULT_PANELS[n] },
+    ]),
   ) as Record<PanelName, PanelState>;
 }
 

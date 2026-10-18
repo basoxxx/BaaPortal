@@ -16,8 +16,12 @@ export function OpenProjectPane() {
 
   useEffect(() => {
     let cancelled = false;
-    void bridge.recentList().then((r) => { if (!cancelled) setRecent(r); });
-    return () => { cancelled = true; };
+    void bridge.recentList().then((r) => {
+      if (!cancelled) setRecent(r);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [bridge]);
 
   const openEntry = async (entry: RecentEntry) => {
@@ -25,7 +29,11 @@ export function OpenProjectPane() {
       await service.open(entry.path);
       return;
     }
-    store.getState().pushMessage({ severity: 'warning', textKey: 'messages.recentMissing', params: { name: entry.name } });
+    store.getState().pushMessage({
+      severity: 'warning',
+      textKey: 'messages.recentMissing',
+      params: { name: entry.name },
+    });
     setNotice(t('messages.recentMissing', { name: entry.name }));
     setRecent(await bridge.recentRemove(entry.path));
   };
@@ -33,7 +41,11 @@ export function OpenProjectPane() {
   return (
     <>
       <h2>{t('portal.action.open')}</h2>
-      {notice ? <p className="baa-notice" role="status">{notice}</p> : null}
+      {notice ? (
+        <p className="baa-notice" role="status">
+          {notice}
+        </p>
+      ) : null}
       <table className="baa-recent">
         <thead>
           <tr>

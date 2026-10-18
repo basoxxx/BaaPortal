@@ -3,11 +3,22 @@ import type { Project, ProjectMeta } from '@baaportal/project';
 
 export type View = 'portal' | 'project';
 export type PortalId = 'start' | 'devices' | 'plc' | 'online';
-export type StartAction = 'open' | 'new' | 'migrate' | 'close' | 'firstSteps' | 'installed' | 'help' | 'language';
+export type StartAction =
+  'open' | 'new' | 'migrate' | 'close' | 'firstSteps' | 'installed' | 'help' | 'language';
 export type TreeNodeId =
-  | 'project' | 'add-device' | 'devices-networks' | 'common-data' | 'doc-settings' | 'languages' | 'online-access';
+  | 'project'
+  | 'add-device'
+  | 'devices-networks'
+  | 'common-data'
+  | 'doc-settings'
+  | 'languages'
+  | 'online-access';
 
-export interface OpenDoc { project: Project; filePath: string; dirty: boolean }
+export interface OpenDoc {
+  project: Project;
+  filePath: string;
+  dirty: boolean;
+}
 export interface InfoMessage {
   id: number;
   /** Data locale AAAA-MM-GG. */
@@ -17,7 +28,11 @@ export interface InfoMessage {
   textKey: string;
   params?: Record<string, string>;
 }
-export interface PanelState { open: boolean; pinned: boolean; size: number } // size in % del gruppo
+export interface PanelState {
+  open: boolean;
+  pinned: boolean;
+  size: number;
+} // size in % del gruppo
 export type PanelName = 'navigation' | 'details' | 'inspector' | 'taskCards';
 export type TaskCardId = 'instructions' | 'test' | 'tasks' | 'libraries';
 
@@ -56,7 +71,8 @@ export const DEFAULT_PANELS: Record<PanelName, PanelState> = {
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const formatDate = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-const formatTime = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+const formatTime = (d: Date) =>
+  `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 
 export function createAppStore(now: () => Date = () => new Date()): StoreApi<AppState> {
   let nextId = 1;
@@ -80,7 +96,13 @@ export function createAppStore(now: () => Date = () => new Date()): StoreApi<App
     updateMeta: (patch) =>
       set((s) =>
         s.doc
-          ? { doc: { ...s.doc, dirty: true, project: { ...s.doc.project, meta: { ...s.doc.project.meta, ...patch } } } }
+          ? {
+              doc: {
+                ...s.doc,
+                dirty: true,
+                project: { ...s.doc.project, meta: { ...s.doc.project.meta, ...patch } },
+              },
+            }
           : s,
       ),
     select: (selection) => set({ selection }),
@@ -88,11 +110,15 @@ export function createAppStore(now: () => Date = () => new Date()): StoreApi<App
       set((s) => {
         const at = now();
         return {
-          messages: [...s.messages, { ...m, id: nextId++, date: formatDate(at), time: formatTime(at) }],
+          messages: [
+            ...s.messages,
+            { ...m, id: nextId++, date: formatDate(at), time: formatTime(at) },
+          ],
           status: { textKey: m.textKey, ...(m.params ? { params: m.params } : {}) },
         };
       }),
-    setPanel: (name, patch) => set((s) => ({ panels: { ...s.panels, [name]: { ...s.panels[name], ...patch } } })),
+    setPanel: (name, patch) =>
+      set((s) => ({ panels: { ...s.panels, [name]: { ...s.panels[name], ...patch } } })),
     setReferenceProjectsOpen: (referenceProjectsOpen) => set({ referenceProjectsOpen }),
     setTaskCard: (taskCard) => set({ taskCard }),
   }));

@@ -3,7 +3,14 @@ import { DEFAULT_PANELS, LAYOUT_KEY, loadLayout, saveLayout } from '../src/proje
 import { DEFAULT_PANELS as STORE_DEFAULTS } from '../src/state/store';
 
 function fakeStorage(raw: string | null): Storage {
-  return { getItem: () => raw, setItem: () => {}, removeItem: () => {}, clear: () => {}, key: () => null, length: 0 };
+  return {
+    getItem: () => raw,
+    setItem: () => {},
+    removeItem: () => {},
+    clear: () => {},
+    key: () => null,
+    length: 0,
+  };
 }
 function throwingStorage(): Storage {
   const boom = () => {

@@ -23,8 +23,18 @@ function make(children: ReactNode): FC<{ size: number }> {
 }
 
 const shapes: Record<
-  | 'portalStart' | 'portalDevices' | 'portalPlc' | 'portalOnline'
-  | 'actionOpen' | 'actionNew' | 'actionMigrate' | 'actionClose' | 'actionFirstSteps' | 'actionInstalled' | 'actionHelp' | 'actionLanguage',
+  | 'portalStart'
+  | 'portalDevices'
+  | 'portalPlc'
+  | 'portalOnline'
+  | 'actionOpen'
+  | 'actionNew'
+  | 'actionMigrate'
+  | 'actionClose'
+  | 'actionFirstSteps'
+  | 'actionInstalled'
+  | 'actionHelp'
+  | 'actionLanguage',
   ReactNode
 > = {
   portalStart: <path d="M16 4v10M9.5 8.5a9 9 0 1 0 13 0" />,
@@ -47,7 +57,9 @@ const shapes: Record<
       <circle cx="16" cy="26" r="1" />
     </>
   ),
-  actionOpen: <path d="M4 9a2 2 0 0 1 2-2h7l3 3h10a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" />,
+  actionOpen: (
+    <path d="M4 9a2 2 0 0 1 2-2h7l3 3h10a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" />
+  ),
   actionNew: (
     <>
       <path d="M8 4h11l6 6v18H8z" />
@@ -61,7 +73,9 @@ const shapes: Record<
       <path d="M13 15l6 6M19 15l-6 6" />
     </>
   ),
-  actionFirstSteps: <path d="M16 4l3.5 8 8.5.8-6.4 5.7 1.9 8.5L16 22.5 8.5 27l1.9-8.5L4 12.8l8.5-.8z" />,
+  actionFirstSteps: (
+    <path d="M16 4l3.5 8 8.5.8-6.4 5.7 1.9 8.5L16 22.5 8.5 27l1.9-8.5L4 12.8l8.5-.8z" />
+  ),
   actionInstalled: (
     <>
       <path d="M16 4l11 6v12l-11 6-11-6V10z" />
@@ -82,4 +96,5 @@ const shapes: Record<
   ),
 };
 
-for (const [name, children] of Object.entries(shapes)) registerIcon(name as IconName, make(children));
+for (const [name, children] of Object.entries(shapes))
+  registerIcon(name as IconName, make(children));

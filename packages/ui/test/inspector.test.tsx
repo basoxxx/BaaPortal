@@ -5,9 +5,13 @@ import { PROJECT_PATH, renderApp } from './renderApp';
 describe('finestra di ispezione', () => {
   it('ha le schede Proprietà, Informazioni, Diagnostica', async () => {
     const { user } = await renderApp({ view: 'project', withProject: true });
-    for (const id of ['properties', 'info', 'diagnostics']) expect(screen.getByTestId(`inspector-tab-${id}`)).toBeInTheDocument();
+    for (const id of ['properties', 'info', 'diagnostics'])
+      expect(screen.getByTestId(`inspector-tab-${id}`)).toBeInTheDocument();
     await user.click(screen.getByTestId('inspector-tab-diagnostics'));
-    expect(screen.getByTestId('inspector-tab-diagnostics')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('inspector-tab-diagnostics')).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
     expect(screen.getByText('Nessuna informazione diagnostica disponibile.')).toBeInTheDocument();
   });
 
@@ -22,7 +26,10 @@ describe('finestra di ispezione', () => {
     await user.click(screen.getByTestId('tree-node-project'));
     expect(screen.getByLabelText('Nome')).toHaveValue('Linea 3');
     expect(screen.getByLabelText('Percorso')).toHaveValue(PROJECT_PATH);
-    const created = new Intl.DateTimeFormat('it-IT', { dateStyle: 'short', timeStyle: 'medium' }).format(new Date('2026-01-01T00:00:00Z'));
+    const created = new Intl.DateTimeFormat('it-IT', {
+      dateStyle: 'short',
+      timeStyle: 'medium',
+    }).format(new Date('2026-01-01T00:00:00Z'));
     expect(screen.getByLabelText('Creato il')).toHaveValue(created);
     expect(screen.getByLabelText('Ultima modifica')).toHaveValue(created);
     expect(store.getState().doc?.dirty).toBe(false);
@@ -45,19 +52,28 @@ describe('finestra di ispezione', () => {
   it('Nome e Percorso sono in sola lettura', async () => {
     const { user } = await renderApp({ view: 'project', withProject: true });
     await user.click(screen.getByTestId('tree-node-project'));
-    for (const l of ['Nome', 'Percorso', 'Creato il', 'Ultima modifica']) expect(screen.getByLabelText(l)).toHaveAttribute('readonly');
+    for (const l of ['Nome', 'Percorso', 'Creato il', 'Ultima modifica'])
+      expect(screen.getByLabelText(l)).toHaveAttribute('readonly');
     expect(screen.getByLabelText('Autore')).not.toHaveAttribute('readonly');
   });
 
   it('Informazioni → Generale elenca i messaggi, il più recente in alto', async () => {
     const { user, store } = await renderApp({ view: 'project', withProject: true });
     act(() => {
-      store.getState().pushMessage({ severity: 'info', textKey: 'messages.saved', params: { name: 'Primo' } });
-      store.getState().pushMessage({ severity: 'warning', textKey: 'messages.recentMissing', params: { name: 'Secondo' } });
+      store
+        .getState()
+        .pushMessage({ severity: 'info', textKey: 'messages.saved', params: { name: 'Primo' } });
+      store.getState().pushMessage({
+        severity: 'warning',
+        textKey: 'messages.recentMissing',
+        params: { name: 'Secondo' },
+      });
     });
     await user.click(screen.getByTestId('inspector-tab-info'));
     expect(screen.getByTestId('info-subtab-general')).toHaveAttribute('aria-selected', 'true');
-    const headers = within(screen.getByTestId('panel-inspector')).getAllByRole('columnheader').map((h) => h.textContent);
+    const headers = within(screen.getByTestId('panel-inspector'))
+      .getAllByRole('columnheader')
+      .map((h) => h.textContent);
     expect(headers).toEqual(['Gravità', 'Messaggio', 'Data', 'Ora']);
     const rows = screen.getAllByTestId('info-row');
     // l'apertura del progetto ha già prodotto un messaggio: i due nuovi stanno in cima
