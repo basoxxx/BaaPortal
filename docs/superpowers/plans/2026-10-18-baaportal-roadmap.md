@@ -4,8 +4,9 @@
 
 Questo documento divide tutte le tappe del progetto in **piani** più piccoli. Ogni piano produce software funzionante e testato, utilizzabile da solo.
 
-Il piano dettagliato, cioè i task passo per passo, si scrive per un piano alla volta, quando il precedente è chiuso, così parte dalle interfacce reali e non da ipotesi. Il primo è già pronto:
-`docs/superpowers/plans/2026-10-18-tappa1a-shell-interfaccia.md`
+Il piano dettagliato, cioè i task passo per passo, si scrive per un piano alla volta, quando il precedente è chiuso, così parte dalle interfacce reali e non da ipotesi. Piani dettagliati scritti finora:
+- 1A: `docs/superpowers/plans/2026-10-18-tappa1a-shell-interfaccia.md` (chiuso);
+- 1B: `docs/superpowers/plans/2026-10-18-tappa1b-modello-dati-plc.md`.
 
 ## Come si chiude ogni piano
 
