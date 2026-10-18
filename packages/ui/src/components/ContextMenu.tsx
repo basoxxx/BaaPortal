@@ -16,11 +16,14 @@ interface Props {
   label: string;
   items: ContextMenuItem[];
   onClose(): void;
+  /** Elemento da cui parte il menu: il menu si apre nel suo documento (anche in una finestra separata). */
+  anchor?: Element | null;
 }
 
 /** Menu contestuale: frecce per muoversi (le voci disattivate si saltano), Invio esegue, Esc chiude. */
-export function ContextMenu({ x, y, label, items, onClose }: Props) {
+export function ContextMenu({ x, y, label, items, onClose, anchor }: Props) {
   const ref = useRef<HTMLDivElement>(null);
+  const doc = anchor?.ownerDocument ?? document;
   const enabled = items.flatMap((it, i) => (it.disabled ? [] : [i]));
 
   const focusItem = (index: number | undefined) => {
@@ -34,8 +37,8 @@ export function ContextMenu({ x, y, label, items, onClose }: Props) {
     const onDown = (e: MouseEvent) => {
       if (!ref.current?.contains(e.target as Node)) onClose();
     };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
+    doc.addEventListener('mousedown', onDown);
+    return () => doc.removeEventListener('mousedown', onDown);
     // Solo alla comparsa del menu.
   }, []);
 
@@ -46,7 +49,7 @@ export function ContextMenu({ x, y, label, items, onClose }: Props) {
   };
 
   const onKeyDown = (e: KeyboardEvent) => {
-    const current = Number((document.activeElement as HTMLElement | null)?.dataset['index'] ?? -1);
+    const current = Number((doc.activeElement as HTMLElement | null)?.dataset['index'] ?? -1);
     const pos = enabled.indexOf(current);
     switch (e.key) {
       case 'ArrowDown':
@@ -107,6 +110,6 @@ export function ContextMenu({ x, y, label, items, onClose }: Props) {
         </Fragment>
       ))}
     </div>,
-    document.body,
+    doc.body,
   );
 }

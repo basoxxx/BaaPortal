@@ -44,8 +44,10 @@ export function useEditTarget(
       if (el && !containerRef.current?.contains(el) && !el.closest(MENUS_SELECTOR))
         setHasFocus(false);
     };
-    document.addEventListener('focusin', onFocusIn);
-    return () => document.removeEventListener('focusin', onFocusIn);
+    // Il documento dell'elemento: in una finestra separata non è quello principale.
+    const doc = containerRef.current?.ownerDocument ?? document;
+    doc.addEventListener('focusin', onFocusIn);
+    return () => doc.removeEventListener('focusin', onFocusIn);
   }, [hasFocus, containerRef]);
 
   return {

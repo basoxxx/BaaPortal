@@ -410,13 +410,15 @@ export function DataGrid<R>(props: DataGridProps<R>) {
     };
     const abort = () => setFill(null);
     const onKey = (e: globalThis.KeyboardEvent) => e.key === 'Escape' && abort();
-    window.addEventListener('pointerup', end);
-    window.addEventListener('pointercancel', abort);
-    window.addEventListener('keydown', onKey);
+    // La griglia può stare in una finestra separata: si ascolta la sua finestra.
+    const view = gridRef.current?.ownerDocument.defaultView ?? window;
+    view.addEventListener('pointerup', end);
+    view.addEventListener('pointercancel', abort);
+    view.addEventListener('keydown', onKey);
     return () => {
-      window.removeEventListener('pointerup', end);
-      window.removeEventListener('pointercancel', abort);
-      window.removeEventListener('keydown', onKey);
+      view.removeEventListener('pointerup', end);
+      view.removeEventListener('pointercancel', abort);
+      view.removeEventListener('keydown', onKey);
     };
   }, [filling, indexOf, onFill]);
   const fillFrom = fill ? (indexOf.get(fill.src) ?? 0) : 0;

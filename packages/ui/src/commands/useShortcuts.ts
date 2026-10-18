@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import { flushPendingEdits } from '../flushPendingEdits';
 import { useServices } from '../state/AppContext';
 import { commands, matchShortcut, type CommandContext } from './commands';
 
@@ -13,13 +12,15 @@ export function handleShortcutKeydown(e: KeyboardEvent, ctx: CommandContext): bo
     if (!all.some((sc) => sc && matchShortcut(e, sc, ctx.bridge.platform))) continue;
     // Nei campi di testo resta globale solo Mod+S: annulla e ripeti sono quelli del campo.
     if (inField && cmd.shortcut !== 'Mod+S') continue;
-    // Una bozza ancora nel campo va confermata prima che il comando legga lo stato.
-    if (inField) flushPendingEdits();
+    // Una bozza ancora nel campo va confermata prima che il comando legga lo stato: il campo può
+    // stare in una finestra separata, quindi si toglie il focus proprio a lui.
+    if (inField) target.blur();
     if (!cmd.isEnabled(ctx.store.getState())) continue;
     e.preventDefault();
     const restore = inField ? target : null;
     void Promise.resolve(cmd.run(ctx)).then(() => {
-      if (restore?.isConnected && document.activeElement === document.body) restore.focus();
+      const doc = restore?.ownerDocument;
+      if (restore?.isConnected && doc?.activeElement === doc?.body) restore.focus();
     });
     return true;
   }

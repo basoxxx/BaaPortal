@@ -29,7 +29,7 @@ export function TagTableEditor({ editor }: { editor: EditorRef }) {
     e.preventDefault();
     const id = TABS[next]!;
     setTab(id);
-    document.getElementById(tabId(id))?.focus();
+    e.currentTarget.ownerDocument.getElementById(tabId(id))?.focus();
   };
   return (
     <div className="baa-editor-body baa-tags-editor" data-testid={`editor-body-${editor.key}`}>

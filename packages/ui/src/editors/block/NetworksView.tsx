@@ -21,7 +21,9 @@ export function NetworksView({ deviceId, blockId }: Props) {
     return b && b.kind !== 'DB' && b.kind !== 'IDB' ? b : undefined;
   });
   const [focusedId, setFocusedId] = useState<string | null>(null);
-  const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [menu, setMenu] = useState<{ id: string; x: number; y: number; anchor: Element } | null>(
+    null,
+  );
 
   const edit = useCallback(
     (labelKey: string, recipe: (block: CodeBlock, dev: PlcDevice) => void) =>
@@ -97,7 +99,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
               aria-haspopup="menu"
               onClick={(e) => {
                 const r = e.currentTarget.getBoundingClientRect();
-                setMenu({ id: n.id, x: r.left, y: r.bottom });
+                setMenu({ id: n.id, x: r.left, y: r.bottom, anchor: e.currentTarget });
               }}
             >
               <span aria-hidden="true">⋯</span>
@@ -126,6 +128,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
         <ContextMenu
           x={menu.x}
           y={menu.y}
+          anchor={menu.anchor}
           label={t('block.networkMenu')}
           items={[
             {

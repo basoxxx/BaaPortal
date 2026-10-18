@@ -125,3 +125,77 @@ test('editor in finestra separata: modifica visibile nella principale, annulla, 
   await closed;
   expect(app.windows()).toHaveLength(0);
 });
+
+/** Avvia la modifica del nome del primo tag nella finestra separata e scrive senza confermare. */
+async function typeFirstTagName(page: Page, name: string): Promise<Locator> {
+  const cell = page
+    .getByRole('grid')
+    .locator('[data-row-key]:not([data-row-key*="add:"])')
+    .first()
+    .locator('[data-col-id="name"]');
+  await cell.click();
+  await cell.press('Enter');
+  const input = cell.locator('input');
+  await input.fill(name);
+  await expect(input).toBeFocused();
+  return input;
+}
+
+const savedFirstTag = (file: string) => {
+  try {
+    return readBaap(readFileSync(file)).devices[0]?.tagTables[0]?.tags[0]?.name;
+  } catch {
+    return undefined;
+  }
+};
+
+test('Mod+S con una cella in modifica nella finestra separata salva il testo scritto', async () => {
+  const file = join(tmp, 'det-save.baap');
+  writeFixtureProject(file, (dev) => {
+    dev.tagTables[0]!.tags.push({
+      id: crypto.randomUUID(),
+      name: 'Motore',
+      type: 'Bool',
+      address: '%M0.0',
+      hmi: true,
+      comment: '',
+    });
+  });
+  const { app, page } = await launchApp({ args: [file] });
+  await page.getByTestId('link-project-view').click();
+  const detached = await detachTable(app, page);
+  const input = await typeFirstTagName(detached, 'Pompa');
+  await input.press(`${mod}+s`);
+  await expect.poll(() => savedFirstTag(file)).toBe('Pompa');
+});
+
+test('chiudere la finestra separata con la X mentre una cella è in modifica conserva la bozza', async () => {
+  const file = join(tmp, 'det-close.baap');
+  writeFixtureProject(file, (dev) => {
+    dev.tagTables[0]!.tags.push({
+      id: crypto.randomUUID(),
+      name: 'Motore',
+      type: 'Bool',
+      address: '%M0.0',
+      hmi: true,
+      comment: '',
+    });
+  });
+  const { app, page } = await launchApp({ args: [file] });
+  await page.getByTestId('link-project-view').click();
+  const detached = await detachTable(app, page);
+  await typeFirstTagName(detached, 'Pompa');
+  // Come il pulsante di chiusura della finestra: la pagina riceve beforeunload.
+  await app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()
+      .find((w) => !w.webContents.getURL().startsWith('file:'))
+      ?.close(),
+  );
+  await expect.poll(() => windowCount(app)).toBe(1);
+  const name = page
+    .getByRole('grid')
+    .locator('[data-row-key]:not([data-row-key*="add:"])')
+    .first()
+    .locator('[data-col-id="name"]');
+  await expect(name).toHaveText('Pompa');
+});

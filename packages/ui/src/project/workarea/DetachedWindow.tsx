@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { handleShortcutKeydown } from '../../commands/useShortcuts';
 import { useEditorInfo } from '../../editors/registry';
+import { flushDocument, registerEditDocument } from '../../flushPendingEdits';
 import { useAppStore, useServices } from '../../state/AppContext';
 import type { EditorRef } from '../../state/workArea';
 import { EditorFrame } from './EditorFrame';
@@ -47,12 +48,18 @@ export function DetachedWindow({ editor }: { editor: EditorRef }) {
     root.className = 'baa-detached-root';
     win.document.body.appendChild(root);
     const onKeyDown = (e: KeyboardEvent) => void handleShortcutKeydown(e, ctx);
-    const onGone = () => store.getState().attachEditor(editor.key);
+    const onGone = () => {
+      // La bozza del campo in modifica si conferma prima che l'editor torni nell'area di lavoro.
+      flushDocument(win.document);
+      store.getState().attachEditor(editor.key);
+    };
+    const unregister = registerEditDocument(win.document);
     win.document.addEventListener('keydown', onKeyDown);
     win.addEventListener('pagehide', onGone);
     win.addEventListener('beforeunload', onGone);
     setChild({ win, root });
     return () => {
+      unregister();
       win.document.removeEventListener('keydown', onKeyDown);
       win.removeEventListener('pagehide', onGone);
       win.removeEventListener('beforeunload', onGone);
