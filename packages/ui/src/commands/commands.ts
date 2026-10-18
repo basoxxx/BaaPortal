@@ -64,9 +64,7 @@ const list: Command[] = [
     icon: 'open',
     shortcut: 'Mod+O',
     isEnabled: always,
-    run: async ({ store, service }) => {
-      if (await service.openFromDialog()) store.getState().setView('project');
-    },
+    run: async ({ service }) => void (await service.openFromDialog()),
   }),
   def('project.close', {
     isEnabled: hasDoc,

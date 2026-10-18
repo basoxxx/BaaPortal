@@ -10,6 +10,14 @@
       "INVALID_JSON": "Il file del progetto è danneggiato: i dati interni non sono leggibili.",
       "INVALID_SCHEMA": "Il file del progetto è danneggiato: i dati interni non hanno la struttura prevista.",
       "NEWER_FORMAT": "Il progetto è stato creato con una versione più recente di BaaPortal. Aggiorna l'applicazione per aprirlo."
+    },
+    "name": {
+      "EMPTY": "Inserisci un nome per il progetto.",
+      "TOO_LONG": "Il nome è troppo lungo: usa al massimo 128 caratteri.",
+      "INVALID_CHARS": "Il nome contiene caratteri non ammessi nei nomi di file.",
+      "RESERVED": "Questo nome è riservato dal sistema operativo: scegline un altro.",
+      "TRAILING_DOT_OR_SPACE": "Il nome non può terminare con un punto o uno spazio.",
+      "EXISTS": "Esiste già un progetto con questo nome in questa cartella."
     }
   },
   "confirm": {
@@ -24,7 +32,8 @@
   "messages": {
     "created": "Progetto \"{{name}}\" creato.",
     "opened": "Progetto \"{{name}}\" aperto.",
-    "saved": "Progetto \"{{name}}\" salvato."
+    "saved": "Progetto \"{{name}}\" salvato.",
+    "recentMissing": "Il progetto \"{{name}}\" non è stato trovato: è stato tolto dall'elenco."
   },
   "commands": {
     "project.new": "Nuovo…",
@@ -71,5 +80,60 @@
     "window.closeAllEditors": "Chiudi tutti gli editor",
     "help.show": "Visualizza la guida",
     "help.about": "Informazioni su BaaPortal"
+  },
+  "portal": {
+    "start": "Avvio",
+    "devices": "Dispositivi e reti",
+    "plc": "Programmazione PLC",
+    "online": "Online e diagnostica",
+    "action": {
+      "open": "Apri progetto esistente",
+      "new": "Crea nuovo progetto",
+      "migrate": "Migra progetto",
+      "close": "Chiudi progetto",
+      "firstSteps": "Primi passi",
+      "installed": "Software installato",
+      "help": "Guida",
+      "language": "Lingua dell'interfaccia utente",
+      "openView": "Apri la vista progetto",
+      "addDevice": "Aggiungi nuovo dispositivo",
+      "addBlock": "Aggiungi nuovo blocco",
+      "accessibleDevices": "Dispositivi accessibili"
+    },
+    "projectView": "Vista progetto",
+    "openProjectInfo": "Progetto aperto: {{path}}",
+    "browse": "Sfoglia…",
+    "noProject": "Nessun progetto aperto.",
+    "new": {
+      "name": "Nome progetto",
+      "path": "Percorso",
+      "author": "Autore",
+      "comment": "Commento",
+      "create": "Crea"
+    },
+    "open": {
+      "project": "Progetto",
+      "path": "Percorso",
+      "lastAccess": "Ultimo accesso",
+      "notFound": "(non trovato)"
+    },
+    "close": {
+      "description": "Chiude il progetto \"{{name}}\". Se ci sono modifiche non salvate ti verrà chiesto cosa fare.",
+      "confirm": "Chiudi il progetto"
+    },
+    "firstSteps": {
+      "device": {
+        "title": "Configura un dispositivo",
+        "description": "Aggiungi al progetto il controllore da programmare."
+      },
+      "program": {
+        "title": "Scrivi programma PLC",
+        "description": "Crea i blocchi con cui il controllore esegue il processo."
+      },
+      "projectView": {
+        "title": "Apri la vista progetto",
+        "description": "Lavora su dispositivi, blocchi e impostazioni del progetto."
+      }
+    }
   }
 }

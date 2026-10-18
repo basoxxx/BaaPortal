@@ -33,7 +33,7 @@ function errorCode(e: unknown): string {
   return typeof code === 'string' ? code : 'UNKNOWN';
 }
 
-function joinPath(dir: string, file: string): string {
+export function joinPath(dir: string, file: string): string {
   const sep = dir.includes('\\') && !dir.includes('/') ? '\\' : '/';
   return dir.endsWith(sep) ? dir + file : dir + sep + file;
 }

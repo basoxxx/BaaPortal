@@ -10,6 +10,14 @@
       "INVALID_JSON": "The project file is damaged: its internal data cannot be read.",
       "INVALID_SCHEMA": "The project file is damaged: its internal data does not have the expected structure.",
       "NEWER_FORMAT": "This project was created with a newer version of BaaPortal. Update the application to open it."
+    },
+    "name": {
+      "EMPTY": "Enter a name for the project.",
+      "TOO_LONG": "The name is too long: use at most 128 characters.",
+      "INVALID_CHARS": "The name contains characters that are not allowed in file names.",
+      "RESERVED": "This name is reserved by the operating system: choose another one.",
+      "TRAILING_DOT_OR_SPACE": "The name cannot end with a dot or a space.",
+      "EXISTS": "A project with this name already exists in this folder."
     }
   },
   "confirm": {
@@ -24,7 +32,8 @@
   "messages": {
     "created": "Project \"{{name}}\" created.",
     "opened": "Project \"{{name}}\" opened.",
-    "saved": "Project \"{{name}}\" saved."
+    "saved": "Project \"{{name}}\" saved.",
+    "recentMissing": "The project \"{{name}}\" was not found: it was removed from the list."
   },
   "commands": {
     "project.new": "New…",
@@ -71,5 +80,60 @@
     "window.closeAllEditors": "Close all editors",
     "help.show": "Show help",
     "help.about": "About BaaPortal"
+  },
+  "portal": {
+    "start": "Start",
+    "devices": "Devices & networks",
+    "plc": "PLC programming",
+    "online": "Online & diagnostics",
+    "action": {
+      "open": "Open existing project",
+      "new": "Create new project",
+      "migrate": "Migrate project",
+      "close": "Close project",
+      "firstSteps": "First steps",
+      "installed": "Installed software",
+      "help": "Help",
+      "language": "User interface language",
+      "openView": "Open the project view",
+      "addDevice": "Add new device",
+      "addBlock": "Add new block",
+      "accessibleDevices": "Accessible devices"
+    },
+    "projectView": "Project view",
+    "openProjectInfo": "Open project: {{path}}",
+    "browse": "Browse…",
+    "noProject": "No project is open.",
+    "new": {
+      "name": "Project name",
+      "path": "Path",
+      "author": "Author",
+      "comment": "Comment",
+      "create": "Create"
+    },
+    "open": {
+      "project": "Project",
+      "path": "Path",
+      "lastAccess": "Last accessed",
+      "notFound": "(not found)"
+    },
+    "close": {
+      "description": "Closes the project \"{{name}}\". If there are unsaved changes you will be asked what to do.",
+      "confirm": "Close the project"
+    },
+    "firstSteps": {
+      "device": {
+        "title": "Configure a device",
+        "description": "Add the controller you want to program to the project."
+      },
+      "program": {
+        "title": "Write PLC program",
+        "description": "Create the blocks the controller uses to run the process."
+      },
+      "projectView": {
+        "title": "Open the project view",
+        "description": "Work on the devices, blocks and settings of the project."
+      }
+    }
   }
 }

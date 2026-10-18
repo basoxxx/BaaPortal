@@ -6,22 +6,31 @@ import type { BaaBridge } from './bridge';
 import { useShortcuts } from './commands/useShortcuts';
 import { i18next, initI18n, t } from './i18n';
 import { createProjectService } from './services/projectService';
-import { AppProvider, type AppServices } from './state/AppContext';
+import { PortalView } from './portal/PortalView';
+import { AppProvider, useAppStore, type AppServices } from './state/AppContext';
+import { attachPortalReaction } from './state/portalReaction';
 import { createAppStore } from './state/store';
 import './theme/tokens.css';
 import './theme/global.css';
 
 export interface AppProps {
   bridge: BaaBridge;
+  /** Chiamata quando store e servizio sono pronti (usata dai test). */
+  onReady?: (services: AppServices) => void;
 }
 
 function Shell() {
   useShortcuts();
-  // Segnaposto: le viste vere arrivano nei Task 4 e 5.
-  return <div data-testid="app-root" />;
+  const view = useAppStore((s) => s.view);
+  return (
+    <div data-testid="app-root" className="baa-app">
+      {/* La vista progetto arriva nel Task 5. */}
+      {view === 'portal' ? <PortalView /> : null}
+    </div>
+  );
 }
 
-export function App({ bridge }: AppProps) {
+export function App({ bridge, onReady }: AppProps) {
   const [services, setServices] = useState<AppServices | null>(null);
 
   useEffect(() => {
@@ -32,8 +41,14 @@ export function App({ bridge }: AppProps) {
       if (cancelled) return;
       const store = createAppStore();
       const service = createProjectService({ store, bridge, t, appVersion });
-      dispose = () => service.dispose();
-      setServices({ store, service, bridge });
+      const detachPortal = attachPortalReaction(store);
+      dispose = () => {
+        detachPortal();
+        service.dispose();
+      };
+      const services = { store, service, bridge };
+      setServices(services);
+      onReady?.(services);
     })();
     return () => {
       cancelled = true;
