@@ -159,5 +159,80 @@
         "description": "Work on the devices, blocks and settings of the project."
       }
     }
+  },
+  "tree": {
+    "project": "Project",
+    "addDevice": "Add new device",
+    "devicesNetworks": "Devices & networks",
+    "commonData": "Common data",
+    "docSettings": "Documentation settings",
+    "languages": "Languages & resources",
+    "onlineAccess": "Online access"
+  },
+  "navigation": {
+    "referenceEmpty": "No reference projects."
+  },
+  "details": {
+    "name": "Name"
+  },
+  "inspector": {
+    "tab": {
+      "properties": "Properties",
+      "info": "Info",
+      "diagnostics": "Diagnostics"
+    },
+    "sub": {
+      "general": "General",
+      "crossRefs": "Cross-references",
+      "compile": "Compile"
+    },
+    "name": "Name",
+    "path": "Path",
+    "created": "Created on",
+    "modified": "Last modified",
+    "author": "Author",
+    "comment": "Comment",
+    "noProperties": "No properties available",
+    "diagnosticsEmpty": "No diagnostic information available.",
+    "crossRefsEmpty": "No cross-references to show.",
+    "compileEmpty": "No compilation results to show.",
+    "severity": "Severity",
+    "message": "Message",
+    "date": "Date",
+    "time": "Time",
+    "sev": {
+      "info": "Information",
+      "warning": "Warning",
+      "error": "Error"
+    }
+  },
+  "taskcards": {
+    "empty": "No items available in this section.",
+    "tab": {
+      "instructions": "Instructions",
+      "test": "Testing",
+      "tasks": "Tasks",
+      "libraries": "Libraries"
+    },
+    "section": {
+      "instructions": {
+        "favorites": "Favorites",
+        "basic": "Basic instructions",
+        "advanced": "Extended instructions",
+        "communication": "Communication",
+        "optional": "Optional packages"
+      },
+      "test": {
+        "cpuPanel": "CPU operator panel",
+        "callStack": "Call stack"
+      },
+      "tasks": {
+        "findReplace": "Find and replace"
+      },
+      "libraries": {
+        "projectLibrary": "Project library",
+        "globalLibraries": "Global libraries"
+      }
+    }
   }
 }

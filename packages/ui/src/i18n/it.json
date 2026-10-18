@@ -159,5 +159,80 @@
         "description": "Lavora su dispositivi, blocchi e impostazioni del progetto."
       }
     }
+  },
+  "tree": {
+    "project": "Progetto",
+    "addDevice": "Aggiungi nuovo dispositivo",
+    "devicesNetworks": "Dispositivi e reti",
+    "commonData": "Dati di base comuni",
+    "docSettings": "Impostazioni della documentazione",
+    "languages": "Lingue e risorse",
+    "onlineAccess": "Accessi online"
+  },
+  "navigation": {
+    "referenceEmpty": "Nessun progetto di riferimento."
+  },
+  "details": {
+    "name": "Nome"
+  },
+  "inspector": {
+    "tab": {
+      "properties": "Proprietà",
+      "info": "Informazioni",
+      "diagnostics": "Diagnostica"
+    },
+    "sub": {
+      "general": "Generale",
+      "crossRefs": "Riferimenti incrociati",
+      "compile": "Compila"
+    },
+    "name": "Nome",
+    "path": "Percorso",
+    "created": "Creato il",
+    "modified": "Ultima modifica",
+    "author": "Autore",
+    "comment": "Commento",
+    "noProperties": "Nessuna proprietà disponibile",
+    "diagnosticsEmpty": "Nessuna informazione diagnostica disponibile.",
+    "crossRefsEmpty": "Nessun riferimento incrociato da mostrare.",
+    "compileEmpty": "Nessun risultato di compilazione da mostrare.",
+    "severity": "Gravità",
+    "message": "Messaggio",
+    "date": "Data",
+    "time": "Ora",
+    "sev": {
+      "info": "Informazione",
+      "warning": "Avviso",
+      "error": "Errore"
+    }
+  },
+  "taskcards": {
+    "empty": "Nessun elemento disponibile in questa sezione.",
+    "tab": {
+      "instructions": "Istruzioni",
+      "test": "Test",
+      "tasks": "Task",
+      "libraries": "Librerie"
+    },
+    "section": {
+      "instructions": {
+        "favorites": "Preferiti",
+        "basic": "Istruzioni di base",
+        "advanced": "Istruzioni avanzate",
+        "communication": "Comunicazione",
+        "optional": "Pacchetti opzionali"
+      },
+      "test": {
+        "cpuPanel": "Pannello di comando CPU",
+        "callStack": "Stack di chiamata"
+      },
+      "tasks": {
+        "findReplace": "Trova e sostituisci"
+      },
+      "libraries": {
+        "projectLibrary": "Libreria di progetto",
+        "globalLibraries": "Librerie globali"
+      }
+    }
   }
 }

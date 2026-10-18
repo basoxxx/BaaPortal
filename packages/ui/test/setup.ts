@@ -13,3 +13,13 @@ globalThis.ResizeObserver ??= class {
   unobserve() {}
   disconnect() {}
 };
+
+// In jsdom ogni rettangolo è 0×0 in (0,0): react-resizable-panels crederebbe che ogni clic (coordinate 0,0)
+// cada su un divisore e gli darebbe il focus, rubandolo a campi e nodi. Teniamo i divisori lontano dal puntatore.
+const realRect = Element.prototype.getBoundingClientRect;
+Element.prototype.getBoundingClientRect = function getBoundingClientRect() {
+  if (this instanceof HTMLElement && this.hasAttribute('data-separator')) {
+    return new DOMRect(-10000, -10000, 0, 0);
+  }
+  return realRect.call(this);
+};

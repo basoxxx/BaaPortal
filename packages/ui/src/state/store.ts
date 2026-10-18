@@ -10,6 +10,8 @@ export type TreeNodeId =
 export interface OpenDoc { project: Project; filePath: string; dirty: boolean }
 export interface InfoMessage {
   id: number;
+  /** Data locale AAAA-MM-GG. */
+  date: string;
   time: string;
   severity: 'info' | 'warning' | 'error';
   textKey: string;
@@ -39,7 +41,7 @@ export interface AppState {
   replaceDoc(d: OpenDoc): void; // stesso documento dopo un salvataggio (anche con nome nuovo)
   updateMeta(patch: Partial<Pick<ProjectMeta, 'author' | 'comment'>>): void; // imposta dirty
   select(id: TreeNodeId | null): void;
-  pushMessage(m: Omit<InfoMessage, 'id' | 'time'>): void; // aggiorna anche status
+  pushMessage(m: Omit<InfoMessage, 'id' | 'time' | 'date'>): void; // aggiorna anche status
   setPanel(name: PanelName, patch: Partial<PanelState>): void;
   setReferenceProjectsOpen(o: boolean): void;
   setTaskCard(t: TaskCardId): void;
@@ -53,6 +55,7 @@ export const DEFAULT_PANELS: Record<PanelName, PanelState> = {
 };
 
 const pad = (n: number) => String(n).padStart(2, '0');
+const formatDate = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const formatTime = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 
 export function createAppStore(now: () => Date = () => new Date()): StoreApi<AppState> {
@@ -82,10 +85,13 @@ export function createAppStore(now: () => Date = () => new Date()): StoreApi<App
       ),
     select: (selection) => set({ selection }),
     pushMessage: (m) =>
-      set((s) => ({
-        messages: [...s.messages, { ...m, id: nextId++, time: formatTime(now()) }],
-        status: { textKey: m.textKey, ...(m.params ? { params: m.params } : {}) },
-      })),
+      set((s) => {
+        const at = now();
+        return {
+          messages: [...s.messages, { ...m, id: nextId++, date: formatDate(at), time: formatTime(at) }],
+          status: { textKey: m.textKey, ...(m.params ? { params: m.params } : {}) },
+        };
+      }),
     setPanel: (name, patch) => set((s) => ({ panels: { ...s.panels, [name]: { ...s.panels[name], ...patch } } })),
     setReferenceProjectsOpen: (referenceProjectsOpen) => set({ referenceProjectsOpen }),
     setTaskCard: (taskCard) => set({ taskCard }),
