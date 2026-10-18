@@ -27,6 +27,8 @@ export interface ProjectService {
   save(): Promise<boolean>;
   saveAs(): Promise<boolean>;
   close(): Promise<boolean>;
+  /** Apre un progetto recuperato come documento modificato (revisione 1, mai salvata). */
+  openRecovered(project: Project, filePath: string): Promise<boolean>;
   handleCloseRequest(): Promise<void>;
   /** Annulla le registrazioni sul bridge (StrictMode, smontaggio). */
   dispose(): void;
@@ -40,6 +42,8 @@ export interface ProjectServiceDeps {
   now?: () => Date;
   /** Conferma le bozze dei campi in modifica prima di salvare, chiudere o aprire. */
   flushPendingEdits?: () => void;
+  /** Chiamata alla chiusura confermata della finestra, prima di chiuderla (es. cancella la copia di recupero). */
+  beforeWindowClose?: () => Promise<void>;
 }
 
 const APP_TITLE = 'BaaPortal';
@@ -226,8 +230,21 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
     return true;
   }
 
+  async function openRecovered(project: Project, filePath: string): Promise<boolean> {
+    if (!(await ensureCanDiscard())) return false;
+    store.getState().setDoc({ project, filePath, dirty: true, revision: 1, savedRevision: 0 });
+    await addRecentBestEffort(filePath, project.meta.name);
+    return true;
+  }
+
   async function handleCloseRequest(): Promise<void> {
-    if (await ensureCanDiscard()) bridge.closeWindowConfirmed();
+    if (!(await ensureCanDiscard())) return;
+    try {
+      await deps.beforeWindowClose?.();
+    } catch {
+      /* la chiusura non deve dipendere dalla pulizia */
+    }
+    bridge.closeWindowConfirmed();
   }
 
   // Titolo della finestra sempre allineato al documento.
@@ -252,6 +269,7 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
     save,
     saveAs,
     close,
+    openRecovered,
     handleCloseRequest,
     dispose() {
       unsubscribeStore();

@@ -38,7 +38,9 @@
     "saved": "Progetto \"{{name}}\" salvato.",
     "recentMissing": "Il progetto \"{{name}}\" non è stato trovato: è stato tolto dall'elenco.",
     "standardTableLocked": "La Tabella delle variabili standard non può essere eliminata.",
-    "pasteNoNumber": "Nessun numero libero: {{count}} oggetti non sono stati incollati."
+    "pasteNoNumber": "Nessun numero libero: {{count}} oggetti non sono stati incollati.",
+    "recoveryWriteFailed": "Impossibile scrivere la copia di recupero automatico: le modifiche non salvate potrebbero andare perse in caso di chiusura anomala.",
+    "recovered": "Modifiche di \"{{name}}\" recuperate."
   },
   "commands": {
     "project.new": "Nuovo…",
@@ -537,5 +539,11 @@
     "group": "Gruppo",
     "tagCount": "Numero di variabili",
     "constantCount": "Numero di costanti"
+  },
+  "recovery": {
+    "title": "Recupero modifiche",
+    "message": "BaaPortal non è stato chiuso correttamente. Recuperare le modifiche di «{{name}}» salvate il {{date}}?",
+    "yes": "Recupera",
+    "no": "Elimina"
   }
 }

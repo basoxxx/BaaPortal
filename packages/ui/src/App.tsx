@@ -8,6 +8,7 @@ import { useShortcuts } from './commands/useShortcuts';
 import { i18next, initI18n, t } from './i18n';
 import { flushPendingEdits } from './flushPendingEdits';
 import { createProjectService } from './services/projectService';
+import { createRecoveryService, type RecoveryService } from './services/recoveryService';
 import { AddBlockDialog } from './project/dialogs/AddBlockDialog';
 import { AddDeviceDialog } from './project/dialogs/AddDeviceDialog';
 import { DetachedWindows } from './project/workarea/DetachedWindow';
@@ -88,24 +89,34 @@ export function App({ bridge, onReady }: AppProps) {
       const detachLayout = store.subscribe((s, prev) => {
         if (s.panels !== prev.panels) saveLayout(storage, s.panels);
       });
+      const ref: { recovery?: RecoveryService } = {};
       const service = createProjectService({
         store,
         bridge,
         t,
         appVersion,
         flushPendingEdits,
+        // "Non salvare" all'uscita non deve lasciare una copia di recupero.
+        beforeWindowClose: async () => {
+          const doc = store.getState().doc;
+          if (doc) await ref.recovery?.clear(doc.filePath);
+        },
       });
+      const recovery = createRecoveryService({ store, bridge, t, appVersion, service });
+      ref.recovery = recovery;
       const detachPortal = attachPortalReaction(store);
       const detachEditors = attachEditorReconciler(store);
       dispose = () => {
         detachPortal();
         detachEditors();
         detachLayout();
+        recovery.dispose();
         service.dispose();
       };
       const services = { store, service, bridge };
       setServices(services);
       onReady?.(services);
+      void recovery.offerRecovery();
     }
     return () => {
       cancelled = true;
