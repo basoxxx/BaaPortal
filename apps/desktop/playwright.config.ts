@@ -5,4 +5,6 @@ export default defineConfig({
   testMatch: '**/*.spec.ts',
   timeout: 30_000,
   workers: 1,
+  expect: { timeout: 10_000 },
+  use: { actionTimeout: 10_000 },
 });

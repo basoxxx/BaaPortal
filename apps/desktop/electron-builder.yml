@@ -1,0 +1,27 @@
+appId: it.baaportal.app
+productName: BaaPortal
+directories:
+  buildResources: build
+  output: dist
+files:
+  - out/**
+  - package.json
+fileAssociations:
+  - ext: baap
+    name: Progetto BaaPortal
+    role: Editor
+win:
+  target:
+    - target: nsis
+      arch: x64
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+mac:
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+  identity: '-'
+  hardenedRuntime: false
+  artifactName: ${productName}-${version}-${arch}.${ext}
+  category: public.app-category.developer-tools

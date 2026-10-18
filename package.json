@@ -13,7 +13,9 @@
     "test": "vitest run",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "e2e": "npm run e2e -w @baaportal/desktop",
+    "dist": "npm run dist -w @baaportal/desktop"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

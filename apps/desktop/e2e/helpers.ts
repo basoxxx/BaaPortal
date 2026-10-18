@@ -1,3 +1,5 @@
+import { spawn } from 'node:child_process';
+import electronPath from 'electron';
 import { _electron, type ElectronApplication, type Page } from '@playwright/test';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -16,5 +18,53 @@ export async function launchApp(opts: { args?: string[] } = {}): Promise<Launche
     env: { ...process.env, BAA_USER_DATA: userData },
   });
   const page = await app.firstWindow();
+  // firstWindow() risolve alla creazione della finestra, prima che il modulo del renderer sia
+  // eseguito: senza questa attesa window.baa e la UI possono ancora non esistere.
+  await page.waitForFunction(
+    () => typeof (window as { baa?: unknown }).baa === 'object' && !!document.querySelector('#root > *'),
+  );
   return { app, page, userData };
+}
+
+/** Sostituisce i dialoghi nativi nel processo principale: ogni messaggio viene registrato in globalThis.__dialogs. */
+export async function stubMessageBox(app: ElectronApplication, response: number): Promise<void> {
+  await app.evaluate(({ dialog }, r) => {
+    const g = globalThis as unknown as { __dialogs: string[] };
+    g.__dialogs = [];
+    dialog.showMessageBox = (async (...a: unknown[]) => {
+      const opts = a[a.length - 1] as { message: string };
+      g.__dialogs.push(opts.message);
+      return { response: r, checkboxChecked: false };
+    }) as unknown as typeof dialog.showMessageBox;
+  }, response);
+}
+
+export function shownDialogs(app: ElectronApplication): Promise<string[]> {
+  return app.evaluate(() => (globalThis as unknown as { __dialogs: string[] }).__dialogs);
+}
+
+export async function createProject(page: Page, name: string, dir: string): Promise<void> {
+  await page.getByTestId('action-new').click();
+  await page.getByLabel('Nome progetto').fill(name);
+  await page.getByLabel('Percorso').fill(dir);
+  await page.getByRole('button', { name: 'Crea', exact: true }).click();
+}
+
+/** Avvia una seconda istanza di Electron con lo stesso userData; risolve con il suo codice di uscita. */
+export function spawnSecondInstance(userData: string, file: string): Promise<number | null> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(electronPath as unknown as string, ['out/main/index.js', file], {
+      env: { ...process.env, BAA_USER_DATA: userData },
+      stdio: 'ignore',
+    });
+    const timer = setTimeout(() => {
+      child.kill();
+      reject(new Error('la seconda istanza non è terminata'));
+    }, 15_000);
+    child.on('exit', (code) => {
+      clearTimeout(timer);
+      resolve(code);
+    });
+    child.on('error', reject);
+  });
 }
