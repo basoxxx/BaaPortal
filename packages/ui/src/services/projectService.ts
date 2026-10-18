@@ -1,10 +1,17 @@
 import type { TFunction } from 'i18next';
 import type { StoreApi } from 'zustand/vanilla';
-import { BaapFormatError, createProject, readBaap, writeBaap, type Project } from '@baaportal/project';
+import {
+  BaapFormatError,
+  createProject,
+  readBaap,
+  validateProjectName,
+  writeBaap,
+  type Project,
+} from '@baaportal/project';
 import type { BaaBridge } from '../bridge';
 import type { AppState } from '../state/store';
 
-export type CreateResult = { ok: true } | { ok: false; error: 'EXISTS' | 'WRITE_FAILED' | 'CANCELED' };
+export type CreateResult = { ok: true } | { ok: false; error: 'EXISTS' | 'WRITE_FAILED' | 'CANCELED' | 'INVALID_PATH' | 'INVALID_NAME' };
 
 export interface ProjectService {
   createNew(input: { name: string; dir: string; author: string; comment: string }): Promise<CreateResult>;
@@ -33,6 +40,11 @@ function errorCode(e: unknown): string {
   return typeof code === 'string' ? code : 'UNKNOWN';
 }
 
+/** Percorso assoluto POSIX (/…), Windows con unità (C:\…) o UNC (\\server\share…). */
+export function isAbsolutePath(p: string): boolean {
+  return /^\//.test(p) || /^[A-Za-z]:[\\/]/.test(p) || /^\\\\[^\\]/.test(p);
+}
+
 export function joinPath(dir: string, file: string): string {
   const sep = dir.includes('\\') && !dir.includes('/') ? '\\' : '/';
   return dir.endsWith(sep) ? dir + file : dir + sep + file;
@@ -57,6 +69,15 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
     }
   }
 
+  /** I recenti sono un'comodità: un loro errore non deve mai far fallire l'operazione. */
+  async function addRecentBestEffort(path: string, name: string): Promise<void> {
+    try {
+      await bridge.recentAdd(path, name);
+    } catch {
+      /* recenti non aggiornati */
+    }
+  }
+
   async function ensureCanDiscard(): Promise<boolean> {
     const doc = store.getState().doc;
     if (!doc?.dirty) return true;
@@ -73,6 +94,15 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
   }
 
   async function createNew(input: { name: string; dir: string; author: string; comment: string }): Promise<CreateResult> {
+    const nameCheck = validateProjectName(input.name);
+    if (!nameCheck.ok) {
+      await showError(t(`errors.name.${nameCheck.reason}`));
+      return { ok: false, error: 'INVALID_NAME' };
+    }
+    if (!isAbsolutePath(input.dir)) {
+      await showError(t('errors.pathNotAbsolute'));
+      return { ok: false, error: 'INVALID_PATH' };
+    }
     if (!(await ensureCanDiscard())) return { ok: false, error: 'CANCELED' };
     const path = joinPath(input.dir, `${input.name}.baap`);
     if (await bridge.fileExists(path)) {
@@ -82,7 +112,7 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
     const project = createProject({ name: input.name, author: input.author, comment: input.comment }, now());
     if (!(await writeProject(project, path))) return { ok: false, error: 'WRITE_FAILED' };
     store.getState().setDoc({ project, filePath: path, dirty: false });
-    await bridge.recentAdd(path, project.meta.name);
+    await addRecentBestEffort(path, project.meta.name);
     announce('created', project.meta.name);
     return { ok: true };
   }
@@ -101,7 +131,7 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
       return false;
     }
     store.getState().setDoc({ project, filePath: path, dirty: false });
-    await bridge.recentAdd(path, project.meta.name);
+    await addRecentBestEffort(path, project.meta.name);
     announce('opened', project.meta.name);
     return true;
   }
@@ -112,26 +142,53 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
   }
 
   async function saveTo(path: string): Promise<boolean> {
-    const doc = store.getState().doc;
+    const before = store.getState();
+    const doc = before.doc;
     if (!doc) return false;
+    const loadId = before.docLoadId;
     const project: Project = { ...doc.project, meta: { ...doc.project.meta, modifiedAt: now().toISOString() } };
     if (!(await writeProject(project, path))) return false;
-    store.getState().replaceDoc({ project, filePath: path, dirty: false });
-    await bridge.recentAdd(path, project.meta.name);
+    // Durante la scrittura l'utente può aver modificato o sostituito il documento.
+    const cur = store.getState();
+    if (cur.docLoadId === loadId && cur.doc) {
+      if (cur.doc.project === doc.project) {
+        cur.replaceDoc({ project, filePath: path, dirty: false });
+      } else {
+        const meta = { ...cur.doc.project.meta, modifiedAt: project.meta.modifiedAt };
+        cur.replaceDoc({ project: { ...cur.doc.project, meta }, filePath: path, dirty: true });
+      }
+    }
+    await addRecentBestEffort(path, project.meta.name);
     announce('saved', project.meta.name);
     return true;
   }
 
-  async function save(): Promise<boolean> {
-    const doc = store.getState().doc;
-    return doc ? saveTo(doc.filePath) : false;
+  // I salvataggi sono serializzati: uno che arriva mentre un altro è in corso attende e poi
+  // scrive di nuovo solo se il documento è ancora modificato.
+  let chain: Promise<unknown> = Promise.resolve();
+  let queued = 0;
+  function enqueueSave(fn: (waited: boolean) => Promise<boolean>): Promise<boolean> {
+    const waited = queued > 0;
+    queued++;
+    const run = chain.then(() => fn(waited));
+    chain = run.catch(() => undefined).finally(() => { queued--; });
+    return run;
+  }
+
+  function save(): Promise<boolean> {
+    return enqueueSave(async (waited) => {
+      const doc = store.getState().doc;
+      if (!doc) return false;
+      if (waited && !doc.dirty) return true;
+      return saveTo(doc.filePath);
+    });
   }
 
   async function saveAs(): Promise<boolean> {
     const doc = store.getState().doc;
     if (!doc) return false;
     const path = await bridge.showSaveProjectDialog(`${doc.project.meta.name}.baap`);
-    return path ? saveTo(path) : false;
+    return path ? enqueueSave(() => saveTo(path)) : false;
   }
 
   async function close(): Promise<boolean> {

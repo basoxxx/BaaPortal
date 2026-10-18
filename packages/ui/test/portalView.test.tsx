@@ -117,6 +117,20 @@ describe('Crea nuovo progetto', () => {
     await waitFor(() => expect(screen.getByLabelText('Percorso')).toHaveValue('/altra/cartella'));
   });
 
+  it('un percorso relativo disabilita Crea e mostra il motivo', async () => {
+    const { user } = await renderApp();
+    await user.click(screen.getByTestId('action-new'));
+    await screen.findByDisplayValue('Progetto1');
+    const dir = screen.getByLabelText('Percorso');
+    await user.clear(dir);
+    await user.type(dir, 'relativo/cartella');
+    expect(screen.getByRole('button', { name: 'Crea' })).toBeDisabled();
+    expect(screen.getByRole('alert')).toHaveTextContent('deve essere assoluto');
+    await user.clear(dir);
+    await user.type(dir, '/assoluto');
+    expect(screen.getByRole('button', { name: 'Crea' })).toBeEnabled();
+  });
+
   it('Crea → Primi passi → Apri la vista progetto', async () => {
     const { user, store, bridge } = await renderApp();
     await user.click(screen.getByTestId('action-new'));

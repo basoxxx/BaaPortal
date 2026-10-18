@@ -1,6 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { PROJECT_PATH, renderApp } from './renderApp';
+import { flush } from './fakeBridge';
 
 const menuTitles = () => within(screen.getByTestId('menu-bar')).getAllByRole('menuitem');
 
@@ -110,6 +111,22 @@ describe('vista progetto: scorciatoie', () => {
     await user.keyboard(keys);
     await waitFor(() => expect(bridge.files.get(PROJECT_PATH)).not.toBe(before));
     await waitFor(() => expect(screen.getByTestId('status-bar')).toHaveTextContent('salvato'));
+  });
+
+  it('la ripetizione automatica del tasto (e.repeat) non rilancia il comando', async () => {
+    const { store, bridge } = await renderApp({ view: 'project', withProject: true });
+    act(() => store.getState().setDoc({ ...store.getState().doc!, dirty: true }));
+    let writes = 0;
+    const orig = bridge.writeFileAtomic.bind(bridge);
+    bridge.writeFileAtomic = async (p, d) => {
+      writes++;
+      return orig(p, d);
+    };
+    fireEvent.keyDown(window, { key: 's', ctrlKey: true, repeat: true });
+    await flush();
+    expect(writes).toBe(0);
+    fireEvent.keyDown(window, { key: 's', ctrlKey: true });
+    await waitFor(() => expect(writes).toBe(1));
   });
 
   it('Ctrl+O funziona anche dalla vista portale', async () => {

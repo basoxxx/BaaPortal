@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { createProject, readBaap, writeBaap } from '@baaportal/project';
 import { strToU8 } from 'fflate';
 import { t } from '../src/i18n';
-import { createProjectService, type ProjectService } from '../src/services/projectService';
+import { createProjectService, isAbsolutePath, type ProjectService } from '../src/services/projectService';
 import { createAppStore } from '../src/state/store';
-import { FakeBridge } from './fakeBridge';
+import { FakeBridge, flush } from './fakeBridge';
 
 const NOW = new Date('2026-10-18T11:00:00Z');
 let bridge: FakeBridge;
@@ -174,5 +174,109 @@ describe('projectService', () => {
     bridge.confirmAnswers.push('cancel');
     await bridge.emitOpenFile('/b.baap');
     expect(store.getState().doc?.filePath).toBe('/a.baap');
+  });
+
+  describe('salvataggio concorrente alle modifiche (C2)', () => {
+    function deferWrites() {
+      const releases: (() => void)[] = [];
+      const orig = bridge.writeFileAtomic.bind(bridge);
+      bridge.writeFileAtomic = async (p, d) => {
+        await new Promise<void>((r) => releases.push(r));
+        return orig(p, d);
+      };
+      return releases;
+    }
+
+    it('una modifica durante il salvataggio resta e il documento resta modificato', async () => {
+      await openValid('/a.baap');
+      store.getState().updateMeta({ author: 'AB' });
+      const releases = deferWrites();
+      const saving = svc.save();
+      await flush();
+      store.getState().updateMeta({ author: 'ABC' });
+      releases[0]!();
+      await saving;
+      const doc = store.getState().doc!;
+      expect(doc.project.meta.author).toBe('ABC');
+      expect(doc.dirty).toBe(true);
+      expect(readBaap(bridge.files.get('/a.baap')!).meta.author).toBe('AB');
+    });
+
+    it('aprire un altro documento durante il salvataggio non viene sovrascritto', async () => {
+      await openValid('/a.baap');
+      store.getState().updateMeta({ author: 'AB' });
+      const releases = deferWrites();
+      const saving = svc.save();
+      await flush();
+      bridge.files.set('/b.baap', bytes('b'));
+      store.getState().setDoc({ project: readBaap(bytes('b')), filePath: '/b.baap', dirty: false });
+      releases[0]!();
+      await saving;
+      expect(store.getState().doc?.filePath).toBe('/b.baap');
+      expect(store.getState().doc?.project.meta.name).toBe('b');
+      expect(store.getState().doc?.dirty).toBe(false);
+    });
+
+    it('due save() concorrenti: stato finale corretto e disco allineato', async () => {
+      await openValid('/a.baap');
+      store.getState().updateMeta({ author: 'AB' });
+      const releases = deferWrites();
+      const first = svc.save();
+      await flush();
+      store.getState().updateMeta({ author: 'ABC' });
+      const second = svc.save();
+      await flush();
+      expect(releases).toHaveLength(1);
+      releases[0]!();
+      await flush();
+      expect(releases).toHaveLength(2);
+      releases[1]!();
+      await Promise.all([first, second]);
+      expect(store.getState().doc?.dirty).toBe(false);
+      expect(readBaap(bridge.files.get('/a.baap')!).meta.author).toBe('ABC');
+    });
+
+    it('due save() concorrenti senza nuove modifiche scrivono una volta sola', async () => {
+      await openValid('/a.baap');
+      store.getState().updateMeta({ author: 'AB' });
+      const releases = deferWrites();
+      const first = svc.save();
+      const second = svc.save();
+      await flush();
+      releases[0]!();
+      await Promise.all([first, second]);
+      expect(releases).toHaveLength(1);
+      expect(store.getState().doc?.dirty).toBe(false);
+    });
+  });
+
+  describe('percorso e nome in createNew (I5)', () => {
+    it.each(['relativo/cartella', '.', '', 'C:relativo'])('rifiuta il percorso non assoluto %j', async (dir) => {
+      expect(await svc.createNew({ name: 'P', dir, author: '', comment: '' })).toEqual({ ok: false, error: 'INVALID_PATH' });
+      expect(bridge.files.size).toBe(0);
+      expect(bridge.errors[0]?.message).toBe(t('errors.pathNotAbsolute'));
+    });
+
+    it.each(['/abs/dir', 'C:\\Progetti', '\\\\server\\share\\x'])('accetta il percorso assoluto %j', async (dir) => {
+      expect(isAbsolutePath(dir)).toBe(true);
+    });
+
+    it('rifiuta un nome non valido senza scrivere nulla', async () => {
+      expect(await svc.createNew({ name: 'a/b', dir: '/d', author: '', comment: '' })).toEqual({ ok: false, error: 'INVALID_NAME' });
+      expect(bridge.files.size).toBe(0);
+    });
+  });
+
+  describe('recenti best-effort', () => {
+    it('un errore dei recenti non fa fallire apertura, creazione e salvataggio', async () => {
+      bridge.recentAdd = async () => { throw new Error('boom'); };
+      bridge.files.set('/a.baap', bytes('a'));
+      expect(await svc.open('/a.baap')).toBe(true);
+      store.getState().updateMeta({ author: 'Z' });
+      expect(await svc.save()).toBe(true);
+      expect(store.getState().doc?.dirty).toBe(false);
+      expect(await svc.createNew({ name: 'N', dir: '/d', author: '', comment: '' })).toEqual({ ok: true });
+      expect(bridge.errors).toHaveLength(0);
+    });
   });
 });

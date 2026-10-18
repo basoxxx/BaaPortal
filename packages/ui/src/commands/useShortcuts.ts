@@ -6,6 +6,7 @@ export function useShortcuts(): void {
   const ctx = useServices();
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (e.repeat) return;
       const target = e.target as HTMLElement | null;
       const inField = target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA';
       for (const cmd of Object.values(commands)) {

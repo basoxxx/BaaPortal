@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { validateProjectName } from '@baaportal/project';
-import { joinPath } from '../../services/projectService';
+import { isAbsolutePath, joinPath } from '../../services/projectService';
 import { useServices } from '../../state/AppContext';
 
 const AUTHOR_KEY = 'baa.lastAuthor';
@@ -48,7 +48,8 @@ export function NewProjectPane() {
 
   const check = validateProjectName(name);
   const nameError = name === '' && !touched.current.name ? null : exists ? t('errors.name.EXISTS') : check.ok ? null : t(`errors.name.${check.reason}`);
-  const canCreate = check.ok && dir.trim() !== '' && !exists;
+  const dirError = dir.trim() !== '' && !isAbsolutePath(dir) ? t('errors.pathNotAbsolute') : null;
+  const canCreate = check.ok && dir.trim() !== '' && dirError === null && !exists;
 
   const browse = async () => {
     const picked = await bridge.showSelectFolderDialog();
@@ -81,6 +82,7 @@ export function NewProjectPane() {
         <label htmlFor="np-dir">{t('portal.new.path')}</label>
         <input id="np-dir" value={dir} onChange={(e) => { touched.current.dir = true; setDir(e.target.value); setExists(false); }} />
         <button type="button" className="baa-btn" onClick={() => void browse()}>{t('portal.browse')}</button>
+        {dirError ? <div className="baa-field-error" role="alert">{dirError}</div> : null}
       </div>
       <div className="baa-field">
         <label htmlFor="np-author">{t('portal.new.author')}</label>

@@ -3,6 +3,8 @@
     "title": "Error",
     "write": "Cannot write the file \"{{path}}\" (code {{code}}). Check permissions and free space, then try again.",
     "read": "Cannot read the file \"{{path}}\" (code {{code}}).",
+    "pathNotAbsolute": "The path must be absolute (for example C:\\Projects or /Users/name/Projects).",
+    "fatal": "An unexpected error occurred. Restart BaaPortal; work you already saved is unaffected.",
     "exists": "A project already exists at \"{{path}}\". Choose a different name or folder.",
     "baap": {
       "NOT_ZIP": "The file is not a valid BaaPortal project: its content is not a recognizable archive.",
