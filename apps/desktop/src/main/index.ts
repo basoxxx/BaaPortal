@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu } from 'electron';
+import { app, BrowserWindow, Menu } from 'electron';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { registerIpc } from './ipc';
@@ -84,7 +84,7 @@ function createWindow(): void {
   });
   // Se il renderer non è pronto (avvio fallito, crash, caricamento) non c'è chi possa confermare: si chiude.
   win.on('close', (e) => {
-    if (allowClose || !rendererIsReady) return;
+    if (allowClose || !rendererIsReady || win?.webContents.isCrashed()) return;
     e.preventDefault();
     win?.webContents.send('app:close-requested');
   });
@@ -138,11 +138,11 @@ if (!app.requestSingleInstanceLock()) {
       allowClose = true;
       win?.close();
     },
+    () => {
+      rendererIsReady = true;
+      for (const p of pendingOpen.splice(0)) win?.webContents.send('app:open-file', p);
+    },
   );
-  ipcMain.on('app:renderer-ready', () => {
-    rendererIsReady = true;
-    for (const p of pendingOpen.splice(0)) win?.webContents.send('app:open-file', p);
-  });
 
   void app.whenReady().then(() => {
     setupNativeMenu();
