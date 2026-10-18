@@ -100,8 +100,13 @@ export function fillTags(source: Tag, count: number, taken: string[], newId: New
   return out;
 }
 
-const isTruthy = (text: string | undefined): boolean =>
-  text === undefined || !/^(false|0)$/i.test(text.trim());
+// Excel italiano copia i booleani come VERO/FALSO; ciò che non si riconosce è il valore predefinito (vero).
+const TRUE_WORDS = new Set(['true', 'vero', '1', 'sì', 'si', 'yes']);
+const FALSE_WORDS = new Set(['false', 'falso', '0', 'no']);
+const parseFlag = (text: string | undefined): boolean => {
+  const w = (text ?? '').trim().toLowerCase();
+  return TRUE_WORDS.has(w) ? true : FALSE_WORDS.has(w) ? false : true;
+};
 const cell = (row: string[], i: number): string | undefined => {
   const v = row[i];
   return v === undefined || v === '' ? undefined : v;
@@ -119,7 +124,7 @@ export function tagsFromTsv(rows: string[][], taken: string[], newId: NewId): Ta
       name: name === '' ? '' : unique(name),
       type: type === undefined ? DEFAULT_TYPE : normalizeType(type),
       address: address === undefined ? DEFAULT_ADDRESS : normalizeAddress(address),
-      hmi: isTruthy(r[4]),
+      hmi: parseFlag(r[4]),
       comment: r[5] ?? '',
     };
   });

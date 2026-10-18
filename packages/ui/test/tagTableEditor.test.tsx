@@ -215,6 +215,26 @@ describe('editor della tabella delle variabili', () => {
     expect(dropVerdict(doc, ids.tagTable(PLC, 'tab2'))).toBeNull();
   });
 
+  it('le schede si usano da tastiera: frecce, Home e Fine', async () => {
+    const app = await open();
+    const tags = screen.getByRole('tab', { name: 'Variabili' });
+    const consts = screen.getByRole('tab', { name: 'Costanti utente' });
+    act(() => tags.focus());
+    await app.user.keyboard('{ArrowRight}');
+    expect(consts).toHaveFocus();
+    expect(consts).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('grid', { name: 'Costanti utente' })).toBeInTheDocument();
+    await app.user.keyboard('{ArrowRight}');
+    expect(tags).toHaveFocus();
+    await app.user.keyboard('{End}');
+    expect(consts).toHaveAttribute('aria-selected', 'true');
+    await app.user.keyboard('{Home}');
+    expect(tags).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('grid', { name: 'Variabili' })).toBeInTheDocument();
+    await app.user.keyboard('{ArrowLeft}');
+    expect(consts).toHaveFocus();
+  });
+
   it('scheda Costanti utente: aggiunta e valore non valido segnato', async () => {
     const app = await open();
     await app.user.click(screen.getByRole('tab', { name: 'Costanti utente' }));

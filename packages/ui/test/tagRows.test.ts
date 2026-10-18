@@ -104,6 +104,13 @@ describe('tagRows', () => {
     expect(c).toMatchObject({ hmi: true });
   });
 
+  it('tagsFromTsv: booleani di Excel italiano (VERO/FALSO, SÌ/NO) e valori sconosciuti = predefinito', () => {
+    const hmi = (v: string) => tagsFromTsv([['A', 'Bool', '%M0.0', '', v]], [], seq())[0]!.hmi;
+    expect(['vero', 'Vero', 'SÌ', 'si', 'YES', 'true', '1'].map(hmi)).toEqual(Array(7).fill(true));
+    expect(['FALSO', 'falso', 'no', 'False', '0'].map(hmi)).toEqual(Array(5).fill(false));
+    expect(['', 'boh'].map(hmi)).toEqual([true, true]);
+  });
+
   it('tagsToTsv: stesse colonne, ritenzione TRUE/FALSE', () => {
     const text = tagsToTsv(
       [tag('A', 'Int', '%MW0', { comment: 'x' }), tag('B', 'Bool', '%M5.0', { hmi: false })],

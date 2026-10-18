@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useId, useState, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { EditorRef } from '../../state/workArea';
 import { ConstantsView } from './ConstantsView';
@@ -11,15 +11,40 @@ export function TagTableEditor({ editor }: { editor: EditorRef }) {
   const { t } = useTranslation();
   const uid = useId();
   const [tab, setTab] = useState<Tab>('tags');
+  const tabId = (id: Tab) => `${uid}-tab-${id}`;
+  // Schede WAI-ARIA: frecce, Home e Fine spostano il focus e attivano la scheda.
+  const onTabKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    const i = TABS.indexOf(tab);
+    const next =
+      e.key === 'ArrowRight'
+        ? (i + 1) % TABS.length
+        : e.key === 'ArrowLeft'
+          ? (i + TABS.length - 1) % TABS.length
+          : e.key === 'Home'
+            ? 0
+            : e.key === 'End'
+              ? TABS.length - 1
+              : -1;
+    if (next < 0) return;
+    e.preventDefault();
+    const id = TABS[next]!;
+    setTab(id);
+    document.getElementById(tabId(id))?.focus();
+  };
   return (
     <div className="baa-editor-body baa-tags-editor" data-testid={`editor-body-${editor.key}`}>
-      <div role="tablist" aria-label={t('tags.tabs')} className="baa-tags-tabs">
+      <div
+        role="tablist"
+        aria-label={t('tags.tabs')}
+        className="baa-tags-tabs"
+        onKeyDown={onTabKeyDown}
+      >
         {TABS.map((id) => (
           <button
             key={id}
             type="button"
             role="tab"
-            id={`${uid}-tab-${id}`}
+            id={tabId(id)}
             aria-selected={tab === id}
             aria-controls={`${uid}-panel`}
             tabIndex={tab === id ? 0 : -1}
@@ -33,7 +58,7 @@ export function TagTableEditor({ editor }: { editor: EditorRef }) {
       <div
         role="tabpanel"
         id={`${uid}-panel`}
-        aria-labelledby={`${uid}-tab-${tab}`}
+        aria-labelledby={tabId(tab)}
         className="baa-tags-panel"
       >
         {tab === 'tags' ? (
