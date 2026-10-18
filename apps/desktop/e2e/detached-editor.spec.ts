@@ -1,4 +1,5 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { readBaap } from '@baaportal/project';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ElectronApplication, Locator, Page } from '@playwright/test';
@@ -91,6 +92,22 @@ test('editor in finestra separata: modifica visibile nella principale, annulla, 
   const again = await detachTable(app, page);
   await renameFirstTag(again, 'Valvola');
   await expect.poll(() => windowCount(app)).toBe(2);
+
+  // Le scorciatoie funzionano anche con il focus nella finestra separata (fuori dai campi di testo)
+  await again.getByRole('grid').locator('[data-row-key]').first().locator('[data-rownum]').click();
+  await again.keyboard.press(`${mod}+s`);
+  await expect
+    .poll(() => {
+      try {
+        return readBaap(readFileSync(file)).devices[0]?.tagTables[0]?.tags[0]?.name;
+      } catch {
+        return undefined;
+      }
+    })
+    .toBe('Valvola');
+  await again.keyboard.press(`${mod}+z`);
+  await expect(page.getByTestId('details-row')).toContainText('Motore');
+
   // La principale è l'unica pagina dell'app: le finestre separate sono about:blank
   const closeMain = () =>
     app.evaluate(({ BrowserWindow }) =>
@@ -106,4 +123,5 @@ test('editor in finestra separata: modifica visibile nella principale, annulla, 
   const closed = app.waitForEvent('close');
   await closeMain();
   await closed;
+  expect(app.windows()).toHaveLength(0);
 });

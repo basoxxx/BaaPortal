@@ -1,4 +1,5 @@
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { readBaap } from '@baaportal/project';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Locator, Page } from '@playwright/test';
@@ -168,7 +169,16 @@ test('modello dati PLC: crea, annulla e ripeti, salva, chiudi e riapri', async (
   await expect.poll(() => shownDialogs(app)).toHaveLength(1);
   await page.keyboard.press(`${mod}+s`);
   const file = join(dir, 'Impianto àè.baap');
-  await expect.poll(() => existsSync(file)).toBe(true);
+  // Il file esiste già dalla creazione: si aspetta che contenga davvero il DB di istanza
+  await expect
+    .poll(() => {
+      try {
+        return readBaap(readFileSync(file)).devices[0]?.blocks.some((b) => b.name === 'Nastro_DB');
+      } catch {
+        return false;
+      }
+    })
+    .toBe(true);
   // 9. Salvato: chiudere il progetto non chiede più nulla
   await page
     .getByTestId('menu-bar')
