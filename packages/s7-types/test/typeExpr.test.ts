@@ -46,6 +46,13 @@ describe('parseType', () => {
     expect(parseType(input)).toEqual({ ok: false, error });
   });
 
+  it.each(['constructor', '__proto__', 'toString'])(
+    'parseType(%s) è un errore di sintassi',
+    (input) => {
+      expect(parseType(input)).toEqual({ ok: false, error: 'SYNTAX' });
+    },
+  );
+
   it('struct e array di struct hanno membri vuoti', () => {
     expect(parseType('Struct')).toEqual({ ok: true, type: { kind: 'struct', members: [] } });
   });

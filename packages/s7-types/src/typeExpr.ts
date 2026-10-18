@@ -31,11 +31,11 @@ const ELEMENTARY_BY_KEY = new Map<string, ElementaryTypeName>(
 const PARAMETER_BY_KEY = new Map<string, ParameterTypeName>(
   PARAMETER_TYPES.map((n) => [n.toLowerCase(), n]),
 );
-const ALIASES: Record<string, ElementaryTypeName | 'dateAndTime'> = {
-  tod: 'Time_Of_Day',
-  dt: 'dateAndTime',
-  date_and_time: 'dateAndTime',
-};
+const ALIASES = new Map<string, ElementaryTypeName | 'dateAndTime'>([
+  ['tod', 'Time_Of_Day'],
+  ['dt', 'dateAndTime'],
+  ['date_and_time', 'dateAndTime'],
+]);
 
 // Restituisce null se il testo contiene caratteri o stringhe non valide.
 function tokenize(text: string): Token[] | null {
@@ -144,7 +144,7 @@ class Parser {
       }
       return this.arrayType();
     }
-    const alias = ALIASES[key];
+    const alias = ALIASES.get(key);
     if (alias === 'dateAndTime') return { kind: 'dateAndTime' };
     const elementary = alias ?? ELEMENTARY_BY_KEY.get(key);
     if (elementary) return { kind: 'elementary', name: elementary };
