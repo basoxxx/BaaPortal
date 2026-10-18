@@ -1,9 +1,24 @@
 import { spawn } from 'node:child_process';
 import electronPath from 'electron';
-import { _electron, test as base, type ElectronApplication, type Page } from '@playwright/test';
-import { mkdtempSync, rmSync } from 'node:fs';
+import {
+  _electron,
+  expect,
+  test as base,
+  type ElectronApplication,
+  type Page,
+} from '@playwright/test';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { findCpu } from '@baaportal/catalog';
+import {
+  createCodeBlock,
+  createPlcDevice,
+  createProject as newProject,
+  writeBaap,
+  type PlcDevice,
+  type Project,
+} from '@baaportal/project';
 
 export interface Launched {
   app: ElectronApplication;
@@ -30,7 +45,7 @@ export const test = base.extend<{ closeLaunchedApps: void }>({
     { auto: true },
   ],
 });
-export { expect } from '@playwright/test';
+export { expect };
 
 /** `cwd`: cartella da cui avviare Electron; lo script principale `out/main/index.js` si risolve da lì. */
 export async function launchApp(
@@ -122,4 +137,84 @@ export function spawnSecondInstance(userData: string, file: string): Promise<num
     });
     child.on('error', reject);
   });
+}
+
+/** Scorciatoia "Mod": Cmd su macOS, Ctrl altrove. */
+export const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
+
+/** Titolo della prima finestra (quella principale). */
+export function mainTitle(app: ElectronApplication): Promise<string | undefined> {
+  return app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getTitle());
+}
+
+export function windowCount(app: ElectronApplication): Promise<number> {
+  return app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length);
+}
+
+/** Dalla vista portale apre la vista progetto. */
+export async function openProjectView(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Apri la vista progetto' }).first().click();
+  await expect(page.getByTestId('menu-bar')).toBeVisible();
+}
+
+/** Aggiunge una CPU dal catalogo con il dialogo "Aggiungi nuovo dispositivo". */
+export async function addCpu(page: Page, cpuId = 'cpu-315-2-pn-dp'): Promise<void> {
+  await page.getByTestId('tree-node-add-device').dblclick();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByTestId(`catalog-cpu:${cpuId}`).click();
+  await page.getByTestId('dialog-ok').click();
+  await expect(dialog).toHaveCount(0);
+}
+
+/** Id del primo PLC nell'albero (gli id dei nodi sono `plc:<id>[:...]`). */
+export async function firstDeviceId(page: Page): Promise<string> {
+  const node = page.locator('[data-testid^="tree-node-plc:"]').first();
+  await expect(node).toBeVisible();
+  const testId = (await node.getAttribute('data-testid')) ?? '';
+  return testId.slice('tree-node-plc:'.length).split(':')[0] ?? '';
+}
+
+/** Aggiunge un blocco con il dialogo "Aggiungi nuovo blocco" (senza aprirlo nell'editor). */
+export async function addBlock(
+  page: Page,
+  dev: string,
+  opts: { kind: 'OB' | 'FB' | 'FC' | 'DB'; name?: string; instanceOf?: string },
+): Promise<void> {
+  await page.getByTestId(`tree-node-plc:${dev}:blocks-add`).dblclick();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('radio', { name: new RegExp(`\\(${opts.kind}\\)`) }).check();
+  if (opts.instanceOf !== undefined) {
+    await dialog.getByRole('radio', { name: 'DB di istanza di' }).check();
+    await dialog.getByLabel('Blocco funzionale', { exact: true }).selectOption(opts.instanceOf);
+  }
+  if (opts.name !== undefined) await dialog.getByLabel('Nome', { exact: true }).fill(opts.name);
+  await dialog.getByRole('checkbox', { name: 'Aggiungi e apri' }).uncheck();
+  await page.getByTestId('dialog-ok').click();
+  await expect(dialog).toHaveCount(0);
+}
+
+/**
+ * Scrive un .baap con un PLC (CPU 315-2 PN/DP) e un FB "Nastro", per gli spec che non devono ripassare
+ * dalla creazione guidata. `customize` modifica il PLC prima della scrittura.
+ */
+export function writeFixtureProject(
+  file: string,
+  customize: (dev: PlcDevice) => void = () => undefined,
+): { project: Project; dev: PlcDevice } {
+  const cpu = findCpu('cpu-315-2-pn-dp');
+  if (!cpu) throw new Error('CPU di prova mancante nel catalogo');
+  const project = newProject({ name: 'Prova', author: '', comment: '' }, new Date());
+  const dev = createPlcDevice({
+    cpu,
+    orderNumber: cpu.versions[0]!.orderNumber,
+    firmware: cpu.versions[0]!.firmware[0]!,
+    name: 'PLC_1',
+    texts: { defaultTagTable: 'Tabella delle variabili standard' },
+  });
+  dev.blocks.push(createCodeBlock({ kind: 'FB', number: 1, name: 'Nastro', language: 'AWL' }));
+  customize(dev);
+  project.devices.push(dev);
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, writeBaap(project, { appVersion: '0.0.0-e2e' }));
+  return { project, dev };
 }

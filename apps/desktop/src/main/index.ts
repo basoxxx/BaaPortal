@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu } from 'electron';
+import { app, BrowserWindow, dialog, Menu } from 'electron';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { registerIpc } from './ipc';
@@ -8,6 +8,25 @@ import { isTrustedUrl, type TrustOptions } from './trust';
 // Hook di test (userData isolato, uscita senza conferma): mai onorato nelle build pacchettizzate.
 const testUserData = !app.isPackaged ? process.env['BAA_USER_DATA'] : undefined;
 if (testUserData) app.setPath('userData', testUserData);
+
+// Solo e2e: BAA_DIALOG_RESPONSES (array JSON di numeri) sostituisce i dialoghi nativi già all'avvio,
+// quando un test non fa in tempo a sostituirli (es. la domanda di recupero). Registra i messaggi.
+if (testUserData && process.env['BAA_DIALOG_RESPONSES']) {
+  try {
+    const parsed: unknown = JSON.parse(process.env['BAA_DIALOG_RESPONSES']);
+    if (Array.isArray(parsed) && parsed.every((n) => typeof n === 'number')) {
+      const responses = [...(parsed as number[])];
+      const g = globalThis as unknown as { __dialogs: string[] };
+      g.__dialogs = [];
+      dialog.showMessageBox = (async (...a: unknown[]) => {
+        g.__dialogs.push((a[a.length - 1] as { message: string }).message);
+        return { response: responses.shift() ?? 0, checkboxChecked: false };
+      }) as unknown as typeof dialog.showMessageBox;
+    }
+  } catch {
+    // JSON non valido: i dialoghi restano quelli veri.
+  }
+}
 
 // Dev server di electron-vite: in una build pacchettizzata la pagina viene sempre dai file dell'app.
 const devUrl = !app.isPackaged ? process.env['ELECTRON_RENDERER_URL'] : undefined;
