@@ -4,6 +4,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ConfirmTexts, RecentEntry } from '@baaportal/ui';
 import { writeFileAtomic } from './fsAtomic';
+import { toIpcResult } from '../shared/ipcResult';
 import { addRecent, removeRecent, type Platform, type StoredRecent } from './recentProjects';
 
 const platform = process.platform as Platform;
@@ -61,7 +62,9 @@ export function registerIpc(
     return r.canceled ? null : (r.filePaths[0] ?? null);
   });
 
-  ipcMain.handle('fs:read', async (_e, path: string) => new Uint8Array(await readFile(path)));
+  ipcMain.handle('fs:read', (_e, path: string) =>
+    toIpcResult(async () => new Uint8Array(await readFile(path))),
+  );
   ipcMain.handle('fs:write-atomic', (_e, path: string, data: Uint8Array) =>
     writeFileAtomic(path, data),
   );
