@@ -150,6 +150,33 @@ describe('pasteObjects', () => {
     expect(copy.tags[0]!.name).toBe('Motore_1');
   });
 
+  it('copia di una tabella con 1000 tag Variabile_1..1000 nello stesso PLC in meno di un secondo', () => {
+    const d = device();
+    const table = d.tagTables[0]!;
+    for (let i = 1; i <= 1000; i++)
+      table.tags.push({
+        id: newId(),
+        name: `Variabile_${i}`,
+        type: 'Bool',
+        address: `%M${(i - 1) >> 3}.${(i - 1) & 7}`,
+        hmi: true,
+        comment: '',
+      });
+    const t0 = performance.now();
+    pasteObjects(
+      d,
+      { kind: 'objects', deviceId: d.id, items: [{ type: 'tagTable', table }] },
+      '',
+      cpu,
+      newId,
+    );
+    const ms = performance.now() - t0;
+    const copy = d.tagTables[1]!;
+    expect(copy.tags.map((t) => t.name).slice(0, 2)).toEqual(['Variabile_1001', 'Variabile_1002']);
+    expect(new Set(copy.tags.map((t) => t.name)).size).toBe(1000);
+    expect(ms).toBeLessThan(1000);
+  });
+
   it('UDT: nome unico nello spazio dei simboli e numero libero', () => {
     const d = device();
     const u = createUdt({ name: 'Motore', number: 1, newId });

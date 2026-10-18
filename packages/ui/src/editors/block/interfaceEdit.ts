@@ -1,5 +1,4 @@
-import type { Member, NewId } from '@baaportal/project';
-import { uniqueName } from '@baaportal/project';
+import { createNamer, type Member, type NewId } from '@baaportal/project';
 import { parseType } from '@baaportal/s7-types';
 import { toTsv } from '../../grid/tsv';
 import { normalizeType } from '../tags/tagRows';
@@ -125,7 +124,7 @@ export function newMember(id: string, name: string): Member {
 
 /** Copia profonda con id nuovi; i nomi di primo livello restano unici rispetto a `taken`. */
 export function cloneMembers(rows: unknown[], taken: string[], newId: NewId): Member[] {
-  const names = [...taken];
+  const unique = createNamer(taken);
   const copy = (m: Member): Member => {
     const out: Member = { ...m, id: newId() };
     delete out.readOnly;
@@ -137,10 +136,7 @@ export function cloneMembers(rows: unknown[], taken: string[], newId: NewId): Me
   for (const r of rows) {
     if (!isMember(r)) continue;
     const m = copy(r);
-    if (m.name !== '') {
-      m.name = uniqueName(m.name, names);
-      names.push(m.name);
-    }
+    if (m.name !== '') m.name = unique(m.name);
     out.push(m);
   }
   return out;
@@ -158,13 +154,16 @@ export function membersToTsv(members: Member[]): string {
 }
 
 export function membersFromTsv(rows: string[][], taken: string[], newId: NewId): Member[] {
-  const names = [...taken];
+  const unique = createNamer(taken);
   return rows.map((r) => {
     const name = r[0] ?? '';
-    const unique = name === '' ? '' : uniqueName(name, names);
-    names.push(unique);
     const type = r[1] === undefined || r[1].trim() === '' ? 'Bool' : normalizeType(r[1]);
-    const m: Member = { id: newId(), name: unique, type, comment: r[3] ?? '' };
+    const m: Member = {
+      id: newId(),
+      name: name === '' ? '' : unique(name),
+      type,
+      comment: r[3] ?? '',
+    };
     if ((r[2] ?? '') !== '') m.initial = r[2]!;
     if (isStructType(type)) m.members = [];
     return m;

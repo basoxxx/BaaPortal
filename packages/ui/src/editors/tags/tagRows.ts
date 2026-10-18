@@ -1,4 +1,10 @@
-import type { CpuProperties, NewId, Tag, UserConstant } from '@baaportal/project';
+import {
+  createNamer,
+  type CpuProperties,
+  type NewId,
+  type Tag,
+  type UserConstant,
+} from '@baaportal/project';
 import {
   addressFitsType,
   defaultLiteral,
@@ -14,20 +20,6 @@ import { toTsv } from '../../grid/tsv';
 const DEFAULT_TYPE = 'Bool';
 const DEFAULT_ADDRESS = '%M0.0';
 const DEFAULT_CONSTANT_TYPE = 'Int';
-
-// Stessa chiave di confronto dei nomi di s7-types (sameName).
-const nameKey = (name: string): string => name.normalize('NFC').toLowerCase();
-
-/** Rende unico un nome rispetto a quelli già presi (e a quelli già dati da questa funzione). */
-function namer(taken: readonly string[]): (base: string) => string {
-  const used = new Set(taken.map(nameKey));
-  return (base) => {
-    let name = base;
-    while (used.has(nameKey(name))) name = incrementName(name);
-    used.add(nameKey(name));
-    return name;
-  };
-}
 
 /** Tipo normalizzato se valido, altrimenti il testo com'è. */
 export function normalizeType(text: string): string {
@@ -82,7 +74,7 @@ export function newTagAfter(prev: Tag | undefined, name: string, newId: NewId): 
 
 /** `count` tag subito dopo la sorgente, con nome e indirizzo incrementati. */
 export function fillTags(source: Tag, count: number, taken: string[], newId: NewId): Tag[] {
-  const unique = namer(taken);
+  const unique = createNamer(taken);
   const parsed = parseAddress(source.address);
   let address = parsed.ok ? parsed.address : null;
   let name = source.name;
@@ -118,7 +110,7 @@ const cell = (row: string[], i: number): string | undefined => {
  * di incolla), come nella riga "<Aggiungi>".
  */
 export function tagsFromTsv(rows: string[][], taken: string[], newId: NewId, prev?: Tag): Tag[] {
-  const unique = namer(taken);
+  const unique = createNamer(taken);
   let before = prev;
   return rows.map((r) => {
     const name = r[0] ?? '';
@@ -149,7 +141,7 @@ const isRecord = (x: unknown): x is Record<string, unknown> => typeof x === 'obj
 
 /** Copia di righe prese dagli appunti: id nuovi, nomi unici; ciò che non è un tag è scartato. */
 export function cloneTags(rows: unknown[], taken: string[], newId: NewId): Tag[] {
-  const unique = namer(taken);
+  const unique = createNamer(taken);
   const out: Tag[] = [];
   for (const r of rows) {
     if (!isRecord(r) || typeof r.name !== 'string') continue;
@@ -166,7 +158,7 @@ export function cloneTags(rows: unknown[], taken: string[], newId: NewId): Tag[]
 }
 
 export function cloneConstants(rows: unknown[], taken: string[], newId: NewId): UserConstant[] {
-  const unique = namer(taken);
+  const unique = createNamer(taken);
   const out: UserConstant[] = [];
   for (const r of rows) {
     if (!isRecord(r) || typeof r.name !== 'string') continue;
@@ -213,7 +205,7 @@ export function fillConstants(
   taken: string[],
   newId: NewId,
 ): UserConstant[] {
-  const unique = namer(taken);
+  const unique = createNamer(taken);
   let name = source.name;
   return Array.from({ length: count }, () => {
     name = unique(incrementName(name));
@@ -223,7 +215,7 @@ export function fillConstants(
 
 /** Colonne: Nome, Tipo di dati, Valore, Commento. */
 export function constantsFromTsv(rows: string[][], taken: string[], newId: NewId): UserConstant[] {
-  const unique = namer(taken);
+  const unique = createNamer(taken);
   return rows.map((r) => {
     const name = r[0] ?? '';
     const type = cell(r, 1);

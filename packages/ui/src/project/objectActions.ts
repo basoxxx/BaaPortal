@@ -1,11 +1,11 @@
 import type { CpuType } from '@baaportal/catalog';
 import {
+  createNamer,
   findBlock,
   findTagTable,
   findUdt,
   nextFreeNumber,
   symbolNames,
-  uniqueName,
   type Block,
   type Member,
   type NewId,
@@ -77,20 +77,22 @@ function blockNumber(d: PlcDevice, b: Block, cpu: CpuType | undefined): number |
   return nextFreeNumber(d, 'DB', limits?.maxDb ?? FALLBACK_MAX);
 }
 
-function pasteTable(target: PlcDevice, src: TagTable, group: string, newId: NewId): TagTable {
+type Namer = (base: string) => string;
+
+function pasteTable(
+  src: TagTable,
+  group: string,
+  names: { tables: Namer; symbols: Namer },
+  newId: NewId,
+): TagTable {
   const table = structuredClone(src);
   table.id = newId();
   table.group = group;
-  table.name = uniqueName(
-    src.name,
-    target.tagTables.map((t) => t.name),
-  );
+  table.name = names.tables(src.name);
   // I nomi di tag e costanti sono simboli del PLC: quelli già presenti si rinominano.
-  const taken = new Set(symbolNames(target));
   for (const item of [...table.tags, ...table.constants]) {
     item.id = newId();
-    item.name = uniqueName(item.name, taken);
-    taken.add(item.name);
+    item.name = names.symbols(item.name);
   }
   return table;
 }
@@ -110,6 +112,11 @@ export function pasteObjects(
 ): ObjectRef[] {
   const out: ObjectRef[] = [];
   const renamedFbs = new Map<string, string>(); // nome originale (minuscolo) → nome della copia
+  // Un solo generatore di nomi per tutto l'incolla: i nomi dati restano presi per i successivi.
+  const names = {
+    symbols: createNamer(symbolNames(target)),
+    tables: createNamer(target.tagTables.map((t) => t.name)),
+  };
   for (const [index, item] of payload.items.entries()) {
     const before = out.length;
     if (item.type === 'block') {
@@ -118,7 +125,7 @@ export function pasteObjects(
       const copy = cloneBlock(item.block, newId);
       copy.number = number;
       copy.group = group;
-      copy.name = uniqueName(item.block.name, symbolNames(target));
+      copy.name = names.symbols(item.block.name);
       if (copy.kind === 'FB') renamedFbs.set(item.block.name.toLowerCase(), copy.name);
       // Un DB di istanza incollato insieme al suo FB segue la copia, non l'originale.
       if (copy.kind === 'IDB') {
@@ -134,12 +141,12 @@ export function pasteObjects(
       copy.id = newId();
       copy.number = n;
       copy.group = group;
-      copy.name = uniqueName(item.udt.name, symbolNames(target));
+      copy.name = names.symbols(item.udt.name);
       copy.members = cloneMembers(copy.members, newId);
       target.udts.push(copy);
       out.push({ kind: 'udt', deviceId: target.id, id: copy.id });
     } else {
-      const table = pasteTable(target, item.table, group, newId);
+      const table = pasteTable(item.table, group, names, newId);
       target.tagTables.push(table);
       out.push({ kind: 'tagTable', deviceId: target.id, id: table.id });
     }

@@ -179,11 +179,40 @@ export function symbolNames(device: PlcDevice): string[] {
   ];
 }
 
+// Stessa chiave di sameName.
+const nameKey = (name: string): string => name.normalize('NFC').toLowerCase();
+const SUFFIX = /^(.*)_(\d+)$/;
+
+/**
+ * Rende unici i nomi di un'operazione: ogni nome restituito si aggiunge a quelli presi. Il nome è il
+ * primo libero della sequenza Nome, Nome_1, Nome_2… (come uniqueName), trovato in tempo quasi costante
+ * anche quando molti nomi della sequenza sono già presi.
+ */
+export function createNamer(taken: Iterable<string>): (base: string) => string {
+  const used = new Set<string>();
+  for (const t of taken) used.add(nameKey(t));
+  // Per un nome preso: le cifre da cui riprendere la sequenza (i nomi in mezzo sono tutti presi).
+  const resume = new Map<string, string>();
+  return (base) => {
+    let name = base;
+    let key = nameKey(name);
+    const seen: string[] = [];
+    while (used.has(key)) {
+      seen.push(key);
+      const digits = resume.get(key);
+      if (digits === undefined) name = incrementName(name);
+      else name = `${SUFFIX.exec(name)?.[1] ?? name}_${digits}`;
+      key = nameKey(name);
+    }
+    used.add(key);
+    const digits = SUFFIX.exec(name)?.[2];
+    if (digits !== undefined) for (const k of seen) resume.set(k, digits);
+    return name;
+  };
+}
+
 export function uniqueName(base: string, taken: Iterable<string>): string {
-  const list = [...taken];
-  let name = base;
-  while (list.some((t) => sameName(t, name))) name = incrementName(name);
-  return name;
+  return createNamer(taken)(base);
 }
 
 export function nextFreeNumber(

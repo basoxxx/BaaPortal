@@ -17,6 +17,7 @@ import {
   toTypedMembers,
   typeResolver,
   uniqueName,
+  createNamer,
   type CodeBlock,
   type Member,
 } from '../src/index';
@@ -162,6 +163,46 @@ describe('numeri e nomi', () => {
     expect(uniqueName('Motore', ['motore', 'Motore_1'])).toBe('Motore_2');
     expect(uniqueName('Nastro', ['Motore'])).toBe('Nastro');
     expect(uniqueName('constructor', ['x'])).toBe('constructor');
+    // Il primo libero della sequenza, anche con buchi; zeri iniziali conservati.
+    expect(uniqueName('Motore', ['Motore', 'Motore_5'])).toBe('Motore_1');
+    expect(uniqueName('A_09', ['a_09', 'A_10'])).toBe('A_11');
+    expect(uniqueName('MOTORE_1', ['motore_1', 'Motore_2'])).toBe('MOTORE_3');
+  });
+
+  it('createNamer: come uniqueName ripetuto, con i nomi dati che diventano presi', () => {
+    const taken = ['Motore', 'Motore_1', 'Motore_3', 'Pompa_01', 'pompa_02'];
+    const bases = ['Motore', 'motore', 'Motore_1', 'Pompa_01', 'Pompa', 'MOTORE', 'Motore_3', 'x'];
+    const unique = createNamer(taken);
+    const got = bases.map((b) => unique(b));
+    const list = [...taken];
+    const expected = bases.map((b) => {
+      const n = uniqueName(b, list);
+      list.push(n);
+      return n;
+    });
+    expect(got).toEqual(expected);
+    expect(got).toEqual([
+      'Motore_2',
+      'motore_4',
+      'Motore_5',
+      'Pompa_03',
+      'Pompa',
+      'MOTORE_6',
+      'Motore_7',
+      'x',
+    ]);
+  });
+
+  it('createNamer: 1000 nomi già presi e ripetuti restano rapidi', () => {
+    const taken = Array.from({ length: 1000 }, (_, i) => `Variabile_${i + 1}`);
+    const t0 = performance.now();
+    const unique = createNamer(taken);
+    const out = taken.map((n) => unique(n));
+    const ms = performance.now() - t0;
+    expect(out[0]).toBe('Variabile_1001');
+    expect(out[999]).toBe('Variabile_2000');
+    expect(new Set(out).size).toBe(1000);
+    expect(ms).toBeLessThan(200);
   });
 
   it('symbolNames: tag, costanti, blocchi e UDT', () => {
