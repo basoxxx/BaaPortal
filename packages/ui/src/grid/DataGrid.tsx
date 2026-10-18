@@ -60,6 +60,11 @@ export interface DataGridProps<R> {
   onRowDragStart?(keys: string[], e: DragEvent): void;
   onRowDragEnd?(): void;
   onDropOnRow?(e: DragEvent, rowKey: string | null): void;
+  /** Se c'è, decide se il rilascio è ammesso (imposta `dropEffect` e fa `preventDefault`). */
+  onDragOverRow?(e: DragEvent, rowKey: string | null): void;
+  /** Classi in più per la riga o la cella (stile, non comportamento). */
+  rowClassName?(row: R): string | undefined;
+  cellClassName?(row: R, columnId: string): string | undefined;
 }
 
 const TARGET_ID = 'grid';
@@ -448,7 +453,13 @@ export function DataGrid<R>(props: DataGridProps<R>) {
       }
       onDragStart={onDragStart}
       onDragEnd={props.onRowDragEnd}
-      onDragOver={props.onDropOnRow ? (e) => e.preventDefault() : undefined}
+      onDragOver={
+        props.onDragOverRow
+          ? (e) => props.onDragOverRow!(e.nativeEvent, rowOf(e.target))
+          : props.onDropOnRow
+            ? (e) => e.preventDefault()
+            : undefined
+      }
       onDrop={
         props.onDropOnRow
           ? (e) => {
@@ -489,7 +500,8 @@ export function DataGrid<R>(props: DataGridProps<R>) {
               'baa-grid-row' +
               (isSel ? ' is-selected' : '') +
               (covered ? ' is-fill-target' : '') +
-              (isData ? '' : ' is-add')
+              (isData ? '' : ' is-add') +
+              (isData && props.rowClassName?.(it.row) ? ` ${props.rowClassName(it.row)}` : '')
             }
           >
             <div
@@ -521,7 +533,10 @@ export function DataGrid<R>(props: DataGridProps<R>) {
                     'baa-grid-cell' +
                     (diag ? ` is-${diag.severity}` : '') +
                     (isActive ? ' is-active' : '') +
-                    (isEditing ? ' is-editing' : '')
+                    (isEditing ? ' is-editing' : '') +
+                    (isData && props.cellClassName?.(it.row, c.id)
+                      ? ` ${props.cellClassName(it.row, c.id)}`
+                      : '')
                   }
                 >
                   <span

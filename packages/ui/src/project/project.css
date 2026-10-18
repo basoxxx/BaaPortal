@@ -639,3 +639,65 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+.baa-block-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.baa-block-section-toggle {
+  align-self: flex-start;
+  padding: 2px 8px;
+  background: none;
+  border: 1px solid var(--baa-border);
+  color: inherit;
+  cursor: pointer;
+}
+.baa-block-problems {
+  margin: 0 0 6px;
+  padding: 4px 8px 4px 24px;
+  color: #c62828;
+  border: 1px solid #c62828;
+}
+.baa-block-error {
+  padding: 8px;
+  color: #c62828;
+  border: 1px solid #c62828;
+}
+.baa-block-header {
+  display: grid;
+  gap: 4px;
+  max-width: 640px;
+}
+.baa-block-header label,
+.baa-network {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.baa-network {
+  max-width: 900px;
+  padding: 6px;
+  border: 1px solid var(--baa-border);
+  background: var(--baa-surface);
+}
+.baa-network-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.baa-network-head input {
+  flex: 1;
+}
+.baa-network textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  resize: vertical;
+}
+.baa-network-source textarea {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+.baa-block-insert {
+  align-self: flex-start;
+  padding: 2px 10px;
+}

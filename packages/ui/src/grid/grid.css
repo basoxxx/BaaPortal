@@ -183,3 +183,13 @@
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+.baa-grid-row.is-section {
+  font-weight: 600;
+  background: var(--baa-panel-header);
+}
+.baa-grid-row.is-muted {
+  color: var(--baa-text-muted);
+}
+.baa-grid-cell.is-placeholder .baa-grid-text {
+  color: var(--baa-disabled);
+}

@@ -4,6 +4,9 @@ import { useTranslation } from 'react-i18next';
 import { findDevice } from '@baaportal/project';
 import type { IconName } from '../icons';
 import { useAppStore } from '../state/AppContext';
+import { BlockEditor } from './block/BlockEditor';
+import { DbEditor } from './db/DbEditor';
+import { UdtEditor } from './udt/UdtEditor';
 import { AllTagsEditor } from './tags/AllTagsEditor';
 import { TagTableEditor } from './tags/TagTableEditor';
 import type { OpenDoc } from '../state/store';
@@ -29,16 +32,17 @@ const device = (ref: EditorRef, doc: OpenDoc) => findDevice(doc.project, ref.dev
 const block = (ref: EditorRef, doc: OpenDoc) =>
   device(ref, doc)?.blocks.find((b) => b.id === ref.objectId);
 
-/** Corpo provvisorio: il Task 13 lo sostituisce per blocchi e UDT. */
-function EmptyEditor({ editor }: { editor: EditorRef }) {
-  const { t } = useTranslation();
-  const doc = useAppStore((s) => s.doc);
-  const def = EDITORS[editor.kind];
-  if (!doc || !def.exists(editor, doc)) return null;
-  return (
-    <div className="baa-editor-body" data-testid={`editor-body-${editor.key}`}>
-      <h3>{def.title(editor, doc, t)}</h3>
-    </div>
+/** Il DB è un blocco: l'editor sceglie la vista in base al tipo. */
+function BlockOrDbEditor({ editor }: { editor: EditorRef }) {
+  const kind = useAppStore((s) => {
+    const dev = s.doc ? findDevice(s.doc.project, editor.deviceId) : undefined;
+    return dev?.blocks.find((b) => b.id === editor.objectId)?.kind;
+  });
+  if (!kind) return null;
+  return kind === 'DB' || kind === 'IDB' ? (
+    <DbEditor editor={editor} />
+  ) : (
+    <BlockEditor editor={editor} />
   );
 }
 
@@ -51,14 +55,14 @@ export const EDITORS: Record<EditorKind, EditorDef> = {
       return b ? `${b.name} [${b.kind === 'IDB' ? 'DB' : b.kind}${b.number}]` : '';
     },
     exists: (r, d) => block(r, d) !== undefined,
-    Component: EmptyEditor,
+    Component: BlockOrDbEditor,
   },
   udt: {
     kind: 'udt',
     icon: () => 'objUdt',
     title: (r, d) => device(r, d)?.udts.find((u) => u.id === r.objectId)?.name ?? '',
     exists: (r, d) => !!device(r, d)?.udts.some((u) => u.id === r.objectId),
-    Component: EmptyEditor,
+    Component: UdtEditor,
   },
   tagTable: {
     kind: 'tagTable',

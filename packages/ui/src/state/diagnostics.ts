@@ -34,13 +34,14 @@ export function diagnosticText(d: Diagnostic, t: TFunction): string {
  */
 export function diagnosticCells(
   diagnostics: Diagnostic[],
-  kind: 'tag' | 'constant',
+  kind: 'tag' | 'constant' | 'member',
   t: TFunction,
 ): Map<string, GridDiagnostic> {
   const grouped = new Map<string, Diagnostic[]>();
   for (const d of diagnostics) {
     if (d.ref.kind !== kind || !d.field) continue;
-    const key = cellKey(d.ref.id, d.field);
+    const id = d.ref.kind === 'member' ? d.ref.memberId : 'id' in d.ref ? d.ref.id : '';
+    const key = cellKey(id, d.field);
     const list = grouped.get(key);
     if (list) list.push(d);
     else grouped.set(key, [d]);

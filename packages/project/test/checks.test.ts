@@ -202,6 +202,26 @@ describe('checkDevice: valori e costanti', () => {
     ]);
   });
 
+  it('override di un membro: [i] per gli elementi di un array, .percorso per i membri del tipo', () => {
+    const d = fresh();
+    const udt = createUdt({ name: 'Asse', number: 1, newId });
+    udt.members.push(member('speed', 'Int'));
+    d.udts.push(udt);
+    const db = createGlobalDb({ number: 1, name: 'Dati', newId });
+    db.members.push(
+      member('arr', 'Array[1..3] of Int', { overrides: { '[2]': '5', '[3]': 'x', '.a': '1' } }),
+      member('ax', '"Asse"', { overrides: { '.speed': '7', '.nope': '1', '.speed ': 'x' } }),
+    );
+    d.blocks.push(db);
+    const ds = checkDevice(d, cpu).filter((x) => x.code === 'VALUE_INVALID');
+    expect(ds.map((x) => [x.ref.kind === 'member' ? x.ref.memberId : '', x.params?.path])).toEqual([
+      [db.members[0]!.id, '[3]'],
+      [db.members[0]!.id, '.a'],
+      [db.members[1]!.id, '.nope'],
+      [db.members[1]!.id, '.speed '],
+    ]);
+  });
+
   it('override di istanza non validi: VALUE_INVALID con il percorso', () => {
     const d = fresh();
     const fb = createCodeBlock({ kind: 'FB', number: 1, name: 'Nastro', language: 'AWL', newId });

@@ -227,7 +227,12 @@
     "editCell": "Edit cell",
     "deleteRows": "Delete rows",
     "pasteRows": "Paste rows",
-    "fillRows": "Auto fill"
+    "fillRows": "Auto fill",
+    "editBlockHeader": "Edit block header",
+    "addNetwork": "Insert network",
+    "deleteNetwork": "Delete network",
+    "editNetwork": "Edit network",
+    "addMember": "Add member"
   },
   "inspector": {
     "tab": {
@@ -456,5 +461,35 @@
     "HEADER_INVALID": "The header is not valid.",
     "PROPERTY_INVALID": "The property value is not valid.",
     "CPU_UNKNOWN": "The CPU is not in the catalog."
+  },
+  "block": {
+    "interface": "Block interface",
+    "collapseInterface": "Collapse the interface",
+    "expandInterface": "Expand the interface",
+    "gridBlock": "Block interface",
+    "gridDb": "Data block contents",
+    "gridUdt": "Data type members",
+    "col": {
+      "name": "Name",
+      "type": "Data type",
+      "offset": "Offset",
+      "default": "Default value",
+      "initial": "Start value",
+      "comment": "Comment",
+      "defaultHint": "When empty, the type's starting value applies, shown in grey"
+    },
+    "title": "Block title",
+    "comment": "Comment",
+    "networks": "Networks",
+    "network": "Network {{n}}",
+    "networkTitle": "Network title",
+    "networkComment": "Network comment",
+    "source": "Network code",
+    "sourceHint": "For now this is plain text: highlighting and checks arrive with the AWL editor.",
+    "insertNetwork": "Insert network",
+    "networkMenu": "Network menu",
+    "deleteNetwork": "Delete network",
+    "instanceFbMissing": "The instance DB refers to FB {{name}}, which does not exist",
+    "problems": "Problems"
   }
 }

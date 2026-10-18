@@ -227,7 +227,12 @@
     "editCell": "Modifica cella",
     "deleteRows": "Elimina righe",
     "pasteRows": "Incolla righe",
-    "fillRows": "Riempimento automatico"
+    "fillRows": "Riempimento automatico",
+    "editBlockHeader": "Modifica intestazione del blocco",
+    "addNetwork": "Inserisci segmento",
+    "deleteNetwork": "Elimina segmento",
+    "editNetwork": "Modifica segmento",
+    "addMember": "Aggiungi membro"
   },
   "inspector": {
     "tab": {
@@ -456,5 +461,35 @@
     "HEADER_INVALID": "L'intestazione non è valida.",
     "PROPERTY_INVALID": "Il valore della proprietà non è valido.",
     "CPU_UNKNOWN": "La CPU non è nel catalogo."
+  },
+  "block": {
+    "interface": "Interfaccia del blocco",
+    "collapseInterface": "Comprimi l'interfaccia",
+    "expandInterface": "Espandi l'interfaccia",
+    "gridBlock": "Interfaccia del blocco",
+    "gridDb": "Dati del blocco dati",
+    "gridUdt": "Membri del tipo di dati",
+    "col": {
+      "name": "Nome",
+      "type": "Tipo di dati",
+      "offset": "Offset",
+      "default": "Valore predefinito",
+      "initial": "Valore iniziale",
+      "comment": "Commento",
+      "defaultHint": "Se è vuoto vale il valore di partenza del tipo, mostrato in grigio"
+    },
+    "title": "Titolo del blocco",
+    "comment": "Commento",
+    "networks": "Segmenti",
+    "network": "Segmento {{n}}",
+    "networkTitle": "Titolo del segmento",
+    "networkComment": "Commento del segmento",
+    "source": "Codice del segmento",
+    "sourceHint": "Per ora è solo testo: l'evidenziazione e i controlli arrivano con l'editor AWL.",
+    "insertNetwork": "Inserisci segmento",
+    "networkMenu": "Menu del segmento",
+    "deleteNetwork": "Elimina segmento",
+    "instanceFbMissing": "Il DB di istanza si riferisce all'FB {{name}}, che non esiste",
+    "problems": "Problemi"
   }
 }

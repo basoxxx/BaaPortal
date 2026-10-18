@@ -422,6 +422,8 @@ export function beginDrag(
   dt.setData('text/plain', [...names, ...tagNames].filter(Boolean).join('\n'));
   dt.effectAllowed = 'copyMove';
 }
+/** Il trascinamento in corso, per chi deve accettarlo o rifiutarlo durante `dragover`. */
+export const peekDrag = (): DragData | null => currentDrag;
 export const endDrag = (): void => {
   currentDrag = null;
 };

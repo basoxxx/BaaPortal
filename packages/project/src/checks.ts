@@ -420,14 +420,32 @@ function typeAtPath(ctx: Ctx, roots: Member[], path: string): DataType | undefin
   return undefined;
 }
 
+// Nei valori sostituiti di un membro: `[i]` è un elemento dell'array del membro, `.percorso` un
+// membro del suo tipo.
+function memberOverrideType(
+  ctx: Ctx,
+  owner: Member,
+  roots: Member[],
+  key: string,
+): DataType | undefined {
+  if (key.startsWith('[')) {
+    const parsed = parseType(owner.type);
+    return parsed.ok && parsed.type.kind === 'array' && /^\[[^\]]*\]$/.test(key)
+      ? parsed.type.element
+      : undefined;
+  }
+  return typeAtPath(ctx, roots, key.startsWith('.') ? key.slice(1) : key);
+}
+
 function checkOverrides(
   ctx: Ctx,
   ref: ObjectRef,
   roots: Member[],
   overrides: Record<string, string> | undefined,
+  owner?: Member,
 ): void {
   for (const [path, value] of Object.entries(overrides ?? {})) {
-    const type = typeAtPath(ctx, roots, path);
+    const type = owner ? memberOverrideType(ctx, owner, roots, path) : typeAtPath(ctx, roots, path);
     const v = type ? parseLiteral(type, value) : undefined;
     if (!v || !v.ok) {
       add(ctx, { severity: 'error', code: 'VALUE_INVALID', ref, field: 'value', params: { path } });
@@ -499,7 +517,7 @@ function checkMemberList(
       }
       if (m.overrides && Object.keys(m.overrides).length > 0) {
         const kids = childrenOf(ctx, m);
-        checkOverrides(ctx, ref, kids ?? [], m.overrides);
+        checkOverrides(ctx, ref, kids ?? [], m.overrides, m);
       }
     }
     if (m.members) checkMemberList(ctx, scope, null, m.members, m.members);

@@ -52,7 +52,6 @@ describe('area di lavoro: apertura e coerenza', () => {
       'true',
     );
     const pane = screen.getByTestId('work-pane-0');
-    expect(within(pane).getByRole('heading', { name: 'Main [OB1]' })).toBeInTheDocument();
     expect(within(pane).getByText('PLC_1 › Main [OB1]')).toBeInTheDocument();
     // Un secondo doppio clic non duplica.
     await app.user.dblClick(screen.getByTestId(`tree-node-plc:${PLC}:block:${mainBlock(app).id}`));
@@ -170,12 +169,10 @@ describe('area di lavoro: riquadri', () => {
     await app.user.click(item);
     expect(app.store.getState().workArea.split).toBe('vertical');
     expect(
-      within(screen.getByTestId('work-pane-0')).getByRole('heading', {
-        name: 'Blocco_1 [FB1]',
-      }),
+      within(screen.getByTestId('work-pane-0')).getByText('PLC_1 › Blocco_1 [FB1]'),
     ).toBeInTheDocument();
     expect(
-      within(screen.getByTestId('work-pane-1')).getByRole('heading', { name: 'Main [OB1]' }),
+      within(screen.getByTestId('work-pane-1')).getByText('PLC_1 › Main [OB1]'),
     ).toBeInTheDocument();
     expect(screen.getByTestId('splitter-panes')).toBeInTheDocument();
     // Si spegne con lo stesso comando.
@@ -248,13 +245,17 @@ describe('finestra separata', () => {
       'width=1000,height=700',
     );
     expect(app.store.getState().workArea.detached).toEqual([key]);
-    await waitFor(() => expect(win.document.querySelector('h3')?.textContent).toBe('Main [OB1]'));
+    await waitFor(() =>
+      expect(win.document.querySelector('.baa-editor-crumb')?.textContent).toBe(
+        'PLC_1 › Main [OB1]',
+      ),
+    );
     expect(win.document.title).toBe('Main [OB1]');
     expect(win.document.head.querySelector('style')).not.toBeNull();
     expect(win.document.documentElement.getAttribute('data-theme')).toBe('dark');
     // Fuori dal riquadro, ma resta nella barra con l'icona finestra.
     expect(
-      within(screen.getByTestId('work-pane-0')).queryByRole('heading', { name: 'Main [OB1]' }),
+      within(screen.getByTestId('work-pane-0')).queryByText('PLC_1 › Main [OB1]'),
     ).not.toBeInTheDocument();
     const barBtn = within(screen.getByTestId('editor-bar')).getByRole('button', {
       name: /Main \[OB1\]/,
@@ -268,7 +269,7 @@ describe('finestra separata', () => {
     expect(app.store.getState().workArea.detached).toEqual([]);
     expect(app.store.getState().workArea.panes[0]).toBe(key);
     expect(
-      within(screen.getByTestId('work-pane-0')).getByRole('heading', { name: 'Main [OB1]' }),
+      within(screen.getByTestId('work-pane-0')).getByText('PLC_1 › Main [OB1]'),
     ).toBeInTheDocument();
     expect(win.close).toHaveBeenCalled();
     document.documentElement.removeAttribute('data-theme');
@@ -293,7 +294,7 @@ describe('finestra separata', () => {
     await app.user.click(screen.getByRole('button', { name: 'Apri in una finestra separata' }));
     await waitFor(() => expect(app.store.getState().workArea.detached).toEqual([]));
     expect(
-      within(screen.getByTestId('work-pane-0')).getByRole('heading', { name: 'Main [OB1]' }),
+      within(screen.getByTestId('work-pane-0')).getByText('PLC_1 › Main [OB1]'),
     ).toBeInTheDocument();
     expect(app.store.getState().messages.at(-1)?.textKey).toBe('messages.detachBlocked');
   });
