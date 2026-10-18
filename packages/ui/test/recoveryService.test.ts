@@ -214,8 +214,56 @@ describe("recoveryService - all'avvio", () => {
     const doc = store.getState().doc;
     expect(doc).toMatchObject({ filePath: '/doc/Linea.baap', dirty: true });
     expect(doc?.project.meta.name).toBe('Linea');
-    expect(bridge.recovery.size).toBe(0);
+    // La copia resta (riscritta con il contenuto recuperato) finché non cambia qualcosa.
+    expect(bridge.recovery.size).toBe(1);
+    expect(readBaap(bridge.recovery.get(recoveryKey('/doc/Linea.baap'))!.data).meta.name).toBe(
+      'Linea',
+    );
     expect(store.getState().messages.some((m) => m.textKey === 'messages.recovered')).toBe(true);
+  });
+
+  it("un tick durante l'apertura non lascia mai la chiave assente", async () => {
+    seed();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const origAdd = bridge.recentAdd.bind(bridge);
+    bridge.recentAdd = async (p: string, n: string) => {
+      await gate;
+      return origAdd(p, n);
+    };
+    const offer = rec.offerRecovery();
+    await tick();
+    expect(bridge.recovery.has(recoveryKey('/doc/Linea.baap'))).toBe(true);
+    release();
+    await offer;
+    expect(bridge.recovery.has(recoveryKey('/doc/Linea.baap'))).toBe(true);
+    // senza modifiche i tick successivi non cambiano nulla e la copia resta
+    await tick();
+    expect(bridge.recovery.has(recoveryKey('/doc/Linea.baap'))).toBe(true);
+  });
+
+  it('se la scrittura immediata fallisce la voce originale resta', async () => {
+    vi.useRealTimers();
+    seed();
+    vi.spyOn(bridge, 'recoveryWrite').mockRejectedValue(new Error('boom'));
+    await rec.offerRecovery();
+    expect(store.getState().doc?.filePath).toBe('/doc/Linea.baap');
+    expect(bridge.recovery.has(recoveryKey('/doc/Linea.baap'))).toBe(true);
+    expect(
+      store.getState().messages.some((m) => m.textKey === 'messages.recoveryWriteFailed'),
+    ).toBe(true);
+  });
+
+  it("un errore di I/O in lettura mostra l'errore e conserva la voce", async () => {
+    vi.useRealTimers();
+    seed();
+    vi.spyOn(bridge, 'recoveryRead').mockRejectedValue(
+      Object.assign(new Error('EIO'), { code: 'EIO' }),
+    );
+    await rec.offerRecovery();
+    expect(bridge.errors).toHaveLength(1);
+    expect(store.getState().doc).toBeNull();
+    expect(bridge.recovery.size).toBe(1);
   });
 
   it('Elimina cancella la voce senza aprire', async () => {

@@ -66,8 +66,10 @@ export function createRecoveryService(deps: RecoveryDeps): RecoveryService {
     return enqueue(() => bridge.recoveryDelete(recoveryKey(filePath)));
   }
 
-  function flush(): Promise<void> {
-    return enqueue(async () => {
+  // true se non c'era nulla da scrivere o la scrittura è riuscita.
+  async function flushChecked(): Promise<boolean> {
+    let ok = true;
+    await enqueue(async () => {
       const s = store.getState();
       const doc = s.doc;
       if (!doc || !doc.dirty) return;
@@ -88,6 +90,7 @@ export function createRecoveryService(deps: RecoveryDeps): RecoveryService {
           lastWrittenRevision = doc.revision;
         }
       } catch {
+        ok = false;
         // Un solo avviso per documento: niente messaggi ogni minuto.
         if (warnedLoadId !== loadId) {
           warnedLoadId = loadId;
@@ -97,10 +100,15 @@ export function createRecoveryService(deps: RecoveryDeps): RecoveryService {
         }
       }
     });
+    return ok;
   }
+  const flush = async (): Promise<void> => {
+    await flushChecked();
+  };
 
   // Pulizia: salvataggio, chiusura/sostituzione del documento, "Salva con nome".
   const unsubscribe = store.subscribe((s, prev) => {
+    if (s.docLoadId !== prev.docLoadId) lastWrittenRevision = null;
     if (!prev.doc) return;
     if (s.docLoadId !== prev.docLoadId || !s.doc) {
       lastWrittenRevision = null;
@@ -147,7 +155,7 @@ export function createRecoveryService(deps: RecoveryDeps): RecoveryService {
       no: t('recovery.no'),
     });
     if (!yes) {
-      await bridge.recoveryDelete(key);
+      await enqueue(() => bridge.recoveryDelete(key));
       return;
     }
     let project;
@@ -159,7 +167,8 @@ export function createRecoveryService(deps: RecoveryDeps): RecoveryService {
           ? t(`errors.baap.${e.code}`)
           : t('errors.read', { path: info.originalPath, code: errorCode(e) });
       await bridge.showError(t('errors.title'), message);
-      await bridge.recoveryDelete(key);
+      // Solo un contenuto non valido si elimina; un errore di I/O lascia la voce intatta.
+      if (e instanceof BaapFormatError) await enqueue(() => bridge.recoveryDelete(key));
       return;
     }
     // La voce si cancella solo quando il contenuto è davvero aperto; se l'utente annulla resta.
@@ -169,7 +178,9 @@ export function createRecoveryService(deps: RecoveryDeps): RecoveryService {
       textKey: 'messages.recovered',
       params: { name: project.meta.name },
     });
-    await bridge.recoveryDelete(key);
+    // Il documento recuperato esiste solo in memoria: la voce resta (e viene sovrascritta con
+    // lo stesso contenuto) finché la nuova copia non è scritta; se la scrittura fallisce resta intatta.
+    await flushChecked();
   }
 
   async function offerRecovery(): Promise<void> {
