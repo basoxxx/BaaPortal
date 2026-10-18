@@ -186,7 +186,8 @@ describe('editor della tabella delle variabili', () => {
     fireEvent.keyDown(input, { key: 'Enter' });
     const ms = performance.now() - t0;
     expect(table(app).tags[0]!.comment).toBe('nota');
-    expect(ms).toBeLessThan(1500);
+    // jsdom è molto più lento di Chromium e i runner Windows della CI sono i più lenti; il test blocca la esplosione quadratica della diagnostica di sovrapposizione, che impiegava decine di secondi.
+    expect(ms).toBeLessThan(5000);
   });
 
   it('incollare testo vuoto non fa nulla', async () => {
