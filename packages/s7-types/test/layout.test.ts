@@ -38,10 +38,10 @@ describe('layout', () => {
   });
 
   it('Struct e Array a byte pari con lunghezza pari', () => {
-    const s = {
+    const s: TypedMember = {
       name: 's',
       type: { kind: 'struct', members: [m('p', 'Bool'), m('q', 'Byte')] },
-    } as const;
+    };
     const r = layoutStruct(
       [m('x', 'Bool'), s, m('y', 'Byte'), m('arr', 'Array[1..3] of Bool'), m('z', 'Byte')],
       none,

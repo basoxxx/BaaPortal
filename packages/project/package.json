@@ -10,6 +10,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@baaportal/catalog": "*",
+    "@baaportal/s7-types": "*",
     "fflate": "^0.8.3",
     "zod": "^4.6.7"
   }
