@@ -66,7 +66,7 @@ export function registerIpc(
     toIpcResult(async () => new Uint8Array(await readFile(path))),
   );
   ipcMain.handle('fs:write-atomic', (_e, path: string, data: Uint8Array) =>
-    writeFileAtomic(path, data),
+    toIpcResult(() => writeFileAtomic(path, data)),
   );
   ipcMain.handle('fs:exists', (_e, path: string) => existsSync(path));
 

@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { BaaBridge } from '@baaportal/ui';
-import { fromIpcResult, type IpcResult } from '../shared/ipcResult';
+import type { RawBridge } from '../shared/rawBridge';
 
 function subscribe<T extends unknown[]>(channel: string, cb: (...args: T) => void): () => void {
   const listener = (_e: unknown, ...args: unknown[]) => cb(...(args as T));
@@ -10,17 +10,15 @@ function subscribe<T extends unknown[]>(channel: string, cb: (...args: T) => voi
   };
 }
 
-const bridge: BaaBridge = {
+const bridge: RawBridge = {
   platform: process.platform as BaaBridge['platform'],
   appVersion: () => ipcRenderer.invoke('app:version'),
   defaultProjectDir: () => ipcRenderer.invoke('app:default-project-dir'),
   showOpenProjectDialog: () => ipcRenderer.invoke('dialog:open-project'),
   showSaveProjectDialog: (name) => ipcRenderer.invoke('dialog:save-project', name),
   showSelectFolderDialog: () => ipcRenderer.invoke('dialog:select-folder'),
-  readFile: async (path) =>
-    fromIpcResult((await ipcRenderer.invoke('fs:read', path)) as IpcResult<Uint8Array>),
-  writeFileAtomic: async (path, data) =>
-    fromIpcResult((await ipcRenderer.invoke('fs:write-atomic', path, data)) as IpcResult<void>),
+  readFile: (path) => ipcRenderer.invoke('fs:read', path),
+  writeFileAtomic: (path, data) => ipcRenderer.invoke('fs:write-atomic', path, data),
   fileExists: (path) => ipcRenderer.invoke('fs:exists', path),
   recentList: () => ipcRenderer.invoke('recent:list'),
   recentAdd: (path, name) => ipcRenderer.invoke('recent:add', path, name),
@@ -34,4 +32,4 @@ const bridge: BaaBridge = {
   rendererReady: () => ipcRenderer.send('app:renderer-ready'),
 };
 
-contextBridge.exposeInMainWorld('baa', bridge);
+contextBridge.exposeInMainWorld('baaRaw', bridge);
