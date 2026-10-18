@@ -855,7 +855,7 @@ Configurazione:
 
 - [ ] **Step 5: Collaudo manuale su Windows e macOS** (lista di controllo, spec §10)
 
-  - [ ] L'installatore si avvia (macOS: tasto destro → Apri; Windows: "Esegui comunque") e l'app si apre sulla Vista portale.
+  - [ ] L'installatore si avvia (macOS 13–14: tasto destro → Apri; macOS 15+: Impostazioni di Sistema → Privacy e sicurezza → "Apri comunque", oppure `xattr -dr com.apple.quarantine /Applications/BaaPortal.app`; un dmg costruito in locale non è in quarantena; Windows: "Esegui comunque") e l'app si apre sulla Vista portale.
   - [ ] Un progetto creato si trova come `.baap` nella cartella scelta, e il doppio clic sul file apre BaaPortal con quel progetto.
   - [ ] Tutti gli elementi di spec §8.1 e §8.2 sono visibili; pannelli, divisori e puntine funzionano; il layout si ricorda al riavvio.
   - [ ] Italiano ↔ English funziona e la scelta si ricorda.

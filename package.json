@@ -14,6 +14,7 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "eslint .",
     "format": "prettier --write .",
+    "format:check": "prettier --check packages apps",
     "e2e": "npm run e2e -w @baaportal/desktop",
     "dist": "npm run dist -w @baaportal/desktop"
   },

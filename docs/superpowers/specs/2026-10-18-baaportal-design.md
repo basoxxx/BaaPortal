@@ -65,7 +65,7 @@ Fonti ammesse:
 - Il simulatore è il primo banco di prova di ogni programma.
 
 ### Firma degli installatori
-- Gli installatori iniziali **non sono firmati**: per uso interno basta autorizzarli al primo avvio (macOS: tasto destro → Apri; Windows: "Esegui comunque").
+- Gli installatori iniziali **non sono firmati**: per uso interno basta autorizzarli al primo avvio (macOS 13–14: tasto destro → Apri; macOS 15+: Impostazioni di Sistema → Privacy e sicurezza → "Apri comunque", oppure `xattr -dr com.apple.quarantine /Applications/BaaPortal.app`; un dmg costruito in locale non è in quarantena; Windows: "Esegui comunque").
 - La firma (Apple Developer ID, certificato Windows) si aggiunge se e quando la ditta vuole distribuirlo più largamente.
 
 ## 6. Decisioni prese
