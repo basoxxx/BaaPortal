@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import electronPath from 'electron';
-import { _electron, type ElectronApplication, type Page } from '@playwright/test';
-import { mkdtempSync } from 'node:fs';
+import { _electron, test, type ElectronApplication, type Page } from '@playwright/test';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -10,6 +10,16 @@ export interface Launched {
   page: Page;
   userData: string;
 }
+
+const launched: Launched[] = [];
+
+// Chiude le app lanciate (anche se il test fallisce) e rimuove gli userData temporanei.
+test.afterEach(async () => {
+  for (const l of launched.splice(0)) {
+    await l.app.close().catch(() => undefined);
+    rmSync(l.userData, { recursive: true, force: true });
+  }
+});
 
 export async function launchApp(opts: { args?: string[] } = {}): Promise<Launched> {
   const userData = mkdtempSync(join(tmpdir(), 'baa-userdata-'));
@@ -23,7 +33,9 @@ export async function launchApp(opts: { args?: string[] } = {}): Promise<Launche
   await page.waitForFunction(
     () => typeof (window as { baa?: unknown }).baa === 'object' && !!document.querySelector('#root > *'),
   );
-  return { app, page, userData };
+  const result = { app, page, userData };
+  launched.push(result);
+  return result;
 }
 
 /** Sostituisce i dialoghi nativi nel processo principale: ogni messaggio viene registrato in globalThis.__dialogs. */

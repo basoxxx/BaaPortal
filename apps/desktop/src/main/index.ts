@@ -1,8 +1,17 @@
 import { app, BrowserWindow, ipcMain, Menu } from 'electron';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { registerIpc } from './ipc';
+import { isTrustedUrl, type TrustOptions } from './trust';
 
-if (process.env['BAA_USER_DATA']) app.setPath('userData', process.env['BAA_USER_DATA']);
+// Hook di test (userData isolato, uscita senza conferma): mai onorato nelle build pacchettizzate.
+const testUserData = !app.isPackaged ? process.env['BAA_USER_DATA'] : undefined;
+if (testUserData) app.setPath('userData', testUserData);
+
+const trust: TrustOptions = {
+  indexFileUrl: pathToFileURL(join(import.meta.dirname, '../renderer/index.html')).href,
+  devUrl: process.env['ELECTRON_RENDERER_URL'],
+};
 
 let win: BrowserWindow | null = null;
 let allowClose = false;
@@ -10,6 +19,13 @@ let rendererIsReady = false;
 const pendingOpen: string[] = [];
 
 const isBaap = (p: string) => p.toLowerCase().endsWith('.baap');
+
+function focusWindow(): void {
+  if (!win) return;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+}
 
 function requestOpen(path: string): void {
   if (rendererIsReady && win) win.webContents.send('app:open-file', path);
@@ -57,8 +73,9 @@ function createWindow(): void {
       sandbox: true,
     },
   });
+  // Se il renderer non è pronto (avvio fallito, crash, caricamento) non c'è chi possa confermare: si chiude.
   win.on('close', (e) => {
-    if (allowClose) return;
+    if (allowClose || !rendererIsReady) return;
     e.preventDefault();
     win?.webContents.send('app:close-requested');
   });
@@ -68,6 +85,14 @@ function createWindow(): void {
   win.webContents.on('did-start-loading', () => {
     rendererIsReady = false;
   });
+  win.webContents.on('render-process-gone', () => {
+    rendererIsReady = false;
+  });
+  // La pagina dell'app non deve mai navigare altrove (file rilasciati, link) né aprire altre finestre.
+  win.webContents.on('will-navigate', (e, url) => {
+    if (!isTrustedUrl(url, trust)) e.preventDefault();
+  });
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   const devUrl = process.env['ELECTRON_RENDERER_URL'];
   if (devUrl) void win.loadURL(devUrl);
   else void win.loadFile(join(import.meta.dirname, '../renderer/index.html'));
@@ -79,19 +104,17 @@ if (!app.requestSingleInstanceLock()) {
   for (const a of process.argv.slice(1)) if (isBaap(a)) pendingOpen.push(a);
 
   app.on('second-instance', (_e, argv) => {
-    if (win) {
-      if (win.isMinimized()) win.restore();
-      win.focus();
-    }
+    focusWindow();
     for (const a of argv.slice(1)) if (isBaap(a)) requestOpen(a);
   });
   app.on('open-file', (e, path) => {
     e.preventDefault();
+    focusWindow();
     requestOpen(path);
   });
   // Solo nei test e2e (userData isolato): permette ad app.close() di Playwright di terminare
   // l'app senza passare dalla conferma di chiusura; la chiusura di finestra resta intercettata.
-  if (process.env['BAA_USER_DATA']) {
+  if (testUserData) {
     app.on('before-quit', () => {
       allowClose = true;
     });
@@ -100,6 +123,7 @@ if (!app.requestSingleInstanceLock()) {
 
   registerIpc(
     () => win,
+    trust,
     () => {
       allowClose = true;
       win?.close();
