@@ -14,6 +14,7 @@ export function MenuBar() {
   const [open, setOpen] = useState<number | null>(null);
   const [active, setActive] = useState(-1); // -1 = il titolo del menu
   const [subOpen, setSubOpen] = useState(false);
+  const [subActive, setSubActive] = useState(-1); // voce attiva del sottomenu; -1 = la voce "Progetti recenti"
   const [recent, setRecent] = useState<RecentEntry[]>([]);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -57,16 +58,22 @@ export function MenuBar() {
     };
   }, [projectOpen, ctx.bridge]);
 
+  useEffect(() => {
+    if (!subOpen) setSubActive(-1);
+  }, [subOpen]);
+
   // Il fuoco segue la voce attiva.
   useEffect(() => {
     if (open === null) return;
     const root = rootRef.current;
-    const target =
-      active < 0
-        ? root?.querySelector<HTMLElement>(`[data-menu-index="${open}"]`)
-        : root?.querySelector<HTMLElement>(`[data-item-index="${active}"]`);
-    target?.focus();
-  }, [open, active, subOpen]);
+    const selector =
+      subOpen && subActive >= 0
+        ? `[data-sub-index="${subActive}"]`
+        : active < 0
+          ? `[data-menu-index="${open}"]`
+          : `[data-item-index="${active}"]`;
+    root?.querySelector<HTMLElement>(selector)?.focus();
+  }, [open, active, subOpen, subActive]);
 
   const entries: MenuEntry[] = open === null ? [] : MENUS[open]!.items.filter((e) => e !== 'sep');
 
@@ -77,6 +84,15 @@ export function MenuBar() {
       setActive(-1);
       setSubOpen(false);
     };
+    if (subOpen && subActive >= 0) {
+      const count = Math.max(recent.length, 1);
+      if (e.key === 'ArrowDown') setSubActive((a) => Math.min(a + 1, count - 1));
+      else if (e.key === 'ArrowUp') setSubActive((a) => Math.max(a - 1, 0));
+      else if (e.key === 'ArrowLeft' || e.key === 'Escape') setSubOpen(false);
+      else if (e.key !== 'Enter' && e.key !== 'ArrowRight') return;
+      if (e.key !== 'Enter') e.preventDefault();
+      return;
+    }
     switch (e.key) {
       case 'Escape':
         e.preventDefault();
@@ -88,7 +104,10 @@ export function MenuBar() {
         break;
       case 'ArrowRight':
         e.preventDefault();
-        if (entries[active] === 'recent' && !subOpen) setSubOpen(true);
+        if (entries[active] === 'recent') {
+          setSubOpen(true);
+          setSubActive(0);
+        }
         else move(1);
         break;
       case 'ArrowLeft':
@@ -127,7 +146,10 @@ export function MenuBar() {
             data-item-index={navIndex}
             tabIndex={-1}
             className="baa-menu-item"
-            onClick={() => setSubOpen(true)}
+            onClick={() => {
+              setSubOpen(true);
+              setSubActive(0);
+            }}
             onMouseEnter={() => setSubOpen(true)}
           >
             <span>{t('menu.recent')}</span>
@@ -136,13 +158,14 @@ export function MenuBar() {
           {subOpen ? (
             <div role="menu" className="baa-menu baa-menu-sub" data-testid="menu-recent">
               {recent.length === 0 ? (
-                <button type="button" role="menuitem" aria-disabled="true" tabIndex={-1} className="baa-menu-item">
+                <button type="button" role="menuitem" aria-disabled="true" data-sub-index={0} tabIndex={-1} className="baa-menu-item">
                   {t('menu.noRecent')}
                 </button>
               ) : (
-                recent.map((r) => (
+                recent.map((r, ri) => (
                   <button
                     key={r.path}
+                    data-sub-index={ri}
                     type="button"
                     role="menuitem"
                     tabIndex={-1}

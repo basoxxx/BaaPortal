@@ -1,5 +1,5 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { PROJECT_PATH, renderApp } from './renderApp';
 
 const menuTitles = () => within(screen.getByTestId('menu-bar')).getAllByRole('menuitem');
@@ -179,5 +179,53 @@ describe('vista progetto: collegamenti', () => {
     const { store } = await renderApp({ view: 'project', withProject: true });
     act(() => store.getState().pushMessage({ severity: 'info', textKey: 'messages.saved', params: { name: 'Prova' } }));
     expect(screen.getByTestId('status-bar')).toHaveTextContent('Progetto "Prova" salvato.');
+  });
+});
+
+describe('vista progetto: colonna sinistra vuota', () => {
+  it('senza pannelli a sinistra la colonna sparisce, restano le barrette, nessun errore', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { user, store } = await renderApp({ view: 'project', withProject: true });
+    await user.click(screen.getByTestId('collapse-navigation'));
+    await user.click(screen.getByTestId('collapse-details'));
+    expect(store.getState().referenceProjectsOpen).toBe(false);
+    expect(screen.getByTestId('work-area')).toBeInTheDocument();
+    expect(screen.getByTestId('strip-navigation')).toBeInTheDocument();
+    expect(screen.getByTestId('strip-details')).toBeInTheDocument();
+    expect(screen.queryByTestId('panel-reference-projects')).not.toBeInTheDocument();
+    await user.click(screen.getByTestId('strip-reference'));
+    expect(screen.getByTestId('panel-reference-projects')).toBeInTheDocument();
+    expect(err).not.toHaveBeenCalled();
+    expect(warn).not.toHaveBeenCalled();
+    err.mockRestore();
+    warn.mockRestore();
+  });
+});
+
+describe('vista progetto: sottomenu recenti da tastiera', () => {
+  it('Progetti recenti: frecce ed Invio aprono il secondo recente', async () => {
+    const { user, bridge, service } = await renderApp({ view: 'project', withProject: true });
+    await bridge.recentAdd('/doc/BaaPortal/Altro.baap', 'Altro');
+    await bridge.recentAdd('/doc/BaaPortal/Terzo.baap', 'Terzo');
+    const opened: string[] = [];
+    service.open = async (p: string) => {
+      opened.push(p);
+      return true;
+    };
+    await user.keyboard('{F10}');
+    await screen.findByRole('menuitem', { name: 'Progetti recenti' });
+    await user.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}'); // Nuovo, Apri, Progetti recenti
+    expect(screen.getByRole('menuitem', { name: 'Progetti recenti' })).toHaveFocus();
+    await user.keyboard('{ArrowRight}');
+    const items = await within(screen.getByTestId('menu-recent')).findAllByRole('menuitem');
+    expect(items[0]).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(items[1]).toHaveFocus();
+    await user.keyboard('{ArrowUp}{ArrowLeft}');
+    expect(screen.queryByTestId('menu-recent')).not.toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Progetti recenti' })).toHaveFocus();
+    await user.keyboard('{Enter}{ArrowDown}{Enter}');
+    expect(opened).toEqual([items[1]!.title]);
   });
 });

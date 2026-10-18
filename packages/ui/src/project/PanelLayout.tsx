@@ -131,14 +131,34 @@ export function PanelLayout(props: PanelLayoutProps) {
       </div>
     ) : null;
 
+  // Se nella colonna sinistra non c'è nulla da mostrare (niente pannelli agganciati e progetti di
+  // riferimento chiusi) la colonna non esiste: restano solo le barrette.
+  const leftVisible = docked('navigation') || docked('details') || refOpen;
   const leftRail = (['navigation', 'details'] as const).filter(stripped);
   const rightRail = stripped('taskCards');
 
   return (
     <div className="baa-layout">
-      {leftRail.length > 0 ? <div className="baa-rail baa-rail-left">{leftRail.map(strip)}</div> : null}
+      {leftRail.length > 0 || !leftVisible ? (
+        <div className="baa-rail baa-rail-left">
+          {leftRail.map(strip)}
+          {!leftVisible ? (
+            <button
+              type="button"
+              data-testid="strip-reference"
+              className="baa-strip baa-strip-left"
+              title={t('panel.toggleReference')}
+              onClick={() => store.getState().setReferenceProjectsOpen(true)}
+            >
+              {t('panel.referenceProjects')}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       <div className="baa-layout-main">
         <Group orientation="horizontal" id="baa-h" onLayoutChanged={persist(['taskCards'])}>
+          {leftVisible ? (
+            <>
           <Panel id="left" defaultSize="18%" minSize="10%">
             <Group orientation="vertical" id="baa-left" onLayoutChanged={persist(['navigation', 'details'])}>
               {docked('navigation') ? (
@@ -179,6 +199,8 @@ export function PanelLayout(props: PanelLayoutProps) {
             </Group>
           </Panel>
           <ResizeHandle id="left" />
+            </>
+          ) : null}
           <Panel id="center" minSize="30%">
             <div className="baa-center">
               <Group orientation="vertical" id="baa-center" onLayoutChanged={persist(['inspector'])}>
