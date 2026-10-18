@@ -8,7 +8,20 @@ import {
   type Tag,
 } from '@baaportal/project';
 import { findCpu } from '@baaportal/catalog';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Un tetto ai numeri FB permette di esaurirli senza creare migliaia di blocchi.
+const cap = vi.hoisted(() => ({ maxFb: 0 }));
+vi.mock('@baaportal/catalog', async (orig) => {
+  const mod = await orig<typeof import('@baaportal/catalog')>();
+  return {
+    ...mod,
+    findCpu: (id: string) => {
+      const c = mod.findCpu(id);
+      return c && cap.maxFb ? { ...c, limits: { ...c.limits, maxFb: cap.maxFb } } : c;
+    },
+  };
+});
 import { commands } from '../src/commands/commands';
 import { ids } from '../src/project/navigation/treeIds';
 import { forgetClipboard } from '../src/services/clipboard';
@@ -20,6 +33,7 @@ const newId = () => `t${++n}`;
 
 beforeEach(() => {
   n = 0;
+  cap.maxFb = 0;
   forgetClipboard();
 });
 
@@ -169,6 +183,107 @@ describe('fra due PLC', () => {
     expect(dev(app).blocks.map((b) => b.name)).toEqual(['Main', 'Nastro']);
     expect(other().blocks.map((b) => b.name)).toContain('Nastro');
     expect(history(app)).toBe(2);
+  });
+});
+
+describe('taglia fra PLC senza perdite', () => {
+  const addPlc2 = (app: RenderedApp, extra?: (d: ReturnType<typeof dev>) => void) => {
+    act(() => {
+      app.store.getState().edit('history.addDevice', (p) => {
+        const d2 = createPlcDevice({
+          cpu: findCpu('cpu-315-2-pn-dp')!,
+          orderNumber: 'x',
+          firmware: 'V3.3',
+          name: 'PLC_2',
+          texts: { defaultTagTable: 'Standard' },
+          newId: () => 'p2',
+        });
+        extra?.(d2);
+        p.devices.push(d2);
+      });
+    });
+    act(() => app.store.getState().setDoc(app.store.getState().doc));
+    return () => findDevice(app.store.getState().doc!.project, 'p2')!;
+  };
+
+  it("l'origine senza numero libero nella destinazione non viene eliminata", async () => {
+    cap.maxFb = 2;
+    const { app, node } = await setup((d) => {
+      d.blocks.push(
+        createCodeBlock({ kind: 'FB', number: 2, name: 'Rullo', language: 'AWL', newId }),
+      );
+    });
+    const other = addPlc2(app, (d) => {
+      d.blocks.push(
+        createCodeBlock({ kind: 'FB', number: 1, name: 'Altro', language: 'AWL', newId }),
+      );
+    });
+    await app.user.click(tn(node));
+    await app.user.keyboard('{Control>}');
+    await app.user.click(tn(ids.block(PLC, dev(app).blocks[2]!.id)));
+    await app.user.keyboard('{/Control}');
+    await app.user.keyboard(ctrl('x'));
+    await app.user.click(tn(ids.folder('p2', 'blocks')));
+    await app.user.keyboard(ctrl('v'));
+    await waitFor(() => expect(other().blocks.map((b) => b.name)).toContain('Nastro'));
+    expect(other().blocks.map((b) => b.name)).not.toContain('Rullo');
+    expect(dev(app).blocks.map((b) => b.name)).toEqual(['Main', 'Rullo']);
+    expect(app.store.getState().messages.at(-1)).toMatchObject({
+      textKey: 'messages.pasteNoNumber',
+      params: { count: '1' },
+    });
+    expect(history(app)).toBe(1);
+    act(() => app.store.getState().undo());
+    expect(dev(app).blocks).toHaveLength(3);
+    expect(other().blocks.map((b) => b.name)).toEqual(['Main', 'Altro']);
+  });
+
+  it("le modifiche all'origine fra taglio e incolla non si perdono", async () => {
+    const { app, node, fbId } = await setup();
+    const other = addPlc2(app);
+    await app.user.click(tn(node));
+    await app.user.keyboard(ctrl('x'));
+    act(() => {
+      app.store.getState().edit('history.rename', (p) => {
+        const fb = findDevice(p, PLC)!.blocks.find((b) => b.id === fbId) as CodeBlock;
+        fb.interface.input.push({ id: 'in1', name: 'Start', type: 'Bool', comment: '' });
+      });
+    });
+    const before = history(app);
+    await app.user.click(tn(ids.folder('p2', 'blocks')));
+    await app.user.keyboard(ctrl('v'));
+    await waitFor(() => expect(other().blocks.map((b) => b.name)).toContain('Nastro'));
+    const copy = other().blocks.find((b) => b.name === 'Nastro') as CodeBlock;
+    expect(copy.interface.input.map((m) => m.name)).toEqual(['Start']);
+    expect(dev(app).blocks.map((b) => b.name)).toEqual(['Main']);
+    expect(history(app)).toBe(before + 1);
+    act(() => app.store.getState().undo());
+    expect(dev(app).blocks.map((b) => b.name)).toEqual(['Main', 'Nastro']);
+    expect(other().blocks.map((b) => b.name)).toEqual(['Main']);
+  });
+
+  it('una origine eliminata dopo il taglio non viene incollata e gli appunti si svuotano', async () => {
+    const { app, node, fbId } = await setup();
+    const other = addPlc2(app);
+    await app.user.click(tn(node));
+    await app.user.keyboard(ctrl('x'));
+    act(() => {
+      app.store.getState().edit('history.delete', (p) => {
+        const d = findDevice(p, PLC)!;
+        d.blocks = d.blocks.filter((b) => b.id !== fbId);
+      });
+    });
+    await app.user.click(tn(ids.folder('p2', 'blocks')));
+    await app.user.keyboard(ctrl('v'));
+    await act(async () => {});
+    expect(other().blocks.map((b) => b.name)).toEqual(['Main']);
+    expect(commands['edit.paste'].isEnabled(app.store.getState())).toBe(false);
+  });
+
+  it('la tabella standard non si taglia', async () => {
+    const { app } = await setup();
+    await app.user.click(tn(ids.tagTable(PLC, dev(app).tagTables[0]!.id)));
+    expect(app.store.getState().editTarget?.can).toMatchObject({ cut: false, copy: true });
   });
 });
 

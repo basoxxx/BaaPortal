@@ -8,6 +8,7 @@ import {
   type MouseEvent,
 } from 'react';
 import { useTranslation } from 'react-i18next';
+import { findDevice } from '@baaportal/project';
 import { Icon } from '../../icons';
 import '../../icons/tree';
 import '../../icons/objects';
@@ -15,7 +16,7 @@ import { ContextMenu, type ContextMenuItem } from '../../components/ContextMenu'
 import { peekClipboardPayload } from '../../services/clipboard';
 import { useAppStore, useServices } from '../../state/AppContext';
 import type { EditAction } from '../../state/store';
-import { areaOfItem } from '../objectActions';
+import { areaOfItem, isStandardTable } from '../objectActions';
 import { runAddNode } from './addActions';
 import {
   addGroupAt,
@@ -119,7 +120,13 @@ export function ProjectTree() {
   const clip = peekClipboardPayload();
   const pasteTarget = selection ? containerOf(doc, selection) : null;
   const can: Partial<Record<EditAction, boolean>> = {
-    cut: objectRefs.length > 0,
+    // La tabella standard non si elimina, quindi non si taglia.
+    cut:
+      objectRefs.length > 0 &&
+      !objectRefs.some((r) => {
+        const d = doc && findDevice(doc.project, r.deviceId);
+        return r.kind === 'tagTable' && !!d && isStandardTable(d, r.id);
+      }),
     copy: objectRefs.length > 0,
     delete: objectRefs.length > 0 || groups.length > 0,
     rename: selectedIds.length === 1 && renameInfo(doc, selectedIds[0]!) !== null,

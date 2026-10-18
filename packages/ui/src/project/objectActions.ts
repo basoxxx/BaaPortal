@@ -98,6 +98,7 @@ function pasteTable(target: PlcDevice, src: TagTable, group: string, newId: NewI
 /**
  * Incolla nel gruppo `group` del PLC `target` (da usare dentro `edit`): clona gli oggetti con id nuovi.
  * Gli oggetti per cui non c'è un numero libero sono saltati; restituisce i riferimenti di quelli creati.
+ * `copiedFrom`, se dato, riceve per ognuno l'indice dell'elemento di partenza in `payload.items`.
  */
 export function pasteObjects(
   target: PlcDevice,
@@ -105,10 +106,12 @@ export function pasteObjects(
   group: string,
   cpu: CpuType | undefined,
   newId: NewId,
+  copiedFrom?: number[],
 ): ObjectRef[] {
   const out: ObjectRef[] = [];
   const renamedFbs = new Map<string, string>(); // nome originale (minuscolo) → nome della copia
-  for (const item of payload.items) {
+  for (const [index, item] of payload.items.entries()) {
+    const before = out.length;
     if (item.type === 'block') {
       const number = blockNumber(target, item.block, cpu);
       if (number === null) continue;
@@ -140,6 +143,7 @@ export function pasteObjects(
       target.tagTables.push(table);
       out.push({ kind: 'tagTable', deviceId: target.id, id: table.id });
     }
+    if (out.length > before) copiedFrom?.push(index);
   }
   return out;
 }

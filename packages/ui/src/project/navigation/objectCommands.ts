@@ -173,9 +173,12 @@ function pasteItems(
   store.getState().edit('history.paste', (p) => {
     const dev = findDevice(p, target.dev);
     if (!dev) return;
-    created = pasteObjects(dev, payload, target.group, findCpu(dev.cpu.typeId), newId);
-    const src = removeFrom?.[0] && findDevice(p, removeFrom[0].deviceId);
-    if (src && removeFrom) deleteObjects(src, removeFrom);
+    const from: number[] = [];
+    created = pasteObjects(dev, payload, target.group, findCpu(dev.cpu.typeId), newId, from);
+    // Si eliminano solo le origini la cui copia è stata creata davvero.
+    const done = removeFrom?.filter((_, i) => from.includes(i));
+    const src = done?.[0] && findDevice(p, done[0].deviceId);
+    if (src && done) deleteObjects(src, done);
   });
   reportSkipped(store, payload.items.length - created.length);
   return created;
@@ -199,7 +202,18 @@ export async function pasteAt(ctx: ObjectCtx, nodeId: string): Promise<void> {
   const target = containerOf(store.getState().doc, nodeId);
   const { payload } = await readClipboard(ctx.bridge);
   if (!target || payload?.kind !== 'objects') return;
-  const items = payload.items.filter((i) => areaOfItem(i) === target.area);
+  let items = payload.items.filter((i) => areaOfItem(i) === target.area);
+  if (payload.cut) {
+    // Dopo il taglio l'origine può essere cambiata: si incolla la versione attuale.
+    const src = deviceOf(store.getState().doc, payload.deviceId);
+    items = src
+      ? itemsOf(
+          src,
+          items.map((i) => itemRef(payload.deviceId, i)),
+        )
+      : [];
+    if (items.length === 0) forgetClipboard();
+  }
   if (items.length === 0) return;
   const refs = items.map((i) => itemRef(payload.deviceId, i));
 
