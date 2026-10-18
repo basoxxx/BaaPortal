@@ -23,6 +23,12 @@ jobs:
       - run: npm run format:check
       - run: npm test
       - run: npm run e2e
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results-${{ matrix.os }}
+          path: apps/desktop/test-results
+          if-no-files-found: ignore
       - run: npm run dist
       - uses: actions/upload-artifact@v4
         with:

@@ -35,21 +35,40 @@ export { expect } from '@playwright/test';
 /** `main`: script principale da avviare (predefinito: la build in out/). */
 export async function launchApp(opts: { args?: string[]; main?: string } = {}): Promise<Launched> {
   const userData = mkdtempSync(join(tmpdir(), 'baa-userdata-'));
+  // Con un timeout proprio, un avvio bloccato fallisce riportando nel call log l'uscita del processo.
   const app = await _electron.launch({
     args: [opts.main ?? 'out/main/index.js', ...(opts.args ?? [])],
     env: { ...process.env, BAA_USER_DATA: userData },
+    timeout: 15_000,
   });
-  const page = await app.firstWindow();
-  // firstWindow() risolve alla creazione della finestra, prima che il modulo del renderer sia
-  // eseguito: senza questa attesa window.baa e la UI possono ancora non esistere.
-  await page.waitForFunction(
-    () =>
-      typeof (window as { baa?: unknown }).baa === 'object' &&
-      !!document.querySelector('#root > *'),
-  );
-  const result = { app, page, userData };
-  launched.push(result);
-  return result;
+  // Uscita di main e renderer: compare nell'errore solo se l'app non arriva a mostrarsi.
+  const log: string[] = [];
+  app.process().stdout?.on('data', (d) => log.push(`[main] ${String(d).trimEnd()}`));
+  app.process().stderr?.on('data', (d) => log.push(`[main:err] ${String(d).trimEnd()}`));
+  let page: Page | undefined;
+  try {
+    page = await app.firstWindow({ timeout: 10_000 });
+    launched.push({ app, page, userData });
+    page.on('console', (m) => log.push(`[renderer:${m.type()}] ${m.text()}`));
+    page.on('pageerror', (e) => log.push(`[renderer:pageerror] ${e.message}`));
+    // firstWindow() risolve alla creazione della finestra, prima che il modulo del renderer sia
+    // eseguito: senza questa attesa window.baa e la UI possono ancora non esistere.
+    await page.waitForFunction(
+      () =>
+        typeof (window as { baa?: unknown }).baa === 'object' &&
+        !!document.querySelector('#root > *'),
+      undefined,
+      { timeout: 15_000 },
+    );
+  } catch (e) {
+    if (!page) {
+      await app.close().catch(() => undefined);
+      rmSync(userData, { recursive: true, force: true });
+    }
+    const where = page ? `pagina: ${page.url()}` : 'nessuna finestra';
+    throw new Error(`l'app non si è mostrata (${where})\n${log.join('\n')}`, { cause: e });
+  }
+  return { app, page, userData };
 }
 
 /** Sostituisce i dialoghi nativi nel processo principale: ogni messaggio viene registrato in globalThis.__dialogs. */
