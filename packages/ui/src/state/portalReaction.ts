@@ -2,16 +2,22 @@ import type { StoreApi } from 'zustand/vanilla';
 import type { AppState } from './store';
 
 /**
- * Dopo un'apertura o una creazione riuscita nella vista portale si resta nel portale,
- * su Avvio > Primi passi. Nella vista progetto non cambia nulla.
- * Reagisce al cambio di `doc.filePath` verso un nuovo valore non nullo.
+ * Reazioni del portale al ciclo di vita del documento (un solo punto per tutti i percorsi):
+ * - documento caricato (apri/crea) nella vista portale: Avvio > Primi passi;
+ *   nella vista progetto non cambia nulla; il salvataggio con nome non conta;
+ * - documento chiuso: vista portale, Avvio > Apri progetto esistente.
  */
 export function attachPortalReaction(store: StoreApi<AppState>): () => void {
   return store.subscribe((s, prev) => {
-    const path = s.doc?.filePath ?? null;
-    if (path === null || path === (prev.doc?.filePath ?? null)) return;
-    if (s.view !== 'portal') return;
-    s.setPortal('start');
-    s.setStartAction('firstSteps');
+    if (s.docLoadId === prev.docLoadId) return;
+    if (s.doc) {
+      if (s.view !== 'portal') return;
+      s.setPortal('start');
+      s.setStartAction('firstSteps');
+    } else if (prev.doc) {
+      s.setView('portal');
+      s.setPortal('start');
+      s.setStartAction('open');
+    }
   });
 }

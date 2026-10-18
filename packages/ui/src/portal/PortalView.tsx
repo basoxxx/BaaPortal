@@ -4,7 +4,6 @@ import { useAppStore, useServices } from '../state/AppContext';
 import type { PortalId, StartAction } from '../state/store';
 import { ActionList, type ActionItem } from './ActionList';
 import { PortalList } from './PortalList';
-import { ClosePane } from './selection/ClosePane';
 import { FirstStepsPane } from './selection/FirstStepsPane';
 import { InstalledSoftwarePane } from './selection/InstalledSoftwarePane';
 import { LanguagePane } from './selection/LanguagePane';
@@ -34,7 +33,6 @@ function SelectionPane({ action }: { action: StartAction }) {
   switch (action) {
     case 'open': return <OpenProjectPane />;
     case 'new': return <NewProjectPane />;
-    case 'close': return <ClosePane />;
     case 'firstSteps': return <FirstStepsPane />;
     case 'installed': return <InstalledSoftwarePane />;
     case 'language': return <LanguagePane />;
@@ -44,7 +42,7 @@ function SelectionPane({ action }: { action: StartAction }) {
 
 export function PortalView() {
   const { t } = useTranslation();
-  const { store } = useServices();
+  const { store, service } = useServices();
   const doc = useAppStore((s) => s.doc);
   const storedPortal = useAppStore((s) => s.portal);
   const startAction = useAppStore((s) => s.startAction);
@@ -72,7 +70,8 @@ export function PortalView() {
           items={portal === 'start' ? startItems : otherItems}
           current={portal === 'start' ? startAction : null}
           onSelect={(id) => {
-            if (portal === 'start') store.getState().setStartAction(id as StartAction);
+            if (id === 'close') void service.close();
+            else if (portal === 'start') store.getState().setStartAction(id as StartAction);
             else if (id === 'openView') store.getState().setView('project');
           }}
         />

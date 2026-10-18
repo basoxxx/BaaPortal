@@ -117,10 +117,6 @@
       "lastAccess": "Last accessed",
       "notFound": "(not found)"
     },
-    "close": {
-      "description": "Closes the project \"{{name}}\". If there are unsaved changes you will be asked what to do.",
-      "confirm": "Close the project"
-    },
     "firstSteps": {
       "device": {
         "title": "Configure a device",

@@ -24,6 +24,8 @@ export interface AppState {
   portal: PortalId;
   startAction: StartAction;
   doc: OpenDoc | null;
+  /** Cresce a ogni documento caricato (apertura, creazione, chiusura); non cresce con il salvataggio. */
+  docLoadId: number;
   selection: TreeNodeId | null;
   messages: InfoMessage[];
   status: { textKey: string; params?: Record<string, string> } | null;
@@ -33,7 +35,8 @@ export interface AppState {
   setView(v: View): void;
   setPortal(p: PortalId): void;
   setStartAction(a: StartAction): void;
-  setDoc(d: OpenDoc | null): void;
+  setDoc(d: OpenDoc | null): void; // nuovo documento caricato o chiuso
+  replaceDoc(d: OpenDoc): void; // stesso documento dopo un salvataggio (anche con nome nuovo)
   updateMeta(patch: Partial<Pick<ProjectMeta, 'author' | 'comment'>>): void; // imposta dirty
   select(id: TreeNodeId | null): void;
   pushMessage(m: Omit<InfoMessage, 'id' | 'time'>): void; // aggiorna anche status
@@ -59,6 +62,7 @@ export function createAppStore(now: () => Date = () => new Date()): StoreApi<App
     portal: 'start',
     startAction: 'open',
     doc: null,
+    docLoadId: 0,
     selection: null,
     messages: [],
     status: null,
@@ -68,7 +72,8 @@ export function createAppStore(now: () => Date = () => new Date()): StoreApi<App
     setView: (view) => set({ view }),
     setPortal: (portal) => set({ portal }),
     setStartAction: (startAction) => set({ startAction }),
-    setDoc: (doc) => set({ doc }),
+    setDoc: (doc) => set((s) => ({ doc, docLoadId: s.docLoadId + 1 })),
+    replaceDoc: (doc) => set({ doc }),
     updateMeta: (patch) =>
       set((s) =>
         s.doc

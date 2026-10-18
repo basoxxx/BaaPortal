@@ -68,9 +68,7 @@ const list: Command[] = [
   }),
   def('project.close', {
     isEnabled: hasDoc,
-    run: async ({ store, service }) => {
-      if (await service.close()) store.getState().setView('portal');
-    },
+    run: async ({ service }) => void (await service.close()),
   }),
   def('project.save', { icon: 'save', shortcut: 'Mod+S', isEnabled: hasDoc, run: async ({ service }) => void (await service.save()) }),
   def('project.saveAs', { shortcut: 'Mod+Shift+S', isEnabled: hasDoc, run: async ({ service }) => void (await service.saveAs()) }),

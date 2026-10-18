@@ -117,10 +117,6 @@
       "lastAccess": "Ultimo accesso",
       "notFound": "(non trovato)"
     },
-    "close": {
-      "description": "Chiude il progetto \"{{name}}\". Se ci sono modifiche non salvate ti verrà chiesto cosa fare.",
-      "confirm": "Chiudi il progetto"
-    },
     "firstSteps": {
       "device": {
         "title": "Configura un dispositivo",

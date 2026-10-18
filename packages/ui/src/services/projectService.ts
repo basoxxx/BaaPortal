@@ -116,7 +116,7 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
     if (!doc) return false;
     const project: Project = { ...doc.project, meta: { ...doc.project.meta, modifiedAt: now().toISOString() } };
     if (!(await writeProject(project, path))) return false;
-    store.getState().setDoc({ project, filePath: path, dirty: false });
+    store.getState().replaceDoc({ project, filePath: path, dirty: false });
     await bridge.recentAdd(path, project.meta.name);
     announce('saved', project.meta.name);
     return true;

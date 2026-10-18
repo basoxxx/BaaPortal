@@ -1,6 +1,9 @@
 import { act, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { createProject, writeBaap } from '@baaportal/project';
+import { createProject, validateProjectName, writeBaap } from '@baaportal/project';
+import { commands } from '../src/commands/commands';
+import enTexts from '../src/i18n/en.json';
+import itTexts from '../src/i18n/it.json';
 import { t } from '../src/i18n';
 import { PROJECT_PATH, renderApp } from './renderApp';
 
@@ -52,6 +55,37 @@ describe('Crea nuovo progetto', () => {
     await user.type(screen.getByLabelText('Nome progetto'), 'CON');
     expect(screen.getByText(t('errors.name.RESERVED'))).toBeVisible();
     expect(screen.getByRole('button', { name: 'Crea' })).toBeDisabled();
+  });
+
+  it.each([
+    ['a/b', 'INVALID_CHARS'],
+    ['Linea 3.', 'TRAILING_DOT_OR_SPACE'],
+  ])('nome %j mostra errors.name.%s e disattiva Crea', async (value, reason) => {
+    const { user } = await renderApp();
+    await user.click(screen.getByTestId('action-new'));
+    await user.clear(screen.getByLabelText('Nome progetto'));
+    await user.type(screen.getByLabelText('Nome progetto'), value);
+    expect(screen.getByText(t(`errors.name.${reason}`))).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Crea' })).toBeDisabled();
+  });
+
+  it('nome vuoto mostra errors.name.EMPTY e disattiva Crea', async () => {
+    const { user } = await renderApp();
+    await user.click(screen.getByTestId('action-new'));
+    await screen.findByDisplayValue('Progetto1');
+    await user.clear(screen.getByLabelText('Nome progetto'));
+    expect(screen.getByText(t('errors.name.EMPTY'))).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Crea' })).toBeDisabled();
+  });
+
+  it('ogni motivo di validateProjectName ha un testo in it e en', () => {
+    const samples = ['', 'x'.repeat(500), 'a/b', 'CON', 'a.'];
+    const reasons = samples.map((n) => { const r = validateProjectName(n); return r.ok ? null : r.reason; });
+    expect([...reasons].sort()).toEqual(['EMPTY', 'INVALID_CHARS', 'RESERVED', 'TOO_LONG', 'TRAILING_DOT_OR_SPACE']);
+    for (const r of reasons) {
+      expect((itTexts.errors.name as Record<string, string>)[r!]).toBeTruthy();
+      expect((enTexts.errors.name as Record<string, string>)[r!]).toBeTruthy();
+    }
   });
 
   it('propone Progetto1 e percorso predefinito', async () => {
@@ -172,12 +206,35 @@ describe('Apri progetto esistente', () => {
 });
 
 describe('altre operazioni', () => {
-  it('Chiudi progetto chiude il documento', async () => {
+  it('Chiudi progetto chiama subito service.close() e torna ad Avvio > Apri', async () => {
     const { user, store } = await renderApp({ withProject: true });
+    expect(store.getState().startAction).toBe('firstSteps');
     await user.click(screen.getByTestId('action-close'));
-    await user.click(screen.getByRole('button', { name: 'Chiudi il progetto' }));
     await waitFor(() => expect(store.getState().doc).toBeNull());
-    expect(store.getState().startAction).toBe('open');
+    expect(store.getState()).toMatchObject({ view: 'portal', portal: 'start', startAction: 'open' });
+  });
+
+  it('Chiudi progetto con modifiche non salvate passa dalla conferma di service.close()', async () => {
+    const { user, store, bridge } = await renderApp({ withProject: true });
+    store.getState().updateMeta({ author: 'X' });
+    await user.click(screen.getByTestId('action-close'));
+    await waitFor(() => expect(bridge.confirmTexts).toHaveLength(1));
+    expect(store.getState().doc).not.toBeNull();
+  });
+
+  it('project.close dalla vista progetto porta al portale su Avvio > Apri', async () => {
+    const { store, service, bridge } = await renderApp({ withProject: true, view: 'project' });
+    await act(async () => { await commands['project.close'].run({ store, service, bridge }); });
+    expect(store.getState()).toMatchObject({ view: 'portal', portal: 'start', startAction: 'open', doc: null });
+  });
+
+  it('Salva con nome nel portale non salta a Primi passi', async () => {
+    const { store, service, bridge } = await renderApp({ withProject: true });
+    act(() => store.getState().setStartAction('installed'));
+    bridge.saveDialogResults.push('/doc/BaaPortal/Altro.baap');
+    await act(async () => { await service.saveAs(); });
+    expect(store.getState().doc?.filePath).toBe('/doc/BaaPortal/Altro.baap');
+    expect(store.getState().startAction).toBe('installed');
   });
 
   it('cambio lingua in English traduce i portali', async () => {
