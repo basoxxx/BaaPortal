@@ -222,7 +222,12 @@
     "delete": "Delete objects",
     "rename": "Rename",
     "addGroup": "Add group",
-    "moveTags": "Move tags"
+    "moveTags": "Move tags",
+    "addRow": "Add row",
+    "editCell": "Edit cell",
+    "deleteRows": "Delete rows",
+    "pasteRows": "Paste rows",
+    "fillRows": "Auto fill"
   },
   "inspector": {
     "tab": {
@@ -305,7 +310,9 @@
       "121": "Programming error",
       "122": "IO access error"
     },
-    "group": "Group_1"
+    "group": "Group_1",
+    "tag": "Tag_1",
+    "constant": "Constant_1"
   },
   "dialog": {
     "ok": "OK",
@@ -411,5 +418,43 @@
     "rowNumber": "Row",
     "fillHandle": "Fill handle",
     "suggestions": "Suggestions"
+  },
+  "tags": {
+    "tabs": "Table tabs",
+    "tab": {
+      "tags": "Tags",
+      "constants": "User constants"
+    },
+    "col": {
+      "name": "Name",
+      "type": "Data type",
+      "address": "Address",
+      "retentive": "Retain",
+      "retentiveHint": "Set in the CPU properties",
+      "hmi": "Accessible from HMI",
+      "table": "Tag table",
+      "comment": "Comment",
+      "value": "Value"
+    }
+  },
+  "diag": {
+    "NAME_INVALID": "The name is not valid.",
+    "NAME_DUPLICATE": "The name is already in use.",
+    "TYPE_INVALID": "The data type is not valid.",
+    "TYPE_NOT_ALLOWED": "The data type is not allowed here.",
+    "TYPE_UNKNOWN": "The data type does not exist.",
+    "TYPE_CYCLE": "The data type contains itself.",
+    "ADDRESS_INVALID": "The address is not valid.",
+    "ADDRESS_TYPE_MISMATCH": "The address does not suit the data type.",
+    "ADDRESS_OUT_OF_RANGE": "The address is outside the CPU limits.",
+    "ADDRESS_OVERLAP": "The address overlaps {{other}}",
+    "VALUE_INVALID": "The value is not valid for the data type.",
+    "NUMBER_DUPLICATE": "The number is already in use.",
+    "NUMBER_OUT_OF_RANGE": "The number is out of range.",
+    "OB_NOT_SUPPORTED": "This CPU does not support the OB.",
+    "INSTANCE_FB_MISSING": "The instance function block does not exist.",
+    "HEADER_INVALID": "The header is not valid.",
+    "PROPERTY_INVALID": "The property value is not valid.",
+    "CPU_UNKNOWN": "The CPU is not in the catalog."
   }
 }

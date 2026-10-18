@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 
 /** Come prosegue la griglia dopo la modifica: 'blur' = il focus è già andato altrove. */
 export type EditNav = 'down' | 'right' | 'left' | 'stay' | 'blur';
@@ -27,6 +28,7 @@ export function CellEditor({
   onDone,
   onCancel,
 }: Props) {
+  const { t } = useTranslation();
   const [text, setText] = useState(initial);
   const [listOpen, setListOpen] = useState(true);
   const [hi, setHi] = useState(-1);
@@ -91,6 +93,8 @@ export function CellEditor({
         className="baa-grid-input"
         value={text}
         aria-label={label}
+        role={suggestions ? 'combobox' : undefined}
+        aria-expanded={suggestions ? showList : undefined}
         aria-autocomplete={suggestions ? 'list' : undefined}
         aria-controls={showList ? listId : undefined}
         aria-activedescendant={showList && hi >= 0 ? `${listId}-${hi}` : undefined}
@@ -103,7 +107,7 @@ export function CellEditor({
         onBlur={() => finish(text, 'blur')}
       />
       {showList ? (
-        <ul id={listId} role="listbox" className="baa-grid-list">
+        <ul id={listId} role="listbox" aria-label={t('grid.suggestions')} className="baa-grid-list">
           {matches.map((s, i) => (
             <li
               key={s}

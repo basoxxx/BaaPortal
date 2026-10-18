@@ -587,6 +587,24 @@
 .baa-editor-body {
   padding: 8px;
 }
+.baa-tags-tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--baa-border);
+}
+.baa-tags-tabs button {
+  padding: 3px 12px;
+  background: none;
+  border: 1px solid transparent;
+  border-bottom: none;
+  color: inherit;
+  cursor: pointer;
+}
+.baa-tags-tabs button.is-active {
+  background: var(--baa-surface);
+  border-color: var(--baa-border);
+}
 .baa-detached-root {
   height: 100vh;
   display: flex;

@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { findDevice } from '@baaportal/project';
 import type { IconName } from '../icons';
 import { useAppStore } from '../state/AppContext';
+import { AllTagsEditor } from './tags/AllTagsEditor';
+import { TagTableEditor } from './tags/TagTableEditor';
 import type { OpenDoc } from '../state/store';
 import type { EditorKind, EditorRef } from '../state/workArea';
 
@@ -27,7 +29,7 @@ const device = (ref: EditorRef, doc: OpenDoc) => findDevice(doc.project, ref.dev
 const block = (ref: EditorRef, doc: OpenDoc) =>
   device(ref, doc)?.blocks.find((b) => b.id === ref.objectId);
 
-/** Corpo provvisorio: i Task 12 e 13 lo sostituiscono con `registerEditor`. */
+/** Corpo provvisorio: il Task 13 lo sostituisce per blocchi e UDT. */
 function EmptyEditor({ editor }: { editor: EditorRef }) {
   const { t } = useTranslation();
   const doc = useAppStore((s) => s.doc);
@@ -63,14 +65,14 @@ export const EDITORS: Record<EditorKind, EditorDef> = {
     icon: () => 'objTagTable',
     title: (r, d) => device(r, d)?.tagTables.find((x) => x.id === r.objectId)?.name ?? '',
     exists: (r, d) => !!device(r, d)?.tagTables.some((x) => x.id === r.objectId),
-    Component: EmptyEditor,
+    Component: TagTableEditor,
   },
   allTags: {
     kind: 'allTags',
     icon: () => 'treeTags',
     title: (_r, _d, t) => t('editor.allTags'),
     exists: (r, d) => device(r, d) !== undefined,
-    Component: EmptyEditor,
+    Component: AllTagsEditor,
   },
 };
 

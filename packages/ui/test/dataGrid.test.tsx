@@ -393,9 +393,9 @@ describe('DataGrid', () => {
     await user.keyboard('Di');
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('listbox')).toBeNull();
-    expect(screen.getByRole('textbox')).toBeInTheDocument();
+    expect(screen.getByRole('combobox')).toBeInTheDocument();
     await user.keyboard('{Escape}');
-    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.queryByRole('combobox')).toBeNull();
     expect(props.onCommit).not.toHaveBeenCalled();
     await user.keyboard('{Enter}UDT_Motore{Enter}');
     expect(props.onCommit).toHaveBeenCalledWith('r1', 'type', 'UDT_Motore');
@@ -420,6 +420,41 @@ describe('DataGrid', () => {
     expect(cell('r2', 'type')).toHaveFocus();
     await user.keyboard('{ArrowLeft}{ArrowLeft}');
     expect(onToggleExpand).toHaveBeenLastCalledWith('r2');
+  });
+
+  it('il doppio clic su una cella modificabile avvia la modifica; su una di sola lettura no', async () => {
+    const { user } = setup({}, [{ key: 'r1', name: 'A', type: 'Int', flag: false }]);
+    await user.dblClick(cell('r1', 'name'));
+    expect(screen.getByRole('textbox')).toHaveValue('A');
+    await user.keyboard('{Escape}');
+    await user.dblClick(cell('r1', 'info'));
+    expect(screen.queryByRole('textbox')).toBeNull();
+  });
+
+  it('il campo del tipo è un combobox collegato all’elenco, che ha un nome', async () => {
+    const { user } = setup();
+    await user.click(cell('r1', 'type'));
+    await user.keyboard('D');
+    const input = screen.getByRole('combobox');
+    const list = screen.getByRole('listbox', { name: 'Suggerimenti' });
+    expect(input).toHaveAttribute('aria-expanded', 'true');
+    expect(input).toHaveAttribute('aria-controls', list.id);
+  });
+
+  it('il riempimento conta la riga <Aggiungi> una sola volta e nulla oltre', async () => {
+    const onFill = vi.fn();
+    const { user } = setup({
+      onFill,
+      addRow: [{ afterKey: 'r2', labelKey: 'grid.addRow', onAdd: vi.fn() }],
+    });
+    await user.click(cell('r1', 'name'));
+    fireEvent.pointerDown(document.querySelector('[data-fill-handle]')!);
+    fireEvent.pointerEnter(document.querySelector('[data-row-key="r2"]')!);
+    fireEvent.pointerEnter(document.querySelector('[data-row-key="r3"]')!);
+    fireEvent.pointerEnter(document.querySelector('[data-row-key="r4"]')!);
+    fireEvent.pointerUp(document.body);
+    // r2 + <Aggiungi>; r3 e r4 stanno oltre la riga di aggiunta.
+    expect(onFill).toHaveBeenCalledWith('r1', 2);
   });
 
   it('2000 righe in meno di 1 s', () => {

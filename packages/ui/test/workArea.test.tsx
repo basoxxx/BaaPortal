@@ -84,7 +84,7 @@ describe('area di lavoro: apertura e coerenza', () => {
     const app = await setup();
     await app.user.dblClick(screen.getByText('Mostra tutte le variabili'));
     expect(
-      within(screen.getByTestId('work-pane-0')).getByRole('heading', { name: 'Variabili PLC' }),
+      within(screen.getByTestId('work-pane-0')).getByRole('grid', { name: 'Variabili PLC' }),
     ).toBeInTheDocument();
   });
 

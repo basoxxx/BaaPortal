@@ -21,6 +21,8 @@ import './grid.css';
 export interface GridColumn<R> {
   id: string;
   headerKey: string;
+  /** Testo che spiega la colonna (suggerimento sull'intestazione). */
+  headerTitleKey?: string;
   width: number;
   editor: 'text' | 'checkbox' | 'type' | 'none';
   get(row: R): string | boolean;
@@ -56,6 +58,7 @@ export interface DataGridProps<R> {
   onFill?(sourceKey: string, count: number): void;
   diagnostic?(rowKey: string, columnId: string): GridDiagnostic | undefined;
   onRowDragStart?(keys: string[], e: DragEvent): void;
+  onRowDragEnd?(): void;
   onDropOnRow?(e: DragEvent, rowKey: string | null): void;
 }
 
@@ -322,6 +325,13 @@ export function DataGrid<R>(props: DataGridProps<R>) {
     if (target.closest('[data-checkbox]')) return toggleCheckbox(it, col);
     if (selected.size > 0 && !target.closest('input')) setSelected(new Set());
   };
+  const onDoubleClick = (e: MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('input,[data-rownum],[data-expander],[data-checkbox]')) return;
+    const it = itemOf(rowOf(target));
+    const col = colOf(target);
+    if (it && col >= 0) startEdit(it, col, null);
+  };
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
     if (target.tagName === 'INPUT' || !resolved || !activeItem) return;
@@ -377,12 +387,20 @@ export function DataGrid<R>(props: DataGridProps<R>) {
     if (i !== undefined && fillRef.current.to !== i) setFill({ ...fillRef.current, to: i });
   };
   const filling = fill !== null;
+  // Il riempimento si ferma alla prima riga "<Aggiungi>", che conta una volta sola.
+  const fillLimit = (src: number, to: number) => {
+    for (let i = src + 1; i <= to; i++) if (items[i]?.kind === 'add') return i;
+    return to;
+  };
+  const fillLimitRef = useRef(fillLimit);
+  fillLimitRef.current = fillLimit;
   useEffect(() => {
     if (!filling) return;
     const end = () => {
       const f = fillRef.current;
       setFill(null);
-      const count = f ? f.to - (indexOf.get(f.src) ?? f.to) : 0;
+      const src = f ? (indexOf.get(f.src) ?? f.to) : 0;
+      const count = f ? fillLimitRef.current(src, f.to) - src : 0;
       if (f && count > 0) onFill?.(f.src, count);
     };
     const abort = () => setFill(null);
@@ -397,6 +415,7 @@ export function DataGrid<R>(props: DataGridProps<R>) {
     };
   }, [filling, indexOf, onFill]);
   const fillFrom = fill ? (indexOf.get(fill.src) ?? 0) : 0;
+  const fillTo = fill ? fillLimit(fillFrom, fill.to) : 0;
 
   // --- Trascinamento di righe ---
   const onDragStart = (e: ReactDragEvent<HTMLDivElement>) => {
@@ -419,6 +438,7 @@ export function DataGrid<R>(props: DataGridProps<R>) {
       onFocus={onFocus}
       onBlur={focusProps.onBlur}
       onClick={onClick}
+      onDoubleClick={onDoubleClick}
       onKeyDown={onKeyDown}
       onPointerDown={onPointerDown}
       onPointerOver={onPointerOver}
@@ -427,6 +447,7 @@ export function DataGrid<R>(props: DataGridProps<R>) {
         e.preventDefault()
       }
       onDragStart={onDragStart}
+      onDragEnd={props.onRowDragEnd}
       onDragOver={props.onDropOnRow ? (e) => e.preventDefault() : undefined}
       onDrop={
         props.onDropOnRow
@@ -440,7 +461,12 @@ export function DataGrid<R>(props: DataGridProps<R>) {
       <div role="row" className="baa-grid-row baa-grid-head">
         <div role="columnheader" className="baa-grid-rownum" aria-label={t('grid.rowNumber')} />
         {columns.map((c) => (
-          <div key={c.id} role="columnheader" className="baa-grid-cell">
+          <div
+            key={c.id}
+            role="columnheader"
+            className="baa-grid-cell"
+            title={c.headerTitleKey ? t(c.headerTitleKey) : undefined}
+          >
             {t(c.headerKey)}
           </div>
         ))}
@@ -449,7 +475,7 @@ export function DataGrid<R>(props: DataGridProps<R>) {
         const isData = it.kind === 'data';
         const selectable = isData && selectableItem(it);
         const isSel = selectable && selected.has(it.key);
-        const covered = fill !== null && i > fillFrom && i <= fill.to;
+        const covered = fill !== null && i > fillFrom && i <= fillTo;
         const depth = isData ? (props.depth?.(it.row) ?? 0) : 0;
         const canOpen = isData && !!props.expandable?.(it.row);
         const open = canOpen && !!props.expanded?.has(it.key);
