@@ -38,6 +38,8 @@ export interface ProjectServiceDeps {
   t: TFunction;
   appVersion: string;
   now?: () => Date;
+  /** Conferma le bozze dei campi in modifica prima di salvare, chiudere o aprire. */
+  flushPendingEdits?: () => void;
 }
 
 const APP_TITLE = 'BaaPortal';
@@ -60,6 +62,7 @@ export function joinPath(dir: string, file: string): string {
 export function createProjectService(deps: ProjectServiceDeps): ProjectService {
   const { store, bridge, t, appVersion } = deps;
   const now = deps.now ?? (() => new Date());
+  const flush = () => deps.flushPendingEdits?.();
 
   const showError = (message: string) => bridge.showError(t('errors.title'), message);
 
@@ -88,6 +91,7 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
   }
 
   async function ensureCanDiscard(): Promise<boolean> {
+    flush();
     const doc = store.getState().doc;
     if (!doc?.dirty) return true;
     const answer = await bridge.confirmUnsaved({
@@ -198,6 +202,7 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
   }
 
   function save(): Promise<boolean> {
+    flush();
     return enqueueSave(async (waited) => {
       const doc = store.getState().doc;
       if (!doc) return false;
@@ -207,6 +212,7 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
   }
 
   async function saveAs(): Promise<boolean> {
+    flush();
     const doc = store.getState().doc;
     if (!doc) return false;
     const path = await bridge.showSaveProjectDialog(`${doc.project.meta.name}.baap`);

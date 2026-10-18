@@ -1,9 +1,10 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
+import { readBaap } from '@baaportal/project';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { CommitInput, CommitTextarea } from '../src/components/CommitField';
-import { renderApp } from './renderApp';
+import { PROJECT_PATH, renderApp } from './renderApp';
 
 describe('CommitInput', () => {
   it('conferma su blur e Invio, Esc annulla, validate blocca', async () => {
@@ -124,5 +125,28 @@ describe("annulla e ripeti nell'app", () => {
     );
     await user.keyboard('{Control>}y{/Control}');
     expect(store.getState().doc?.project.meta.author).toBe('MarioZ');
+  });
+});
+
+describe('bozze in modifica e salvataggio/chiusura', () => {
+  it('Ctrl+S con il campo ancora in modifica salva il valore e non lascia il documento modificato', async () => {
+    const { user, store, bridge } = await renderApp({ view: 'project', withProject: true });
+    await user.click(screen.getByTestId('tree-node-project'));
+    await user.type(screen.getByLabelText('Autore'), 'Z');
+    await user.keyboard('{Control>}s{/Control}');
+    await waitFor(() => expect(store.getState().doc?.dirty).toBe(false));
+    expect(store.getState().doc?.project.meta.author).toBe('MarioZ');
+    expect(readBaap(bridge.files.get(PROJECT_PATH)!).meta.author).toBe('MarioZ');
+  });
+
+  it('una richiesta di chiusura con il campo in modifica chiede di salvare', async () => {
+    const { user, bridge } = await renderApp({ view: 'project', withProject: true });
+    await user.click(screen.getByTestId('tree-node-project'));
+    await user.type(screen.getByLabelText('Autore'), 'Z');
+    await act(async () => {
+      await bridge.emitCloseRequest();
+    });
+    expect(bridge.confirmTexts).toHaveLength(1);
+    expect(bridge.closeConfirmed).toBe(false);
   });
 });

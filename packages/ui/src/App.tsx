@@ -6,6 +6,7 @@ import type { BaaBridge } from './bridge';
 import { ErrorBoundary, FatalError } from './ErrorBoundary';
 import { useShortcuts } from './commands/useShortcuts';
 import { i18next, initI18n, t } from './i18n';
+import { flushPendingEdits } from './flushPendingEdits';
 import { createProjectService } from './services/projectService';
 import { PortalView } from './portal/PortalView';
 import { ProjectView } from './project/ProjectView';
@@ -65,7 +66,13 @@ export function App({ bridge, onReady }: AppProps) {
       const detachLayout = store.subscribe((s, prev) => {
         if (s.panels !== prev.panels) saveLayout(storage, s.panels);
       });
-      const service = createProjectService({ store, bridge, t, appVersion });
+      const service = createProjectService({
+        store,
+        bridge,
+        t,
+        appVersion,
+        flushPendingEdits,
+      });
       const detachPortal = attachPortalReaction(store);
       dispose = () => {
         detachPortal();
