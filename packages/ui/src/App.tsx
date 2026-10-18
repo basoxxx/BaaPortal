@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { I18nextProvider } from 'react-i18next';
 import type { BaaBridge } from './bridge';
+import { ErrorBoundary, FatalError } from './ErrorBoundary';
 import { useShortcuts } from './commands/useShortcuts';
 import { i18next, initI18n, t } from './i18n';
 import { createProjectService } from './services/projectService';
@@ -42,11 +43,20 @@ function Shell() {
 
 export function App({ bridge, onReady }: AppProps) {
   const [services, setServices] = useState<AppServices | null>(null);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     let dispose: (() => void) | undefined;
     void (async () => {
+      try {
+        await start();
+      } catch (e) {
+        console.error(e);
+        if (!cancelled) setFailed(true);
+      }
+    })();
+    async function start() {
       const [appVersion] = await Promise.all([bridge.appVersion(), initI18n()]);
       if (cancelled) return;
       const store = createAppStore();
@@ -65,7 +75,7 @@ export function App({ bridge, onReady }: AppProps) {
       const services = { store, service, bridge };
       setServices(services);
       onReady?.(services);
-    })();
+    }
     return () => {
       cancelled = true;
       dispose?.();
@@ -73,12 +83,15 @@ export function App({ bridge, onReady }: AppProps) {
     };
   }, [bridge]);
 
+  if (failed) return <FatalError />;
   if (!services) return null;
   return (
-    <I18nextProvider i18n={i18next}>
-      <AppProvider value={services}>
-        <Shell />
-      </AppProvider>
-    </I18nextProvider>
+    <ErrorBoundary>
+      <I18nextProvider i18n={i18next}>
+        <AppProvider value={services}>
+          <Shell />
+        </AppProvider>
+      </I18nextProvider>
+    </ErrorBoundary>
   );
 }

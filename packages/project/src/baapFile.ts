@@ -25,8 +25,8 @@ const projectSchema = z.object({
       name: z.string(),
       author: z.string(),
       comment: z.string(),
-      createdAt: z.string(),
-      modifiedAt: z.string(),
+      createdAt: z.iso.datetime(),
+      modifiedAt: z.iso.datetime(),
     })
     .strict(),
 });

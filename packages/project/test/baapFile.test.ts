@@ -61,6 +61,30 @@ describe('file .baap', () => {
         'project.json': strToU8('{"formatVersion":1,"meta":{}}'),
       }),
     ],
+    [
+      'INVALID_SCHEMA',
+      zipSync({
+        'baaportal.json': manifest(1),
+        'project.json': strToU8(
+          JSON.stringify({
+            formatVersion: 1,
+            meta: { name: 'X', author: '', comment: '', createdAt: 'ieri', modifiedAt: now.toISOString() },
+          }),
+        ),
+      }),
+    ],
+    [
+      'INVALID_SCHEMA',
+      zipSync({
+        'baaportal.json': manifest(1),
+        'project.json': strToU8(
+          JSON.stringify({
+            formatVersion: 1,
+            meta: { name: 'X', author: '', comment: '', createdAt: now.toISOString(), modifiedAt: '' },
+          }),
+        ),
+      }),
+    ],
     ['NEWER_FORMAT', zipSync({ 'baaportal.json': manifest(2), 'project.json': strToU8('{}') })],
     ['NOT_ZIP', truncatedValidBaap()],
   ])('readBaap rifiuta con %s', (code, bytes) => {
