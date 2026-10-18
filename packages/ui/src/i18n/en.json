@@ -177,6 +177,10 @@
   "details": {
     "name": "Name"
   },
+  "history": {
+    "author": "Project author",
+    "comment": "Project comment"
+  },
   "inspector": {
     "tab": {
       "properties": "Properties",

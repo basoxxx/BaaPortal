@@ -269,7 +269,9 @@ describe('altre operazioni', () => {
 
   it('Chiudi progetto con modifiche non salvate passa dalla conferma di service.close()', async () => {
     const { user, store, bridge } = await renderApp({ withProject: true });
-    store.getState().updateMeta({ author: 'X' });
+    store.getState().edit('history.author', (p) => {
+      p.meta.author = 'X';
+    });
     await user.click(screen.getByTestId('action-close'));
     await waitFor(() => expect(bridge.confirmTexts).toHaveLength(1));
     expect(store.getState().doc).not.toBeNull();

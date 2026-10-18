@@ -505,3 +505,8 @@
 .baa-tc-section h3 button[aria-expanded='true']::before {
   content: '▾';
 }
+.baa-field-error {
+  grid-column: 2;
+  color: var(--baa-error, #c42b1c);
+  font-size: 0.9em;
+}

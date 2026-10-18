@@ -128,7 +128,9 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
       now(),
     );
     if (!(await writeProject(project, path))) return { ok: false, error: 'WRITE_FAILED' };
-    store.getState().setDoc({ project, filePath: path, dirty: false });
+    store
+      .getState()
+      .setDoc({ project, filePath: path, dirty: false, revision: 0, savedRevision: 0 });
     await addRecentBestEffort(path, project.meta.name);
     announce('created', project.meta.name);
     return { ok: true };
@@ -147,7 +149,9 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
       await showError(message);
       return false;
     }
-    store.getState().setDoc({ project, filePath: path, dirty: false });
+    store
+      .getState()
+      .setDoc({ project, filePath: path, dirty: false, revision: 0, savedRevision: 0 });
     await addRecentBestEffort(path, project.meta.name);
     announce('opened', project.meta.name);
     return true;
@@ -163,20 +167,14 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
     const doc = before.doc;
     if (!doc) return false;
     const loadId = before.docLoadId;
-    const project: Project = {
-      ...doc.project,
-      meta: { ...doc.project.meta, modifiedAt: now().toISOString() },
-    };
+    const revision = doc.revision;
+    const modifiedAt = now().toISOString();
+    const project: Project = { ...doc.project, meta: { ...doc.project.meta, modifiedAt } };
     if (!(await writeProject(project, path))) return false;
-    // Durante la scrittura l'utente può aver modificato o sostituito il documento.
-    const cur = store.getState();
-    if (cur.docLoadId === loadId && cur.doc) {
-      if (cur.doc.project === doc.project) {
-        cur.replaceDoc({ project, filePath: path, dirty: false });
-      } else {
-        const meta = { ...cur.doc.project.meta, modifiedAt: project.meta.modifiedAt };
-        cur.replaceDoc({ project: { ...cur.doc.project, meta }, filePath: path, dirty: true });
-      }
+    // Durante la scrittura l'utente può aver modificato (la revisione catturata resta quella scritta,
+    // quindi il documento resta "modificato") o sostituito il documento.
+    if (store.getState().docLoadId === loadId) {
+      store.getState().markSaved({ filePath: path, revision, modifiedAt });
     }
     await addRecentBestEffort(path, project.meta.name);
     announce('saved', project.meta.name);

@@ -34,6 +34,9 @@ describe('finestra di ispezione', () => {
     expect(screen.getByLabelText('Ultima modifica')).toHaveValue(created);
     expect(store.getState().doc?.dirty).toBe(false);
     await user.type(screen.getByLabelText('Autore'), 'Z');
+    // La conferma avviene all'uscita dal campo, non a ogni tasto.
+    expect(store.getState().doc?.dirty).toBe(false);
+    await user.tab();
     expect(store.getState().doc?.dirty).toBe(true);
     expect(store.getState().doc?.project.meta.author).toBe('MarioZ');
     expect(screen.getByLabelText('Autore')).toHaveValue('MarioZ');
@@ -45,8 +48,10 @@ describe('finestra di ispezione', () => {
     const c = screen.getByLabelText('Commento');
     expect(c.tagName).toBe('TEXTAREA');
     await user.type(c, 'ab{Enter}cd');
-    expect(store.getState().doc?.project.meta.comment).toBe('ab\ncd');
     expect(c).toHaveFocus();
+    expect(c).toHaveValue('ab\ncd');
+    await user.tab();
+    expect(store.getState().doc?.project.meta.comment).toBe('ab\ncd');
   });
 
   it('Nome e Percorso sono in sola lettura', async () => {

@@ -61,6 +61,7 @@ export interface Command {
   labelKey: string;
   icon?: IconName;
   shortcut?: string;
+  altShortcuts?: string[];
   isEnabled(s: AppState): boolean;
   isChecked?(s: AppState): boolean;
   run(ctx: CommandContext): void | Promise<void>;
@@ -122,8 +123,19 @@ const list: Command[] = [
   def('project.print', { icon: 'print' }),
   def('project.printPreview'),
   def('project.exit', { isEnabled: always, run: ({ service }) => service.handleCloseRequest() }),
-  def('edit.undo', { icon: 'undo' }),
-  def('edit.redo', { icon: 'redo' }),
+  def('edit.undo', {
+    icon: 'undo',
+    shortcut: 'Mod+Z',
+    isEnabled: (s) => s.history.past.length > 0,
+    run: ({ store }) => store.getState().undo(),
+  }),
+  def('edit.redo', {
+    icon: 'redo',
+    shortcut: 'Mod+Y',
+    altShortcuts: ['Mod+Shift+Z'],
+    isEnabled: (s) => s.history.future.length > 0,
+    run: ({ store }) => store.getState().redo(),
+  }),
   def('edit.cut', { icon: 'cut' }),
   def('edit.copy', { icon: 'copy' }),
   def('edit.paste', { icon: 'paste' }),

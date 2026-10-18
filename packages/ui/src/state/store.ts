@@ -1,5 +1,8 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
-import type { Project, ProjectMeta } from '@baaportal/project';
+import type { Project } from '@baaportal/project';
+import { applyHistory, HISTORY_LIMIT, pushLimited, recordEdit, type HistoryEntry } from './history';
+
+export { HISTORY_LIMIT, type HistoryEntry };
 
 export type View = 'portal' | 'project';
 export type PortalId = 'start' | 'devices' | 'plc' | 'online';
@@ -18,6 +21,9 @@ export interface OpenDoc {
   project: Project;
   filePath: string;
   dirty: boolean;
+  /** Numero dell'ultima modifica applicata; undo/redo lo riportano a quello della voce. */
+  revision: number;
+  savedRevision: number;
 }
 export interface InfoMessage {
   id: number;
@@ -43,6 +49,7 @@ export interface AppState {
   doc: OpenDoc | null;
   /** Cresce a ogni documento caricato (apertura, creazione, chiusura); non cresce con il salvataggio. */
   docLoadId: number;
+  history: { past: HistoryEntry[]; future: HistoryEntry[] };
   selection: TreeNodeId | null;
   messages: InfoMessage[];
   status: { textKey: string; params?: Record<string, string> } | null;
@@ -53,8 +60,12 @@ export interface AppState {
   setPortal(p: PortalId): void;
   setStartAction(a: StartAction): void;
   setDoc(d: OpenDoc | null): void; // nuovo documento caricato o chiuso
-  replaceDoc(d: OpenDoc): void; // stesso documento dopo un salvataggio (anche con nome nuovo)
-  updateMeta(patch: Partial<Pick<ProjectMeta, 'author' | 'comment'>>): void; // imposta dirty
+  /** Modifica il progetto con una ricetta immer; false (e nessuna voce) se non cambia nulla. */
+  edit(labelKey: string, recipe: (draft: Project) => void): boolean;
+  undo(): void;
+  redo(): void;
+  /** Dopo un salvataggio: nessuna voce di cronologia. */
+  markSaved(a: { filePath: string; revision: number; modifiedAt: string }): void;
   select(id: TreeNodeId | null): void;
   pushMessage(m: Omit<InfoMessage, 'id' | 'time' | 'date'>): void; // aggiorna anche status
   setPanel(name: PanelName, patch: Partial<PanelState>): void;
@@ -76,7 +87,10 @@ const formatTime = (d: Date) =>
 
 export function createAppStore(now: () => Date = () => new Date()): StoreApi<AppState> {
   let nextId = 1;
-  return createStore<AppState>()((set) => ({
+  // Il contatore delle revisioni cresce sempre: dopo un undo, un nuovo edit non riusa numeri.
+  let revisionCounter = 0;
+  const withDirty = (d: OpenDoc): OpenDoc => ({ ...d, dirty: d.revision !== d.savedRevision });
+  return createStore<AppState>()((set, get) => ({
     view: 'portal',
     portal: 'start',
     startAction: 'open',
@@ -91,17 +105,70 @@ export function createAppStore(now: () => Date = () => new Date()): StoreApi<App
     setView: (view) => set({ view }),
     setPortal: (portal) => set({ portal }),
     setStartAction: (startAction) => set({ startAction }),
-    setDoc: (doc) => set((s) => ({ doc, docLoadId: s.docLoadId + 1 })),
-    replaceDoc: (doc) => set({ doc }),
-    updateMeta: (patch) =>
+    history: { past: [], future: [] },
+    setDoc: (doc) => {
+      if (doc) revisionCounter = doc.revision; // il prossimo edit prende revision + 1
+      set((s) => ({
+        doc: doc ? withDirty(doc) : null,
+        docLoadId: s.docLoadId + 1,
+        history: { past: [], future: [] },
+      }));
+    },
+    edit: (labelKey, recipe) => {
+      const { doc, history } = get();
+      if (!doc) return false;
+      const rec = recordEdit(doc.project, recipe);
+      if (!rec) return false;
+      const after = ++revisionCounter;
+      const entry: HistoryEntry = {
+        labelKey,
+        patches: rec.patches,
+        inverse: rec.inverse,
+        before: doc.revision,
+        after,
+      };
+      set({
+        doc: withDirty({ ...doc, project: rec.next, revision: after }),
+        history: { past: pushLimited(history.past, entry), future: [] },
+      });
+      return true;
+    },
+    undo: () => {
+      const { doc, history } = get();
+      const entry = history.past[history.past.length - 1];
+      if (!doc || !entry) return;
+      set({
+        doc: withDirty({
+          ...doc,
+          project: applyHistory(doc.project, entry.inverse),
+          revision: entry.before,
+        }),
+        history: { past: history.past.slice(0, -1), future: [entry, ...history.future] },
+      });
+    },
+    redo: () => {
+      const { doc, history } = get();
+      const entry = history.future[0];
+      if (!doc || !entry) return;
+      set({
+        doc: withDirty({
+          ...doc,
+          project: applyHistory(doc.project, entry.patches),
+          revision: entry.after,
+        }),
+        history: { past: [...history.past, entry], future: history.future.slice(1) },
+      });
+    },
+    markSaved: ({ filePath, revision, modifiedAt }) =>
       set((s) =>
         s.doc
           ? {
-              doc: {
+              doc: withDirty({
                 ...s.doc,
-                dirty: true,
-                project: { ...s.doc.project, meta: { ...s.doc.project.meta, ...patch } },
-              },
+                filePath,
+                savedRevision: revision,
+                project: { ...s.doc.project, meta: { ...s.doc.project.meta, modifiedAt } },
+              }),
             }
           : s,
       ),
