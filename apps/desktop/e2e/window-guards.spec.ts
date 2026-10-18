@@ -1,9 +1,8 @@
-import { expect, test } from '@playwright/test';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createProject as newProject, writeBaap } from '@baaportal/project';
-import { launchApp } from './helpers';
+import { createProject, expect, launchApp, shownDialogs, stubMessageBox, test } from './helpers';
 
 const title = (app: Awaited<ReturnType<typeof launchApp>>['app']) =>
   app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getTitle());
@@ -24,6 +23,49 @@ test("una navigazione della pagina viene bloccata: l'app resta sulla sua pagina 
   await page.evaluate(() => window.open('https://example.com'));
   await page.waitForTimeout(300);
   expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(1);
+});
+
+test('dopo una navigazione bloccata la chiusura chiede ancora di salvare le modifiche', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'baa-guard-'));
+  try {
+    const { app, page } = await launchApp();
+    await stubMessageBox(app, 2);
+    await createProject(page, 'Pressa', join(dir, 'p'));
+    await page.getByRole('button', { name: 'Apri la vista progetto' }).first().click();
+    await page.getByTestId('tree-node-project').click();
+    await page.getByTestId('panel-inspector').getByLabel('Autore').fill('Modificato');
+    await page.evaluate(() => {
+      location.href = 'file:///etc/hosts';
+    });
+    await page.waitForTimeout(500);
+
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.close());
+    await expect.poll(() => shownDialogs(app)).toHaveLength(1);
+    expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(1);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('dopo una ricarica la pagina si riannuncia: la chiusura chiede di nuovo di salvare', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'baa-guard-'));
+  try {
+    const { app, page } = await launchApp();
+    await stubMessageBox(app, 2);
+    await app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.webContents.reload(),
+    );
+    await page.waitForFunction(() => !!document.querySelector('#root > *'));
+    await createProject(page, 'Pressa', join(dir, 'p'));
+    await page.getByRole('button', { name: 'Apri la vista progetto' }).first().click();
+    await page.getByTestId('tree-node-project').click();
+    await page.getByTestId('panel-inspector').getByLabel('Autore').fill('Modificato');
+
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.close());
+    await expect.poll(() => shownDialogs(app)).toHaveLength(1);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('il rilascio di un file sulla finestra non lo apre nel renderer', async () => {
@@ -64,27 +106,31 @@ test('un renderer in crash non impedisce di chiudere la finestra', async () => {
 test('open-file (macOS) ripristina una finestra minimizzata e apre il file', async () => {
   test.skip(process.platform !== 'darwin', 'open-file esiste solo su macOS');
   const dir = mkdtempSync(join(tmpdir(), 'baa-openfile-'));
-  const file = join(dir, 'minimizzato.baap');
-  writeFileSync(
-    file,
-    writeBaap(newProject({ name: 'Min', author: 'x', comment: '' }, new Date()), {
-      appVersion: '0.1.0',
-    }),
-  );
-  const { app } = await launchApp();
-  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.minimize());
-  await expect
-    .poll(() =>
-      app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.isMinimized()),
-    )
-    .toBe(true);
-  await app.evaluate(({ app: a }, p) => {
-    a.emit('open-file', { preventDefault() {} }, p);
-  }, file);
-  await expect
-    .poll(() =>
-      app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.isMinimized()),
-    )
-    .toBe(false);
-  await expect.poll(() => title(app)).toBe(`BaaPortal - ${file}`);
+  try {
+    const file = join(dir, 'minimizzato.baap');
+    writeFileSync(
+      file,
+      writeBaap(newProject({ name: 'Min', author: 'x', comment: '' }, new Date()), {
+        appVersion: '0.1.0',
+      }),
+    );
+    const { app } = await launchApp();
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.minimize());
+    await expect
+      .poll(() =>
+        app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.isMinimized()),
+      )
+      .toBe(true);
+    await app.evaluate(({ app: a }, p) => {
+      a.emit('open-file', { preventDefault() {} }, p);
+    }, file);
+    await expect
+      .poll(() =>
+        app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.isMinimized()),
+      )
+      .toBe(false);
+    await expect.poll(() => title(app)).toBe(`BaaPortal - ${file}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

@@ -2,15 +2,20 @@ import { app, BrowserWindow, ipcMain, Menu } from 'electron';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { registerIpc } from './ipc';
+import type { Platform } from './recentProjects';
 import { isTrustedUrl, type TrustOptions } from './trust';
 
 // Hook di test (userData isolato, uscita senza conferma): mai onorato nelle build pacchettizzate.
 const testUserData = !app.isPackaged ? process.env['BAA_USER_DATA'] : undefined;
 if (testUserData) app.setPath('userData', testUserData);
 
+// Dev server di electron-vite: in una build pacchettizzata la pagina viene sempre dai file dell'app.
+const devUrl = !app.isPackaged ? process.env['ELECTRON_RENDERER_URL'] : undefined;
+
 const trust: TrustOptions = {
   indexFileUrl: pathToFileURL(join(import.meta.dirname, '../renderer/index.html')).href,
-  devUrl: process.env['ELECTRON_RENDERER_URL'],
+  devUrl,
+  platform: process.platform as Platform,
 };
 
 let win: BrowserWindow | null = null;
@@ -86,7 +91,9 @@ function createWindow(): void {
   win.on('closed', () => {
     win = null;
   });
-  win.webContents.on('did-start-loading', () => {
+  // Solo un nuovo documento (es. ricarica) deve riannunciarsi: una navigazione bloccata da
+  // will-navigate avvia comunque un caricamento ma lascia la pagina, e il renderer, com'erano.
+  win.webContents.on('did-navigate', () => {
     rendererIsReady = false;
   });
   win.webContents.on('render-process-gone', () => {
@@ -97,7 +104,6 @@ function createWindow(): void {
     if (!isTrustedUrl(url, trust)) e.preventDefault();
   });
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  const devUrl = process.env['ELECTRON_RENDERER_URL'];
   if (devUrl) void win.loadURL(devUrl);
   else void win.loadFile(join(import.meta.dirname, '../renderer/index.html'));
 }
