@@ -14,7 +14,7 @@ import { ids, parseNodeId } from './treeIds';
 /** Numero massimo degli UDT in S7-300. */
 export const MAX_UDT = 65535;
 
-/** Aggiunge una tabella delle variabili (un solo passo di annulla) e la seleziona. */
+/** Aggiunge una tabella delle variabili (un solo passo di annulla), la seleziona e la apre. */
 export function addTagTable(store: StoreApi<AppState>, deviceId: string): void {
   let newId: string | null = null;
   store.getState().edit('history.addTagTable', (p) => {
@@ -28,10 +28,13 @@ export function addTagTable(store: StoreApi<AppState>, deviceId: string): void {
     dev.tagTables.push(table);
     newId = table.id;
   });
-  if (newId) store.getState().select(ids.tagTable(deviceId, newId));
+  if (newId) {
+    store.getState().select(ids.tagTable(deviceId, newId));
+    store.getState().openEditor({ kind: 'tagTable', deviceId, objectId: newId });
+  }
 }
 
-/** Aggiunge un tipo di dati utente (un solo passo di annulla) e lo seleziona. */
+/** Aggiunge un tipo di dati utente (un solo passo di annulla), lo seleziona e lo apre. */
 export function addUdt(store: StoreApi<AppState>, deviceId: string): void {
   let newId: string | null = null;
   store.getState().edit('history.addUdt', (p) => {
@@ -43,7 +46,10 @@ export function addUdt(store: StoreApi<AppState>, deviceId: string): void {
     dev.udts.push(udt);
     newId = udt.id;
   });
-  if (newId) store.getState().select(ids.udt(deviceId, newId));
+  if (newId) {
+    store.getState().select(ids.udt(deviceId, newId));
+    store.getState().openEditor({ kind: 'udt', deviceId, objectId: newId });
+  }
 }
 
 /**

@@ -87,6 +87,17 @@ function panelToggle(id: CommandId, panel: PanelName): Command {
   });
 }
 
+/** Accende e spegne la divisione dell'area di lavoro nella modalità data. */
+function splitToggle(id: CommandId, mode: 'vertical' | 'horizontal'): Command {
+  return def(id, {
+    icon: 'splitWorkArea',
+    isEnabled: hasDoc,
+    isChecked: (s) => s.workArea.split === mode,
+    run: ({ store }) =>
+      store.getState().setSplit(store.getState().workArea.split === mode ? 'none' : mode),
+  });
+}
+
 /** Comando di Modifica: agisce sull'elemento col focus (`editTarget`) se questo lo permette. */
 function editCommand(
   id: CommandId,
@@ -192,9 +203,12 @@ const list: Command[] = [
   def('options.settings'),
   def('tools.crossReferences'),
   def('tools.callStructure'),
-  def('window.splitVertical', { icon: 'splitWorkArea' }),
-  def('window.splitHorizontal', { icon: 'splitWorkArea' }),
-  def('window.closeAllEditors'),
+  splitToggle('window.splitVertical', 'vertical'),
+  splitToggle('window.splitHorizontal', 'horizontal'),
+  def('window.closeAllEditors', {
+    isEnabled: (s) => s.workArea.editors.length > 0,
+    run: ({ store }) => store.getState().closeAllEditors(),
+  }),
   def('help.show'),
   def('help.about', {
     isEnabled: always,

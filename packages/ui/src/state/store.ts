@@ -1,8 +1,10 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { Project } from '@baaportal/project';
+import * as wa from './workArea';
 import { applyHistory, HISTORY_LIMIT, pushLimited, recordEdit, type HistoryEntry } from './history';
 
 export { HISTORY_LIMIT, type HistoryEntry };
+export type { EditorKind, EditorRef, WorkAreaState } from './workArea';
 
 export type View = 'portal' | 'project';
 export type PortalId = 'start' | 'devices' | 'plc' | 'online';
@@ -63,6 +65,7 @@ export interface AppState {
   panels: Record<PanelName, PanelState>;
   referenceProjectsOpen: boolean;
   taskCard: TaskCardId;
+  workArea: wa.WorkAreaState;
   setView(v: View): void;
   setPortal(p: PortalId): void;
   setStartAction(a: StartAction): void;
@@ -82,6 +85,16 @@ export interface AppState {
   setPanel(name: PanelName, patch: Partial<PanelState>): void;
   setReferenceProjectsOpen(o: boolean): void;
   setTaskCard(t: TaskCardId): void;
+  /** Apre l'editor (o lo attiva, o porta in primo piano la sua finestra) e seleziona il suo nodo. */
+  openEditor(target: wa.EditorTarget): void;
+  closeEditor(key: string): void;
+  closeAllEditors(): void;
+  /** Attiva l'editor nel riquadro con il focus e seleziona il suo nodo. */
+  activateEditor(key: string): void;
+  setSplit(mode: wa.SplitMode): void;
+  focusPane(i: 0 | 1): void;
+  detachEditor(key: string): void;
+  attachEditor(key: string): void;
 }
 
 export const DEFAULT_PANELS: Record<PanelName, PanelState> = {
@@ -116,6 +129,7 @@ export function createAppStore(now: () => Date = () => new Date()): StoreApi<App
     panels: structuredClone(DEFAULT_PANELS),
     referenceProjectsOpen: false,
     taskCard: 'instructions',
+    workArea: wa.initialWorkArea(),
     setView: (view) => set({ view }),
     setPortal: (portal) => set({ portal }),
     setStartAction: (startAction) => set({ startAction }),
@@ -125,6 +139,7 @@ export function createAppStore(now: () => Date = () => new Date()): StoreApi<App
       set((s) => ({
         doc: doc ? withDirty(doc) : null,
         docLoadId: s.docLoadId + 1,
+        workArea: wa.closeAllEditors(s.workArea),
         dialog: null,
         history: { past: [], future: [] },
       }));
@@ -207,5 +222,26 @@ export function createAppStore(now: () => Date = () => new Date()): StoreApi<App
       set((s) => ({ panels: { ...s.panels, [name]: { ...s.panels[name], ...patch } } })),
     setReferenceProjectsOpen: (referenceProjectsOpen) => set({ referenceProjectsOpen }),
     setTaskCard: (taskCard) => set({ taskCard }),
+    openEditor: (target) => {
+      if (!get().doc) return;
+      set((s) => ({
+        workArea: wa.openEditor(s.workArea, target),
+        selection: wa.nodeIdOfEditor(target),
+      }));
+    },
+    activateEditor: (key) => {
+      const e = get().workArea.editors.find((x) => x.key === key);
+      if (!e) return;
+      set((s) => ({
+        workArea: wa.activateEditor(s.workArea, key),
+        selection: wa.nodeIdOfEditor(e),
+      }));
+    },
+    closeEditor: (key) => set((s) => ({ workArea: wa.closeEditor(s.workArea, key) })),
+    closeAllEditors: () => set((s) => ({ workArea: wa.closeAllEditors(s.workArea) })),
+    setSplit: (mode) => set((s) => ({ workArea: wa.setSplit(s.workArea, mode) })),
+    focusPane: (i) => set((s) => ({ workArea: wa.focusPane(s.workArea, i) })),
+    detachEditor: (key) => set((s) => ({ workArea: wa.detachEditor(s.workArea, key) })),
+    attachEditor: (key) => set((s) => ({ workArea: wa.attachEditor(s.workArea, key) })),
   }));
 }

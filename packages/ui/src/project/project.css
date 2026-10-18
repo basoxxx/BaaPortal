@@ -536,3 +536,88 @@
   color: var(--baa-error, #c42b1c);
   font-size: 0.9em;
 }
+
+/* Area di lavoro: riquadri, cornice dell'editor, barra degli editor */
+.baa-work-area {
+  overflow: hidden;
+}
+.baa-work-pane {
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.baa-pane-focused {
+  outline: 1px solid var(--baa-accent);
+  outline-offset: -1px;
+}
+.baa-pane-empty {
+  margin: auto;
+  padding: 12px;
+  color: var(--baa-text-muted, inherit);
+  text-align: center;
+}
+.baa-editor-frame {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.baa-editor-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  padding: 2px 6px;
+  background: var(--baa-panel-header);
+  border-bottom: 1px solid var(--baa-border);
+}
+.baa-editor-crumb {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.baa-editor-content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.baa-editor-body {
+  padding: 8px;
+}
+.baa-detached-root {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--baa-surface);
+}
+.baa-editor-bar-items {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+.baa-editor-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 160px;
+  height: 22px;
+  padding: 0 6px;
+  background: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+  color: inherit;
+}
+.baa-editor-tab[aria-pressed='true'] {
+  background: var(--baa-surface);
+  border-color: var(--baa-border);
+}
+.baa-editor-tab-label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

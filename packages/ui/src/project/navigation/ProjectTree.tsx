@@ -17,6 +17,7 @@ import { peekClipboardPayload } from '../../services/clipboard';
 import { useAppStore, useServices } from '../../state/AppContext';
 import type { EditAction } from '../../state/store';
 import { areaOfItem, isStandardTable } from '../objectActions';
+import { editorOfNode } from '../../state/workArea';
 import { runAddNode } from './addActions';
 import {
   addGroupAt,
@@ -236,11 +237,24 @@ export function ProjectTree() {
     setMenu({ x, y, nodeId });
   };
 
+  const openable = (nodeId: string) =>
+    editorOfNode(nodeId) !== null && !!rows.find((r) => r.node.id === nodeId)?.node.enabled;
+  const openNode = (nodeId: string): boolean => {
+    const target = openable(nodeId) ? editorOfNode(nodeId) : null;
+    if (target) store.getState().openEditor(target);
+    return target !== null;
+  };
+
   const menuItems = (nodeId: string): ContextMenuItem[] => {
     const act = (a: EditAction) => () => void runRef.current(a);
     const group = containerOf(doc, nodeId);
     return [
-      { id: 'open', label: t('objects.open'), disabled: true, run: () => {} },
+      {
+        id: 'open',
+        label: t('objects.open'),
+        disabled: !openable(nodeId),
+        run: () => openNode(nodeId),
+      },
       {
         id: 'cut',
         label: t('commands.edit.cut'),
@@ -342,7 +356,8 @@ export function ProjectTree() {
         pick(rows[rows.length - 1]!.node.id, true);
         break;
       case 'Enter':
-        if (!row.node.enabled || !runAddNode(store, row.node.id)) return;
+        if (!row.node.enabled) return;
+        if (!runAddNode(store, row.node.id) && !openNode(row.node.id)) return;
         break;
       default:
         return;
@@ -383,7 +398,8 @@ export function ProjectTree() {
               draggable={draggable || undefined}
               onClick={(e) => onNodeClick(e, node)}
               onDoubleClick={() => {
-                if (!node.enabled || !runAddNode(store, node.id)) toggle(node);
+                if (!node.enabled || !(runAddNode(store, node.id) || openNode(node.id)))
+                  toggle(node);
               }}
               onContextMenu={(e) => {
                 e.preventDefault();

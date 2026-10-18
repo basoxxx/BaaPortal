@@ -423,11 +423,11 @@ describe('gruppi e menu contestuale', () => {
       'Aggiungi nuovo gruppo',
       'Proprietà',
     ]);
-    expect(items[0]).toHaveAttribute('aria-disabled', 'true'); // Apri: dal Task 10
+    expect(items[0]).not.toHaveAttribute('aria-disabled'); // Apri: la tabella si apre
     expect(items[6]).toHaveAttribute('aria-disabled', 'true'); // non è una cartella
     expect(items[3]).toHaveAttribute('aria-disabled', 'true'); // nessun oggetto copiato
-    expect(items[1]).toHaveFocus();
-    await app.user.keyboard('{ArrowDown}');
+    expect(items[0]).toHaveFocus();
+    await app.user.keyboard('{ArrowDown}{ArrowDown}');
     expect(items[2]).toHaveFocus();
     await app.user.keyboard('{Enter}');
     expect(app.bridge.clipboard).toBe('Nastro');

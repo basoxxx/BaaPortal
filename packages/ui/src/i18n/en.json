@@ -32,6 +32,7 @@
     }
   },
   "messages": {
+    "detachBlocked": "The separate window could not be opened: the editor stays in the work area.",
     "created": "Project \"{{name}}\" created.",
     "opened": "Project \"{{name}}\" opened.",
     "saved": "Project \"{{name}}\" saved.",
@@ -371,6 +372,22 @@
       "100": "Restart (startup)",
       "121": "Programming error",
       "122": "I/O access error"
+    }
+  },
+  "editor": {
+    "allTags": "PLC tags",
+    "empty": "No editor open. Double-click an object in the project tree.",
+    "pane": "Pane {{n}}",
+    "detach": "Open in a separate window",
+    "attach": "Move back to the work area",
+    "close": "Close",
+    "inWindow": "(in a separate window)",
+    "groupMenu": "Editors in the group",
+    "kind": {
+      "block": "Blocks",
+      "udt": "Data types",
+      "tagTable": "Tag tables",
+      "allTags": "PLC tags"
     }
   },
   "objects": {

@@ -10,10 +10,12 @@ import { flushPendingEdits } from './flushPendingEdits';
 import { createProjectService } from './services/projectService';
 import { AddBlockDialog } from './project/dialogs/AddBlockDialog';
 import { AddDeviceDialog } from './project/dialogs/AddDeviceDialog';
+import { DetachedWindows } from './project/workarea/DetachedWindow';
 import { PortalView } from './portal/PortalView';
 import { ProjectView } from './project/ProjectView';
 import { loadLayout, saveLayout } from './project/layoutStorage';
 import { AppProvider, useAppStore, useServices, type AppServices } from './state/AppContext';
+import { attachEditorReconciler } from './state/editorReconciler';
 import { attachPortalReaction } from './state/portalReaction';
 import { createAppStore } from './state/store';
 import './theme/tokens.css';
@@ -45,8 +47,19 @@ function Shell() {
       {view === 'portal' ? <PortalView /> : <ProjectView />}
       {dialog?.kind === 'addDevice' ? <AddDeviceDialog onClose={close} /> : null}
       {dialog?.kind === 'addBlock' ? (
-        <AddBlockDialog deviceId={dialog.deviceId} onClose={close} />
+        <AddBlockDialog
+          deviceId={dialog.deviceId}
+          onClose={close}
+          onAdded={(ref, open) => {
+            if (open && ref.kind === 'block') {
+              store
+                .getState()
+                .openEditor({ kind: 'block', deviceId: ref.deviceId, objectId: ref.id });
+            }
+          }}
+        />
       ) : null}
+      <DetachedWindows />
     </div>
   );
 }
@@ -83,8 +96,10 @@ export function App({ bridge, onReady }: AppProps) {
         flushPendingEdits,
       });
       const detachPortal = attachPortalReaction(store);
+      const detachEditors = attachEditorReconciler(store);
       dispose = () => {
         detachPortal();
+        detachEditors();
         detachLayout();
         service.dispose();
       };

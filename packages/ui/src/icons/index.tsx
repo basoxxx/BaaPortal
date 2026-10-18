@@ -60,7 +60,8 @@ export type IconName =
   | 'treeWatch'
   | 'treeBackup'
   | 'treeProgInfo'
-  | 'treeAdd';
+  | 'treeAdd'
+  | 'editorWindow';
 
 const registry = new Map<IconName, FC<{ size: number }>>();
 

@@ -32,6 +32,7 @@
     }
   },
   "messages": {
+    "detachBlocked": "Impossibile aprire la finestra separata: l'editor resta nell'area di lavoro.",
     "created": "Progetto \"{{name}}\" creato.",
     "opened": "Progetto \"{{name}}\" aperto.",
     "saved": "Progetto \"{{name}}\" salvato.",
@@ -371,6 +372,22 @@
       "100": "Riavvio (avviamento)",
       "121": "Errore di programmazione",
       "122": "Errore di accesso alla periferia"
+    }
+  },
+  "editor": {
+    "allTags": "Variabili PLC",
+    "empty": "Nessun editor aperto. Fai doppio clic su un oggetto nell'albero del progetto.",
+    "pane": "Riquadro {{n}}",
+    "detach": "Apri in una finestra separata",
+    "attach": "Riporta nell'area di lavoro",
+    "close": "Chiudi",
+    "inWindow": "(in una finestra separata)",
+    "groupMenu": "Editor del gruppo",
+    "kind": {
+      "block": "Blocchi",
+      "udt": "Tipi di dati",
+      "tagTable": "Tabelle delle variabili",
+      "allTags": "Variabili PLC"
     }
   },
   "objects": {

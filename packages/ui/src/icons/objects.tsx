@@ -118,6 +118,12 @@ shapes.treeAdd = (
     <path d="M8 5v6M5 8h6" stroke="#2e9a4f" />
   </>
 );
+shapes.editorWindow = (
+  <>
+    <rect x="2" y="3" width="12" height="10" rx="1" stroke="#4a5860" />
+    <path d="M2 6h12" stroke="#4a5860" />
+  </>
+);
 
 for (const [name, node] of Object.entries(shapes) as [IconName, ReactNode][])
   registerIcon(name, make(node));
