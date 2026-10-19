@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   findDevice,
@@ -54,6 +54,14 @@ type MemberOwnerKind = 'OB' | 'FB' | 'FC' | 'DB' | 'UDT';
 
 const newId = () => globalThis.crypto.randomUUID();
 const rowKey = (r: InterfaceRow) => r.key;
+const sameRow = (a: InterfaceRow, b: InterfaceRow) =>
+  (Object.keys(a) as (keyof InterfaceRow)[]).every((k) =>
+    k === 'editable'
+      ? (Object.keys(a.editable) as (keyof InterfaceRow['editable'])[]).every(
+          (f) => a.editable[f] === b.editable[f],
+        )
+      : a[k] === b[k],
+  ) && Object.keys(a).length === Object.keys(b).length;
 const isFbIn = (device: PlcDevice) => (name: string) =>
   device.blocks.some((b) => b.kind === 'FB' && sameName(b.name, name));
 
@@ -126,10 +134,21 @@ export function InterfaceTable({ deviceId, target, label, valueHeaderKey }: Prop
     [],
   );
 
-  const rows = useMemo(
-    () => (owner && device ? interfaceRows(owner, device, expanded) : []),
-    [owner, device, expanded],
-  );
+  // interfaceRows ricostruisce tutte le righe: quelle invariate mantengono l'oggetto di prima,
+  // così la griglia ridisegna solo le righe cambiate.
+  const prevRows = useRef(new Map<string, InterfaceRow>());
+  const rows = useMemo(() => {
+    const fresh = owner && device ? interfaceRows(owner, device, expanded) : [];
+    const next = new Map<string, InterfaceRow>();
+    const out = fresh.map((r) => {
+      const old = prevRows.current.get(r.key);
+      const row = old && sameRow(old, r) ? old : r;
+      next.set(r.key, row);
+      return row;
+    });
+    prevRows.current = next;
+    return out;
+  }, [owner, device, expanded]);
   const byKey = useMemo(() => new Map(rows.map((r) => [r.key, r])), [rows]);
   const slots = useMemo(
     () => (ownerKind ? addSlots(rows, ownerKind, expanded) : []),

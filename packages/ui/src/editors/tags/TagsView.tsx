@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   findDevice,
@@ -62,10 +62,20 @@ export function TagsView({ deviceId, tableId }: Props) {
   const props = device?.properties;
   const diagnostics = useCellDiagnostics(deviceId, 'tag', t);
 
+  // Un oggetto riga per ogni Tag: finché il Tag (e la sua tabella) non cambia, la riga resta
+  // la stessa e la griglia non la ridisegna.
+  const rowCache = useRef(new WeakMap<Tag, TagRow>());
   const rows = useMemo<TagRow[]>(
     () =>
       (tableId === null ? (tables ?? []) : (tables ?? []).filter((x) => x.id === tableId)).flatMap(
-        (table) => table.tags.map((tag) => ({ tag, tableId: table.id, tableName: table.name })),
+        (table) =>
+          table.tags.map((tag) => {
+            const old = rowCache.current.get(tag);
+            if (old && old.tableId === table.id && old.tableName === table.name) return old;
+            const row = { tag, tableId: table.id, tableName: table.name };
+            rowCache.current.set(tag, row);
+            return row;
+          }),
       ),
     [tables, tableId],
   );

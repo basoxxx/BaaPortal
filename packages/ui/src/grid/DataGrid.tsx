@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  memo,
   useId,
   useMemo,
   useRef,
@@ -11,6 +12,7 @@ import {
   type PointerEvent,
 } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type { BaaBridge } from '../bridge';
 import { copyToClipboard, readClipboard, type ClipboardPayload } from '../services/clipboard';
 import { useServices } from '../state/AppContext';
@@ -440,6 +442,43 @@ export function DataGrid<R>(props: DataGridProps<R>) {
     props.onRowDragStart(selKeys.includes(key) ? selKeys : [key], e.nativeEvent);
   };
 
+  // Per ogni riga si calcolano i dati "per cella" (diagnostica, classi, rientro): se sono uguali
+  // a quelli del disegno precedente si riusa lo stesso oggetto, così la riga non si ridisegna.
+  const metaCache = useRef(new Map<string, RowMeta>());
+  const nextMeta = new Map<string, RowMeta>();
+  const metaFor = (key: string, row: R | null, canOpen: boolean): RowMeta => {
+    const fresh: RowMeta =
+      row === null
+        ? EMPTY_META
+        : {
+            diags: columns.map((c) => props.diagnostic?.(key, c.id)),
+            cellCls: columns.map((c) => props.cellClassName?.(row, c.id)),
+            rowCls: props.rowClassName?.(row),
+            depth: props.depth?.(row) ?? 0,
+            canOpen,
+            open: canOpen && !!props.expanded?.has(key),
+          };
+    const prev = metaCache.current.get(key);
+    const meta = prev && sameMeta(prev, fresh) ? prev : fresh;
+    nextMeta.set(key, meta);
+    return meta;
+  };
+  useEffect(() => {
+    metaCache.current = nextMeta;
+  });
+
+  // Gestori stabili per le righe: leggono sempre l'ultimo stato tramite un riferimento.
+  const latest = useRef({ finishEdit });
+  latest.current = { finishEdit };
+  const onEditDone = useCallback(
+    (value: string, nav: EditNav) => latest.current.finishEdit(value, nav),
+    [],
+  );
+  const onEditCancel = useCallback(() => {
+    setEditing(null);
+    setFocusTick((n) => n + 1);
+  }, []);
+
   const widths = `34px ${columns.map((c) => `${c.width}px`).join(' ')}`;
   const total = 34 + columns.reduce((n, c) => n + c.width, 0);
 
@@ -496,130 +535,202 @@ export function DataGrid<R>(props: DataGridProps<R>) {
       {items.map((it, i) => {
         const isData = it.kind === 'data';
         const selectable = isData && selectableItem(it);
-        const isSel = selectable && selected.has(it.key);
         const covered = fill !== null && i > fillFrom && i <= fillTo;
-        const depth = isData ? (props.depth?.(it.row) ?? 0) : 0;
-        const canOpen = isData && !!props.expandable?.(it.row);
-        const open = canOpen && !!props.expanded?.has(it.key);
+        const row = isData ? it.row : null;
+        const canOpen = row !== null && !!props.expandable?.(row);
+        return (
+          <GridRow<R>
+            key={it.key}
+            itemKey={it.key}
+            row={row}
+            num={isData ? it.num : 0}
+            addLabel={it.kind === 'add' ? t(addRow[it.index]!.labelKey) : null}
+            addIndex={it.kind === 'add' ? it.index : -1}
+            columns={columns}
+            activeCol={resolved?.idx === i ? resolved.col : -1}
+            selectable={selectable}
+            selected={selectable && selected.has(it.key)}
+            covered={covered}
+            editing={editing?.key === it.key ? editing : null}
+            meta={metaFor(it.key, row, canOpen)}
+            draggable={isData && !!props.onRowDragStart}
+            showFill={!!onFill}
+            uid={uid}
+            t={t}
+            onDone={onEditDone}
+            onCancel={onEditCancel}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+interface RowMeta {
+  diags: (GridDiagnostic | undefined)[];
+  cellCls: (string | undefined)[];
+  rowCls: string | undefined;
+  depth: number;
+  canOpen: boolean;
+  open: boolean;
+}
+const EMPTY_META: RowMeta = {
+  diags: [],
+  cellCls: [],
+  rowCls: undefined,
+  depth: 0,
+  canOpen: false,
+  open: false,
+};
+const sameList = <T,>(a: T[], b: T[], eq: (x: T, y: T) => boolean) =>
+  a.length === b.length && a.every((x, i) => eq(x, b[i]!));
+const sameDiag = (a: GridDiagnostic | undefined, b: GridDiagnostic | undefined) =>
+  a === b || (!!a && !!b && a.severity === b.severity && a.text === b.text);
+const sameMeta = (a: RowMeta, b: RowMeta) =>
+  a.rowCls === b.rowCls &&
+  a.depth === b.depth &&
+  a.canOpen === b.canOpen &&
+  a.open === b.open &&
+  sameList(a.diags, b.diags, sameDiag) &&
+  sameList(a.cellCls, b.cellCls, Object.is);
+
+interface GridRowProps<R> {
+  itemKey: string;
+  /** null per le righe "<Aggiungi>". */
+  row: R | null;
+  num: number;
+  addLabel: string | null;
+  addIndex: number;
+  columns: GridColumn<R>[];
+  /** Colonna attiva di questa riga, -1 se la cella attiva è altrove. */
+  activeCol: number;
+  selectable: boolean;
+  selected: boolean;
+  covered: boolean;
+  /** Solo per la riga in modifica, altrimenti null. */
+  editing: Editing | null;
+  meta: RowMeta;
+  draggable: boolean;
+  showFill: boolean;
+  uid: string;
+  t: TFunction;
+  onDone(value: string, nav: EditNav): void;
+  onCancel(): void;
+}
+
+/** Una riga della griglia: si ridisegna solo se cambiano le sue proprietà (React.memo). */
+function GridRowImpl<R>(p: GridRowProps<R>) {
+  const { row, columns, meta, editing, t } = p;
+  const isData = row !== null;
+  return (
+    <div
+      role="row"
+      data-row-key={p.itemKey}
+      aria-selected={p.selectable ? p.selected : undefined}
+      className={
+        'baa-grid-row' +
+        (p.selected ? ' is-selected' : '') +
+        (p.covered ? ' is-fill-target' : '') +
+        (isData ? '' : ' is-add') +
+        (meta.rowCls ? ` ${meta.rowCls}` : '')
+      }
+    >
+      <div role="rowheader" data-rownum="" className="baa-grid-rownum" draggable={p.draggable}>
+        {isData ? p.num : ''}
+      </div>
+      {columns.map((c, ci) => {
+        const isActive = p.activeCol === ci;
+        const isEditing = editing !== null && editing.col === ci;
+        const diag = meta.diags[ci];
+        const diagId = `${p.uid}-d${p.itemKey}-${ci}`;
+        const value = isData ? c.get(row) : '';
+        const editable =
+          (c.editor === 'text' || c.editor === 'type') && (!isData || !c.readOnly?.(row));
+        const readOnly = !editable && c.editor !== 'checkbox';
+        const label = t(c.headerKey);
+        const cellCls = meta.cellCls[ci];
         return (
           <div
-            key={it.key}
-            role="row"
-            data-row-key={it.key}
-            aria-selected={selectable ? isSel : undefined}
+            key={c.id}
+            role="gridcell"
+            data-col-id={c.id}
+            tabIndex={isActive ? 0 : -1}
+            aria-readonly={readOnly || undefined}
+            aria-describedby={diag ? diagId : undefined}
+            title={diag?.text}
             className={
-              'baa-grid-row' +
-              (isSel ? ' is-selected' : '') +
-              (covered ? ' is-fill-target' : '') +
-              (isData ? '' : ' is-add') +
-              (isData && props.rowClassName?.(it.row) ? ` ${props.rowClassName(it.row)}` : '')
+              'baa-grid-cell' +
+              (diag ? ` is-${diag.severity}` : '') +
+              (isActive ? ' is-active' : '') +
+              (isEditing ? ' is-editing' : '') +
+              (cellCls ? ` ${cellCls}` : '')
             }
           >
-            <div
-              role="rowheader"
-              data-rownum=""
-              className="baa-grid-rownum"
-              draggable={isData && !!props.onRowDragStart}
+            <span
+              className="baa-grid-content"
+              data-indent={ci === 0 ? '' : undefined}
+              style={ci === 0 ? { paddingLeft: meta.depth * INDENT } : undefined}
             >
-              {isData ? it.num : ''}
-            </div>
-            {columns.map((c, ci) => {
-              const isActive = resolved?.idx === i && resolved.col === ci;
-              const isEditing = editing?.key === it.key && editing.col === ci;
-              const diag = isData ? props.diagnostic?.(it.key, c.id) : undefined;
-              const diagId = `${uid}-d${i}-${ci}`;
-              const value = isData ? c.get(it.row) : '';
-              const readOnly = !editableCell(it, ci) && c.editor !== 'checkbox';
-              const label = t(c.headerKey);
-              return (
-                <div
-                  key={c.id}
-                  role="gridcell"
-                  data-col-id={c.id}
-                  tabIndex={isActive ? 0 : -1}
-                  aria-readonly={readOnly || undefined}
-                  aria-describedby={diag ? diagId : undefined}
-                  title={diag?.text}
-                  className={
-                    'baa-grid-cell' +
-                    (diag ? ` is-${diag.severity}` : '') +
-                    (isActive ? ' is-active' : '') +
-                    (isEditing ? ' is-editing' : '') +
-                    (isData && props.cellClassName?.(it.row, c.id)
-                      ? ` ${props.cellClassName(it.row, c.id)}`
-                      : '')
-                  }
-                >
-                  <span
-                    className="baa-grid-content"
-                    data-indent={ci === 0 ? '' : undefined}
-                    style={ci === 0 ? { paddingLeft: depth * INDENT } : undefined}
-                  >
-                    {ci === 0 && isData ? (
-                      canOpen ? (
-                        <button
-                          type="button"
-                          tabIndex={-1}
-                          data-expander=""
-                          className={'baa-grid-expander' + (open ? ' is-open' : '')}
-                          aria-expanded={open}
-                          aria-label={t(open ? 'grid.collapse' : 'grid.expand')}
-                        />
-                      ) : (
-                        <span className="baa-grid-expander-spacer" />
-                      )
-                    ) : null}
-                    {isEditing ? (
-                      <CellEditor
-                        initial={editing.seed ?? String(value)}
-                        selectAll={editing.seed === null}
-                        listId={`${uid}-l`}
-                        label={label}
-                        {...(c.editor === 'type' && isData
-                          ? { suggestions: c.suggestions?.(it.row) ?? [] }
-                          : {})}
-                        onDone={finishEdit}
-                        onCancel={() => {
-                          setEditing(null);
-                          requestFocus();
-                        }}
-                      />
-                    ) : c.editor === 'checkbox' && isData ? (
-                      <span
-                        role="checkbox"
-                        data-checkbox=""
-                        aria-checked={value === true}
-                        aria-label={label}
-                        className={'baa-grid-check' + (value === true ? ' is-checked' : '')}
-                      />
-                    ) : ci === 0 && it.kind === 'add' ? (
-                      <span className="baa-grid-add">{t(addRow[it.index]!.labelKey)}</span>
-                    ) : (
-                      <span className="baa-grid-text">{String(value)}</span>
-                    )}
-                  </span>
-                  {diag ? (
-                    <>
-                      <span className="baa-grid-diag" aria-hidden="true" />
-                      <span id={diagId} className="baa-grid-sr">
-                        {diag.text}
-                      </span>
-                    </>
-                  ) : null}
-                  {isActive && !isEditing && onFill && isData ? (
-                    <span
-                      data-fill-handle=""
-                      className="baa-grid-fill"
-                      title={t('grid.fillHandle')}
-                      aria-hidden="true"
-                    />
-                  ) : null}
-                </div>
-              );
-            })}
+              {ci === 0 && isData ? (
+                meta.canOpen ? (
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    data-expander=""
+                    className={'baa-grid-expander' + (meta.open ? ' is-open' : '')}
+                    aria-expanded={meta.open}
+                    aria-label={t(meta.open ? 'grid.collapse' : 'grid.expand')}
+                  />
+                ) : (
+                  <span className="baa-grid-expander-spacer" />
+                )
+              ) : null}
+              {isEditing ? (
+                <CellEditor
+                  initial={editing.seed ?? String(value)}
+                  selectAll={editing.seed === null}
+                  listId={`${p.uid}-l`}
+                  label={label}
+                  {...(c.editor === 'type' && isData
+                    ? { suggestions: c.suggestions?.(row) ?? [] }
+                    : {})}
+                  onDone={p.onDone}
+                  onCancel={p.onCancel}
+                />
+              ) : c.editor === 'checkbox' && isData ? (
+                <span
+                  role="checkbox"
+                  data-checkbox=""
+                  aria-checked={value === true}
+                  aria-label={label}
+                  className={'baa-grid-check' + (value === true ? ' is-checked' : '')}
+                />
+              ) : ci === 0 && p.addLabel !== null ? (
+                <span className="baa-grid-add">{p.addLabel}</span>
+              ) : (
+                <span className="baa-grid-text">{String(value)}</span>
+              )}
+            </span>
+            {diag ? (
+              <>
+                <span className="baa-grid-diag" aria-hidden="true" />
+                <span id={diagId} className="baa-grid-sr">
+                  {diag.text}
+                </span>
+              </>
+            ) : null}
+            {isActive && !isEditing && p.showFill && isData ? (
+              <span
+                data-fill-handle=""
+                className="baa-grid-fill"
+                title={t('grid.fillHandle')}
+                aria-hidden="true"
+              />
+            ) : null}
           </div>
         );
       })}
     </div>
   );
 }
+const GridRow = memo(GridRowImpl) as typeof GridRowImpl;
