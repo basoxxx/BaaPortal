@@ -266,7 +266,16 @@ function completeInParams(
   const partial = m[2]!;
   const iface = callee?.iface;
   if (!callee || !iface) return none(sAt);
-  const assigned = new Set((callStmt.params ?? []).map((p) => norm(p.name.replace(/^"|"$/g, ''))));
+  // Un parametro scritto con un alias (SZL_ID) è già assegnato con il suo nome canonico (SSL_ID).
+  const canonical = (name: string): string => {
+    for (const [alias, to] of Object.entries(callee.paramAliases ?? {})) {
+      if (sameName(alias, name)) return to;
+    }
+    return name;
+  };
+  const assigned = new Set(
+    (callStmt.params ?? []).map((p) => norm(canonical(p.name.replace(/^"|"$/g, '')))),
+  );
   const ret =
     (callee.kind === 'FC' || callee.kind === 'SFC') &&
     iface.returnType &&

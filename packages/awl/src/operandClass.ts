@@ -46,6 +46,8 @@ export function resolveOperand(ctx: AwlContext, op: Operand, rep: Report): Resol
     case 'local':
       return resolveLocal(ctx, op.path, rep);
     case 'constant':
+      // P##nome: il locale deve esistere nell'interfaccia del blocco.
+      if (op.pointerTo) resolveLocal(ctx, op.pointerTo, rep);
       return { k: 'const', pointer: /^p#/i.test(op.text), text: op.text };
     case 'indirect': {
       // il bersaglio di un accesso in memoria indiretta non si controlla nel tipo

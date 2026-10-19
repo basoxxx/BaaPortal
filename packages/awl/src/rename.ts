@@ -57,22 +57,29 @@ function pathEdits(op: Operand, target: RenameTarget, newName: string, out: Edit
       out.push(edit(op.dbSymbol.range, `"${newName}"`));
     return;
   }
-  if (op.kind !== 'symbol' && op.kind !== 'local') return;
-  const segs: PathSegment[] = op.path;
+  // `P##nome` punta al locale `#nome`: si rinomina come un locale.
+  const path =
+    op.kind === 'constant' && op.pointerTo
+      ? { kind: 'local' as const, path: op.pointerTo }
+      : op.kind === 'symbol' || op.kind === 'local'
+        ? op
+        : null;
+  if (!path) return;
+  const segs: PathSegment[] = path.path;
   const first = segs[0]!;
   switch (target.kind) {
     case 'symbol':
-      if (op.kind === 'symbol' && first.quoted && sameName(first.name, target.oldName)) {
+      if (path.kind === 'symbol' && first.quoted && sameName(first.name, target.oldName)) {
         out.push(edit(first.range, `"${newName}"`));
       }
       return;
     case 'local':
-      if (op.kind === 'local' && sameName(first.name, target.oldName)) {
+      if (path.kind === 'local' && sameName(first.name, target.oldName)) {
         out.push(edit(first.range, bareOrQuoted(newName)));
       }
       return;
     case 'member': {
-      if (op.kind !== target.root) return;
+      if (path.kind !== target.root) return;
       if (target.rootName !== null && !sameName(first.name, target.rootName)) return;
       const at = 1 + target.path.length;
       const seg = segs[at];

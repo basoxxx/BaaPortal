@@ -478,3 +478,22 @@ describe('prestazioni', () => {
     expect(ms).toBeLessThan(2000);
   });
 });
+
+describe('puntatore a un locale: P##nome', () => {
+  it('il nome si cerca nell interfaccia del blocco; vale dove vale un puntatore', () => {
+    expect(summary(['L P##Tmp\nLAR1 P##"Tmp"\nL P##Sub.Vel\nLAR2 P##Pos'])).toEqual([]);
+    expect(summary(['L P##Nessuno\nL P##Sub.Zzz'])).toEqual([
+      'UNKNOWN_LOCAL@0:Nessuno',
+      'UNKNOWN_MEMBER@0:Zzz',
+    ]);
+    // Dove un puntatore non vale non vale nemmeno P##.
+    expect(summary(['A P##Tmp'])).toEqual(['OPERAND_NOT_ALLOWED@0:P##Tmp']);
+  });
+
+  it('come parametro Pointer di un CALL', () => {
+    const call = (p: string) =>
+      `CALL "Prese"\n(T1 := T 1, P := ${p}, Q := MW 0, Blk := FC 1, Tx := 'a', Tp := "Macchina", B := TRUE, W := MW 2)`;
+    expect(summary([call('P##Tmp')])).toEqual([]);
+    expect(summary([call('P##Boh')])).toEqual(['UNKNOWN_LOCAL@0:Boh']);
+  });
+});

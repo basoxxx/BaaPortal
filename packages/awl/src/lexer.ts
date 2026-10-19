@@ -86,6 +86,9 @@ const BYTES = /B#\([ \t]*\d+(?:[ \t]*,[ \t]*\d+){1,3}[ \t]*\)/iy;
 const PREFIXED = /[A-Za-z0-9_]+#[+-]?[0-9A-Za-z_.:#-]+/y;
 const NUMBER = /[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?(?![A-Za-z0-9_.])/y;
 const CONST_PREFIX = /[A-Za-z][A-Za-z0-9_]*#/y;
+const NAME_PART = '(?:"[^"\\r\\n]*"|[A-Za-z_][A-Za-z0-9_]*)';
+/** `P##nome`, `P##"nome con spazi"`, `P##struct.membro`: puntatore a un locale. */
+const LOCAL_POINTER = new RegExp(`P##${NAME_PART}(?:\\.${NAME_PART})*`, 'iy');
 
 function sticky(re: RegExp, src: string, i: number): number {
   re.lastIndex = i;
@@ -98,6 +101,7 @@ export function scanConstant(src: string, i: number): number {
   const c = src[i];
   if (c === "'") return sticky(CHAR, src, i);
   if (c === 'P' || c === 'p') {
+    if (src[i + 1] === '#' && src[i + 2] === '#') return sticky(LOCAL_POINTER, src, i);
     const e = sticky(POINTER, src, i);
     if (e >= 0) return e;
   }

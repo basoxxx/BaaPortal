@@ -29,7 +29,13 @@ export type Operand =
   | { kind: 'timerCounter'; area: 'T' | 'C'; number: number; range: Range }
   | { kind: 'symbol'; path: PathSegment[]; range: Range }
   | { kind: 'local'; path: PathSegment[]; range: Range }
-  | { kind: 'constant'; text: string; range: Range }
+  | {
+      kind: 'constant';
+      text: string;
+      range: Range;
+      /** `P##nome`: puntatore a un locale; il percorso del locale con i range esatti dei nomi. */
+      pointerTo?: PathSegment[];
+    }
   | {
       kind: 'indirect';
       /** null = accesso tra aree (`B [AR1, P#0.0]`, `[AR1, P#0.0]`): l'area sta nel registro. */

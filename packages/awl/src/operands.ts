@@ -105,6 +105,9 @@ function tryOperand(ctx: Ctx, i: number): Parsed {
   const c = src[i];
   const fail = (): Fail => ({ code: 'BAD_OPERAND', start: i, end: badEnd(src, i) });
   if (c === '"' || c === '#') return tryPath(ctx, i);
+  if ((c === 'P' || c === 'p') && src[i + 1] === '#' && src[i + 2] === '#') {
+    return tryLocalPointer(ctx, i);
+  }
   if (
     c === "'" ||
     isDigit(c) ||
@@ -296,6 +299,25 @@ function tryIndirect(
       range: ctx.idx.range(start, close + 1),
     },
     end: close + 1,
+  };
+}
+
+/** `P##nome`: un puntatore (costante) al locale `#nome`, con il percorso del locale. */
+function tryLocalPointer(ctx: Ctx, i: number): Parsed {
+  const r = tryPath(ctx, i + 2);
+  if (!('operand' in r) || r.operand.kind !== 'local') {
+    return 'code' in r && r.code === 'UNCLOSED_STRING'
+      ? r
+      : { code: 'BAD_OPERAND', start: i, end: badEnd(ctx.src, i) };
+  }
+  return {
+    operand: {
+      kind: 'constant',
+      text: ctx.src.slice(i, r.end),
+      range: ctx.idx.range(i, r.end),
+      pointerTo: r.operand.path,
+    },
+    end: r.end,
   };
 }
 

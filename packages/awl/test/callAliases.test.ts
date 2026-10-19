@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkBlockCode, type AwlBlockInfo, type AwlContext } from '../src';
+import { checkBlockCode, completeAt, type AwlBlockInfo, type AwlContext } from '../src';
 import { emptyIface, el, m, makeCtx } from './ctx';
 
 const rdsysst: AwlBlockInfo = {
@@ -78,5 +78,18 @@ describe('parametro Struct senza membri', () => {
     expect(codes(`${base}"Macchina")`)).toEqual([]); // tag di tipo UDT "Tipo"
     expect(codes(`${base}#Pos)`)).toEqual(['CALL_PARAM_TYPE']); // Real
     expect(codes(`${base}"Avvio")`)).toEqual(['CALL_PARAM_TYPE']); // Bool
+  });
+});
+
+describe('alias dei parametri nel completamento', () => {
+  it('un parametro scritto con il suo alias conta come già assegnato', () => {
+    const net = 'CALL "RDSYSST"\n(REQ := M 0.0, SZL_ID := W#16#1C, ';
+    const labels = completeAt([net], 0, net.length, withRd(), 'international').options.map(
+      (o) => o.label,
+    );
+    expect(labels).not.toContain('SSL_ID');
+    expect(labels).not.toContain('REQ');
+    expect(labels).toContain('INDEX');
+    expect(labels).toContain('SSL_HEADER');
   });
 });

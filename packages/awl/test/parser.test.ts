@@ -277,3 +277,35 @@ describe('parseNetwork', () => {
     expect(dt).toBeLessThan(1000);
   });
 });
+
+describe('puntatore a un locale: P##nome', () => {
+  const slice = (src: string, r: { from: { offset: number }; to: { offset: number } }) =>
+    src.slice(r.from.offset, r.to.offset);
+
+  it('nome semplice, tra virgolette e percorso: costante puntatore con il nome esatto', () => {
+    for (const [src, names, texts] of [
+      ['L P##Tmp', ['Tmp'], ['Tmp']],
+      ['LAR1 P##"Valore x"', ['Valore x'], ['"Valore x"']],
+      ['L p##Dati.Pos', ['Dati', 'Pos'], ['Dati', 'Pos']],
+    ] as [string, string[], string[]][]) {
+      const { operand, errors } = op(src);
+      expect(errors, src).toEqual([]);
+      if (operand?.kind !== 'constant') throw new Error(`${src}: ${operand?.kind}`);
+      expect(operand.text).toBe(src.slice(src.indexOf(' ') + 1));
+      expect(operand.pointerTo!.map((s) => s.name)).toEqual(names);
+      expect(operand.pointerTo!.map((s) => slice(src, s.range))).toEqual(texts);
+    }
+  });
+
+  it('anche come valore di un parametro di CALL', () => {
+    const r = parseNetwork('CALL "Copia"\n(SRC := P##Buf, N := 4)', 'international');
+    expect(r.errors).toEqual([]);
+    const v = r.statements[0]!.params![0]!.value!;
+    expect(v.kind === 'constant' && v.pointerTo?.[0]?.name).toBe('Buf');
+  });
+
+  it('P## senza nome: BAD_OPERAND', () => {
+    expect(op('L P##').errors.map((e) => e.code)).toEqual(['BAD_OPERAND']);
+    expect(op('L P##"aperto').errors.map((e) => e.code)).toEqual(['UNCLOSED_STRING']);
+  });
+});

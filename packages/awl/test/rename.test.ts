@@ -176,3 +176,21 @@ describe('renameInSource', () => {
     );
   });
 });
+
+describe('renameInSource: P##locale', () => {
+  it('rinomina locale e membro di un locale dentro P##', () => {
+    const src = 'L P##Tmp\nLAR1 P##"Tmp"\nL P##Tmp2\nL P##Sub.Vel\nL P#M0.0';
+    expect(ren(src, { kind: 'local', oldName: 'tmp' }, 'Temp')).toBe(
+      'L P##Temp\nLAR1 P##Temp\nL P##Tmp2\nL P##Sub.Vel\nL P#M0.0',
+    );
+    expect(
+      ren(
+        src,
+        { kind: 'member', root: 'local', rootName: 'Sub', path: [], oldName: 'Vel' },
+        'Velocita',
+      ),
+    ).toBe('L P##Tmp\nLAR1 P##"Tmp"\nL P##Tmp2\nL P##Sub.Velocita\nL P#M0.0');
+    // Un simbolo globale con lo stesso nome non è un locale.
+    expect(ren('L P##Tmp', { kind: 'symbol', oldName: 'Tmp' }, 'X')).toBe('L P##Tmp');
+  });
+});

@@ -158,28 +158,9 @@ function renameInterfaceMember(
     }
   }
   if (block.kind !== 'FB' || section === 'temp') return;
-  // I DB di istanza: "Istanza".membro.
-  for (const idb of device.blocks) {
-    if (idb.kind !== 'IDB' || !sameName(idb.instanceOf, block.name)) continue;
-    rewrite(
-      all,
-      { kind: 'member', root: 'symbol', rootName: idb.name, path: parents, oldName },
-      newName,
-    );
-  }
-  // Le multi-istanze negli altri FB: #istanza.membro.
-  for (const caller of all) {
-    if (caller.kind !== 'FB') continue;
-    for (const inst of caller.interface.static) {
-      const t = namedTypeOf(inst);
-      if (t === undefined || !sameName(t, block.name)) continue;
-      rewrite(
-        [caller],
-        { kind: 'member', root: 'local', rootName: inst.name, path: parents, oldName },
-        newName,
-      );
-    }
-  }
+  // DB di istanza ("Istanza".membro) e multi-istanze (#istanza.membro), anche annidate: anche
+  // attraverso il DB di istanza o le multi-istanze di un FB che contiene questo FB.
+  renameNestedMember(device, { kind: 'fb', name: block.name }, parents, oldName, newName);
 }
 
 interface Root {
@@ -195,12 +176,32 @@ interface Root {
 function renameUdtMember(device: PlcDevice, udt: Udt, chain: Member[], newName: string): void {
   const oldName = chain[chain.length - 1]!.name;
   const parents = chain.slice(0, -1).map((m) => m.name);
+  renameNestedMember(device, { kind: 'udt', name: udt.name }, parents, oldName, newName);
+}
+
+/**
+ * Il membro `parents.oldName` del tipo `owner` (un UDT o un FB): ogni percorso del dispositivo il cui
+ * tipo risolto e quel tipo prende il nome nuovo. Si parte da tag, membri di DB, DB di istanza e
+ * locali dei blocchi e si scende per struct, UDT e FB (multi-istanze), con un limite di profondita e
+ * senza girare in tondo.
+ */
+function renameNestedMember(
+  device: PlcDevice,
+  owner: { kind: 'udt' | 'fb'; name: string },
+  parents: string[],
+  oldName: string,
+  newName: string,
+): void {
   const udts = new Map<string, Udt>();
   for (const u of device.udts) if (!udts.has(nameKey(u.name))) udts.set(nameKey(u.name), u);
   const fbs = new Map<string, CodeBlock>();
   for (const b of device.blocks) {
     if (b.kind === 'FB' && !fbs.has(nameKey(b.name))) fbs.set(nameKey(b.name), b);
   }
+  const ownerKey = nameKey(owner.name);
+  // Come nella risoluzione dei tipi: un UDT ha la precedenza su un FB con lo stesso nome.
+  const isOwner = (key: string): boolean =>
+    key === ownerKey && (owner.kind === 'udt' || !udts.has(key));
   const all = codeBlocks(device);
 
   const emit = (root: Root, prefix: string[], scope: CodeBlock[]) => {
@@ -217,6 +218,24 @@ function renameUdtMember(device: PlcDevice, udt: Udt, chain: Member[], newName: 
     );
   };
 
+  /** Un valore del tipo nominato `name`, raggiunto da `root` con il percorso `prefix`. */
+  const walkNamed = (
+    name: string,
+    root: Root,
+    prefix: string[],
+    scope: CodeBlock[],
+    stack: string[],
+  ) => {
+    const key = nameKey(name);
+    if (isOwner(key)) {
+      emit(root, prefix, scope);
+      return;
+    }
+    if (stack.includes(key) || stack.length >= MAX_DEPTH) return;
+    const children = udts.get(key)?.members ?? (fbs.has(key) ? fbMembers(fbs.get(key)!) : []);
+    for (const c of children) walk(c, root, [...prefix, c.name], scope, [...stack, key]);
+  };
+
   const walk = (
     m: Pick<Member, 'type' | 'members'>,
     root: Root,
@@ -228,26 +247,9 @@ function renameUdtMember(device: PlcDevice, udt: Udt, chain: Member[], newName: 
     const parsed = parseType(m.type);
     if (!parsed.ok) return;
     const base = baseType(parsed.type);
-    const into = (children: Member[], via: string[]) => {
-      for (const c of children) walk(c, root, [...prefix, c.name], scope, via);
-    };
     if (base.kind === 'struct') {
-      into(m.members ?? [], stack);
-    } else if (base.kind === 'named') {
-      const key = nameKey(base.name);
-      if (key === nameKey(udt.name)) {
-        // Prima gli UDT, come nella risoluzione dei tipi.
-        emit(root, prefix, scope);
-        return;
-      }
-      if (stack.includes(key)) return;
-      const inner = udts.get(key);
-      if (inner) into(inner.members, [...stack, key]);
-      else {
-        const fb = fbs.get(key);
-        if (fb) into(fbMembers(fb), [...stack, key]);
-      }
-    }
+      for (const c of m.members ?? []) walk(c, root, [...prefix, c.name], scope, stack);
+    } else if (base.kind === 'named') walkNamed(base.name, root, prefix, scope, stack);
   };
 
   for (const table of device.tagTables) {
@@ -259,9 +261,8 @@ function renameUdtMember(device: PlcDevice, udt: Udt, chain: Member[], newName: 
     if (b.kind === 'DB') {
       for (const m of b.members) walk(m, { kind: 'symbol', name: b.name }, [m.name], all, []);
     } else if (b.kind === 'IDB') {
-      const fb = fbs.get(nameKey(b.instanceOf));
-      if (!fb) continue;
-      for (const m of fbMembers(fb)) walk(m, { kind: 'symbol', name: b.name }, [m.name], all, []);
+      // Il DB di istanza ha il tipo del suo FB: "Istanza".membro, "Istanza".multi.membro, ...
+      walkNamed(b.instanceOf, { kind: 'symbol', name: b.name }, [], all, []);
     } else {
       // I locali valgono solo nel codice del loro blocco.
       for (const s of SECTIONS) {

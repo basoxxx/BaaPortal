@@ -3,6 +3,7 @@ import {
   addSource,
   createCodeBlock,
   createGlobalDb,
+  createInstanceDb,
   createUdt,
   renameMemberWithOverrides,
   renameWithReferences,
@@ -141,6 +142,70 @@ describe('rinomina nel codice: parametri di FB', () => {
     expect(net(code(d, 'Main'))).toBe(
       'L "Nastro_DB".Vel\nL "Nastro_DB".Conteggio\nL "Dati".A.Pos.X',
     );
+  });
+});
+
+describe('rinomina nel codice: membri di FB annidati (A -> B -> C)', () => {
+  function nested() {
+    const d = makeDevice();
+    const newId = seq('z');
+    const c = createCodeBlock({ kind: 'FB', number: 10, name: 'C', language: 'AWL', newId });
+    c.interface.static.push({ id: 'c-y', name: 'y', type: 'Int', comment: '' });
+    setCode(c, 'L #y');
+    const b = createCodeBlock({ kind: 'FB', number: 11, name: 'B', language: 'AWL', newId });
+    b.interface.input.push({ id: 'b-x', name: 'x', type: 'Int', comment: '' });
+    b.interface.static.push({ id: 'b-c', name: 'c', type: '"C"', comment: '' });
+    setCode(b, 'L #x\nL #c.y\nCALL #c');
+    const a = createCodeBlock({ kind: 'FB', number: 12, name: 'A', language: 'AWL', newId });
+    a.interface.static.push({ id: 'a-inst', name: 'inst', type: '"B"', comment: '' });
+    setCode(a, 'CALL #inst\n(x := 1)\nL #inst.x\nL #inst.c.y');
+    const adb = createInstanceDb({ number: 13, name: 'A_DB', instanceOf: 'A', newId });
+    adb.overrides = { 'inst.x': '5', 'inst.c.y': '6' };
+    const bdb = createInstanceDb({ number: 14, name: 'B_DB', instanceOf: 'B', newId });
+    d.blocks.push(c, b, a, adb, bdb);
+    setCode(
+      code(d, 'Main'),
+      'L "A_DB".inst.x\nL "A_DB".inst.c.y\nL "A_DB".inst.c.y2\nL "B_DB".x\nL "B_DB".c.y\nL "Nastro_DB".inst.x',
+    );
+    return d;
+  }
+  const ref = (d: PlcDevice, owner: string, memberId: string) => ({
+    kind: 'member' as const,
+    deviceId: d.id,
+    ownerKind: 'block' as const,
+    ownerId: byName(d, owner).id,
+    memberId,
+  });
+
+  it('un membro di B: anche "A_DB".inst.x, attraverso il DB di istanza di chi lo contiene', () => {
+    const d = nested();
+    renameWithReferences(d, ref(d, 'B', 'b-x'), 'xx');
+    expect(net(code(d, 'B'))).toBe('L #xx\nL #c.y\nCALL #c');
+    expect(net(code(d, 'A'))).toBe('CALL #inst\n(xx := 1)\nL #inst.xx\nL #inst.c.y');
+    expect(net(code(d, 'Main'))).toBe(
+      'L "A_DB".inst.xx\nL "A_DB".inst.c.y\nL "A_DB".inst.c.y2\nL "B_DB".xx\nL "B_DB".c.y\nL "Nastro_DB".inst.x',
+    );
+    expect(byName(d, 'A_DB')).toMatchObject({ overrides: { 'inst.xx': '5', 'inst.c.y': '6' } });
+  });
+
+  it('un membro di C, due livelli sotto: ogni percorso che porta a C', () => {
+    const d = nested();
+    renameWithReferences(d, ref(d, 'C', 'c-y'), 'yy');
+    expect(net(code(d, 'C'))).toBe('L #yy');
+    expect(net(code(d, 'B'))).toBe('L #x\nL #c.yy\nCALL #c');
+    expect(net(code(d, 'A'))).toBe('CALL #inst\n(x := 1)\nL #inst.x\nL #inst.c.yy');
+    expect(net(code(d, 'Main'))).toBe(
+      'L "A_DB".inst.x\nL "A_DB".inst.c.yy\nL "A_DB".inst.c.y2\nL "B_DB".x\nL "B_DB".c.yy\nL "Nastro_DB".inst.x',
+    );
+    expect(byName(d, 'A_DB')).toMatchObject({ overrides: { 'inst.x': '5', 'inst.c.yy': '6' } });
+  });
+
+  it('FB che si contengono a vicenda: la rinomina finisce', () => {
+    const d = nested();
+    code(d, 'C').interface.static.push({ id: 'c-a', name: 'giro', type: '"A"', comment: '' });
+    renameWithReferences(d, ref(d, 'C', 'c-y'), 'yy');
+    expect(net(code(d, 'C'))).toBe('L #yy');
+    expect(net(code(d, 'B'))).toBe('L #x\nL #c.yy\nCALL #c');
   });
 });
 
