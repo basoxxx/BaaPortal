@@ -1,5 +1,5 @@
 // Applica una sorgente letta a un dispositivo: crea o sostituisce UDT, blocchi e DB.
-import { findCpu, findOb, SYSTEM_BLOCKS } from '@baaportal/catalog';
+import { findCpu, findOb, OB_DEFINITIONS, SYSTEM_BLOCKS } from '@baaportal/catalog';
 import {
   createCodeBlock,
   createGlobalDb,
@@ -97,7 +97,9 @@ export function applySource(
     if (unit.kind === 'UDT') {
       const u = createUdt({ name, number, newId });
       Object.assign(u, {
+        title: unit.udt.title,
         comment: unit.udt.comment,
+        headerName: unit.udt.headerName,
         author: unit.udt.author,
         family: unit.udt.family,
         version: unit.udt.version,
@@ -170,7 +172,11 @@ export function applySource(
       return;
     }
     const kind: Kind = unit.kind === 'IDB' ? 'DB' : unit.kind;
-    const number = unit.number ?? freeNumber(device, kind);
+    const catalogOb =
+      unit.kind === 'OB' && unit.number === undefined
+        ? OB_DEFINITIONS.find((o) => sameName(o.defaultName, unit.name))
+        : undefined;
+    const number = unit.number ?? catalogOb?.number ?? freeNumber(device, kind);
     const name = unit.name !== '' ? unit.name : defaultName(device, unit.kind, number);
     const t = build(unit, number, name);
     if (t.kind === 'udt') device.udts.push(t.obj);

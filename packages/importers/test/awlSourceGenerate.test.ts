@@ -41,7 +41,7 @@ describe('generateAwlSource', () => {
       'FUNCTION "Calcola" : Void',
       'FUNCTION_BLOCK "Nastro"',
       'FUNCTION_BLOCK "Linea"',
-      'ORGANIZATION_BLOCK "Main"',
+      'ORGANIZATION_BLOCK OB 1',
       'DATA_BLOCK "Linea_DB"',
       'DATA_BLOCK "Dati"',
     ]);

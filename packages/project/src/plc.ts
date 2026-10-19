@@ -54,9 +54,11 @@ export function createUdt(a: { name: string; number: number; newId?: NewId }): U
     name: a.name,
     number: a.number,
     group: '',
+    title: '',
     comment: '',
     author: '',
     family: '',
+    headerName: '',
     version: '0.1',
     members: [],
   };

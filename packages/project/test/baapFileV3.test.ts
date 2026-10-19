@@ -173,6 +173,20 @@ describe('migrazione dal formato 2', () => {
     expect(opened).toEqual(p);
   });
 
+  it('un UDT del formato 2 senza title e headerName si apre con stringhe vuote', () => {
+    const p = makeProject();
+    const f = unzipSync(asFormat2(p));
+    for (const path of Object.keys(f).filter((x) => x.includes('/types/'))) {
+      const u = json(f, path);
+      delete u.title;
+      delete u.headerName;
+      put(f, path, u);
+    }
+    const opened = readBaap(zipSync(f));
+    expect(opened.devices[0]!.udts.length).toBeGreaterThan(0);
+    for (const u of opened.devices[0]!.udts) expect([u.title, u.headerName]).toEqual(['', '']);
+  });
+
   it('salvato di nuovo, il progetto migrato è del formato 3 e si riapre uguale', () => {
     const p = makeProject();
     const opened = readBaap(asFormat2(p));

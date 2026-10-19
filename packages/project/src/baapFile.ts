@@ -107,9 +107,12 @@ const udtSchema = obj({
   name: str,
   number: z.number(),
   group: str,
+  // Assenti nei file scritti prima che l'UDT avesse titolo e nome di intestazione.
+  title: str.default(''),
   comment: str,
   author: str,
   family: str,
+  headerName: str.default(''),
   version: str,
   members: z.array(memberSchema),
 });

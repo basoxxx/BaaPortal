@@ -64,9 +64,11 @@ export interface Udt {
   name: string;
   number: number;
   group: string;
+  title: string;
   comment: string;
   author: string;
   family: string;
+  headerName: string;
   version: string;
   members: Member[];
 }

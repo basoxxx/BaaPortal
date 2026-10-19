@@ -22,7 +22,7 @@ describe('parseAwlSource: unità', () => {
       ['FC', 'Somma'],
       ['FB', 'Nastro'],
       ['FB', 'Linea'],
-      ['OB', 'Main'],
+      ['OB', ''],
       ['DB', 'Dati'],
       ['IDB', 'Nastro_DB'],
       ['IDB', 'Linea_DB'],

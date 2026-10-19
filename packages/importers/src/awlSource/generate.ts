@@ -127,14 +127,14 @@ function udtLines(u: Udt): string[] {
   return [
     ...header(
       `TYPE ${quoted(u.name)}`,
-      '',
+      u.title,
       u.comment,
       {
-        title: '',
-        comment: '',
+        title: u.title,
+        comment: u.comment,
         author: u.author,
         family: u.family,
-        headerName: '',
+        headerName: u.headerName,
         version: u.version,
       },
       [],
@@ -148,7 +148,7 @@ function udtLines(u: Udt): string[] {
 function codeLines(b: CodeBlock, mnemonic: Mnemonic): string[] {
   const unit =
     b.kind === 'OB'
-      ? `ORGANIZATION_BLOCK ${quoted(b.name)}`
+      ? `ORGANIZATION_BLOCK OB ${b.number}`
       : b.kind === 'FB'
         ? `FUNCTION_BLOCK ${quoted(b.name)}`
         : `FUNCTION ${quoted(b.name)} : ${b.interface.returnType === '' ? 'Void' : b.interface.returnType}`;

@@ -1,5 +1,7 @@
 // Lettura di una sorgente AWL: unità (UDT, OB, FB, FC, DB), intestazioni, dichiarazioni e reti.
-import type { BlockHeader, DbAttributes, Member } from '@baaportal/project';
+import { OB_DEFINITIONS } from '@baaportal/catalog';
+import type { BlockHeader, DbAttributes, Member, PlcDevice } from '@baaportal/project';
+import { sameName } from '@baaportal/s7-types';
 import { detectMnemonic, finishNetworks, splitNetworks, type RawNetwork } from './code';
 import { assignToMembers, normalizeType, readMembers } from './declarations';
 import { Reader } from './reader';
@@ -22,10 +24,14 @@ const KIND_OF: Record<string, 'UDT' | 'OB' | 'FB' | 'FC' | 'DB'> = {
   DATA_BLOCK: 'DB',
 };
 const ABSOLUTE = /^(OB|FB|FC|DB|UDT|SFB)\s*(\d+)$/i;
-const SECTION = /^(VAR_INPUT|VAR_OUTPUT|VAR_IN_OUT|VAR_TEMP|VAR)(\s+(RETAIN|CONSTANT))?$/i;
+const SECTION = /^(VAR_INPUT|VAR_OUTPUT|VAR_IN_OUT|VAR_TEMP|VAR)(\s+\S.*)?$/i;
 const BODY_WORD = /^(VAR|VAR_INPUT|VAR_OUTPUT|VAR_IN_OUT|VAR_TEMP|BEGIN|STRUCT)\b/i;
 const END_ANY = /^END_(TYPE|ORGANIZATION_BLOCK|FUNCTION_BLOCK|FUNCTION|DATA_BLOCK)\b/i;
 const UNKNOWN_ATTR = /^[A-Za-z_][A-Za-z0-9_]*\s*[:=]/;
+
+/** Inizio di un'unità; esclude `Type := 1` e simili (un membro di nome uguale a una parola chiave). */
+const isUnitStart = (code: string): boolean =>
+  UNIT_START.test(code) && !/^\w+\s*(:=|\.|\[)/.test(code);
 
 const emptyHeader = (): BlockHeader => ({
   title: '',
@@ -50,6 +56,12 @@ interface UnitName {
 }
 
 /** Nome di un'unità: `"Nome"`, `Nome`, oppure `FB 1` (nome vuoto e numero). */
+/** MISSING_END: alla riga corrente (l'unità seguente) o, a fine file, all'ultima riga. */
+function missingEnd(r: Reader, expected: string): void {
+  const line = Math.min(r.i, r.lines.length - 1);
+  r.error(line, r.indent(line), 'MISSING_END', { expected });
+}
+
 function readUnitName(r: Reader, line: number, rest: string, keyword: string): UnitName | null {
   const col = r.indent(line);
   let head = rest.trim();
@@ -134,7 +146,7 @@ function readHeader(r: Reader): Header {
     else if (flag === 'READ_ONLY') h.attributes.readOnly = true;
     else if (flag === 'NON_RETAIN') h.attributes.nonRetain = true;
     else if (BODY_WORD.test(code) || END_ANY.test(code) || !UNKNOWN_ATTR.test(code)) return h;
-    else if (UNIT_START.test(code)) return h;
+    else if (isUnitStart(code)) return h;
     else r.error(r.i, r.indent(r.i), 'UNKNOWN_ATTRIBUTE', { name: code.split(/[\s:=]/)[0]! });
     r.i++;
   }
@@ -159,24 +171,27 @@ function readCodeBody(
   for (;;) {
     const code = peekCode(r);
     if (code === undefined) {
-      r.error(startLine, r.indent(startLine), 'MISSING_END', { expected: `END_${keyword}` });
+      missingEnd(r, `END_${keyword}`);
       return;
     }
     if (end.test(code)) {
       r.i++;
       return;
     }
-    if (UNIT_START.test(code) && r.indent(r.i) === 0) {
-      r.error(startLine, r.indent(startLine), 'MISSING_END', { expected: `END_${keyword}` });
+    if (isUnitStart(code)) {
+      missingEnd(r, `END_${keyword}`);
       return;
     }
     const section = SECTION.exec(code);
     if (section) {
       const at = r.i;
+      if (section[2] !== undefined) {
+        r.error(at, r.indent(at), 'UNSUPPORTED_SECTION', { section: code });
+      }
       r.i++;
       const members = readMembers(r, (c) => /^END_VAR\b/i.test(c));
       if (!r.done && /^END_VAR\b/i.test(cleanLine(r.lines[r.i]!).code)) r.i++;
-      else r.error(at, r.indent(at), 'MISSING_END', { expected: 'END_VAR' });
+      else missingEnd(r, 'END_VAR');
       const key = {
         VAR_INPUT: 'input',
         VAR_OUTPUT: 'output',
@@ -192,14 +207,12 @@ function readCodeBody(
       const from = r.i;
       while (!r.done) {
         const c = cleanLine(r.lines[r.i]!).code;
-        const line = r.lines[r.i]!;
-        if (end.test(c) && !line.startsWith(' ') && !line.startsWith('\t')) break;
-        if (UNIT_START.test(line) && r.indent(r.i) === 0) break;
+        if (end.test(c) || isUnitStart(c)) break;
         r.i++;
       }
       nets.push(...splitNetworks(r.lines, from, r.i));
       if (!r.done && end.test(cleanLine(r.lines[r.i]!).code)) r.i++;
-      else r.error(startLine, r.indent(startLine), 'MISSING_END', { expected: `END_${keyword}` });
+      else missingEnd(r, `END_${keyword}`);
       return;
     }
     r.error(r.i, r.indent(r.i), 'UNEXPECTED_TOKEN', { text: code.split(/\s/)[0]! });
@@ -214,11 +227,10 @@ interface StructBody {
 /** `STRUCT ... END_STRUCT;` di un UDT o di un DB. */
 function readStruct(r: Reader): StructBody {
   const members: Member[] = [];
-  const at = r.i;
   r.i++;
   members.push(...readMembers(r, (c) => /^END_STRUCT\b/i.test(c)));
   if (!r.done && /^END_STRUCT\b/i.test(cleanLine(r.lines[r.i]!).code)) r.i++;
-  else r.error(at, r.indent(at), 'MISSING_END', { expected: 'END_STRUCT' });
+  else missingEnd(r, 'END_STRUCT');
   return { members };
 }
 
@@ -254,7 +266,7 @@ function readAssignments(
       r.i++;
       return;
     }
-    if (UNIT_START.test(code) && r.indent(r.i) === 0) break;
+    if (isUnitStart(code)) break;
     if (code !== '') {
       if (buffer.trim() === '') bufferLine = r.i;
       buffer += (buffer === '' ? '' : ' ') + code;
@@ -262,7 +274,7 @@ function readAssignments(
     }
     r.i++;
   }
-  r.error(startLine, r.indent(startLine), 'MISSING_END', { expected: 'END_DATA_BLOCK' });
+  missingEnd(r, 'END_DATA_BLOCK');
 }
 
 const unitKey = (u: SourceUnit): string => {
@@ -277,6 +289,7 @@ function readUnit(
   rawKeyword: string,
   rest: string,
   nets: RawNetwork[],
+  device: PlcDevice | undefined,
 ): SourceUnit | null {
   const startLine = r.i;
   const keyword = rawKeyword.toUpperCase();
@@ -290,6 +303,15 @@ function readUnit(
     return null;
   }
   const num = un.number === undefined ? {} : { number: un.number };
+  // Un OB è identificato dal numero: per nome solo se il nome è del catalogo o è già nel dispositivo.
+  if (
+    kind === 'OB' &&
+    un.number === undefined &&
+    !OB_DEFINITIONS.some((o) => sameName(o.defaultName, un.name)) &&
+    !device?.blocks.some((b) => b.kind === 'OB' && sameName(b.name, un.name))
+  ) {
+    r.error(startLine, r.indent(startLine), 'OB_NUMBER_UNKNOWN', { name: un.name });
+  }
 
   if (kind === 'UDT') {
     const code = peekCode(r);
@@ -298,7 +320,7 @@ function readUnit(
     else if (code !== undefined && !END_OF.TYPE!.test(code)) {
       r.error(r.i, r.indent(r.i), 'UNEXPECTED_TOKEN', { text: code.split(/\s/)[0]! });
     }
-    closeUnit(r, keyword, startLine);
+    closeUnit(r, keyword);
     const hd = h.header;
     return {
       kind: 'UDT',
@@ -306,9 +328,11 @@ function readUnit(
       ...num,
       udt: {
         name: un.name,
-        comment: [hd.title, hd.comment].filter((x) => x !== '').join('\n'),
+        title: hd.title,
+        comment: hd.comment,
         author: hd.author,
         family: hd.family,
+        headerName: hd.headerName,
         version: hd.version,
         members,
       },
@@ -320,6 +344,12 @@ function readUnit(
     const lineAt = r.i;
     let members: Member[] | undefined;
     let instanceOf: string | undefined;
+    if (code !== undefined && SECTION.test(code)) {
+      // I DB con VAR ... END_VAR sono dell'S7-1x00; l'S7-300 usa STRUCT.
+      r.error(lineAt, r.indent(lineAt), 'UNSUPPORTED_SECTION', { section: code });
+      skipToEnd(r, keyword);
+      return null;
+    }
     if (code !== undefined && /^STRUCT$/i.test(code)) members = readStruct(r).members;
     else if (code !== undefined && !/^BEGIN$/i.test(code) && !END_OF.DATA_BLOCK!.test(code)) {
       const abs = ABSOLUTE.exec(code);
@@ -408,10 +438,10 @@ function readUnit(
   };
 }
 
-function closeUnit(r: Reader, keyword: string, startLine: number): void {
+function closeUnit(r: Reader, keyword: string): void {
   const code = peekCode(r);
   if (code !== undefined && END_OF[keyword]!.test(code)) r.i++;
-  else r.error(startLine, r.indent(startLine), 'MISSING_END', { expected: `END_${keyword}` });
+  else missingEnd(r, `END_${keyword}`);
 }
 
 function skipToEnd(r: Reader, keyword: string): void {
@@ -422,8 +452,13 @@ function skipToEnd(r: Reader, keyword: string): void {
   }
 }
 
+/**
+ * Legge una sorgente. Con `device`, un OB indicato per nome è accettato anche se il nome è quello di un
+ * OB già presente (altrimenti serve un nome del catalogo, o il numero: `OB 35`).
+ */
 export function parseAwlSource(
   text: string,
+  device?: PlcDevice,
 ): { ok: true; source: ParsedSource } | { ok: false; errors: SourceError[] } {
   const r = new Reader(splitLines(text));
   const units: SourceUnit[] = [];
@@ -443,7 +478,7 @@ export function parseAwlSource(
       continue;
     }
     const at = r.i;
-    const unit = readUnit(r, m[1]!, m[2]!, nets);
+    const unit = readUnit(r, m[1]!, m[2]!, nets, device);
     if (!unit) continue;
     const key = unitKey(unit);
     if (seen.has(key))

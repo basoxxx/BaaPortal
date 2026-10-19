@@ -18,10 +18,10 @@ describe('applySource', () => {
     expect(r.created).toHaveLength(8);
     expect(d.udts.map((u) => [u.name, u.number])).toEqual([['Asse', 1]]);
     expect(d.blocks.map((b) => [b.kind, b.name, b.number])).toEqual([
+      ['OB', 'Main', 1],
       ['FC', 'Somma', 1],
       ['FB', 'Nastro', 1],
       ['FB', 'Linea', 2],
-      ['OB', 'Main', 1],
       ['DB', 'Dati', 1],
       ['IDB', 'Nastro_DB', 2],
       ['IDB', 'Linea_DB', 3],
