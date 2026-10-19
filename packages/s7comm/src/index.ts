@@ -20,3 +20,6 @@ export * from './capture/captureLog';
 export * from './capture/dissect';
 export * from './capture/pcap';
 export * from './capture/tcpStreams';
+export * from './transport';
+export * from './readOnlyGuard';
+export * from './connection';
