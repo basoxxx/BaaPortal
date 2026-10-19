@@ -52,8 +52,8 @@ export function NetworksView({ deviceId, blockId }: Props) {
   const drafts = useRef(new Map<string, Draft>());
   const handles = useRef(new Map<string, AwlEditorHandle>());
   // Le diagnostiche di ogni segmento: un segmento che non cambia tiene lo stesso array, e il suo editor non ricalcola.
-  const [byNetwork, setByNetwork] = useState<AwlDiagnostic[][]>([]);
-  const problems = useMemo(() => byNetwork.flat(), [byNetwork]);
+  // Chiavi per id del segmento: se un segmento viene inserito o tolto, i problemi restano ai loro segmenti.
+  const [byNetwork, setByNetwork] = useState<Record<string, AwlDiagnostic[]>>({});
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ id: string; x: number; y: number; anchor: Element } | null>(
     null,
@@ -104,16 +104,22 @@ export function NetworksView({ deviceId, blockId }: Props) {
     clearTimeout(timer.current);
     timer.current = setTimeout(() => {
       const l = latest.current;
-      const next: AwlDiagnostic[][] = (l.networks ?? []).map(() => []);
+      const nets = l.networks ?? [];
+      const next: Record<string, AwlDiagnostic[]> = {};
+      for (const n of nets) next[n.id] = [];
       if (l.awlCtx && l.networks) {
         for (const d of checkBlockCode(l.textsShown(), l.awlCtx, l.mnemonic))
-          next[d.network]?.push(d);
+          next[nets[d.network]?.id ?? '']?.push(d);
       }
       setByNetwork((prev) => {
-        const merged = next.map((arr, i) =>
-          prev[i] && JSON.stringify(prev[i]) === JSON.stringify(arr) ? prev[i]! : arr,
-        );
-        const same = merged.length === prev.length && merged.every((a, i) => a === prev[i]);
+        const merged: Record<string, AwlDiagnostic[]> = {};
+        for (const [id, arr] of Object.entries(next)) {
+          const old = prev[id];
+          merged[id] = old && JSON.stringify(old) === JSON.stringify(arr) ? old : arr;
+        }
+        const keys = Object.keys(merged);
+        const same =
+          keys.length === Object.keys(prev).length && keys.every((id) => merged[id] === prev[id]);
         return same ? prev : merged;
       });
     }, CHECK_DELAY_MS);
@@ -129,6 +135,10 @@ export function NetworksView({ deviceId, blockId }: Props) {
       b.header[field] = value;
     });
   const only = block.networks.length <= 1;
+  // I problemi nell'ordine attuale dei segmenti; la posizione è quella di adesso, non quella del controllo.
+  const problems = block.networks.flatMap((n, i) =>
+    (byNetwork[n.id] ?? NO_DIAGNOSTICS).map((d) => ({ d, id: n.id, pos: i + 1 })),
+  );
   const onDraft = (n: Network, text: string) => {
     if (text === shown(n.source, mnemonic)) drafts.current.delete(n.id);
     else drafts.current.set(n.id, { base: n.source, mnemonic, text });
@@ -211,7 +221,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
                 value={n.source}
                 mnemonic={mnemonic}
                 aria-label={`${t('block.source')} ${i + 1}`}
-                diagnostics={byNetwork[i] ?? NO_DIAGNOSTICS}
+                diagnostics={byNetwork[n.id] ?? NO_DIAGNOSTICS}
                 complete={(offset, text) =>
                   awlCtx
                     ? completeAt(textsShown({ index: i, text }), i, offset, awlCtx, mnemonic)
@@ -248,18 +258,15 @@ export function NetworksView({ deviceId, blockId }: Props) {
             aria-label={t('block.awlProblems')}
             hidden={problems.length === 0}
           >
-            {problems.map((d, k) => (
+            {problems.map(({ d, id, pos }, k) => (
               <li key={k}>
                 <button
                   type="button"
                   className={`is-${d.severity}`}
-                  onClick={() => {
-                    const n = block.networks[d.network];
-                    if (n) handles.current.get(n.id)?.focusAt(d.range.from.offset);
-                  }}
+                  onClick={() => handles.current.get(id)?.focusAt(d.range.from.offset)}
                 >
                   {t('block.awlProblemRow', {
-                    n: d.network + 1,
+                    n: pos,
                     line: d.range.from.line + 1,
                     message: t(`awl.diag.${d.code}`, d.params ?? {}),
                   })}

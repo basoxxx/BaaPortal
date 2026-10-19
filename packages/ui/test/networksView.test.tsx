@@ -20,6 +20,10 @@ const viewOf = (n = 1) => EditorView.findFromDOM(textbox(n).closest('.cm-editor'
 const set = (view: EditorView, text: string) =>
   act(() => view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } }));
 const focus = (view: EditorView) => act(() => view.contentDOM.focus());
+async function app_deleteFirst() {
+  fireEvent.click(screen.getByRole('button', { name: 'Menu del segmento 1' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Elimina segmento' }));
+}
 const mnemonicSelect = () => screen.getByRole('combobox', { name: 'Mnemonica' });
 
 describe("segmenti AWL con l'editor CodeMirror", () => {
@@ -201,6 +205,27 @@ describe("segmenti AWL con l'editor CodeMirror", () => {
       await openEditor('block', f.id, (d) => void d.blocks.push(f));
       await waitFor(() => expect(viewOf().dom.querySelector('.cm-lintRange-error')).not.toBeNull());
       expect(viewOf().dom.querySelector('.cm-lintRange-error')!.textContent).toBe('"Nope"');
+    },
+    T,
+  );
+
+  it(
+    'togliendo un segmento, la sottolineatura non passa al segmento che prende il suo posto',
+    async () => {
+      const f = fb('Nastro');
+      f.networks = [
+        { id: 'n0', title: '', comment: '', source: 'A "Nope"' },
+        { id: 'n1', title: '', comment: '', source: 'A I 0.0\nA I 0.1' },
+      ];
+      await openEditor('block', f.id, (d) => void d.blocks.push(f));
+      await waitFor(() =>
+        expect(viewOf(1).dom.querySelector('.cm-lintRange-error')).not.toBeNull(),
+      );
+      await app_deleteFirst();
+      // Subito, senza attendere il nuovo controllo: il segmento n1 non ha errori.
+      expect(viewOf(1).state.doc.toString()).toBe('A I 0.0\nA I 0.1');
+      expect(viewOf(1).dom.querySelector('.cm-lintRange-error')).toBeNull();
+      expect(screen.queryByText(/Segmento 1, riga 1/)).toBeNull();
     },
     T,
   );

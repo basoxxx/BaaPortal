@@ -104,6 +104,23 @@ describe('AwlEditor', () => {
   );
 
   it(
+    "a capo misti o `\\r` isolato: scrivere e rimettere il testo com'era non conferma nulla",
+    () => {
+      for (const value of ['a\r\nb\nc', 'a\rb\rc', 'a\r\nb\rc']) {
+        const e = setup({ value });
+        const shown = e.view().state.doc.toString();
+        focus(e.view());
+        e.set('x');
+        e.set(shown);
+        blur(e.view());
+        expect(e.onCommit).not.toHaveBeenCalled();
+        e.unmount();
+      }
+    },
+    T,
+  );
+
+  it(
     'cambio di mnemonica senza bozza: nessuna conferma',
     () => {
       const e = setup({ value: 'A I 0.0' });
