@@ -1,0 +1,30 @@
+FUNCTION "Somma" : Int
+TITLE =
+VERSION : 0.1
+
+VAR_INPUT
+  A : Int;
+  B : Int;
+END_VAR
+
+VAR_TEMP
+  Tmp : Int;
+END_VAR
+
+BEGIN
+NETWORK
+TITLE = Somma
+	L #A;
+	L #B;
+	+I;
+	T #RET_VAL;
+END_FUNCTION
+
+FUNCTION "Azzera" : Void
+TITLE =
+VERSION : 0.1
+
+BEGIN
+NETWORK
+TITLE =
+END_FUNCTION

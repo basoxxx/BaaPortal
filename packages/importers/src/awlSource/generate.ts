@@ -1,0 +1,260 @@
+// Scrittura di una sorgente AWL in stile TIA: nomi tra virgolette, tipi canonici, indirizzi con '%'.
+import { convertMnemonics, formatNetwork, parseNetwork, type Mnemonic } from '@baaportal/awl';
+import type {
+  Block,
+  BlockHeader,
+  CodeBlock,
+  DbAttributes,
+  GlobalDb,
+  InstanceDb,
+  Member,
+  ObjectRef,
+  PlcDevice,
+  Udt,
+} from '@baaportal/project';
+import { parseType, sameName } from '@baaportal/s7-types';
+import { commentLines, quoteName, quotePathKey, quoted } from './text';
+
+const CALLS = new Set(['CALL', 'UC', 'CC']);
+
+/** Ordina in modo che ogni elemento segua le sue dipendenze; a parità e nei cicli resta l'ordine dato. */
+function orderByDeps<T>(items: T[], deps: (item: T) => T[]): T[] {
+  const out: T[] = [];
+  const state = new Map<T, 'visiting' | 'done'>();
+  const visit = (item: T): void => {
+    if (state.has(item)) return;
+    state.set(item, 'visiting');
+    for (const d of deps(item)) visit(d);
+    state.set(item, 'done');
+    out.push(item);
+  };
+  for (const item of items) visit(item);
+  return out;
+}
+
+function namedTypes(list: Member[], out: string[] = []): string[] {
+  for (const m of list) {
+    const p = parseType(m.type);
+    if (p.ok) {
+      const base = p.type.kind === 'array' ? p.type.element : p.type;
+      if (base.kind === 'named') out.push(base.name);
+    }
+    if (m.members) namedTypes(m.members, out);
+  }
+  return out;
+}
+
+function calledBlocks(block: CodeBlock, blocks: CodeBlock[]): CodeBlock[] {
+  const out: CodeBlock[] = [];
+  for (const n of block.networks) {
+    if (n.source === '') continue;
+    for (const st of parseNetwork(n.source, 'international').statements) {
+      if (!st.instruction.def || !CALLS.has(st.instruction.def.id) || !st.operand) continue;
+      const op = st.operand;
+      if (op.kind === 'block') {
+        const hit = blocks.find((b) => b.kind === op.blockKind && b.number === op.number);
+        if (hit) out.push(hit);
+      } else if (op.kind === 'symbol' && op.path[0]) {
+        const name = op.path[0].name;
+        const hit = blocks.find((b) => sameName(b.name, name));
+        if (hit) out.push(hit);
+      }
+    }
+  }
+  return out;
+}
+
+function header(
+  unit: string,
+  title: string,
+  comment: string,
+  h: BlockHeader,
+  flags: string[],
+  extra: string[],
+): string[] {
+  const out = [unit, title === '' ? 'TITLE =' : `TITLE = ${title}`, ...commentLines(comment)];
+  if (flags.includes('KNOW_HOW_PROTECT')) out.push('KNOW_HOW_PROTECT');
+  if (h.author !== '') out.push(`AUTHOR : ${h.author}`);
+  if (h.family !== '') out.push(`FAMILY : ${h.family}`);
+  if (h.headerName !== '') out.push(`NAME : ${h.headerName}`);
+  out.push(`VERSION : ${h.version}`);
+  out.push(...extra);
+  out.push('');
+  return out;
+}
+
+const attrLines = (a: DbAttributes): string[] => [
+  ...(a.unlinked ? ['UNLINKED'] : []),
+  ...(a.readOnly ? ['READ_ONLY'] : []),
+  ...(a.nonRetain ? ['NON_RETAIN'] : []),
+];
+
+function memberLines(list: Member[], depth: number): string[] {
+  const pad = '  '.repeat(depth);
+  const out: string[] = [];
+  for (const m of list) {
+    const tail = m.comment === '' ? '' : ` // ${m.comment}`;
+    if (m.members && /\bStruct$/.test(m.type)) {
+      out.push(`${pad}${quoteName(m.name)} : ${m.type}`);
+      out.push(...memberLines(m.members, depth + 1));
+      out.push(`${pad}END_STRUCT;${tail}`);
+    } else {
+      const init = m.initial === undefined || m.initial === '' ? '' : ` := ${m.initial}`;
+      out.push(`${pad}${quoteName(m.name)} : ${m.type}${init};${tail}`);
+    }
+  }
+  return out;
+}
+
+const structLines = (members: Member[]): string[] => [
+  'STRUCT',
+  ...memberLines(members, 1),
+  'END_STRUCT;',
+  '',
+];
+
+function overrideLines(members: Member[], prefix: string, out: string[]): void {
+  for (const m of members) {
+    const path = prefix === '' ? quoteName(m.name) : `${prefix}.${quoteName(m.name)}`;
+    for (const [key, value] of Object.entries(m.overrides ?? {})) {
+      out.push(`  ${path}${quotePathKey(key)} := ${value};`);
+    }
+    if (m.members) overrideLines(m.members, path, out);
+  }
+}
+
+function udtLines(u: Udt): string[] {
+  return [
+    ...header(
+      `TYPE ${quoted(u.name)}`,
+      '',
+      u.comment,
+      {
+        title: '',
+        comment: '',
+        author: u.author,
+        family: u.family,
+        headerName: '',
+        version: u.version,
+      },
+      [],
+      [],
+    ),
+    ...structLines(u.members),
+    'END_TYPE',
+  ];
+}
+
+function codeLines(b: CodeBlock, mnemonic: Mnemonic): string[] {
+  const unit =
+    b.kind === 'OB'
+      ? `ORGANIZATION_BLOCK ${quoted(b.name)}`
+      : b.kind === 'FB'
+        ? `FUNCTION_BLOCK ${quoted(b.name)}`
+        : `FUNCTION ${quoted(b.name)} : ${b.interface.returnType === '' ? 'Void' : b.interface.returnType}`;
+  const out = header(
+    unit,
+    b.header.title,
+    b.header.comment,
+    b.header,
+    b.knowHowProtected ? ['KNOW_HOW_PROTECT'] : [],
+    [],
+  );
+  const i = b.interface;
+  const sections: [string, Member[]][] = [
+    ['VAR_INPUT', i.input],
+    ['VAR_OUTPUT', i.output],
+    ['VAR_IN_OUT', i.inOut],
+    ['VAR', i.static],
+    ['VAR_TEMP', i.temp],
+  ];
+  for (const [kw, list] of sections) {
+    if (list.length === 0) continue;
+    out.push(kw, ...memberLines(list, 1), 'END_VAR', '');
+  }
+  out.push('BEGIN');
+  for (const n of b.networks) {
+    out.push(
+      'NETWORK',
+      n.title === '' ? 'TITLE =' : `TITLE = ${n.title}`,
+      ...commentLines(n.comment),
+    );
+    if (n.source === '') continue;
+    const text =
+      mnemonic === 'international'
+        ? n.source
+        : convertMnemonics(n.source, 'international', mnemonic);
+    out.push(...formatNetwork(text, mnemonic).split(/\r?\n/));
+  }
+  out.push(
+    `END_${b.kind === 'OB' ? 'ORGANIZATION_BLOCK' : b.kind === 'FB' ? 'FUNCTION_BLOCK' : 'FUNCTION'}`,
+  );
+  return out;
+}
+
+function dbLines(b: GlobalDb | InstanceDb): string[] {
+  const out = header(
+    `DATA_BLOCK ${quoted(b.name)}`,
+    b.header.title,
+    b.header.comment,
+    b.header,
+    b.knowHowProtected ? ['KNOW_HOW_PROTECT'] : [],
+    attrLines(b.attributes),
+  );
+  if (b.kind === 'DB') {
+    out.push(...structLines(b.members), 'BEGIN');
+    overrideLines(b.members, '', out);
+  } else {
+    out.push(quoted(b.instanceOf), '', 'BEGIN');
+    for (const [key, value] of Object.entries(b.overrides))
+      out.push(`  ${quotePathKey(key)} := ${value};`);
+  }
+  out.push('END_DATA_BLOCK');
+  return out;
+}
+
+/**
+ * Sorgente AWL (stile TIA) degli oggetti indicati: UDT in ordine di dipendenza, poi i blocchi di
+ * codice con i richiamati prima dei chiamanti, poi DB e DB di istanza. Un'unità per volta, separate da
+ * una riga vuota.
+ */
+export function generateAwlSource(
+  device: PlcDevice,
+  refs: ObjectRef[],
+  mnemonic: Mnemonic,
+): string {
+  const seen = new Set<string>();
+  const udts: Udt[] = [];
+  const blocks: Block[] = [];
+  for (const r of refs) {
+    if (r.kind !== 'udt' && r.kind !== 'block') continue;
+    if (seen.has(`${r.kind}:${r.id}`)) continue;
+    seen.add(`${r.kind}:${r.id}`);
+    if (r.kind === 'udt') {
+      const u = device.udts.find((x) => x.id === r.id);
+      if (u) udts.push(u);
+    } else {
+      const b = device.blocks.find((x) => x.id === r.id);
+      if (b) blocks.push(b);
+    }
+  }
+  const sortedUdts = orderByDeps(udts, (u) =>
+    namedTypes(u.members).flatMap((n) => udts.filter((x) => x !== u && sameName(x.name, n))),
+  );
+  const code = blocks.filter(
+    (b): b is CodeBlock => b.kind === 'OB' || b.kind === 'FB' || b.kind === 'FC',
+  );
+  const sortedCode = orderByDeps(code, (b) => {
+    const i = b.interface;
+    const typed = namedTypes([...i.input, ...i.output, ...i.inOut, ...i.static]);
+    const fbs = typed.flatMap((n) => code.filter((x) => x.kind === 'FB' && sameName(x.name, n)));
+    return [...fbs, ...calledBlocks(b, code)].filter((x) => x !== b);
+  });
+  const dbs = blocks.filter((b): b is GlobalDb | InstanceDb => b.kind === 'DB' || b.kind === 'IDB');
+  const units: string[][] = [
+    ...sortedUdts.map(udtLines),
+    ...sortedCode.map((b) => codeLines(b, mnemonic)),
+    ...dbs.map(dbLines),
+  ];
+  return units.map((u) => u.join('\n')).join('\n\n') + (units.length > 0 ? '\n' : '');
+}

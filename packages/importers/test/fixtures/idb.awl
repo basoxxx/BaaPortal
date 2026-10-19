@@ -1,0 +1,10 @@
+DATA_BLOCK "Nastro_DB"
+TITLE =
+VERSION : 0.1
+
+"Nastro"
+
+BEGIN
+  Velocita := 120;
+  Dati.Pos.X := 1.0;
+END_DATA_BLOCK
