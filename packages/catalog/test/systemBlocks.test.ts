@@ -73,6 +73,9 @@ describe('catalogo SFC/SFB', () => {
       output: ['BUSY:Bool', 'SSL_HEADER:Struct', 'DR:Any'],
     });
     expect(rdsysst.returnType).toBe('Int');
+    // L'edizione tedesca e le sorgenti STEP 7 V5.5 usano SZL al posto di SSL.
+    expect(rdsysst.paramAliases).toEqual({ SZL_ID: 'SSL_ID', SZL_HEADER: 'SSL_HEADER' });
+    expect(SYSTEM_BLOCKS.filter((b) => b.paramAliases).map((b) => b.name)).toEqual(['RDSYSST']);
     const fill = findSystemBlock({ kind: 'SFC', number: 21 })!;
     expect(fill.name).toBe('FILL');
     expect(sig(fill)).toEqual({ input: ['BVAL:Any'], output: ['BLK:Any'] });

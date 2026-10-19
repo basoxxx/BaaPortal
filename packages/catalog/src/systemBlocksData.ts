@@ -15,6 +15,8 @@ export interface RawSystemBlock {
   s?: string | string[];
   /** Tipo di RET_VAL, solo per le SFC che lo hanno. */
   ret?: string;
+  /** Nomi alternativi dei parametri (alias -> canonico). */
+  aliases?: Record<string, string>;
 }
 
 // Un documento per costante: titolo, edizione e indirizzo di quello effettivamente scaricato.
@@ -262,6 +264,8 @@ export const RAW_SYSTEM_BLOCKS: readonly RawSystemBlock[] = [
     i: 'REQ:Bool SSL_ID:Word INDEX:Word',
     o: 'BUSY:Bool SSL_HEADER:Struct DR:Any',
     ret: R,
+    // L'edizione tedesca e le sorgenti STEP 7 V5.5 usano SZL al posto di SSL.
+    aliases: { SZL_ID: 'SSL_ID', SZL_HEADER: 'SSL_HEADER' },
   },
   {
     kind: 'SFC',

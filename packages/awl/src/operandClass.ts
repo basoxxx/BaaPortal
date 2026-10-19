@@ -215,9 +215,17 @@ const SHARED_BLOCK: Record<string, string> = {
 };
 
 /** Il valore `r` puo' essere passato a un parametro di tipo `pt`? */
-export function paramCompatible(pt: DataType, r: Resolved): boolean {
+export function paramCompatible(pt: DataType, r: Resolved, ctx?: AwlContext): boolean {
   if (r.k === 'unknown') return true;
   switch (pt.kind) {
+    case 'struct': {
+      // Struct senza membri (SFC 6, SFC 51): accetta qualsiasi Struct o UDT.
+      if (pt.members.length > 0) return 'type' in r && !!r.type && typesEqual(r.type, pt);
+      const t = 'type' in r ? r.type : undefined;
+      if (!t) return false;
+      if (t.kind === 'struct') return true;
+      return t.kind === 'named' && ctx?.resolve(t.name)?.kind === 'udt';
+    }
     case 'elementary': {
       if (r.k === 'const') return !r.pointer && parseLiteral(pt, r.text).ok;
       if ('type' in r && r.type) return r.type.kind === 'elementary' && r.type.name === pt.name;

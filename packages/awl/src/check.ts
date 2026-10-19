@@ -244,6 +244,14 @@ function checkCall(st: Statement, p: ParseResult, ctx: AwlContext, rep: Report):
   checkParams(callee, params, st, ctx, rep);
 }
 
+/** Il nome canonico di un parametro (risolve gli alias, es. SZL_ID -> SSL_ID). */
+function aliasOf(callee: AwlBlockInfo, name: string): string {
+  for (const [alias, canonical] of Object.entries(callee.paramAliases ?? {})) {
+    if (sameName(alias, name)) return canonical;
+  }
+  return name;
+}
+
 function checkParams(
   callee: AwlBlockInfo,
   params: CallParam[],
@@ -267,18 +275,23 @@ function checkParams(
       ]
     : [];
   const seen = new Set<string>();
+  const spelled = new Map<string, string>();
   for (const prm of params) {
     const r = prm.value ? resolveOperand(ctx, prm.value, rep) : null;
     if (!iface) continue;
     const name = unquote(prm.name);
-    const decl = known.find((m) => sameName(m.name, name));
-    if (!decl) {
+    const canonical = aliasOf(callee, name);
+    const decl = known.find((m) => sameName(m.name, canonical));
+    // Lo stesso parametro scritto con due nomi (alias e canonico) e' un doppione.
+    const earlier = decl ? spelled.get(labelKey(decl.name)) : undefined;
+    if (!decl || (earlier !== undefined && !sameName(earlier, name))) {
       rep('CALL_PARAM_UNKNOWN', prm.nameRange, { name });
       continue;
     }
     seen.add(labelKey(decl.name));
+    spelled.set(labelKey(decl.name), name);
     if (prm.arrow === '=>' && decl.input) rep('CALL_PARAM_DIRECTION', prm.nameRange, { name });
-    if (prm.value && r && !paramCompatible(decl.type, r)) {
+    if (prm.value && r && !paramCompatible(decl.type, r, ctx)) {
       rep('CALL_PARAM_TYPE', prm.value.range, { name });
     }
   }

@@ -20,6 +20,8 @@ export interface AwlBlockInfo {
   dbMembers?: TypedMember[];
   /** Per un IDB: il nome dell'FB di cui e' l'istanza. */
   instanceOf?: string;
+  /** Nomi alternativi dei parametri (alias -> nome canonico). */
+  paramAliases?: Record<string, string>;
 }
 
 export interface AwlSymbolInfo {

@@ -21,6 +21,8 @@ export interface SystemBlock {
   static?: TypedMember[];
   /** Tipo di RET_VAL (solo SFC con valore di ritorno). */
   returnType?: string;
+  /** Nomi alternativi dei parametri (alias -> nome canonico), es. SZL_ID per SSL_ID. */
+  paramAliases?: Record<string, string>;
   source: string;
 }
 
@@ -54,6 +56,7 @@ function build(raw: RawSystemBlock): SystemBlock {
   };
   if (raw.s !== undefined) block.static = members(owner, raw.s);
   if (raw.ret !== undefined) block.returnType = raw.ret;
+  if (raw.aliases !== undefined) block.paramAliases = raw.aliases;
   return block;
 }
 

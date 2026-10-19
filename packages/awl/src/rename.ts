@@ -16,7 +16,15 @@ export type RenameTarget =
       oldName: string;
     }
   | { kind: 'local'; oldName: string }
-  | { kind: 'callParam'; block: string; oldName: string };
+  | {
+      kind: 'callParam';
+      block: string;
+      oldName: string;
+      /** Chiama anche per numero: `CALL FB 3`. */
+      number?: { kind: 'FB' | 'FC'; number: number };
+      /** Nomi di multi-istanze locali: `CALL #inst`. */
+      instances?: string[];
+    };
 
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const bareOrQuoted = (name: string): string => (IDENT.test(name) ? name : `"${name}"`);
@@ -69,6 +77,7 @@ function pathEdits(op: Operand, target: RenameTarget, newName: string, out: Edit
       const at = 1 + target.path.length;
       const seg = segs[at];
       if (!seg || !sameName(seg.name, target.oldName)) return;
+      // Solo i nomi: gli indici di array non contano (il tipo e' lo stesso per ogni elemento).
       if (!target.path.every((n, i) => sameName(n, segs[1 + i]!.name))) return;
       out.push(edit(seg.range, bareOrQuoted(newName)));
       return;
@@ -76,6 +85,23 @@ function pathEdits(op: Operand, target: RenameTarget, newName: string, out: Edit
     case 'callParam':
       return;
   }
+}
+
+function isTargetCall(callee: Operand, target: RenameTarget): boolean {
+  if (target.kind !== 'callParam') return false;
+  if (callee.kind === 'symbol') {
+    return callee.path.length === 1 && sameName(callee.path[0]!.name, target.block);
+  }
+  if (callee.kind === 'block') {
+    const n = target.number;
+    return !!n && callee.blockKind === n.kind && callee.number === n.number;
+  }
+  if (callee.kind === 'local') {
+    return (
+      callee.path.length === 1 && !!target.instances?.some((i) => sameName(i, callee.path[0]!.name))
+    );
+  }
+  return false;
 }
 
 function paramEdit(
@@ -87,7 +113,7 @@ function paramEdit(
 ): void {
   if (target.kind !== 'callParam' || st.instruction.def?.id !== 'CALL') return;
   const callee = st.operand;
-  if (callee?.kind !== 'symbol' || !sameName(callee.path[0]!.name, target.block)) return;
+  if (!callee || !isTargetCall(callee, target)) return;
   const name = p.name.startsWith('"') ? p.name.slice(1, -1) : p.name;
   if (sameName(name, target.oldName)) out.push(edit(p.nameRange, bareOrQuoted(newName)));
 }
@@ -99,6 +125,8 @@ export function renameInSource(
   newName: string,
   mnemonic: Mnemonic,
 ): string {
+  // Un nome con virgolette, caratteri di controllo o a capo romperebbe il codice.
+  if (/["\u0000-\u001f\u007f\u2028\u2029]/.test(newName)) return source;
   const { statements } = parseDetailed(source, mnemonic);
   const edits: Edit[] = [];
   for (const st of statements) {

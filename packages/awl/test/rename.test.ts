@@ -127,4 +127,52 @@ describe('renameInSource', () => {
       'U "S"\r\nSPA M1\r\nM1: U E 0.0\r\n= "S"',
     );
   });
+
+  it('membro: gli indici di array non contano', () => {
+    const src = 'L "Dati".Assi[3].Pos\nL "Dati".Assi[1,2].Pos';
+    expect(
+      ren(
+        src,
+        { kind: 'member', root: 'symbol', rootName: 'Dati', path: ['Assi'], oldName: 'Pos' },
+        'Posizione',
+      ),
+    ).toBe('L "Dati".Assi[3].Posizione\nL "Dati".Assi[1,2].Posizione');
+  });
+
+  it('nuovo nome non valido: sorgente invariato', () => {
+    const src = 'A "Avvio"';
+    for (const bad of ['a"b', 'a\nb', 'a\rb', 'a\u0000b', 'a\u2028b']) {
+      expect(ren(src, { kind: 'symbol', oldName: 'Avvio' }, bad)).toBe(src);
+    }
+  });
+
+  it('callParam: anche CALL FB n, CALL FC n e CALL #istanza', () => {
+    const src = [
+      'CALL "Nastro", "Nastro_DB"\n(Vel := 1)',
+      'CALL FB 2, DB 3\n(Vel := 2)',
+      'CALL FC 2\n(Vel := 3)',
+      'CALL #sub\n(Vel := 4)',
+      'CALL #altra\n(Vel := 5)',
+    ].join('\n');
+    const out = ren(
+      src,
+      {
+        kind: 'callParam',
+        block: 'Nastro',
+        oldName: 'Vel',
+        number: { kind: 'FB', number: 2 },
+        instances: ['SUB'],
+      },
+      'Velocita',
+    );
+    expect(out).toBe(
+      [
+        'CALL "Nastro", "Nastro_DB"\n(Velocita := 1)',
+        'CALL FB 2, DB 3\n(Velocita := 2)',
+        'CALL FC 2\n(Vel := 3)',
+        'CALL #sub\n(Velocita := 4)',
+        'CALL #altra\n(Vel := 5)',
+      ].join('\n'),
+    );
+  });
 });
