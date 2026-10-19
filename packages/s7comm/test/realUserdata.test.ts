@@ -39,6 +39,7 @@ interface Stats {
   noHead: number;
   generic: number;
   setClock: number;
+  forbidden: number;
   szlReq: number;
   szlFrag: number;
   szlLists: number;
@@ -58,6 +59,7 @@ const zero = (): Stats => ({
   noHead: 0,
   generic: 0,
   setClock: 0,
+  forbidden: 0,
   szlReq: 0,
   szlFrag: 0,
   szlLists: 0,
@@ -121,12 +123,18 @@ describe.skipIf(!HAVE)('userdata su catture reali: encode(decode(x)) identico', 
           continue;
         }
         const { param: up } = d;
-        const isSetClock =
-          up.method === 'request' &&
-          up.group === 7 &&
-          (up.subfunction === 2 || up.subfunction === 4);
-        if (isSetClock) {
-          s.setClock++; // il codificatore rifiuta di proposito di scriverla
+        const key0 = `${up.group}/${up.subfunction}`;
+        const inScope =
+          up.method === 'request'
+            ? ['4/1', '3/1', '3/2', '3/3', '7/1', '7/3'].includes(key0)
+            : ![1, 2, 5].includes(up.group) && !(up.group === 7 && [2, 4].includes(up.subfunction));
+        if (!inScope) {
+          // fuori dall'allowlist del kit di sola lettura: il codificatore deve rifiutarla
+          s.setClock += key0 === '7/2' || key0 === '7/4' ? 1 : 0;
+          s.forbidden++;
+          guard('fuori allowlist', () => {
+            expect(() => encodeUserdata(d.param, d.payload, d.returnCode)).toThrow(RangeError);
+          });
         } else {
           s.generic++;
           guard('generico', () => {

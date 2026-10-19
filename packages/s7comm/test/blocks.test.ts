@@ -117,7 +117,7 @@ describe('funzioni blocco (proto §8)', () => {
       name: 'DATADB',
       version: '0.1',
     });
-    expect(d.codeTime.year).toBe(2014);
+    expect(d.codeTime?.year).toBe(2014);
     expect(hex(encodeBlockInfo(d))).toBe(hex(bytes));
   });
 
@@ -127,10 +127,44 @@ describe('funzioni blocco (proto §8)', () => {
     expect(decodeBlockInfo(bytes).version).toBe('1.1');
   });
 
-  it('block info malformato -> PROTOCOL', () => {
-    expect(() => decodeBlockInfo(new Uint8Array(77))).toThrow(S7Error);
+  it('block info di 70 byte: decodifica i campi che entrano e conserva i byte', () => {
+    const full = encodeBlockInfo(DB1);
+    const part = full.slice(0, 70);
+    const d = decodeBlockInfo(part);
+    expect(d).toMatchObject({
+      type: 'DB',
+      typeCode: 0x0a,
+      number: 1,
+      mc7Length: 400,
+      author: 'TWI',
+      name: 'DATADB',
+      version: '0.1',
+      checksum: 0xc0df,
+    });
+    expect(d.codeTime?.year).toBe(2014);
+    expect(hex(encodeBlockInfo(d))).toBe(hex(part));
+    const tiny = decodeBlockInfo(full.slice(0, 14));
+    expect(tiny.number).toBe(1);
+    expect(tiny.loadLength).toBeUndefined();
+    expect(tiny.author).toBeUndefined();
+    expect(decodeBlockInfo(new Uint8Array(0)).typeCode).toBeUndefined();
+  });
+
+  it('sottotipo sconosciuto: type undefined, typeCode numerico, round trip', () => {
     const bytes = encodeBlockInfo(DB1);
-    bytes[11] = 0x33; // subblk type sconosciuto
-    expect(() => decodeBlockInfo(bytes)).toThrow(S7Error);
+    bytes[11] = 0x33;
+    const d = decodeBlockInfo(bytes);
+    expect(d.type).toBeUndefined();
+    expect(d.typeCode).toBe(0x33);
+    expect(hex(encodeBlockInfo(d))).toBe(hex(bytes));
+  });
+
+  it('timestamp non valido: codeTime undefined, byte grezzi conservati', () => {
+    const bytes = encodeBlockInfo(DB1);
+    bytes.set([0x05, 0x26, 0x5c, 0x00, 0x00, 0x01], 22); // ms = un giorno
+    const d = decodeBlockInfo(bytes);
+    expect(d.codeTime).toBeUndefined();
+    expect(d.interfaceTime?.year).toBe(2014);
+    expect(hex(encodeBlockInfo(d))).toBe(hex(bytes));
   });
 });

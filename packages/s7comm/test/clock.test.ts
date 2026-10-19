@@ -111,4 +111,17 @@ describe('ora BCD (proto §12.1)', () => {
     expect(() => decodeBlockTimestamp(fromHex('05 26 5c 00 00 00'))).toThrow(S7Error); // 86400000 ms
     expect(() => decodeBlockTimestamp(new Uint8Array(5))).toThrow(S7Error);
   });
+
+  it('encodeBlockTimestamp valida ms e intervallo di date', () => {
+    const t = { year: 2014, month: 8, day: 20, hour: 11, minute: 0, second: 0, ms: 0 };
+    expect(() => encodeBlockTimestamp(t)).not.toThrow();
+    expect(() => encodeBlockTimestamp({ ...t, hour: 24 })).toThrow(S7Error);
+    expect(() => encodeBlockTimestamp({ ...t, ms: 1000 })).toThrow(S7Error);
+    expect(() => encodeBlockTimestamp({ ...t, minute: -1 })).toThrow(S7Error);
+    expect(() => encodeBlockTimestamp({ ...t, year: 1983 })).toThrow(S7Error);
+    expect(() => encodeBlockTimestamp({ ...t, year: 2200 })).toThrow(S7Error);
+    expect(() => encodeBlockTimestamp({ ...t, month: 2, day: 31 })).toThrow(S7Error);
+    expect(() => encodeBlockTimestamp({ ...t, month: 13 })).toThrow(S7Error);
+    expect(() => encodeBlockTimestamp({ ...t, day: 1.5 })).toThrow(S7Error);
+  });
 });

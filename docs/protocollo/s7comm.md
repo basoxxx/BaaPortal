@@ -639,7 +639,12 @@ Primi 8 byte della parte dati (dopo i 4 byte return/TS/len):
 | 4 | 2 | LENTHDR | lunghezza di **un** record in byte |
 | 6 | 2 | N_DR | numero di record |
 
-Seguono N_DR record da LENTHDR byte. **verificato**: `0132 0004 0028 0001` = id 0x0132,
+Seguono N_DR record da LENTHDR byte. **Eccezione, liste "solo intestazione"**: se l'estratto
+dell'SZL-ID è `0xF` (es. `0x0F1C`, `0x0F74`, `0x0F11`, `0x0F00`, `0x0FA0`) la risposta è la sola
+intestazione di 8 byte, con LENTHDR e N_DR valorizzati (es. `0f1c 0000 0022 000a`) ma **nessun
+record**. Un parser non deve pretendere N_DR×LENTHDR byte in questo caso.
+**verificato** su `s7comm_reading_plc_status.pcap` e `s7comm_program_blocklist_onlineview.pcap`
+(`0f11 0000 001c 0004`, `0f1c 0000 0022 000a`, `0f74 0000 0004 0007`). **verificato**: `0132 0004 0028 0001` = id 0x0132,
 idx 0x0004, record 0x28=40 byte, 1 record.
 
 ### 7.3 Liste che servono a BaaPortal su S7-300
@@ -663,19 +668,22 @@ Record = Index(1 word) + stringa ASCII (il resto fino a 34 byte), gap riempiti c
 `0x00`. **verificato** su `s7comm_reading_plc_status.pcap`:
 `0001 "IM151-8-CPU"`, `0004 "Original Siemens Equipment"`, `0005 "S C-C6TW74882012"`,
 `0008 "MMC 2900FC1A"`; su `cisa/snap7.pcap`: `0001 "S7300/ET200M station_1"`,
-`0005 "S C-B1U3931420011"`.
+`0005 "S C-B1U393142011"` (16 caratteri; una versione precedente di questo documento riportava per errore 17 caratteri, **verificato su cattura cisa/snap7.pcap**).
 
 #### `0x0424` — modo operativo attuale (RUN/STOP) (LENTHDR = 20)
-Record: ereig(1 word, event id) + ae(1 byte) + **bzu-id**(1 byte) + res(4 byte) +
+Record: ereig(1 word, event id) + ae(1 byte) + **bzu-id**(1 byte, **offset 3 del record**) + res(4 byte) +
 anlinfo1..4(4 byte) + time(8 byte, timestamp S7). Il **bzu-id** codifica il cambio di
 modo: nibble basso = modo richiesto, nibble alto = modo precedente. Valori nibble:
 `0x1`=STOP(update), `0x2`=STOP(memory reset), `0x3`=STOP(self init), `0x4`=STOP(internal),
 `0x5`=startup(complete restart), `0x7`=restart, `0x8`=**RUN**, `0xA`=HOLD, `0xD`=DEFECT.
-⚠️ snap7 usa in alternativa SZL **`0x0424` index 0** e legge il byte a offset 7 della
-parte dati (`opData[7]`): `0x08`=RUN, `0x04`=STOP, `0x00`=unknown; se diverso lo tratta
-come STOP. Evento ereig osservato: `0x5144` (es. "I/O access"?) o `0x4302` ecc.
-**verificato** su `s7comm_reading_plc_status.pcap` (`0424 0000 0014 0001` +
-`5144 ff 08 …` → modo RUN, byte[7] del payload = `0x08`).
+⚠️ **Posizione del byte di modo**: nel record il byte di modo (bzu-id) è all'**offset 3 del
+record**, cioè offset 11 del payload SZL (8 byte di intestazione + 3) o offset 15 della parte
+dati con i 4 byte return/TS/len. Ne usiamo il **nibble basso** (`0x08` → RUN). snap7 legge
+`0x0424` index 0 con `opData[7]` (`0x08`=RUN, `0x04`=STOP, `0x00`=unknown, altro = STOP): quel
+"7" è relativo a una base diversa (il buffer di snap7), **non** all'inizio del record, e non va
+usato come offset nel record. Evento ereig osservato: `0x5144` o `0x4302` ecc.
+**verificato** su `cisa/s7ident.pcap` e `cisa/snap7.pcap` (`0424 0000 0014 0001` + `5144 ff 08 …`
+→ modo RUN, bzu-id = `0x08` all'offset 3 del record) e su `s7comm_reading_plc_status.pcap`.
 
 #### `0x00A0` / `0x01A0` — buffer diagnostico (LENTHDR = 20)
 `0x00A0` = tutte le entry nel modo attuale; `0x01A0` = le N più recenti (N in INDEX);

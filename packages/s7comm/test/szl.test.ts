@@ -138,11 +138,81 @@ describe('SZL (proto §7)', () => {
     expect(entries[0]!.time).toMatchObject({ year: 2024, month: 10, day: 4, hour: 21 });
   });
 
-  it("i parser tipizzati rifiutano liste dell'id sbagliato o record corti con PROTOCOL", () => {
-    expect(() => modeFrom(list(0x0011, 0, ['00'.repeat(20)]))).toThrow(S7Error);
-    expect(() => commFrom(list(0x0131, 1, ['0001']))).toThrow(S7Error);
-    expect(() => protectionFrom(list(0x0232, 4, ['0004']))).toThrow(S7Error);
-    expect(() => identityFrom(list(0x001c, 0, ['00'.repeat(34)]))).toThrow(S7Error);
+  it('un parser tipizzato con la lista sbagliata lancia RangeError (errore del programmatore)', () => {
+    expect(() => modeFrom(list(0x0011, 0, ['00'.repeat(20)]))).toThrow(RangeError);
+    expect(() => commFrom(list(0x0011, 1, ['00'.repeat(20)]))).toThrow(RangeError);
+    expect(() => protectionFrom(list(0x0011, 4, ['00'.repeat(20)]))).toThrow(RangeError);
+    expect(() => diagFrom(list(0x0011, 0, ['00'.repeat(20)]))).toThrow(RangeError);
+    expect(() => identityFrom(list(0x001c, 0, ['00'.repeat(34)]))).toThrow(RangeError);
+    expect(() =>
+      identityFrom(list(0x0011, 0, ['00'.repeat(28)]), list(0x0011, 0, ['00'.repeat(28)])),
+    ).toThrow(RangeError);
+  });
+
+  it("diagFrom: un'ora tutta a zero o con weekday > 7 in mezzo non fa perdere la lista", () => {
+    const ok = '4302' + '00112233445566778899' + '2410042124250005';
+    const zero = '4303' + 'aabbccddeeff00112233' + '0000000000000000';
+    const wd = '4304' + '00000000000000000000' + '2410042124250009';
+    const e = diagFrom(list(0x00a0, 0, [ok, zero, wd, ok]));
+    expect(e.map((x) => x.eventId)).toEqual([0x4302, 0x4303, 0x4304, 0x4302]);
+    expect(e[1]!.time).toBeUndefined();
+    expect(hex(e[1]!.rawTime!)).toBe('0000000000000000');
+    expect(hex(e[1]!.info)).toBe('aabbccddeeff00112233');
+    expect(e[2]!.time).toBeUndefined();
+    expect(hex(e[2]!.rawTime!)).toBe('2410042124250009');
+    expect(e[3]!.time).toMatchObject({ year: 2024 });
+    expect(e[0]!.rawTime).toBeUndefined();
+  });
+
+  it('diagFrom: record più corto del layout decodifica i campi che entrano', () => {
+    const e = diagFrom(list(0x00a0, 0, ['4302001122']));
+    expect(e).toHaveLength(1);
+    expect(e[0]!.eventId).toBe(0x4302);
+    expect(hex(e[0]!.info)).toBe('001122');
+    expect(e[0]!.time).toBeUndefined();
+  });
+
+  it('identityFrom: 0x0011 senza index 1 -> orderNumber vuoto, senza lanciare', () => {
+    const rec6 = '0006' + '20'.repeat(20) + '00c0' + '0001' + '0000';
+    const id = identityFrom(list(0x0011, 0, [rec6]));
+    expect(id.orderNumber).toBe('');
+    expect(id.version).toBeUndefined();
+  });
+
+  it('identityFrom: record più corto del layout -> campi che entrano, il resto undefined', () => {
+    const short = '0001' + hex(new TextEncoder().encode('6ES7 315-2EH14'));
+    const id = identityFrom(list(0x0011, 0, [short]));
+    expect(id.orderNumber).toBe('6ES7 315-2EH14');
+    expect(id.version).toBeUndefined();
+  });
+
+  it('identityFrom: 0x001C con soli 2 indici su 6, e record cortissimi', () => {
+    const l11 = parseSzl([payloadOf(V.S7IDENT_0011_RES)]);
+    const str = (i: number, s: string): string =>
+      i.toString(16).padStart(4, '0') + hex(new TextEncoder().encode(s)).padEnd(64, '0');
+    const l1c = list(0x001c, 0, [str(1, 'AS1'), str(2, 'MOD')]);
+    const id = identityFrom(l11, l1c);
+    expect(id).toMatchObject({ asName: 'AS1', moduleName: 'MOD' });
+    expect(id.serialNumber).toBeUndefined();
+    expect(id.mmcSerial).toBeUndefined();
+    expect(id.copyright).toBeUndefined();
+    expect(id.plantId).toBeUndefined();
+    expect(() => identityFrom(l11, list(0x001c, 0, ['00']))).not.toThrow();
+  });
+
+  it('modeFrom: record troppo corto o nessun record -> UNKNOWN', () => {
+    expect(modeFrom(list(0x0424, 0, ['5144ff']))).toBe('UNKNOWN');
+    expect(modeFrom({ id: 0x0424, index: 0, recordLength: 20, records: [] })).toBe('UNKNOWN');
+  });
+
+  it('protectionFrom e commFrom: risultato parziale con campi opzionali', () => {
+    const p = protectionFrom(list(0x0232, 4, ['0004000100020003']));
+    expect(p).toEqual({ switchLevel: 1, paramLevel: 2, validLevel: 3 });
+    expect(protectionFrom(list(0x0232, 4, ['0004']))).toEqual({});
+    expect(protectionFrom({ id: 0x0232, index: 4, recordLength: 40, records: [] })).toEqual({});
+    expect(commFrom(list(0x0131, 1, ['000100f0']))).toEqual({ maxPdu: 240 });
+    expect(commFrom(list(0x0131, 1, ['0001']))).toEqual({});
+    expect(commFrom(list(0x0131, 2, ['0002' + '00'.repeat(38)]))).toEqual({});
   });
 });
 

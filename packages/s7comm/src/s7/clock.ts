@@ -109,10 +109,29 @@ export function decodeBlockTimestamp(b: Uint8Array): S7DateTime {
 }
 
 export function encodeBlockTimestamp(t: S7DateTime): Uint8Array {
-  const days = Math.round((Date.UTC(t.year, t.month - 1, t.day) - EPOCH_1984) / MS_DAY);
-  if (!Number.isInteger(days) || days < 0 || days > 0xffff)
-    throw bad('data fuori dal formato dei blocchi');
+  const int = (v: number): boolean => Number.isInteger(v);
+  if (![t.year, t.month, t.day, t.hour, t.minute, t.second, t.ms].every(int)) {
+    throw bad('campo non intero');
+  }
+  if (t.hour < 0 || t.hour > 23) throw bad(`ora ${t.hour} fuori 0-23`);
+  if (t.minute < 0 || t.minute > 59) throw bad(`minuto ${t.minute} fuori 0-59`);
+  if (t.second < 0 || t.second > 59) throw bad(`secondo ${t.second} fuori 0-59`);
+  if (t.ms < 0 || t.ms > 999) throw bad(`millisecondi ${t.ms} fuori 0-999`);
   const ms = ((t.hour * 60 + t.minute) * 60 + t.second) * 1000 + t.ms;
+  if (ms < 0 || ms >= MS_DAY) throw bad(`ms dalla mezzanotte ${ms} fuori 0-${MS_DAY - 1}`);
+  const date = new Date(0);
+  date.setUTCFullYear(t.year, t.month - 1, t.day);
+  date.setUTCHours(0, 0, 0, 0);
+  if (
+    date.getUTCFullYear() !== t.year ||
+    date.getUTCMonth() !== t.month - 1 ||
+    date.getUTCDate() !== t.day
+  ) {
+    throw bad(`data ${t.year}-${t.month}-${t.day} non valida`);
+  }
+  const days = Math.round((date.getTime() - EPOCH_1984) / MS_DAY);
+  if (days < 0 || days > 0xffff)
+    throw bad('data fuori dal formato dei blocchi (1984-01-01 + 65535 giorni)');
   return Uint8Array.of(
     ms >>> 24,
     (ms >>> 16) & 255,

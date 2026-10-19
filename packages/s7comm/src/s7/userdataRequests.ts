@@ -46,8 +46,8 @@ export function reqReadClock(sequence = 0): UserdataFrame {
 export function reqContinue(group: number, subfunction: number, sequence: number): UserdataFrame {
   return encodeUserdata(
     {
-      method: 'response',
-      type: 4,
+      method: 'request',
+      methodByte: 0x12,
       group,
       subfunction,
       sequence,

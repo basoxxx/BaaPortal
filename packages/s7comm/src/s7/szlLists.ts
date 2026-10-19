@@ -3,16 +3,19 @@ import { S7Error } from '../errors';
 import { decodeBcdDateTime, type S7DateTime } from './clock';
 import type { SzlList } from './szl';
 
-function bad(msg: string): S7Error {
-  return new S7Error('PROTOCOL', `SZL: ${msg}`);
+/**
+ * Passare la lista sbagliata a un parser tipizzato è un errore del programmatore (RangeError).
+ * Il contenuto dei record invece non lancia mai: i campi che mancano restano undefined.
+ */
+function expectList(l: SzlList, number: number, what: string): void {
+  if ((l.id & 0xff) !== number) {
+    throw new RangeError(`${what}: lista 0x${l.id.toString(16)} inattesa`);
+  }
 }
 
-/** Verifica l'id (numero di lista nel byte basso, estratto ignorato) e la lunghezza record. */
-function expectList(l: SzlList, number: number, minRecord: number, what: string): void {
-  if ((l.id & 0xff) !== number) throw bad(`${what}: lista 0x${l.id.toString(16)} inattesa`);
-  if (l.records.length > 0 && l.recordLength < minRecord) {
-    throw bad(`${what}: record di ${l.recordLength} byte, ne servono ${minRecord}`);
-  }
+/** Parola a offset `off` del record, se ci sta tutta. */
+function word(r: Uint8Array | undefined, off: number): number | undefined {
+  return r && off + 2 <= r.length ? readU16(r, off) : undefined;
 }
 
 function text(b: Uint8Array): string {
@@ -29,7 +32,7 @@ function recordWithIndex(l: SzlList, index: number): Uint8Array | undefined {
 
 export interface CpuIdentity {
   orderNumber: string;
-  version: string;
+  version?: string;
   asName?: string;
   moduleName?: string;
   serialNumber?: string;
@@ -41,23 +44,23 @@ export interface CpuIdentity {
 /**
  * Identità dalla 0x0011 (record index 1: MlFB; la versione dal record 7, firmware, forma
  * "V3.2.6") e, se c'è, dalla 0x001C (proto §7.3). Senza il record 7 la versione viene
- * dall'indice 1 come `V<Ausbg1>.<Ausbg2>`.
+ * dall'indice 1 come `V<Ausbg1>.<Ausbg2>`. Senza il record 1 `orderNumber` è '' e la versione
+ * resta undefined; un record più corto del layout dà i campi che ci stanno.
  */
 export function identityFrom(s0011: SzlList, s001c?: SzlList): CpuIdentity {
-  expectList(s0011, 0x11, 28, 'identificazione 0x0011');
+  expectList(s0011, 0x11, 'identificazione 0x0011');
   const r1 = recordWithIndex(s0011, 1);
-  if (!r1) throw bad('0x0011 senza il record index 1');
-  const orderNumber = text(r1.subarray(2, 22));
-  let version: string;
+  const id: CpuIdentity = { orderNumber: r1 ? text(r1.subarray(2, 22)) : '' };
   const r7 = recordWithIndex(s0011, 7);
-  if (r7 && r7[24] === 0x56) {
-    version = `V${r7[25]}.${r7[26]}.${r7[27]}`;
+  if (r7 && r7.length >= 28 && r7[24] === 0x56) {
+    id.version = `V${r7[25]}.${r7[26]}.${r7[27]}`;
   } else {
-    version = `V${readU16(r1, 24)}.${readU16(r1, 26)}`;
+    const a1 = word(r1, 24);
+    const a2 = word(r1, 26);
+    if (a1 !== undefined && a2 !== undefined) id.version = `V${a1}.${a2}`;
   }
-  const id: CpuIdentity = { orderNumber, version };
   if (s001c) {
-    expectList(s001c, 0x1c, 2, 'identificazione 0x001C');
+    expectList(s001c, 0x1c, 'identificazione 0x001C');
     const str = (index: number): string | undefined => {
       const r = recordWithIndex(s001c, index);
       return r ? text(r.subarray(2)) : undefined;
@@ -79,12 +82,13 @@ export type CpuMode = 'RUN' | 'STOP' | 'STARTUP' | 'HOLD' | 'DEFECT' | 'UNKNOWN'
 
 /**
  * Modo dalla 0x0424 (proto §7.3): record = ereig(2) + ae(1) + bzu-id(1) ...; il nibble basso del
- * bzu-id è il modo attuale: 8 RUN, 1-4 STOP, 5 e 7 avvio, A HOLD, D difetto. Altro: UNKNOWN.
+ * bzu-id (offset 3 del record) è il modo attuale: 8 RUN, 1-4 STOP, 5 e 7 avvio, A HOLD,
+ * D difetto. Altro, record troppo corto o lista vuota: UNKNOWN.
  */
 export function modeFrom(s0424: SzlList): CpuMode {
-  expectList(s0424, 0x24, 4, 'modo 0x0424');
+  expectList(s0424, 0x24, 'modo 0x0424');
   const r = s0424.records[0];
-  if (!r) return 'UNKNOWN';
+  if (!r || r.length < 4) return 'UNKNOWN';
   const nib = r[3]! & 0x0f;
   if (nib === 0x8) return 'RUN';
   if (nib >= 1 && nib <= 4) return 'STOP';
@@ -95,51 +99,68 @@ export function modeFrom(s0424: SzlList): CpuMode {
 }
 
 export interface ProtectionInfo {
-  switchLevel: number;
-  paramLevel: number;
-  validLevel: number;
-  modeSwitch: 'RUN' | 'RUN-P' | 'STOP' | 'MRES' | 'UNKNOWN';
+  switchLevel?: number;
+  paramLevel?: number;
+  validLevel?: number;
+  modeSwitch?: 'RUN' | 'RUN-P' | 'STOP' | 'MRES' | 'UNKNOWN';
 }
 
-/** 0x0232 index 4: sch_schal, sch_par, sch_rel, bart_sch (proto §7.3). */
+/** 0x0232 index 4: sch_schal, sch_par, sch_rel, bart_sch (proto §7.3). I campi che non ci sono restano assenti. */
 export function protectionFrom(s0232: SzlList): ProtectionInfo {
-  expectList(s0232, 0x32, 10, 'protezione 0x0232');
+  expectList(s0232, 0x32, 'protezione 0x0232');
   const r = s0232.records[0];
-  if (!r) throw bad('protezione senza record');
-  const modes = ['UNKNOWN', 'RUN', 'RUN-P', 'STOP', 'MRES'] as const;
-  return {
-    switchLevel: readU16(r, 2),
-    paramLevel: readU16(r, 4),
-    validLevel: readU16(r, 6),
-    modeSwitch: modes[readU16(r, 8)] ?? 'UNKNOWN',
-  };
+  const out: ProtectionInfo = {};
+  const sw = word(r, 2);
+  const par = word(r, 4);
+  const rel = word(r, 6);
+  const bart = word(r, 8);
+  if (sw !== undefined) out.switchLevel = sw;
+  if (par !== undefined) out.paramLevel = par;
+  if (rel !== undefined) out.validLevel = rel;
+  if (bart !== undefined) {
+    const modes = ['UNKNOWN', 'RUN', 'RUN-P', 'STOP', 'MRES'] as const;
+    out.modeSwitch = modes[bart] ?? 'UNKNOWN';
+  }
+  return out;
 }
 
 export interface CommCapabilities {
-  maxPdu: number;
-  maxConnections: number;
+  maxPdu?: number;
+  maxConnections?: number;
 }
 
-/** 0x0131 index 1: pdu e anz (proto §7.3). */
+/** 0x0131 index 1: pdu e anz (proto §7.3). Senza il record o con un record corto, campi assenti. */
 export function commFrom(s0131: SzlList): CommCapabilities {
-  expectList(s0131, 0x31, 6, 'comunicazione 0x0131');
+  expectList(s0131, 0x31, 'comunicazione 0x0131');
   const r = recordWithIndex(s0131, 1);
-  if (!r) throw bad('0x0131 senza il record index 1');
-  return { maxPdu: readU16(r, 2), maxConnections: readU16(r, 4) };
+  const out: CommCapabilities = {};
+  const pdu = word(r, 2);
+  const anz = word(r, 4);
+  if (pdu !== undefined) out.maxPdu = pdu;
+  if (anz !== undefined) out.maxConnections = anz;
+  return out;
 }
 
 export interface DiagEntry {
   eventId: number;
   info: Uint8Array;
-  time: S7DateTime;
+  /** Assente se l'ora del record non è una data valida (allora c'è `rawTime`). */
+  time?: S7DateTime;
+  rawTime?: Uint8Array;
 }
 
-/** 0x00A0: id evento (2) + info (10) + ora breve BCD (8). */
+/** 0x00A0: id evento (2) + info (10) + ora breve BCD (8). Un'ora non valida non fa perdere la voce. */
 export function diagFrom(s00a0: SzlList): DiagEntry[] {
-  expectList(s00a0, 0xa0, 20, 'buffer diagnostico 0x00A0');
-  return s00a0.records.map((r) => ({
-    eventId: readU16(r, 0),
-    info: r.slice(2, 12),
-    time: decodeBcdDateTime(r.subarray(12, 20)),
-  }));
+  expectList(s00a0, 0xa0, 'buffer diagnostico 0x00A0');
+  return s00a0.records.map((r) => {
+    const entry: DiagEntry = { eventId: word(r, 0) ?? 0, info: r.slice(2, 12) };
+    const raw = r.slice(12, 20);
+    try {
+      entry.time = decodeBcdDateTime(raw);
+    } catch (e) {
+      if (!(e instanceof S7Error)) throw e;
+      entry.rawTime = raw;
+    }
+    return entry;
+  });
 }

@@ -191,6 +191,8 @@ export function decodeBlockInfoRequest(payload: Uint8Array): {
  * (byte esatti di una CPU reale). Se mancano, `encodeBlockInfo` usa i valori tipici.
  */
 export interface BlockInfoRaw {
+  /** Payload originale completo. */
+  bytes?: Uint8Array;
   /** Offset 0-1. */
   word0?: number;
   /** Offset 2-3, lunghezza delle informazioni. */
@@ -215,25 +217,32 @@ export interface BlockInfoRaw {
   name?: Uint8Array;
 }
 
+/**
+ * Informazioni di blocco. `typeCode` è il byte di sottotipo come sul filo; `type` è assente se
+ * il codice è sconosciuto. Gli altri campi mancano se il payload è più corto di 78 byte
+ * (decodifica "campo per campo") o, per i timestamp, se non sono una data valida; `raw.bytes`
+ * conserva sempre il payload originale.
+ */
 export interface BlockInfo {
-  type: BlockType;
-  number: number;
-  language: number;
-  flags: number;
-  loadLength: number;
-  security: number;
-  codeTime: S7DateTime;
-  interfaceTime: S7DateTime;
-  ssbLength: number;
-  addLength: number;
-  localDataLength: number;
-  mc7Length: number;
-  author: string;
-  family: string;
-  name: string;
+  typeCode?: number;
+  type?: BlockType;
+  number?: number;
+  language?: number;
+  flags?: number;
+  loadLength?: number;
+  security?: number;
+  codeTime?: S7DateTime;
+  interfaceTime?: S7DateTime;
+  ssbLength?: number;
+  addLength?: number;
+  localDataLength?: number;
+  mc7Length?: number;
+  author?: string;
+  family?: string;
+  name?: string;
   /** "x.y" dai nibble. */
-  version: string;
-  checksum: number;
+  version?: string;
+  checksum?: number;
   raw?: BlockInfoRaw;
 }
 
@@ -247,46 +256,64 @@ function trimmed(b: Uint8Array): string {
   return s;
 }
 
+function tryTime(b: Uint8Array): S7DateTime | undefined {
+  try {
+    return decodeBlockTimestamp(b);
+  } catch (e) {
+    if (e instanceof S7Error) return undefined;
+    throw e;
+  }
+}
+
+/** Decodifica i campi che stanno nel payload; non lancia mai sul contenuto. */
 export function decodeBlockInfo(p: Uint8Array): BlockInfo {
-  if (p.length !== INFO_LENGTH)
-    throw bad(`info blocco di ${p.length} byte invece di ${INFO_LENGTH}`);
-  const type = FROM_BINARY.get(p[11]!);
-  if (!type) throw bad(`tipo di sottoblocco 0x${p[11]!.toString(16)} sconosciuto`);
-  const ver = p[66]!;
-  return {
-    type,
-    number: readU16(p, 12),
-    language: p[10]!,
-    flags: p[9]!,
-    loadLength: readU32(p, 14),
-    security: readU32(p, 18),
-    codeTime: decodeBlockTimestamp(p.subarray(22, 28)),
-    interfaceTime: decodeBlockTimestamp(p.subarray(28, 34)),
-    ssbLength: readU16(p, 34),
-    addLength: readU16(p, 36),
-    localDataLength: readU16(p, 38),
-    mc7Length: readU16(p, 40),
-    author: trimmed(p.subarray(42, 50)),
-    family: trimmed(p.subarray(50, 58)),
-    name: trimmed(p.subarray(58, 66)),
-    version: `${ver >> 4}.${ver & 15}`,
-    checksum: readU16(p, 68),
-    raw: {
-      word0: readU16(p, 0),
-      infoLength: readU16(p, 2),
-      unknown2: readU16(p, 4),
-      magic: readU16(p, 6),
-      unknown8: p[8]!,
-      unknown67: p[67]!,
-      reserved1: readU32(p, 70),
-      reserved2: readU32(p, 74),
-      codeTime: p.slice(22, 28),
-      interfaceTime: p.slice(28, 34),
-      author: p.slice(42, 50),
-      family: p.slice(50, 58),
-      name: p.slice(58, 66),
-    },
+  const fits = (off: number, len: number): boolean => off + len <= p.length;
+  const u16 = (off: number): number | undefined => (fits(off, 2) ? readU16(p, off) : undefined);
+  const u32 = (off: number): number | undefined => (fits(off, 4) ? readU32(p, off) : undefined);
+  const u8 = (off: number): number | undefined => (fits(off, 1) ? p[off] : undefined);
+  const str = (off: number): string | undefined =>
+    fits(off, 8) ? trimmed(p.subarray(off, off + 8)) : undefined;
+  const out: BlockInfo = {};
+  const set = <K extends keyof BlockInfo>(k: K, v: BlockInfo[K] | undefined): void => {
+    if (v !== undefined) out[k] = v;
   };
+  const code = u8(11);
+  set('typeCode', code);
+  if (code !== undefined) set('type', FROM_BINARY.get(code));
+  set('number', u16(12));
+  set('language', u8(10));
+  set('flags', u8(9));
+  set('loadLength', u32(14));
+  set('security', u32(18));
+  if (fits(22, 6)) set('codeTime', tryTime(p.subarray(22, 28)));
+  if (fits(28, 6)) set('interfaceTime', tryTime(p.subarray(28, 34)));
+  set('ssbLength', u16(34));
+  set('addLength', u16(36));
+  set('localDataLength', u16(38));
+  set('mc7Length', u16(40));
+  set('author', str(42));
+  set('family', str(50));
+  set('name', str(58));
+  const ver = u8(66);
+  if (ver !== undefined) out.version = `${ver >> 4}.${ver & 15}`;
+  set('checksum', u16(68));
+  out.raw = {
+    bytes: p.slice(),
+    word0: u16(0),
+    infoLength: u16(2),
+    unknown2: u16(4),
+    magic: u16(6),
+    unknown8: u8(8),
+    unknown67: u8(67),
+    reserved1: u32(70),
+    reserved2: u32(74),
+    codeTime: fits(22, 6) ? p.slice(22, 28) : undefined,
+    interfaceTime: fits(28, 6) ? p.slice(28, 34) : undefined,
+    author: fits(42, 8) ? p.slice(42, 50) : undefined,
+    family: fits(50, 8) ? p.slice(50, 58) : undefined,
+    name: fits(58, 8) ? p.slice(58, 66) : undefined,
+  };
+  return out;
 }
 
 function padded(s: string, raw: Uint8Array | undefined): Uint8Array {
@@ -297,34 +324,42 @@ function padded(s: string, raw: Uint8Array | undefined): Uint8Array {
   return out;
 }
 
+/**
+ * 78 byte. Un `BlockInfo` uscito da un payload di lunghezza diversa si ricodifica restituendo
+ * quel payload (`raw.bytes`). Per il finto PLC servono almeno `type` e `number`.
+ */
 export function encodeBlockInfo(i: BlockInfo): Uint8Array {
   const r = i.raw ?? {};
-  const m = /^([0-9a-f])\.([0-9a-f])$/i.exec(i.version);
+  if (r.bytes && r.bytes.length !== INFO_LENGTH) return r.bytes.slice();
+  const code = i.type !== undefined ? BINARY[i.type] : i.typeCode;
+  if (code === undefined) throw new RangeError('block info senza type né typeCode');
+  const m = /^([0-9a-f])\.([0-9a-f])$/i.exec(i.version ?? '0.0');
   if (!m) throw new RangeError(`versione "${i.version}" non è x.y`);
+  const zero = { year: 1984, month: 1, day: 1, hour: 0, minute: 0, second: 0, ms: 0 };
   const out = new Uint8Array(INFO_LENGTH);
   writeU16(out, 0, r.word0 ?? 0);
   writeU16(out, 2, r.infoLength ?? 0x4a);
   writeU16(out, 4, r.unknown2 ?? 0x2200);
   writeU16(out, 6, r.magic ?? 0x7070);
   out[8] = r.unknown8 ?? 0x01;
-  out[9] = i.flags;
-  out[10] = i.language;
-  out[11] = BINARY[i.type];
-  writeU16(out, 12, i.number);
-  writeU32(out, 14, i.loadLength);
-  writeU32(out, 18, i.security);
-  out.set(r.codeTime ?? encodeBlockTimestamp(i.codeTime), 22);
-  out.set(r.interfaceTime ?? encodeBlockTimestamp(i.interfaceTime), 28);
-  writeU16(out, 34, i.ssbLength);
-  writeU16(out, 36, i.addLength);
-  writeU16(out, 38, i.localDataLength);
-  writeU16(out, 40, i.mc7Length);
-  out.set(padded(i.author, r.author), 42);
-  out.set(padded(i.family, r.family), 50);
-  out.set(padded(i.name, r.name), 58);
+  out[9] = i.flags ?? 0;
+  out[10] = i.language ?? 0;
+  out[11] = code;
+  writeU16(out, 12, i.number ?? 0);
+  writeU32(out, 14, i.loadLength ?? 0);
+  writeU32(out, 18, i.security ?? 0);
+  out.set(r.codeTime ?? encodeBlockTimestamp(i.codeTime ?? zero), 22);
+  out.set(r.interfaceTime ?? encodeBlockTimestamp(i.interfaceTime ?? zero), 28);
+  writeU16(out, 34, i.ssbLength ?? 0);
+  writeU16(out, 36, i.addLength ?? 0);
+  writeU16(out, 38, i.localDataLength ?? 0);
+  writeU16(out, 40, i.mc7Length ?? 0);
+  out.set(padded(i.author ?? '', r.author), 42);
+  out.set(padded(i.family ?? '', r.family), 50);
+  out.set(padded(i.name ?? '', r.name), 58);
   out[66] = (parseInt(m[1]!, 16) << 4) | parseInt(m[2]!, 16);
   out[67] = r.unknown67 ?? 0;
-  writeU16(out, 68, i.checksum);
+  writeU16(out, 68, i.checksum ?? 0);
   writeU32(out, 70, r.reserved1 ?? 0);
   writeU32(out, 74, r.reserved2 ?? 0);
   return out;

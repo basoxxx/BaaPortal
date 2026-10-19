@@ -20,6 +20,7 @@ describe('userdata (ROSCTR 7, proto §6)', () => {
     const d = decodeUserdata(b(V.S7IDENT_0011_REQ.param), b(V.S7IDENT_0011_REQ.data));
     expect(d.param).toEqual({
       method: 'request',
+      methodByte: 0x11,
       type: 4,
       group: 4,
       subfunction: 1,
@@ -36,6 +37,7 @@ describe('userdata (ROSCTR 7, proto §6)', () => {
     const d = decodeUserdata(b(V.SNAP7_001C_RES1.param), b(V.SNAP7_001C_RES1.data));
     expect(d.param).toEqual({
       method: 'response',
+      methodByte: 0x12,
       type: 8,
       group: 4,
       subfunction: 1,
@@ -53,7 +55,8 @@ describe('userdata (ROSCTR 7, proto §6)', () => {
   it('richiesta di continuazione reale: method 0x12, type 4, return 0x0a, payload vuoto', () => {
     const d = decodeUserdata(b(V.SNAP7_001C_NEXT.param), b(V.SNAP7_001C_NEXT.data));
     expect(d.param).toMatchObject({
-      method: 'response',
+      method: 'request',
+      methodByte: 0x12,
       type: 4,
       sequence: 2,
       lastDataUnit: false,
@@ -89,15 +92,66 @@ describe('userdata (ROSCTR 7, proto §6)', () => {
     }
   });
 
-  it('non codifica il set clock (né altre funzioni che modificano), in nessuna forma', () => {
-    for (const sub of [2, 4]) {
-      expect(() =>
-        encodeUserdata(
-          { method: 'request', group: 7, subfunction: sub, sequence: 0 },
-          new Uint8Array(10),
-        ),
-      ).toThrow(RangeError);
+  const ALLOWED = new Set(['4/1', '3/1', '3/2', '3/3', '7/1', '7/3']);
+
+  it('richieste: solo SZL, blocchi in lettura e lettura orologio; ogni altra coppia lancia RangeError', () => {
+    for (let group = 0; group < 16; group++) {
+      for (let sub = 0; sub < 256; sub++) {
+        const f = (): unknown =>
+          encodeUserdata(
+            { method: 'request', group, subfunction: sub, sequence: 0 },
+            new Uint8Array(4),
+          );
+        if (ALLOWED.has(`${group}/${sub}`)) expect(f).not.toThrow();
+        else expect(f, `${group}/${sub}`).toThrow(RangeError);
+      }
     }
+    expect(() => reqContinue(7, 2, 1)).toThrow(RangeError);
+    expect(() => reqContinue(1, 0x0c, 1)).toThrow(RangeError);
+    expect(() => reqContinue(4, 1, 1)).not.toThrow();
+  });
+
+  it('risposte: generiche per il finto PLC, ma mai gruppi 1/2/5 né set clock', () => {
+    const resp = (group: number, sub: number): unknown =>
+      encodeUserdata(
+        { method: 'response', group, subfunction: sub, sequence: 0 },
+        new Uint8Array(4),
+      );
+    for (const [g, s] of [
+      [1, 1],
+      [1, 0x0c],
+      [2, 1],
+      [5, 1],
+      [7, 2],
+      [7, 4],
+    ] as const) {
+      expect(() => resp(g, s), `${g}/${s}`).toThrow(RangeError);
+    }
+    for (const [g, s] of [
+      [4, 1],
+      [4, 2],
+      [3, 3],
+      [7, 1],
+      [7, 3],
+    ] as const) {
+      expect(() => resp(g, s), `${g}/${s}`).not.toThrow();
+    }
+  });
+
+  it('il type deriva dal method: combinazioni incoerenti lanciano RangeError', () => {
+    const base = { group: 4, subfunction: 1, sequence: 0 };
+    expect(() =>
+      encodeUserdata({ ...base, method: 'response', type: 4 }, new Uint8Array(4)),
+    ).toThrow(RangeError);
+    expect(() =>
+      encodeUserdata({ ...base, method: 'request', type: 8 }, new Uint8Array(4)),
+    ).toThrow(RangeError);
+    expect(() =>
+      encodeUserdata({ ...base, method: 'request', type: 4 }, new Uint8Array(4)),
+    ).not.toThrow();
+    expect(() =>
+      encodeUserdata({ ...base, method: 'request', methodByte: 0x13 }, new Uint8Array(4)),
+    ).toThrow(RangeError);
   });
 
   it('input malformati danno S7Error PROTOCOL', () => {
@@ -109,7 +163,8 @@ describe('userdata (ROSCTR 7, proto §6)', () => {
       ['0001120411440100', 'ff09000200110000'], // lunghezza incoerente
       ['0001120411440100', 'ff09'], // dati < 4 byte
       ['0001120411440100', 'ff09000400110000aa'], // byte in più
-      ['0001120311440100', 'ff09000400110000'], // method sconosciuto
+      ['0001120413440100', 'ff09000400110000'], // method sconosciuto
+      ['0001120411140100', 'ff09000400110000'], // type nibble 1
     ];
     for (const [p, d] of bad) {
       let err: unknown;
