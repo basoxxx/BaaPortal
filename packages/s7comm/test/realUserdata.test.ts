@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   S7Error,
@@ -30,9 +29,7 @@ import {
   protectionFrom,
   type SzlList,
 } from '../src';
-import { DIR, HAVE, files, tpkts } from './captures';
-
-if (!HAVE) console.warn(`[realUserdata] catture assenti in ${DIR}: test saltato`);
+import { allCaptures, framesOf } from './captures';
 
 interface Stats {
   pdus7: number;
@@ -74,14 +71,15 @@ const zero = (): Stats => ({
   mismatch: 0,
 });
 
-describe.skipIf(!HAVE)('userdata su catture reali: encode(decode(x)) identico', () => {
+describe('userdata su catture reali: encode(decode(x)) identico', () => {
   it('ogni PDU ROSCTR 7 coperta, per file', () => {
     const lines: string[] = [];
     const fails: string[] = [];
     const total = zero();
-    for (const f of files(DIR)) {
+    for (const cap of allCaptures()) {
+      const f = cap.path;
       const s = zero();
-      const name = f.slice(DIR.length + 1);
+      const name = cap.name;
       const same = (what: string, got: Uint8Array, want: Uint8Array): void => {
         if (hex(got) !== hex(want)) {
           s.mismatch++;
@@ -98,10 +96,10 @@ describe.skipIf(!HAVE)('userdata su catture reali: encode(decode(x)) identico', 
       };
       // frammenti aperti per (gruppo, sottofunzione), risposta dopo risposta
       const open = new Map<string, { frags: Uint8Array[]; seq: number }>();
-      for (const t of tpkts(readFileSync(f))) {
+      for (const t of framesOf(f)) {
         let cotp;
         try {
-          cotp = decodeCotp(t.subarray(4));
+          cotp = decodeCotp(t);
         } catch {
           continue;
         }

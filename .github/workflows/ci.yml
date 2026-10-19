@@ -21,6 +21,9 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run format:check
+      - name: Scarica catture S7 pubbliche
+        run: node scripts/fetch-s7-captures.mjs
+        continue-on-error: true
       - run: npm test
       - run: npm run e2e
       - if: failure()

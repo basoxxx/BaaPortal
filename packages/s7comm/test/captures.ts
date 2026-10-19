@@ -1,126 +1,74 @@
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { readPcap } from '../src';
 
-// Catture reali pubbliche. Cartella: S7_CAPTURES_DIR, oppure .cache/s7-captures/ nella radice.
-export const DIR =
+/**
+ * Aiuti di test per le catture reali.
+ *
+ * - cisagov (BSD-3) sta nel repository: i test su di esse girano sempre, CI compresa.
+ * - Le altre sono scaricate da `scripts/fetch-s7-captures.mjs` in `.cache/s7-captures/`
+ *   (oppure nella cartella di `S7_CAPTURES_DIR`). Se mancano, i test che le usano le saltano.
+ */
+export const CISAGOV_DIR = resolve(__dirname, 'captures/cisagov');
+export const CACHE_DIR =
   process.env['S7_CAPTURES_DIR'] ?? resolve(__dirname, '../../../.cache/s7-captures');
-export const HAVE = existsSync(DIR);
 
-// ---- lettore pcap/pcapng minimale (verrà sostituito dal lettore vero del Task 5) ----
-
-interface Pkt {
-  link: number;
-  data: Uint8Array;
+export interface CaptureFile {
+  /** Percorso assoluto. */
+  path: string;
+  /** Nome breve per i messaggi: `cisagov/snap7.pcap`, `icspcap/...`. */
+  name: string;
 }
 
-function readPackets(buf: Buffer): Pkt[] {
-  const out: Pkt[] = [];
-  const m = buf.readUInt32BE(0);
-  if (m === 0xa1b2c3d4 || m === 0xd4c3b2a1 || m === 0xa1b23c4d || m === 0x4d3cb2a1) {
-    const le = m === 0xd4c3b2a1 || m === 0x4d3cb2a1;
-    const u32 = (o: number): number => (le ? buf.readUInt32LE(o) : buf.readUInt32BE(o));
-    const link = u32(20);
-    for (let o = 24; o + 16 <= buf.length;) {
-      const incl = u32(o + 8);
-      out.push({ link, data: buf.subarray(o + 16, o + 16 + incl) });
-      o += 16 + incl;
-    }
-  } else if (m === 0x0a0d0d0a) {
-    let le = true;
-    const links: number[] = [];
-    for (let o = 0; o + 12 <= buf.length;) {
-      const type = le ? buf.readUInt32LE(o) : buf.readUInt32BE(o);
-      if (type === 0x0a0d0d0a) le = buf.readUInt32LE(o + 8) === 0x1a2b3c4d;
-      const len = le ? buf.readUInt32LE(o + 4) : buf.readUInt32BE(o + 4);
-      const u16 = (p: number): number => (le ? buf.readUInt16LE(p) : buf.readUInt16BE(p));
-      const u32 = (p: number): number => (le ? buf.readUInt32LE(p) : buf.readUInt32BE(p));
-      if (type === 1) links.push(u16(o + 8));
-      else if (type === 6) {
-        const cap = u32(o + 20);
-        out.push({ link: links[u32(o + 8)] ?? 1, data: buf.subarray(o + 28, o + 28 + cap) });
-      } else if (type === 3) {
-        out.push({ link: links[0] ?? 1, data: buf.subarray(o + 12, o + 8 + len - 4) });
-      }
-      if (len < 12) break;
-      o += len;
-    }
-  }
-  return out;
-}
+const PCAP_RE = /\.pcap(ng)?$/;
 
-/** Ricostruisce i flussi TCP verso/da porta 102 e li spezza in TPKT. */
-export function tpkts(buf: Buffer): Uint8Array[] {
-  interface Flow {
-    next: number | null;
-    buf: Buffer;
-  }
-  const flows = new Map<string, Flow>();
-  const out: Uint8Array[] = [];
-  for (const { link, data: p } of readPackets(buf)) {
-    let ip: Buffer;
-    const b = Buffer.from(p);
-    if (link === 1) {
-      let et = b.readUInt16BE(12);
-      let o = 14;
-      while (et === 0x8100 || et === 0x88a8) {
-        et = b.readUInt16BE(o + 2);
-        o += 4;
-      }
-      if (et !== 0x0800) continue;
-      ip = b.subarray(o);
-    } else if (link === 101 || link === 228) ip = b;
-    else if (link === 0) ip = b.subarray(4);
-    else if (link === 113) ip = b.subarray(16);
-    else continue;
-    if (ip.length < 20 || ip[0]! >> 4 !== 4 || ip[9] !== 6) continue;
-    const ihl = (ip[0]! & 15) * 4;
-    const tcp = ip.subarray(ihl, ip.readUInt16BE(2));
-    if (tcp.length < 20) continue;
-    const sp = tcp.readUInt16BE(0);
-    const dp = tcp.readUInt16BE(2);
-    if (sp !== 102 && dp !== 102) continue;
-    const seq = tcp.readUInt32BE(4);
-    const flags = tcp[13]!;
-    const pl = tcp.subarray((tcp[12]! >> 4) * 4);
-    const key = `${ip.subarray(12, 16).toString('hex')}:${sp}>${ip.subarray(16, 20).toString('hex')}:${dp}`;
-    let f = flows.get(key);
-    if (!f) flows.set(key, (f = { next: null, buf: Buffer.alloc(0) }));
-    if (flags & 0x02) {
-      f.next = (seq + 1) >>> 0;
-      continue;
-    }
-    if (pl.length === 0) continue;
-    if (f.next === null) f.next = seq;
-    const diff = (seq - f.next) >>> 0;
-    let add: Buffer | null = null;
-    if (diff === 0) add = pl;
-    else if (diff > 0x7fffffff) {
-      const back = (f.next - seq) >>> 0; // ritrasmissione/sovrapposizione
-      if (back < pl.length) add = pl.subarray(back);
-    } else add = pl; // buco: si prosegue comunque
-    if (!add) continue;
-    f.next = (f.next + add.length) >>> 0;
-    f.buf = Buffer.concat([f.buf, add]);
-    while (f.buf.length >= 4) {
-      if (f.buf[0] !== 3) {
-        f.buf = Buffer.alloc(0);
-        break;
-      }
-      const ln = f.buf.readUInt16BE(2);
-      if (f.buf.length < ln) break;
-      out.push(f.buf.subarray(0, ln));
-      f.buf = f.buf.subarray(ln);
-    }
-  }
-  return out;
-}
-
-export function files(dir: string): string[] {
-  const r: string[] = [];
+function walk(dir: string): string[] {
+  const out: string[] = [];
   for (const n of readdirSync(dir)) {
     const p = join(dir, n);
-    if (statSync(p).isDirectory()) r.push(...files(p));
-    else if (/\.pcap(ng)?$/.test(n)) r.push(p);
+    if (statSync(p).isDirectory()) out.push(...walk(p));
+    else if (PCAP_RE.test(n)) out.push(p);
   }
-  return r.sort();
+  return out.sort();
+}
+
+/** Le catture del repository (sempre presenti). */
+export function bundledCaptures(): CaptureFile[] {
+  return walk(CISAGOV_DIR).map((path) => ({
+    path,
+    name: `cisagov/${path.slice(CISAGOV_DIR.length + 1)}`,
+  }));
+}
+
+/** Le catture scaricate. Le copie di cisagov nella stessa cartella non si contano due volte. */
+export function downloadedCaptures(): CaptureFile[] {
+  if (!existsSync(CACHE_DIR)) return [];
+  return walk(CACHE_DIR)
+    .map((path) => ({ path, name: path.slice(CACHE_DIR.length + 1).replace(/\\/g, '/') }))
+    .filter((c) => !/^(cisa|cisagov)\//.test(c.name));
+}
+
+/** Tutte le catture disponibili: prima quelle del repository. */
+export function allCaptures(): CaptureFile[] {
+  return [...bundledCaptures(), ...downloadedCaptures()];
+}
+
+interface PublicEntry {
+  file: string;
+  url: string;
+  sha256: string;
+  license: string;
+}
+
+/** Catture elencate in public.json e non presenti nella cartella di cache. */
+export function missingCaptures(): string[] {
+  const list = JSON.parse(
+    readFileSync(resolve(__dirname, 'captures/public.json'), 'utf8'),
+  ) as PublicEntry[];
+  return list.map((e) => e.file).filter((f) => !existsSync(join(CACHE_DIR, ...f.split('/'))));
+}
+
+/** Tutti i frame (payload TPKT, senza header) di una cattura, flusso dopo flusso. */
+export function framesOf(path: string): Uint8Array[] {
+  return readPcap(readFileSync(path)).flatMap((s) => s.frames.map((f) => f.bytes));
 }

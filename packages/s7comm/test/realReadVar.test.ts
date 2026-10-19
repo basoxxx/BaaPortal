@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   decodeCotp,
@@ -9,9 +8,7 @@ import {
   encodeReadResponse,
   hex,
 } from '../src';
-import { DIR, HAVE, files, tpkts } from './captures';
-
-if (!HAVE) console.warn(`[realReadVar] catture assenti in ${DIR}: test saltato`);
+import { allCaptures, framesOf } from './captures';
 
 function allS7any(param: Uint8Array): boolean {
   let o = 2;
@@ -28,19 +25,20 @@ function allS7any(param: Uint8Array): boolean {
   return true;
 }
 
-describe.skipIf(!HAVE)('read var su catture reali: encode(decode(x)) identico', () => {
+describe('read var su catture reali: encode(decode(x)) identico', () => {
   it('ogni richiesta e risposta read var', () => {
     const stats: string[] = [];
     let req = 0;
     let res = 0;
-    for (const f of files(DIR)) {
+    for (const cap of allCaptures()) {
+      const f = cap.path;
       let nReq = 0;
       let nRes = 0;
       let nOther = 0;
-      for (const t of tpkts(readFileSync(f))) {
+      for (const t of framesOf(f)) {
         let cotp;
         try {
-          cotp = decodeCotp(t.subarray(4));
+          cotp = decodeCotp(t);
         } catch {
           continue;
         }
@@ -69,7 +67,7 @@ describe.skipIf(!HAVE)('read var su catture reali: encode(decode(x)) identico', 
       req += nReq;
       res += nRes;
       stats.push(
-        `${f.slice(DIR.length + 1)}: ${nReq} richieste, ${nRes} risposte, ${nOther} richieste non S7ANY saltate`,
+        `${cap.name}: ${nReq} richieste, ${nRes} risposte, ${nOther} richieste non S7ANY saltate`,
       );
     }
     console.log(`[realReadVar]\n${stats.join('\n')}\nTOTALE: ${req} richieste, ${res} risposte`);

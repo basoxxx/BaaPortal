@@ -1,0 +1,188 @@
+[
+  {
+    "file": "s7comm_downloading_block_db1.pcap",
+    "url": "https://wiki.wireshark.org/uploads/__moin_import__/attachments/SampleCaptures/s7comm_downloading_block_db1.pcap",
+    "sha256": "48725bd1af7b778821351cd0f50f0ee259e438074a27f8431a8a1a3351dfd3d0",
+    "license": "Wiki Wireshark SampleCaptures: nessuna licenza dichiarata, non ridistribuire (proto 16.1)"
+  },
+  {
+    "file": "s7comm_program_blocklist_onlineview.pcap",
+    "url": "https://wiki.wireshark.org/uploads/__moin_import__/attachments/SampleCaptures/s7comm_program_blocklist_onlineview.pcap",
+    "sha256": "b2e7014362630b803b413dda595e4ba7a3a910105712f448c22dba517ec02851",
+    "license": "Wiki Wireshark SampleCaptures: nessuna licenza dichiarata, non ridistribuire (proto 16.1)"
+  },
+  {
+    "file": "s7comm_reading_plc_status.pcap",
+    "url": "https://wiki.wireshark.org/uploads/__moin_import__/attachments/SampleCaptures/s7comm_reading_plc_status.pcap",
+    "sha256": "e71f81b471bd67da2fd6e40dc69a7179574ba66771c6150cd7bfe232cc07b8a9",
+    "license": "Wiki Wireshark SampleCaptures: nessuna licenza dichiarata, non ridistribuire (proto 16.1)"
+  },
+  {
+    "file": "s7comm_reading_setting_plc_time.pcap",
+    "url": "https://wiki.wireshark.org/uploads/__moin_import__/attachments/SampleCaptures/s7comm_reading_setting_plc_time.pcap",
+    "sha256": "d74c1eca1f2039dadcccd43c212f649b293acf6a80db1560e9ee22aeabb4c5d4",
+    "license": "Wiki Wireshark SampleCaptures: nessuna licenza dichiarata, non ridistribuire (proto 16.1)"
+  },
+  {
+    "file": "s7comm_varservice_libnodavedemo.pcap",
+    "url": "https://wiki.wireshark.org/uploads/__moin_import__/attachments/SampleCaptures/s7comm_varservice_libnodavedemo.pcap",
+    "sha256": "a1ff275c087fafbfdc8821ea59ab9bfb11f5adcc9ce6bb5888a1c4a4d7b6affc",
+    "license": "Wiki Wireshark SampleCaptures: nessuna licenza dichiarata, non ridistribuire (proto 16.1)"
+  },
+  {
+    "file": "s7comm_varservice_libnodavedemo_bench.pcap",
+    "url": "https://wiki.wireshark.org/uploads/__moin_import__/attachments/SampleCaptures/s7comm_varservice_libnodavedemo_bench.pcap",
+    "sha256": "bdbacb1b09c621f23be1c4c55145aec24930b6fa5541e7f4626dab6a314f1308",
+    "license": "Wiki Wireshark SampleCaptures: nessuna licenza dichiarata, non ridistribuire (proto 16.1)"
+  },
+  {
+    "file": "icspcap/1-S7comm-VarService-Read-DB1DBD0.pcap",
+    "url": "https://media.githubusercontent.com/media/automayt/ICS-pcap/master/S7/1-S7comm-VarService-Read-DB1DBD0/1-S7comm-VarService-Read-DB1DBD0.pcap",
+    "sha256": "0e9583b7e3d9df9f572e02e90329523281a9d149d9ee862ca16d0d4ad0c686b0",
+    "license": "automayt/ICS-pcap: nessuna licenza dichiarata, non ridistribuire (proto 16.2)"
+  },
+  {
+    "file": "icspcap/2-S7comm-VarService-CyclicData-1s.pcap",
+    "url": "https://media.githubusercontent.com/media/automayt/ICS-pcap/master/S7/2-S7comm-VarService-CyclicData-1s/2-S7comm-VarService-CyclicData-1s.pcap",
+    "sha256": "a5d778c725c34313883849eda83d62e184ffdc712bed18dcca2e96d068257147",
+    "license": "automayt/ICS-pcap: nessuna licenza dichiarata, non ridistribuire (proto 16.2)"
+  },
+  {
+    "file": "icspcap/3-S7comm-VAT_MB100_MW200_MD300_M400-0.pcap",
+    "url": "https://media.githubusercontent.com/media/automayt/ICS-pcap/master/S7/3-S7comm-VAT_MB100_MW200_MD300_M400-0/3-S7comm-VAT_MB100_MW200_MD300_M400-0.pcap",
+    "sha256": "d63d475d3a83e9cea2aceb58910142970f5ecff185efa007c2cf6616e50a8ff5",
+    "license": "automayt/ICS-pcap: nessuna licenza dichiarata, non ridistribuire (proto 16.2)"
+  },
+  {
+    "file": "icspcap/4-S7comm-Download-DB1-with-password-request.pcap",
+    "url": "https://media.githubusercontent.com/media/automayt/ICS-pcap/master/S7/4-S7comm-Download-DB1-with-password-request/4-S7comm-Download-DB1-with-password-request.pcap",
+    "sha256": "5aaed04c0d443c2e43df941dbf3ee732fb15ca0578874dfff4a7db402806dc3f",
+    "license": "automayt/ICS-pcap: nessuna licenza dichiarata, non ridistribuire (proto 16.2)"
+  },
+  {
+    "file": "icspcap/S7-1200-Uploading-OB1-TIAV12.pcap",
+    "url": "https://media.githubusercontent.com/media/automayt/ICS-pcap/master/S7/S7-1200-Uploading-OB1-TIAV12/S7-1200-Uploading-OB1-TIAV12.pcap",
+    "sha256": "73e4b36469447e0fd45ccd38ca0583fbe60f6df27372b1ca11066e335deb650e",
+    "license": "automayt/ICS-pcap: nessuna licenza dichiarata, non ridistribuire (proto 16.2)"
+  },
+  {
+    "file": "icspcap/s7-1200-hmi.pcap",
+    "url": "https://media.githubusercontent.com/media/automayt/ICS-pcap/master/S7/s7-1200-hmi/s7-1200-hmi.pcap",
+    "sha256": "b38ccaf183673619e7f5d69476293a01da743076a281c96e949f0f29a42d1650",
+    "license": "automayt/ICS-pcap: nessuna licenza dichiarata, non ridistribuire (proto 16.2)"
+  },
+  {
+    "file": "gymgit/snap7_s300_everything.pcapng",
+    "url": "https://raw.githubusercontent.com/gymgit/s7-pcaps/master/snap7_s300_everything.pcapng",
+    "sha256": "2b91f6a8a203ec83e4f2dbb69d5e61602845f23da0baa31d95d029fb24cbd427",
+    "license": "gymgit/s7-pcaps: nessuna licenza dichiarata, creato per uso pubblico, non ridistribuire (proto 16.4)"
+  },
+  {
+    "file": "gymgit/snap7_s300_readVar.pcapng",
+    "url": "https://raw.githubusercontent.com/gymgit/s7-pcaps/master/snap7_s300_readVar.pcapng",
+    "sha256": "19333fdf9b8e7bc582dbac9faadf1f6c23e79b82f4cd5c26806f7c95e4a3bd3d",
+    "license": "gymgit/s7-pcaps: nessuna licenza dichiarata, creato per uso pubblico, non ridistribuire (proto 16.4)"
+  },
+  {
+    "file": "gymgit/snap7_s300_setupCommunication.pcapng",
+    "url": "https://raw.githubusercontent.com/gymgit/s7-pcaps/master/snap7_s300_setupCommunication.pcapng",
+    "sha256": "72ef8d4809b074e5d1734547db37a4d46d9b550261c7e381ae4da9664f332f52",
+    "license": "gymgit/s7-pcaps: nessuna licenza dichiarata, creato per uso pubblico, non ridistribuire (proto 16.4)"
+  },
+  {
+    "file": "gymgit/snap7_s300_stop.pcapng",
+    "url": "https://raw.githubusercontent.com/gymgit/s7-pcaps/master/snap7_s300_stop.pcapng",
+    "sha256": "c3d47f730f76f37a0114fd7bae4dbe580c8bf22c71201852a2817cc5c9192de5",
+    "license": "gymgit/s7-pcaps: nessuna licenza dichiarata, creato per uso pubblico, non ridistribuire (proto 16.4)"
+  },
+  {
+    "file": "gymgit/step7_s300_AuthPassword.pcapng",
+    "url": "https://raw.githubusercontent.com/gymgit/s7-pcaps/master/step7_s300_AuthPassword.pcapng",
+    "sha256": "8350842c2cf5727a8cde5defad9ed8287347ddabca00f9491da1cccfacccf445",
+    "license": "gymgit/s7-pcaps: nessuna licenza dichiarata, creato per uso pubblico, non ridistribuire (proto 16.4)"
+  },
+  {
+    "file": "gymgit/step7_s300_copyRamToRom.pcapng",
+    "url": "https://raw.githubusercontent.com/gymgit/s7-pcaps/master/step7_s300_copyRamToRom.pcapng",
+    "sha256": "240b47e1dbab2c0845d0e4a8d060e2bee44784d2381e29d97fbdf98e6bb8e4bd",
+    "license": "gymgit/s7-pcaps: nessuna licenza dichiarata, creato per uso pubblico, non ridistribuire (proto 16.4)"
+  },
+  {
+    "file": "gymgit/step7_s300_download.pcapng",
+    "url": "https://raw.githubusercontent.com/gymgit/s7-pcaps/master/step7_s300_download.pcapng",
+    "sha256": "b70e89869a6e5fa950c403415d5fabcc3860d36adc8670bed09398a2d6b6339c",
+    "license": "gymgit/s7-pcaps: nessuna licenza dichiarata, creato per uso pubblico, non ridistribuire (proto 16.4)"
+  },
+  {
+    "file": "gymgit/step7_s300_readDiagData.pcapng",
+    "url": "https://raw.githubusercontent.com/gymgit/s7-pcaps/master/step7_s300_readDiagData.pcapng",
+    "sha256": "6ba61ac1ec340e9129007a5a7aec16ae1009f9691eda31172c56b155022e702c",
+    "license": "gymgit/s7-pcaps: nessuna licenza dichiarata, creato per uso pubblico, non ridistribuire (proto 16.4)"
+  },
+  {
+    "file": "gymgit/step7_s300_readVarTab.pcapng",
+    "url": "https://raw.githubusercontent.com/gymgit/s7-pcaps/master/step7_s300_readVarTab.pcapng",
+    "sha256": "9cd63c73f2e5715585357f1f278cfb5baeeae9ecaa326bb5fcd4a038afa1ca85",
+    "license": "gymgit/s7-pcaps: nessuna licenza dichiarata, creato per uso pubblico, non ridistribuire (proto 16.4)"
+  },
+  {
+    "file": "gymgit/step7_s300_rwVarTab.pcapng",
+    "url": "https://raw.githubusercontent.com/gymgit/s7-pcaps/master/step7_s300_rwVarTab.pcapng",
+    "sha256": "aab8d49d09b57b60313905a4db2ac8b83e2034e36d56739cfdfa77efd1a25c20",
+    "license": "gymgit/s7-pcaps: nessuna licenza dichiarata, creato per uso pubblico, non ridistribuire (proto 16.4)"
+  },
+  {
+    "file": "gymgit/step7_s300_stop.pcapng",
+    "url": "https://raw.githubusercontent.com/gymgit/s7-pcaps/master/step7_s300_stop.pcapng",
+    "sha256": "c761c5122be8de929e50e128f3c9d42576d3b88ac1ed2a63b4b6962990479487",
+    "license": "gymgit/s7-pcaps: nessuna licenza dichiarata, creato per uso pubblico, non ridistribuire (proto 16.4)"
+  },
+  {
+    "file": "gymgit/tia_s300_downloadHwConfig.pcapng",
+    "url": "https://raw.githubusercontent.com/gymgit/s7-pcaps/master/tia_s300_downloadHwConfig.pcapng",
+    "sha256": "5859f9b07503b1d287b43dc614577bb0bf8aa9b301b2079e42425fe21e3a0c64",
+    "license": "gymgit/s7-pcaps: nessuna licenza dichiarata, creato per uso pubblico, non ridistribuire (proto 16.4)"
+  },
+  {
+    "file": "gymgit/tia_s300_downloadOb1.pcapng",
+    "url": "https://raw.githubusercontent.com/gymgit/s7-pcaps/master/tia_s300_downloadOb1.pcapng",
+    "sha256": "759440ab240a9b54824766ddd352fd09da50a897b08420e421fc9a4553450a74",
+    "license": "gymgit/s7-pcaps: nessuna licenza dichiarata, creato per uso pubblico, non ridistribuire (proto 16.4)"
+  },
+  {
+    "file": "gymgit/tia_s300_flashLed.pcapng",
+    "url": "https://raw.githubusercontent.com/gymgit/s7-pcaps/master/tia_s300_flashLed.pcapng",
+    "sha256": "7056ebe55946c155b50828ed64b7643e8abfff3e506ff2d2902b28a076cbe965",
+    "license": "gymgit/s7-pcaps: nessuna licenza dichiarata, creato per uso pubblico, non ridistribuire (proto 16.4)"
+  },
+  {
+    "file": "gymgit/tia_s300_goOnline.pcapng",
+    "url": "https://raw.githubusercontent.com/gymgit/s7-pcaps/master/tia_s300_goOnline.pcapng",
+    "sha256": "e6d2359ffbbaf85efc56d85e060059c2cdb902bc19dfeb71f38298e4db8eb152",
+    "license": "gymgit/s7-pcaps: nessuna licenza dichiarata, creato per uso pubblico, non ridistribuire (proto 16.4)"
+  },
+  {
+    "file": "gymgit/wincc_s300_setup-alarm-read-write.pcapng",
+    "url": "https://raw.githubusercontent.com/gymgit/s7-pcaps/master/wincc_s300_setup-alarm-read-write.pcapng",
+    "sha256": "0b342c47afe5f4abf059c357cd88e2c50e7dcd29916c605cf5b52121ad80259c",
+    "license": "gymgit/s7-pcaps: nessuna licenza dichiarata, creato per uso pubblico, non ridistribuire (proto 16.4)"
+  },
+  {
+    "file": "gymgit/wincc_s300_setup-alarm-read.pcapng",
+    "url": "https://raw.githubusercontent.com/gymgit/s7-pcaps/master/wincc_s300_setup-alarm-read.pcapng",
+    "sha256": "97a7824d9d5f759fb4200b5d135b58b9c2aea02713227c9ded13b35807e2eabb",
+    "license": "gymgit/s7-pcaps: nessuna licenza dichiarata, creato per uso pubblico, non ridistribuire (proto 16.4)"
+  },
+  {
+    "file": "gymgit/wincc_s300_setup-alarm-read_2.pcapng",
+    "url": "https://raw.githubusercontent.com/gymgit/s7-pcaps/master/wincc_s300_setup-alarm-read_2.pcapng",
+    "sha256": "aa85b9b7e88e5e13d48475ad84d485a41998e646367b3c4551b0bb97c0be66bb",
+    "license": "gymgit/s7-pcaps: nessuna licenza dichiarata, creato per uso pubblico, non ridistribuire (proto 16.4)"
+  },
+  {
+    "file": "gymgit/wincc_s400_production.pcapng",
+    "url": "https://raw.githubusercontent.com/gymgit/s7-pcaps/master/wincc_s400_production.pcapng",
+    "sha256": "d0bae738862ee3157c73b2ca90230a3d0c8e21402923155296f9b86804a2f0ae",
+    "license": "gymgit/s7-pcaps: nessuna licenza dichiarata, creato per uso pubblico, non ridistribuire (proto 16.4)"
+  }
+]

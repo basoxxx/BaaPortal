@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   buildBlockFile,
@@ -21,9 +20,7 @@ import {
   parseBlockFileName,
   type S7Pdu,
 } from '../src';
-import { DIR, HAVE, files, tpkts } from './captures';
-
-if (!HAVE) console.warn(`[realUpload] catture assenti in ${DIR}: test saltato`);
+import { allCaptures, framesOf } from './captures';
 
 interface Stats {
   startReq: number;
@@ -60,13 +57,13 @@ const zero = (): Stats => ({
 });
 
 /** Ricompone i segmenti COTP DT (eot=0) di una PDU S7, nell'ordine di cattura. */
-function pdus(buf: Buffer): S7Pdu[] {
+function pdus(path: string): S7Pdu[] {
   const out: S7Pdu[] = [];
   let acc: Uint8Array[] = [];
-  for (const t of tpkts(buf)) {
+  for (const t of framesOf(path)) {
     let c;
     try {
-      c = decodeCotp(t.subarray(4));
+      c = decodeCotp(t);
     } catch {
       continue;
     }
@@ -105,14 +102,15 @@ function downloadJobName(param: Uint8Array): string | null {
   return String.fromCharCode(...param.subarray(9, 18));
 }
 
-describe.skipIf(!HAVE)('upload su catture reali: encode(decode(x)) identico', () => {
+describe('upload su catture reali: encode(decode(x)) identico', () => {
   it('ogni PDU 0x1D/0x1E/0x1F e ogni blocco, per file', () => {
     const lines: string[] = [];
     const fails: string[] = [];
     const total = zero();
-    for (const f of files(DIR)) {
+    for (const cap of allCaptures()) {
+      const f = cap.path;
       const s = zero();
-      const name = f.slice(DIR.length + 1);
+      const name = cap.name;
       const same = (what: string, got: Uint8Array, want: Uint8Array): void => {
         if (hex(got) !== hex(want)) {
           s.mismatch++;
@@ -170,7 +168,7 @@ describe.skipIf(!HAVE)('upload su catture reali: encode(decode(x)) identico', ()
       const names = new Map<number, string>(); // pduRef -> nome file della richiesta 0x1D / 0x1B
       let up: { fileName: string; chunks: Uint8Array[]; total: number | null } | null = null;
       let dl: { fileName: string; chunks: Uint8Array[] } | null = null;
-      for (const pdu of pdus(readFileSync(f))) {
+      for (const pdu of pdus(f)) {
         if (pdu.rosctr === 7 || pdu.rosctr === 2) continue;
         const fn = pdu.param[0];
         const tag = `ref ${pdu.pduRef} fn ${fn?.toString(16)}`;
@@ -280,6 +278,9 @@ describe.skipIf(!HAVE)('upload su catture reali: encode(decode(x)) identico', ()
     expect(total.mismatch).toBe(0);
     expect(total.startReq).toBeGreaterThan(0);
     expect(total.blocks).toBeGreaterThan(0);
-    expect(total.dlBlocks).toBeGreaterThan(0);
+    // il download di DB1 sta in una cattura scaricata: si controlla solo se c'è
+    if (allCaptures().some((c) => c.name === 's7comm_downloading_block_db1.pcap')) {
+      expect(total.dlBlocks).toBeGreaterThan(0);
+    }
   });
 });
