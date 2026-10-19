@@ -1,0 +1,231 @@
+// Fixture AWL tedesca: mnemonici tedeschi (U, SPB, AUF, E/A, Z...) nelle forme di operando ammesse.
+M001:	U	%E0.0;	// con etichetta
+	U E 0.0
+	UN A 0.1
+	U %A4.7
+	O M 10.7
+	U E1.0
+	U DB10.DBX 2.1
+	U "Tag"
+	UN #lokal.bit
+	U Z 3
+	U T 5
+	U E [MD 2]
+	U A [MD 2]
+	U [AR1, P#0.0]
+	U BIE
+	O OV
+	L EB 1
+	L EW 0
+	L ED 4
+	L AB 2
+	L AW 4
+	L AD 4
+	L PEW 256
+	L PED 256
+	T AW 4
+	T PAW 256
+	T PAD 256
+	L Z 2
+	L T 3
+	L STW
+	L DBLG
+	L W [AR2, P#0.0]
+	ZV Z 1
+	ZR Z 2
+	SI T 1
+	SV T 2
+	SE T 3
+	SA T 5
+	FR Z 1
+	AUF DB 10
+	AUF DI 5
+	AUF DB [MW 2]
+	SPA M001
+	SPB M001
+	SPBN M001
+	BEB
+	BEA
+	CALL FC 1
+	CALL FB 1, DB 1
+	CALL "Nastro", "Nastro_DB"
+	(  Start := %E0.0,
+	   Fehler => %M10.0
+	);
+// --- una riga per ogni istruzione della tabella (mnemonico tedesco) ---
+	U E 0.0
+	UN E 0.0
+	O E 0.0
+	O
+	ON E 0.0
+	X E 0.0
+	XN E 0.0
+	U(
+	UN(
+	O(
+	ON(
+	X(
+	XN(
+	)
+	= E 0.0
+	R E 0.0
+	S E 0.0
+	NOT
+	SET
+	CLR
+	SAVE
+	FN E 0.0
+	FP E 0.0
+	==I
+	<>I
+	>I
+	<I
+	>=I
+	<=I
+	==D
+	<>D
+	>D
+	<D
+	>=D
+	<=D
+	==R
+	<>R
+	>R
+	<R
+	>=R
+	<=R
+	BTI
+	ITB
+	BTD
+	ITD
+	DTB
+	DTR
+	INVI
+	INVD
+	NEGI
+	NEGD
+	NEGR
+	TAW
+	TAD
+	RND
+	TRUNC
+	RND+
+	RND-
+	ZV Z 1
+	ZR Z 1
+	AUF DB 10
+	TDB
+	SPA M001
+	SPL M001
+	SPB M001
+	SPBN M001
+	SPBB M001
+	SPBNB M001
+	SPBI M001
+	SPBIN M001
+	SPO M001
+	SPS M001
+	SPZ M001
+	SPN M001
+	SPP M001
+	SPM M001
+	SPPZ M001
+	SPMZ M001
+	SPU M001
+	LOOP M001
+	+I
+	-I
+	*I
+	/I
+	+D
+	-D
+	*D
+	/D
+	MOD
+	+ 5
+	+R
+	-R
+	*R
+	/R
+	ABS
+	SQR
+	SQRT
+	EXP
+	LN
+	SIN
+	COS
+	TAN
+	ASIN
+	ACOS
+	ATAN
+	L EW 0
+	T AW 0
+	LAR1 P#M 0.0
+	LAR1
+	LAR2 P#M 0.0
+	LAR2
+	TAR1 MD 4
+	TAR1
+	TAR2 MD 4
+	TAR2
+	TAR
+	BE
+	BEA
+	BEB
+	CALL FC 1
+	CC FC 1
+	UC FC 1
+	MCR(
+	)MCR
+	MCRA
+	MCRD
+	SSI 2
+	SSI
+	SSD 2
+	SSD
+	SLW 2
+	SLW
+	SRW 2
+	SRW
+	SLD 2
+	SLD
+	SRD 2
+	SRD
+	RLD 2
+	RLD
+	RRD 2
+	RRD
+	RLDA
+	RRDA
+	SI T 1
+	SV T 1
+	SE T 1
+	SS T 1
+	SA T 1
+	FR T 1
+	LC T 1
+	UW W#16#FF
+	UW
+	OW W#16#FF
+	OW
+	XOW W#16#FF
+	XOW
+	UD DW#16#FF
+	UD
+	OD DW#16#FF
+	OD
+	XOD DW#16#FF
+	XOD
+	TAK
+	PUSH
+	POP
+	ENT
+	LEAVE
+	INC 1
+	DEC 1
+	BLD 1
+	NOP 0
+	+AR1 P#M 0.0
+	+AR1
+	+AR2 P#M 0.0
+	+AR2
