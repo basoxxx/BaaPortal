@@ -50,36 +50,39 @@ export interface AwlContext {
   allBlocks(): readonly AwlBlockInfo[];
 }
 
-export type AwlCode =
-  | 'SYNTAX'
-  | 'UNKNOWN_INSTRUCTION'
-  | 'BAD_OPERAND'
-  | 'OPERAND_MISSING'
-  | 'OPERAND_NOT_ALLOWED'
-  | 'TYPE_MISMATCH'
-  | 'UNKNOWN_SYMBOL'
-  | 'UNKNOWN_LOCAL'
-  | 'UNKNOWN_MEMBER'
-  | 'UNKNOWN_BLOCK'
-  | 'UNKNOWN_LABEL'
-  | 'DUPLICATE_LABEL'
-  | 'LABEL_TOO_LONG'
-  | 'BRACKET_UNCLOSED'
-  | 'BRACKET_UNEXPECTED'
-  | 'BRACKET_DEPTH'
-  | 'MCR_DEPTH'
-  | 'ADDRESS_OUT_OF_RANGE'
-  | 'CALL_PARAM_MISSING'
-  | 'CALL_PARAM_UNKNOWN'
-  | 'CALL_PARAM_TYPE'
-  | 'CALL_PARAM_DIRECTION'
-  | 'CALL_INSTANCE_MISSING'
-  | 'CALL_INSTANCE_WRONG'
-  | 'LOCAL_NOT_ACCESSIBLE'
-  | 'CONSTANT_OUT_OF_RANGE'
-  // codici del parser che non hanno un equivalente nell'elenco precedente
-  | 'UNCLOSED_STRING'
-  | 'UNCLOSED_PARAMS';
+/** Tutti i codici di diagnostica (fonte unica: il tipo `AwlCode` ne deriva). */
+export const AWL_CODES = [
+  'SYNTAX',
+  'UNKNOWN_INSTRUCTION',
+  'BAD_OPERAND',
+  'OPERAND_MISSING',
+  'OPERAND_NOT_ALLOWED',
+  'TYPE_MISMATCH',
+  'UNKNOWN_SYMBOL',
+  'UNKNOWN_LOCAL',
+  'UNKNOWN_MEMBER',
+  'UNKNOWN_BLOCK',
+  'UNKNOWN_LABEL',
+  'DUPLICATE_LABEL',
+  'LABEL_TOO_LONG',
+  'BRACKET_UNCLOSED',
+  'BRACKET_UNEXPECTED',
+  'BRACKET_DEPTH',
+  'MCR_DEPTH',
+  'ADDRESS_OUT_OF_RANGE',
+  'CALL_PARAM_MISSING',
+  'CALL_PARAM_UNKNOWN',
+  'CALL_PARAM_TYPE',
+  'CALL_PARAM_DIRECTION',
+  'CALL_INSTANCE_MISSING',
+  'CALL_INSTANCE_WRONG',
+  'LOCAL_NOT_ACCESSIBLE',
+  'CONSTANT_OUT_OF_RANGE',
+  'UNCLOSED_STRING',
+  'UNCLOSED_PARAMS',
+] as const;
+
+export type AwlCode = (typeof AWL_CODES)[number];
 
 export interface AwlDiagnostic {
   severity: 'error' | 'warning';

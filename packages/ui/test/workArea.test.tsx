@@ -1,6 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createCodeBlock, findDevice } from '@baaportal/project';
+import { EditorView } from '@codemirror/view';
 import { commands } from '../src/commands/commands';
 import { editorKey } from '../src/state/workArea';
 import { renderApp, type RenderedApp } from './renderApp';
@@ -274,6 +275,33 @@ describe('finestra separata', () => {
     expect(win.close).toHaveBeenCalled();
     document.documentElement.removeAttribute('data-theme');
   });
+
+  it("l'editor AWL funziona nella finestra separata: stili nella figlia e bozza confermata alla chiusura", async () => {
+    const win = fakeWindow();
+    vi.spyOn(window, 'open').mockReturnValue(win as unknown as Window);
+    const app = await setup();
+    await app.user.dblClick(screen.getByText('Main [OB1]'));
+    await app.user.click(screen.getByRole('button', { name: 'Apri in una finestra separata' }));
+    const cm = await waitFor(() => {
+      const el = win.document.querySelector<HTMLElement>('.cm-editor');
+      expect(el).not.toBeNull();
+      return el!;
+    });
+    const view = EditorView.findFromDOM(cm)!;
+    // CodeMirror monta i propri stili nel documento della finestra figlia.
+    expect(view.root).toBe(win.document);
+    expect(
+      [...win.document.head.querySelectorAll('style')].some((st) =>
+        (st.textContent ?? '').includes('.cm-scroller'),
+      ),
+    ).toBe(true);
+    act(() => view.contentDOM.focus());
+    act(() => view.dispatch({ changes: { from: 0, insert: 'A I 0.0' } }));
+    act(() => {
+      win.dispatchEvent(new Event('pagehide'));
+    });
+    expect(mainBlock(app).networks[0]!.source).toBe('A I 0.0');
+  }, 30_000);
 
   it("chiudere l'editor staccato chiude la finestra", async () => {
     const win = fakeWindow();

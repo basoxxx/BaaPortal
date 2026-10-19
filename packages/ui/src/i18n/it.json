@@ -236,7 +236,8 @@
     "editNetwork": "Modifica segmento",
     "addMember": "Aggiungi membro",
     "editProperty": "Modifica proprietà",
-    "removeOverride": "Rimuovi valore sostituito"
+    "removeOverride": "Rimuovi valore sostituito",
+    "editNetworkCode": "Modifica codice del segmento"
   },
   "inspector": {
     "tab": {
@@ -490,14 +491,20 @@
     "networkTitle": "Titolo del segmento",
     "networkComment": "Commento del segmento",
     "source": "Codice del segmento",
-    "sourceHint": "Per ora è solo testo: l'evidenziazione e i controlli arrivano con l'editor AWL.",
+    "sourceHint": "Per ora è solo testo: l'evidenziazione e i controlli ci sono solo per i blocchi AWL.",
     "insertNetwork": "Inserisci segmento",
     "networkMenu": "Menu del segmento",
     "removeOverride": "Rimuovi",
     "removeOverrideLabel": "Rimuovi il valore di {{path}}",
     "deleteNetwork": "Elimina segmento",
     "instanceFbMissing": "Il DB di istanza si riferisce all'FB {{name}}, che non esiste",
-    "problems": "Problemi"
+    "problems": "Problemi",
+    "mnemonic": "Mnemonica",
+    "mnemonicInternational": "Internazionale",
+    "mnemonicGerman": "Tedesco",
+    "awlProblems": "Problemi",
+    "awlProblemRow": "Segmento {{n}}, riga {{line}}: {{message}}",
+    "awlNoProblems": "Nessun problema"
   },
   "props": {
     "banner": "Queste proprietà servono al simulatore e ai controlli offline. Fino alla tappa 6 non vengono caricate nel PLC.",
@@ -549,5 +556,37 @@
     "message": "BaaPortal non è stato chiuso correttamente. Recuperare le modifiche di «{{name}}» salvate il {{date}}?",
     "yes": "Recupera",
     "no": "Elimina"
+  },
+  "awl": {
+    "diag": {
+      "SYNTAX": "Errore di sintassi",
+      "UNKNOWN_INSTRUCTION": "Istruzione sconosciuta",
+      "BAD_OPERAND": "Operando non valido",
+      "OPERAND_MISSING": "All'istruzione {{instruction}} manca l'operando",
+      "OPERAND_NOT_ALLOWED": "Operando non ammesso per questa istruzione",
+      "TYPE_MISMATCH": "Tipo di dati non compatibile",
+      "UNKNOWN_SYMBOL": "Il simbolo \"{{name}}\" non esiste",
+      "UNKNOWN_LOCAL": "La variabile locale #{{name}} non esiste",
+      "UNKNOWN_MEMBER": "Il membro \"{{name}}\" non esiste",
+      "UNKNOWN_BLOCK": "Il blocco {{name}} non esiste",
+      "UNKNOWN_LABEL": "L'etichetta {{name}} non esiste",
+      "DUPLICATE_LABEL": "Etichetta già definita nel blocco",
+      "LABEL_TOO_LONG": "L'etichetta può avere al massimo 4 caratteri",
+      "BRACKET_UNCLOSED": "Parentesi aperta e mai chiusa",
+      "BRACKET_UNEXPECTED": "Parentesi chiusa senza parentesi aperta",
+      "BRACKET_DEPTH": "Troppe parentesi annidate (massimo 7)",
+      "MCR_DEPTH": "Troppi livelli MCR annidati (massimo 8)",
+      "ADDRESS_OUT_OF_RANGE": "Indirizzo fuori dai limiti della CPU",
+      "CALL_PARAM_MISSING": "Manca il parametro {{name}}",
+      "CALL_PARAM_UNKNOWN": "Il parametro {{name}} non esiste",
+      "CALL_PARAM_TYPE": "Il tipo del parametro {{name}} non corrisponde",
+      "CALL_PARAM_DIRECTION": "Il parametro {{name}} non si può assegnare in questa direzione",
+      "CALL_INSTANCE_MISSING": "Manca il DB di istanza",
+      "CALL_INSTANCE_WRONG": "Il DB di istanza non appartiene all'FB chiamato",
+      "LOCAL_NOT_ACCESSIBLE": "La variabile locale #{{name}} non è accessibile qui",
+      "CONSTANT_OUT_OF_RANGE": "Costante fuori dai limiti per l'istruzione {{instruction}}",
+      "UNCLOSED_STRING": "Virgolette aperte e mai chiuse",
+      "UNCLOSED_PARAMS": "Parentesi dei parametri aperta e mai chiusa"
+    }
   }
 }

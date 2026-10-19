@@ -378,8 +378,8 @@ describe('editor di blocco: intestazione e segmenti', () => {
     expect(block(app, f.id).header).toMatchObject({ title: 'Nastro 1', comment: 'nota' });
     expect(past(app)).toBe(before + 2);
     const src = screen.getByRole('textbox', { name: 'Codice del segmento 1' });
-    expect(src.parentElement).toHaveClass('baa-network-source');
-    expect(src.parentElement).toHaveAttribute('title', expect.stringContaining('editor AWL'));
+    // Il blocco AWL ha l'editor CodeMirror; gli altri linguaggi tengono l'area di testo con il suggerimento.
+    expect(src.closest('.baa-network-source')).not.toBeNull();
     expect(within(document.body).getAllByText('Segmento 1')).toHaveLength(1);
   });
 });

@@ -1,11 +1,36 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { findDevice, type CodeBlock, type Network, type PlcDevice } from '@baaportal/project';
+import {
+  checkBlockCode,
+  completeAt,
+  convertMnemonics,
+  type AwlDiagnostic,
+  type Mnemonic,
+} from '@baaportal/awl';
+import { findCpu } from '@baaportal/catalog';
+import {
+  createAwlContext,
+  findDevice,
+  type CodeBlock,
+  type Network,
+  type PlcDevice,
+} from '@baaportal/project';
 import { CommitInput, CommitTextarea } from '../../components/CommitField';
 import { ContextMenu } from '../../components/ContextMenu';
+import { AwlEditor, type AwlEditorHandle } from '../awl/AwlEditor';
+import { useMnemonic } from '../awl/mnemonicPreference';
 import { useAppStore, useServices } from '../../state/AppContext';
 
 const newId = () => globalThis.crypto.randomUUID();
+const CHECK_DELAY_MS = 250;
+const shown = (source: string, m: Mnemonic) => convertMnemonics(source, 'international', m);
+
+/** Testo non ancora confermato di un segmento, valido finché sorgente e mnemonica sono quelli da cui parte. */
+interface Draft {
+  base: string;
+  mnemonic: Mnemonic;
+  text: string;
+}
 
 interface Props {
   deviceId: string;
@@ -20,6 +45,18 @@ export function NetworksView({ deviceId, blockId }: Props) {
     const b = dev?.blocks.find((x) => x.id === blockId);
     return b && b.kind !== 'DB' && b.kind !== 'IDB' ? b : undefined;
   });
+  const dev = useAppStore((s) => (s.doc ? findDevice(s.doc.project, deviceId) : undefined));
+  const [mnemonic, setMnemonic] = useMnemonic();
+  const isAwl = block?.language === 'AWL';
+  // Il contesto del controllo si rifà a ogni revisione del dispositivo, non a ogni tasto.
+  const awlCtx = useMemo(
+    () => (dev && isAwl ? createAwlContext(dev, blockId, findCpu(dev.cpu.typeId)) : null),
+    [dev, blockId, isAwl],
+  );
+  const drafts = useRef(new Map<string, Draft>());
+  const handles = useRef(new Map<string, AwlEditorHandle>());
+  const [draftRev, setDraftRev] = useState(0);
+  const [diagnostics, setDiagnostics] = useState<AwlDiagnostic[]>([]);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ id: string; x: number; y: number; anchor: Element } | null>(
     null,
@@ -50,12 +87,48 @@ export function NetworksView({ deviceId, blockId }: Props) {
       if (b.networks.length > 1) b.networks = b.networks.filter((x) => x.id !== id);
     });
 
+  const networks = block?.networks;
+  /** I testi mostrati di tutti i segmenti, con la bozza al posto del testo salvato. */
+  const textsShown = (override?: { index: number; text: string }): string[] =>
+    (networks ?? []).map((n, i) => {
+      if (override && override.index === i) return override.text;
+      const d = drafts.current.get(n.id);
+      return d && d.base === n.source && d.mnemonic === mnemonic
+        ? d.text
+        : shown(n.source, mnemonic);
+    });
+  useEffect(() => {
+    if (!awlCtx || !networks) {
+      setDiagnostics([]);
+      return;
+    }
+    const timer = setTimeout(
+      () => setDiagnostics(checkBlockCode(textsShown(), awlCtx, mnemonic)),
+      CHECK_DELAY_MS,
+    );
+    return () => clearTimeout(timer);
+    // textsShown legge bozze e segmenti correnti: le dipendenze sono ciò che li cambia.
+  }, [awlCtx, networks, mnemonic, draftRev]);
+
   if (!block) return null;
   const editHeader = (field: 'title' | 'comment', value: string) =>
     edit('history.editBlockHeader', (b) => {
       b.header[field] = value;
     });
   const only = block.networks.length <= 1;
+  const onDraft = (n: Network, text: string) => {
+    if (text === shown(n.source, mnemonic)) drafts.current.delete(n.id);
+    else drafts.current.set(n.id, { base: n.source, mnemonic, text });
+    setDraftRev((r) => r + 1);
+  };
+  const commitCode = (id: string, stored: string) => {
+    drafts.current.delete(id);
+    edit('history.editNetworkCode', (b) => {
+      const n = b.networks.find((x) => x.id === id);
+      if (n) n.source = stored;
+    });
+  };
+  const problems = diagnostics.filter((d) => d.network < block.networks.length);
   return (
     <div className="baa-block-networks">
       <div className="baa-block-header">
@@ -67,6 +140,15 @@ export function NetworksView({ deviceId, blockId }: Props) {
             onCommit={(v) => editHeader('title', v)}
           />
         </label>
+        {isAwl ? (
+          <label className="baa-awl-mnemonic">
+            <span>{t('block.mnemonic')}</span>
+            <select value={mnemonic} onChange={(e) => setMnemonic(e.target.value as Mnemonic)}>
+              <option value="international">{t('block.mnemonicInternational')}</option>
+              <option value="german">{t('block.mnemonicGerman')}</option>
+            </select>
+          </label>
+        ) : null}
         <label>
           <span>{t('block.comment')}</span>
           <CommitTextarea
@@ -111,16 +193,70 @@ export function NetworksView({ deviceId, blockId }: Props) {
             aria-label={`${t('block.networkComment')} ${i + 1}`}
             onCommit={(v) => editNetwork(n.id, 'comment', v)}
           />
-          <div className="baa-network-source" title={t('block.sourceHint')}>
-            <CommitTextarea
-              value={n.source}
-              rows={6}
-              aria-label={`${t('block.source')} ${i + 1}`}
-              onCommit={(v) => editNetwork(n.id, 'source', v)}
-            />
-          </div>
+          {isAwl ? (
+            <div className="baa-network-source">
+              <AwlEditor
+                value={n.source}
+                mnemonic={mnemonic}
+                aria-label={`${t('block.source')} ${i + 1}`}
+                diagnostics={problems.filter((d) => d.network === i)}
+                complete={(offset, text) =>
+                  awlCtx
+                    ? completeAt(textsShown({ index: i, text }), i, offset, awlCtx, mnemonic)
+                    : { from: offset, options: [] }
+                }
+                onChange={(text) => onDraft(n, text)}
+                onCommit={(stored) => commitCode(n.id, stored)}
+                ref={(h) => {
+                  if (h) handles.current.set(n.id, h);
+                  else handles.current.delete(n.id);
+                }}
+              />
+            </div>
+          ) : (
+            <div className="baa-network-source" title={t('block.sourceHint')}>
+              <CommitTextarea
+                value={n.source}
+                rows={6}
+                aria-label={`${t('block.source')} ${i + 1}`}
+                onCommit={(v) => editNetwork(n.id, 'source', v)}
+              />
+            </div>
+          )}
         </section>
       ))}
+      {isAwl ? (
+        <section className="baa-awl-problems-panel" aria-label={t('block.awlProblems')}>
+          <h4 className="baa-block-networks-title">{t('block.awlProblems')}</h4>
+          {problems.length === 0 ? (
+            <p className="baa-prop-note">{t('block.awlNoProblems')}</p>
+          ) : null}
+          <ul
+            className="baa-awl-problems"
+            aria-label={t('block.awlProblems')}
+            hidden={problems.length === 0}
+          >
+            {problems.map((d, k) => (
+              <li key={k}>
+                <button
+                  type="button"
+                  className={`is-${d.severity}`}
+                  onClick={() => {
+                    const n = block.networks[d.network];
+                    if (n) handles.current.get(n.id)?.focusAt(d.range.from.offset);
+                  }}
+                >
+                  {t('block.awlProblemRow', {
+                    n: d.network + 1,
+                    line: d.range.from.line + 1,
+                    message: t(`awl.diag.${d.code}`, d.params ?? {}),
+                  })}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
       <button type="button" className="baa-block-insert" onClick={insert}>
         {t('block.insertNetwork')}
       </button>

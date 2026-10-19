@@ -236,7 +236,8 @@
     "editNetwork": "Edit network",
     "addMember": "Add member",
     "editProperty": "Edit property",
-    "removeOverride": "Remove overridden value"
+    "removeOverride": "Remove overridden value",
+    "editNetworkCode": "Edit network code"
   },
   "inspector": {
     "tab": {
@@ -490,14 +491,20 @@
     "networkTitle": "Network title",
     "networkComment": "Network comment",
     "source": "Network code",
-    "sourceHint": "For now this is plain text: highlighting and checks arrive with the AWL editor.",
+    "sourceHint": "For now this is plain text: highlighting and checks exist only for AWL blocks.",
     "insertNetwork": "Insert network",
     "networkMenu": "Network menu",
     "removeOverride": "Remove",
     "removeOverrideLabel": "Remove the value of {{path}}",
     "deleteNetwork": "Delete network",
     "instanceFbMissing": "The instance DB refers to FB {{name}}, which does not exist",
-    "problems": "Problems"
+    "problems": "Problems",
+    "mnemonic": "Mnemonics",
+    "mnemonicInternational": "International",
+    "mnemonicGerman": "German",
+    "awlProblems": "Problems",
+    "awlProblemRow": "Network {{n}}, line {{line}}: {{message}}",
+    "awlNoProblems": "No problems"
   },
   "props": {
     "banner": "These properties are used by the simulator and the offline checks. Until stage 6 they are not downloaded to the PLC.",
@@ -549,5 +556,37 @@
     "message": "BaaPortal was not closed correctly. Recover the changes to \"{{name}}\" saved on {{date}}?",
     "yes": "Recover",
     "no": "Delete"
+  },
+  "awl": {
+    "diag": {
+      "SYNTAX": "Syntax error",
+      "UNKNOWN_INSTRUCTION": "Unknown instruction",
+      "BAD_OPERAND": "Invalid operand",
+      "OPERAND_MISSING": "The {{instruction}} instruction is missing its operand",
+      "OPERAND_NOT_ALLOWED": "Operand not allowed for this instruction",
+      "TYPE_MISMATCH": "Incompatible data type",
+      "UNKNOWN_SYMBOL": "The symbol \"{{name}}\" does not exist",
+      "UNKNOWN_LOCAL": "The local variable #{{name}} does not exist",
+      "UNKNOWN_MEMBER": "The member \"{{name}}\" does not exist",
+      "UNKNOWN_BLOCK": "The block {{name}} does not exist",
+      "UNKNOWN_LABEL": "The label {{name}} does not exist",
+      "DUPLICATE_LABEL": "Label already defined in the block",
+      "LABEL_TOO_LONG": "A label can have at most 4 characters",
+      "BRACKET_UNCLOSED": "Opening parenthesis is never closed",
+      "BRACKET_UNEXPECTED": "Closing parenthesis without an opening one",
+      "BRACKET_DEPTH": "Too many nested parentheses (maximum 7)",
+      "MCR_DEPTH": "Too many nested MCR levels (maximum 8)",
+      "ADDRESS_OUT_OF_RANGE": "Address outside the CPU limits",
+      "CALL_PARAM_MISSING": "The parameter {{name}} is missing",
+      "CALL_PARAM_UNKNOWN": "The parameter {{name}} does not exist",
+      "CALL_PARAM_TYPE": "The type of the parameter {{name}} does not match",
+      "CALL_PARAM_DIRECTION": "The parameter {{name}} cannot be assigned in this direction",
+      "CALL_INSTANCE_MISSING": "The instance DB is missing",
+      "CALL_INSTANCE_WRONG": "The instance DB does not belong to the called FB",
+      "LOCAL_NOT_ACCESSIBLE": "The local variable #{{name}} is not accessible here",
+      "CONSTANT_OUT_OF_RANGE": "Constant out of range for the {{instruction}} instruction",
+      "UNCLOSED_STRING": "Quotation mark is never closed",
+      "UNCLOSED_PARAMS": "Parameter parenthesis is never closed"
+    }
   }
 }

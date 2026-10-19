@@ -1,0 +1,84 @@
+.baa-awl-editor {
+  width: 100%;
+}
+.baa-awl-editor .cm-editor {
+  border: 1px solid var(--baa-border);
+  background: var(--baa-surface);
+  color: var(--baa-text);
+  font-size: var(--baa-font-size);
+}
+.baa-awl-editor .cm-editor.cm-focused {
+  outline: 1px solid var(--baa-accent);
+}
+.baa-awl-editor .cm-scroller {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  min-height: 7em;
+}
+.baa-awl-editor .cm-content {
+  padding: 4px 0;
+  caret-color: var(--baa-text);
+}
+.baa-awl-editor .cm-selectionBackground,
+.baa-awl-editor .cm-editor.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground {
+  background: var(--baa-selection);
+}
+.baa-awl-instruction {
+  color: var(--baa-awl-instruction);
+  font-weight: 600;
+}
+.baa-awl-address {
+  color: var(--baa-awl-address);
+}
+.baa-awl-symbol {
+  color: var(--baa-awl-symbol);
+}
+.baa-awl-local {
+  color: var(--baa-awl-local);
+}
+.baa-awl-constant {
+  color: var(--baa-awl-constant);
+}
+.baa-awl-label {
+  color: var(--baa-awl-label);
+}
+.baa-awl-comment {
+  color: var(--baa-awl-comment);
+  font-style: italic;
+}
+.baa-awl-problems {
+  list-style: none;
+  margin: 4px 0 8px;
+  padding: 0;
+}
+.baa-awl-problems button {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: var(--baa-text);
+  font: inherit;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+.baa-awl-problems button:hover,
+.baa-awl-problems button:focus-visible {
+  background: var(--baa-selection);
+}
+.baa-awl-problems .is-warning::before,
+.baa-awl-problems .is-error::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: #c62828;
+}
+.baa-awl-problems .is-warning::before {
+  background: var(--baa-online);
+}
+.baa-awl-mnemonic {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}

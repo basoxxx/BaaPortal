@@ -126,6 +126,27 @@ describe('annulla e ripeti', () => {
     expect(store.getState().history.past).toHaveLength(1);
   });
 
+  it("dentro l'editor AWL (contenteditable) Mod+Z non tocca il progetto e Mod+S resta globale", () => {
+    const { store, ctx, author } = setup('win32');
+    let saved = 0;
+    (ctx as { service: unknown }).service = {
+      save: () => {
+        saved++;
+        return Promise.resolve();
+      },
+    };
+    const editable = document.createElement('div');
+    editable.setAttribute('contenteditable', 'true');
+    document.body.appendChild(editable);
+    expect(handleShortcutKeydown(key({ ctrlKey: true, key: 'z' }, editable), ctx)).toBe(false);
+    expect(handleShortcutKeydown(key({ ctrlKey: true, key: 'y' }, editable), ctx)).toBe(false);
+    expect(author()).toBe('A');
+    expect(store.getState().history.past).toHaveLength(1);
+    expect(handleShortcutKeydown(key({ ctrlKey: true, key: 's' }, editable), ctx)).toBe(true);
+    expect(saved).toBe(1);
+    editable.remove();
+  });
+
   it('un tasto che si ripete non esegue il comando', () => {
     const { ctx, author } = setup('win32');
     expect(handleShortcutKeydown(key({ ctrlKey: true, key: 'z', repeat: true }), ctx)).toBe(false);
