@@ -642,7 +642,7 @@ function GridRowImpl<R>(p: GridRowProps<R>) {
         const isActive = p.activeCol === ci;
         const isEditing = editing !== null && editing.col === ci;
         const diag = meta.diags[ci];
-        const diagId = `${p.uid}-d${p.itemKey}-${ci}`;
+        const diagId = `${p.uid}-d${encodeURIComponent(p.itemKey)}-${ci}`;
         const value = isData ? c.get(row) : '';
         const editable =
           (c.editor === 'text' || c.editor === 'type') && (!isData || !c.readOnly?.(row));

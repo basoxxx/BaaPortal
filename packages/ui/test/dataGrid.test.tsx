@@ -509,6 +509,61 @@ describe('DataGrid', () => {
     expect(onFill).toHaveBeenCalledWith('r1', 2);
   });
 
+  it('la diagnostica di una chiave con spazi si risolve da aria-describedby', () => {
+    const rows = [{ key: 'm a/b c', name: 'X', type: 'Int', flag: false }];
+    setup({ diagnostic: () => ({ severity: 'error', text: 'Nome non valido' }) }, rows);
+    const id = cell('m a/b c', 'name').getAttribute('aria-describedby')!;
+    expect(id).not.toMatch(/\s/);
+    expect(document.getElementById(id)).toHaveTextContent('Nome non valido');
+  });
+
+  it('una riga memoizzata mostra diagnostica ed espansione nuove a parità di rows', async () => {
+    const rows = makeRows(3);
+    const rowKey = (r: Row) => r.key;
+    function Stateful() {
+      const [bad, setBad] = useState(false);
+      const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
+      const diagnostic = useCallback<NonNullable<DataGridProps<Row>['diagnostic']>>(
+        (k, c) =>
+          bad && k === 'r2' && c === 'name'
+            ? { severity: 'warning', text: 'Attenzione' }
+            : undefined,
+        [bad],
+      );
+      return (
+        <>
+          <button onClick={() => setBad(true)}>diag</button>
+          <DataGrid<Row>
+            label="g"
+            rows={rows}
+            rowKey={rowKey}
+            columns={columns}
+            onCommit={vi.fn()}
+            diagnostic={diagnostic}
+            expandable={() => true}
+            expanded={expanded}
+            onToggleExpand={(k) => setExpanded(new Set([k]))}
+          />
+        </>
+      );
+    }
+    const user = userEvent.setup();
+    render(
+      <AppProvider
+        value={{ store: createAppStore(), bridge: new FakeBridge(), service: null as never }}
+      >
+        <Stateful />
+      </AppProvider>,
+    );
+    expect(cell('r2', 'name')).not.toHaveAttribute('title');
+    await user.click(screen.getByText('diag'));
+    expect(cell('r2', 'name')).toHaveAttribute('title', 'Attenzione');
+    const expander = () => cell('r2', 'name').querySelector('[data-expander]')!;
+    expect(expander()).toHaveAttribute('aria-expanded', 'false');
+    await user.click(expander());
+    expect(expander()).toHaveAttribute('aria-expanded', 'true');
+  });
+
   it('righe memoizzate: una modifica o lo spostamento della cella attiva ridisegnano solo le righe interessate', async () => {
     const renders = new Map<string, number>();
     const counted: GridColumn<Row>[] = [
