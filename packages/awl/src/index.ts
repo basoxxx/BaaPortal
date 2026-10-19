@@ -3,3 +3,7 @@ export * from './lexer';
 export * from './parser';
 export * from './format';
 export * from './mnemonics';
+export * from './context';
+export * from './check';
+export * from './complete';
+export * from './rename';

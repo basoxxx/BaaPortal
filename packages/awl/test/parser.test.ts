@@ -101,6 +101,26 @@ describe('parseNetwork', () => {
     expect(op('A "DB".DBX').operand).toMatchObject({ kind: 'symbol' });
   });
 
+  it('numero di bit oltre 7: BAD_OPERAND per indirizzi e puntatori', () => {
+    for (const s of [
+      'A I0.9',
+      'A DB1.DBX0.9',
+      'A M 3.8',
+      'L P#M0.8',
+      'L P#0.8',
+      'LAR1 P#DB1.DBX 2.9',
+    ]) {
+      const r = op(s);
+      expect(r.errors.map((e) => e.code)).toEqual(['BAD_OPERAND']);
+      expect(r.operand).toBeUndefined();
+    }
+    expect(op('A [AR1, P#0.9]').errors.map((e) => e.code)).toEqual(['BAD_OPERAND']);
+    expect(op('A "Dati".DBX 2.8').operand).toMatchObject({ kind: 'symbol' });
+    for (const s of ['A I0.7', 'L P#M0.7', 'L P#7.7', 'A DB1.DBX0.0']) {
+      expect(op(s).errors).toEqual([]);
+    }
+  });
+
   it('AR2 come operando solo di LAR1 e TAR1', () => {
     expect(op('LAR1 AR2').operand).toMatchObject({ kind: 'special', name: 'AR2' });
     expect(op('TAR1 ar2').operand).toMatchObject({ kind: 'special', name: 'AR2' });

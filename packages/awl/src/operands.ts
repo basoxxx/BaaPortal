@@ -62,6 +62,10 @@ for (const e of new Set(AREA_MNEMONICS.values())) {
   else sized(k[0] as AreaId, k.slice(1));
 }
 
+const POINTER_BIT = /^P#(?:(?:DB|DI)\d+\.)?(?:[A-Za-z]+[ \t]?)?\d+\.(\d+)/i;
+/** `P#M0.8`: il numero di bit di un puntatore va da 0 a 7. */
+const badPointerBit = (text: string): boolean => Number(POINTER_BIT.exec(text)?.[1] ?? 0) > 7;
+
 const LETTERS = /[A-Za-z]+/y;
 const DIGITS = /\d+/y;
 const BIT = /(\d+)\.(\d+)/y;
@@ -100,6 +104,7 @@ function tryOperand(ctx: Ctx, i: number): Parsed {
     (c !== undefined && hasConstPrefix(src, i))
   ) {
     const e = scanConstant(src, i);
+    if (e >= 0 && badPointerBit(src.slice(i, e))) return fail();
     if (e >= 0) {
       return {
         operand: { kind: 'constant', text: src.slice(i, e), range: ctx.idx.range(i, e) },
@@ -225,7 +230,7 @@ function numberPart(
 ): { at: { byte: number; bit?: number }; end: number } | null {
   if (size === 'X') {
     const m = match(BIT, src, k);
-    if (!m || !boundary(src, k + m[0].length)) return null;
+    if (!m || !boundary(src, k + m[0].length) || Number(m[2]) > 7) return null;
     return { at: { byte: Number(m[1]), bit: Number(m[2]) }, end: k + m[0].length };
   }
   const m = match(DIGITS, src, k);
@@ -249,7 +254,7 @@ function tryIndirect(
     if (src[k] !== ',') return fail();
     k = skipWs(src, k + 1);
     const e = scanConstant(src, k);
-    if (e < 0) return fail();
+    if (e < 0 || badPointerBit(src.slice(k, e))) return fail();
     const close = skipWs(src, e);
     if (src[close] !== ']') return fail();
     return {
