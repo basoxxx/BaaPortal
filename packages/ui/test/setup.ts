@@ -23,3 +23,22 @@ Element.prototype.getBoundingClientRect = function getBoundingClientRect() {
   }
   return realRect.call(this);
 };
+
+// jsdom non implementa isContentEditable: lo ricaviamo dall'attributo (serve a CodeMirror e alle scorciatoie).
+if (!('isContentEditable' in HTMLElement.prototype)) {
+  Object.defineProperty(HTMLElement.prototype, 'isContentEditable', {
+    configurable: true,
+    get(this: HTMLElement) {
+      const attr = this.closest('[contenteditable]')?.getAttribute('contenteditable');
+      return attr !== null && attr !== undefined && attr !== 'false';
+    },
+  });
+}
+
+// CodeMirror misura il testo con Range.getClientRects / getBoundingClientRect, assenti in jsdom.
+const emptyRects = () => {
+  const list: DOMRect[] = [];
+  return Object.assign(list, { item: () => null }) as unknown as DOMRectList;
+};
+Range.prototype.getClientRects ??= emptyRects;
+Range.prototype.getBoundingClientRect ??= () => new DOMRect(0, 0, 0, 0);

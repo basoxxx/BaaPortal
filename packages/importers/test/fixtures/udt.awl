@@ -1,0 +1,36 @@
+TYPE "Asse"
+TITLE =
+// Asse di movimentazione.
+//
+// Seconda parte del commento.
+AUTHOR : Diego
+FAMILY : Motori
+VERSION : 1.2
+
+STRUCT
+  Attivo : Bool := TRUE; // abilitazione
+  Pos : Struct
+    X : Real := 1.5;
+    Y : Real;
+    Limiti : Array[0..1] of Real;
+  END_STRUCT; // posizione
+  Quote : Array[1..10] of Int;
+  Punti : Array[1..3] of Struct
+    A : Int;
+    B : Int := 2;
+  END_STRUCT;
+  Nome : String[20] := 'Asse';
+END_STRUCT;
+
+END_TYPE
+
+TYPE "Assi"
+TITLE =
+VERSION : 0.1
+
+STRUCT
+  Lista : Array[1..2] of "Asse";
+  Primo : "Asse";
+END_STRUCT;
+
+END_TYPE

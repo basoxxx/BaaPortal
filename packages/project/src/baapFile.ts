@@ -2,6 +2,7 @@ import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { z } from 'zod';
 import {
   FORMAT_VERSION,
+  type ExternalSource,
   type Member,
   type PlcDevice,
   type Project,
@@ -42,11 +43,12 @@ const projectV1Schema = z.object({
   formatVersion: z.literal(1),
   meta: z.object(metaShape).strict(),
 });
-const projectV2Schema = obj({
-  formatVersion: z.literal(FORMAT_VERSION),
-  meta: obj(metaShape),
-  devices: z.array(obj({ id, name: str })),
-});
+const projectSchema = (version: 2 | 3) =>
+  obj({
+    formatVersion: z.literal(version),
+    meta: obj(metaShape),
+    devices: z.array(obj({ id, name: str })),
+  });
 
 const manifestSchema = z.object({ formatVersion: z.number() });
 
@@ -63,7 +65,7 @@ const memberSchema: z.ZodType<Member> = z.lazy(() =>
   }),
 );
 
-const deviceSchema = obj({
+const deviceShape = {
   id,
   name: str,
   cpu: obj({ typeId: str, orderNumber: str, firmware: str }),
@@ -87,7 +89,10 @@ const deviceSchema = obj({
   tagTables: z.array(id),
   udts: z.array(id),
   blocks: z.array(id),
-});
+};
+// Formato 2: nessun elenco di sorgenti. Formato 3: elenco ordinato di sorgenti (il testo sta in file a parte).
+const deviceSchemaV2 = obj(deviceShape);
+const deviceSchemaV3 = obj({ ...deviceShape, sources: z.array(obj({ id, name: str })) });
 
 const tagTableSchema = obj({
   id,
@@ -102,9 +107,12 @@ const udtSchema = obj({
   name: str,
   number: z.number(),
   group: str,
+  // Assenti nei file scritti prima che l'UDT avesse titolo e nome di intestazione.
+  title: str.default(''),
   comment: str,
   author: str,
   family: str,
+  headerName: str.default(''),
   version: str,
   members: z.array(memberSchema),
 });
@@ -181,7 +189,7 @@ export function writeBaap(project: Project, opts: { appVersion: string }): Uint8
   };
   for (const device of devices) {
     const dir = deviceDir(device.id);
-    const { tagTables, udts, blocks, ...deviceRest } = device;
+    const { tagTables, udts, blocks, sources, ...deviceRest } = device;
     // Le chiavi della voce di project.json restano lì.
     delete deviceRest.listExtras;
     files[`${dir}/device.json`] = toJson({
@@ -189,10 +197,13 @@ export function writeBaap(project: Project, opts: { appVersion: string }): Uint8
       tagTables: tagTables.map((t) => t.id),
       udts: udts.map((u) => u.id),
       blocks: blocks.map((b) => b.id),
+      sources: sources.map((x) => ({ ...x.listExtras, id: x.id, name: x.name })),
     });
     for (const t of tagTables) files[`${dir}/tags/${t.id}.json`] = toJson(t);
     for (const u of udts) files[`${dir}/types/${u.id}.json`] = toJson(u);
     for (const b of blocks) files[`${dir}/blocks/${b.id}.json`] = toJson(b);
+    // UTF-8 senza BOM, come in memoria (strToU8 non aggiunge il BOM).
+    for (const x of sources) files[`${dir}/sources/${x.id}.awl`] = strToU8(x.text);
   }
   return zipSync(files);
 }
@@ -244,6 +255,7 @@ function checkUniqueIds(device: PlcDevice): void {
     add(u.id);
     collectMemberIds(u.members, add);
   }
+  for (const x of device.sources) add(x.id);
   for (const b of device.blocks) {
     add(b.id);
     if (b.kind === 'DB') collectMemberIds(b.members, add);
@@ -257,10 +269,44 @@ function checkUniqueIds(device: PlcDevice): void {
   }
 }
 
-function readDevice(files: Map<string, Uint8Array>, listedId: string): PlcDevice {
+// Gli id delle sorgenti diventano nomi di file: niente separatori, '..' o ':'.
+const unsafeFileId = (x: string): boolean => /[/\\:]|\.\./.test(x);
+// fflate/strFromU8 scarta un eventuale BOM iniziale: qui il testo va conservato com'e.
+const textDecoder = new TextDecoder('utf-8', { ignoreBOM: true });
+
+function readSources(
+  files: Map<string, Uint8Array>,
+  dir: string,
+  listed: { id: string; name: string }[],
+): ExternalSource[] {
+  const seen = new Set<string>();
+  return listed.map((l) => {
+    if (unsafeFileId(l.id) || seen.has(l.id)) throw invalid();
+    seen.add(l.id);
+    const bytes = files.get(`${dir}/sources/${l.id}.awl`);
+    if (!bytes) throw invalid();
+    const extras = Object.entries(l).filter(([k]) => k !== 'id' && k !== 'name');
+    return {
+      id: l.id,
+      name: l.name,
+      text: textDecoder.decode(bytes),
+      ...(extras.length > 0 ? { listExtras: Object.fromEntries(extras) } : {}),
+    };
+  });
+}
+
+function readDevice(files: Map<string, Uint8Array>, listedId: string, version: 2 | 3): PlcDevice {
   const dir = deviceDir(listedId);
-  const raw = readListed(files, `${dir}/device.json`, deviceSchema, listedId);
+  const raw = readListed(
+    files,
+    `${dir}/device.json`,
+    version === 3 ? deviceSchemaV3 : deviceSchemaV2,
+    listedId,
+  );
   const { tagTables, udts, blocks, ...rest } = raw;
+  const listedSources = 'sources' in raw ? (raw.sources as { id: string; name: string }[]) : [];
+  // Nel formato 2 una chiave `sources` non esiste: se c'e, e di un'altra origine e si ignora.
+  delete (rest as { sources?: unknown }).sources;
   const device = {
     ...rest,
     tagTables: tagTables.map((x) =>
@@ -268,6 +314,7 @@ function readDevice(files: Map<string, Uint8Array>, listedId: string): PlcDevice
     ) as TagTable[],
     udts: udts.map((x) => readListed(files, `${dir}/types/${x}.json`, udtSchema, x)) as Udt[],
     blocks: blocks.map((x) => readListed(files, `${dir}/blocks/${x}.json`, blockSchema, x)),
+    sources: version === 3 ? readSources(files, dir, listedSources) : [],
   } as PlcDevice;
   checkUniqueIds(device);
   return device;
@@ -294,25 +341,28 @@ export function readBaap(bytes: Uint8Array): Project {
   if (!projectBytes) throw invalid();
   const json = parseJson(projectBytes);
 
-  if (manifest.data.formatVersion < FORMAT_VERSION) {
+  const version = manifest.data.formatVersion;
+  if (version === 1) {
     // Migrazione dal formato 1: stessi metadati, nessun dispositivo.
     const v1 = projectV1Schema.safeParse(json);
     if (!v1.success) throw invalid();
     return { formatVersion: FORMAT_VERSION, meta: v1.data.meta as ProjectMeta, devices: [] };
   }
+  // Il formato 2 si apre com'e, con `sources: []`; il 3 e quello attuale. Altri valori non esistono.
+  if (version !== 2 && version !== 3) throw invalid();
 
-  const project = projectV2Schema.safeParse(json);
+  const project = projectSchema(version).safeParse(json);
   if (!project.success) throw invalid();
   const { devices: listed, ...rest } = project.data;
   const ids = new Set<string>();
   const devices = listed.map((l) => {
     if (ids.has(l.id)) throw invalid();
     ids.add(l.id);
-    const device = readDevice(files, l.id);
+    const device = readDevice(files, l.id, version);
     // La voce dell'elenco ripete id e nome; le altre chiavi (di versioni più recenti) si conservano.
     const extras = Object.entries(l).filter(([k]) => k !== 'id' && k !== 'name');
     if (extras.length > 0) device.listExtras = Object.fromEntries(extras);
     return device;
   });
-  return { ...rest, devices } as Project;
+  return { ...rest, formatVersion: FORMAT_VERSION, devices } as Project;
 }

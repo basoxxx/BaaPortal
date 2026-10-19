@@ -16,3 +16,16 @@
   --baa-font-size: 12px;
   --baa-row-height: 20px;
 }
+
+/* Colori dell'evidenziazione AWL (editor dei segmenti e sorgenti esterne) */
+:root {
+  --baa-awl-instruction: #0b5cad;
+  --baa-awl-address: #1b262c;
+  --baa-awl-symbol: #7a3e9d;
+  --baa-awl-local: #a0522d;
+  --baa-awl-constant: #1a7f37;
+  --baa-awl-label: #b45f06;
+  --baa-awl-comment: #6b7a83;
+  --baa-awl-keyword: #8c2f6b;
+  --baa-awl-param: #4a5a8a;
+}

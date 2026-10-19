@@ -8,7 +8,11 @@ export function handleShortcutKeydown(e: KeyboardEvent, ctx: CommandContext): bo
   // Un dialogo modale aperto tiene per sé la tastiera: nessun comando globale.
   if (ctx.store.getState().dialog !== null) return false;
   const target = e.target as HTMLElement | null;
-  const inField = target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA';
+  // Anche l'editor AWL (CodeMirror) è un campo di testo: un elemento contenteditable.
+  const inField =
+    target?.tagName === 'INPUT' ||
+    target?.tagName === 'TEXTAREA' ||
+    target?.isContentEditable === true;
   for (const cmd of Object.values(commands)) {
     const all = [cmd.shortcut, ...(cmd.altShortcuts ?? [])];
     if (!all.some((sc) => sc && matchShortcut(e, sc, ctx.bridge.platform))) continue;

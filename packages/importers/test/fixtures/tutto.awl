@@ -1,0 +1,124 @@
+TYPE "Asse"
+TITLE =
+VERSION : 0.1
+
+STRUCT
+  Pos : Struct
+    X : Real;
+  END_STRUCT;
+  Quote : Array[1..4] of Int;
+END_STRUCT;
+
+END_TYPE
+
+FUNCTION "Somma" : Int
+TITLE =
+VERSION : 0.1
+
+VAR_INPUT
+  A : Int;
+  B : Int;
+END_VAR
+
+BEGIN
+NETWORK
+TITLE =
+	L #A;
+	L #B;
+	+I;
+	T #RET_VAL;
+END_FUNCTION
+
+FUNCTION_BLOCK "Nastro"
+TITLE =
+VERSION : 0.1
+
+VAR_INPUT
+  Avvio : Bool;
+  Arresto : Bool;
+END_VAR
+
+VAR_OUTPUT
+  Marcia : Bool;
+END_VAR
+
+VAR
+  Dati : "Asse";
+  Velocita : Int := 100;
+END_VAR
+
+BEGIN
+NETWORK
+TITLE = Marcia
+	A #Avvio;
+	AN #Arresto;
+	= #Marcia;
+NETWORK
+TITLE = Somma
+	CALL "Somma"
+	(
+	   A       := #Velocita,
+	   B       := 1,
+	   RET_VAL => #Velocita
+	);
+END_FUNCTION_BLOCK
+
+FUNCTION_BLOCK "Linea"
+TITLE =
+VERSION : 0.1
+
+VAR
+  Primo : "Nastro";
+END_VAR
+
+BEGIN
+NETWORK
+TITLE =
+	CALL #Primo
+	(
+	   Avvio   := %I0.0,
+	   Arresto := %I0.1
+	);
+END_FUNCTION_BLOCK
+
+ORGANIZATION_BLOCK OB 1
+TITLE =
+VERSION : 0.1
+
+BEGIN
+NETWORK
+TITLE = Linea
+	CALL "Linea", "Linea_DB";
+END_ORGANIZATION_BLOCK
+
+DATA_BLOCK "Dati"
+TITLE =
+VERSION : 0.1
+
+STRUCT
+  Giri : Int := 5;
+  Asse : "Asse";
+END_STRUCT;
+
+BEGIN
+  Asse.Pos.X := 2.5;
+END_DATA_BLOCK
+
+DATA_BLOCK "Nastro_DB"
+TITLE =
+VERSION : 0.1
+
+"Nastro"
+
+BEGIN
+  Velocita := 120;
+END_DATA_BLOCK
+
+DATA_BLOCK "Linea_DB"
+TITLE =
+VERSION : 0.1
+
+"Linea"
+
+BEGIN
+END_DATA_BLOCK

@@ -34,6 +34,27 @@ const VALID: [string, string, string][] = [
   ['Char', "'$''", "'$''"],
   ['String[5]', "'a$Lb'", "'a$Lb'"],
   ['String[2]', "'$41$42'", "'$41$42'"],
+  // STEP 7 V5.5: anno a due cifre (90-99 → 1990-1999, 00-89 → 2000-2089).
+  ['Date_And_Time', 'DT#90-1-1-0:0:0.000', 'DT#1990-01-01-00:00:00.000'],
+  ['Date_And_Time', 'DT#89-12-31-23:59:59.999', 'DT#2089-12-31-23:59:59.999'],
+  ['Date_And_Time', 'DATE_AND_TIME#05-6-7-8:9:10', 'DT#2005-06-07-08:09:10.000'],
+  // Cifre separate da '_'.
+  ['Word', '2#0000_0000_0000_0001', '16#1'],
+  ['Byte', '2#1010_1010', '16#AA'],
+  ['Word', '16#FF_FF', '16#FFFF'],
+  ['Word', 'W#16#00_FF', '16#FF'],
+  ['DWord', 'DW#16#FFFF_0000', '16#FFFF0000'],
+  ['Byte', 'B#16#0_F', '16#F'],
+  // Valori iniziali di un array: elenco, ripetizione, misti; anche meno elementi della dimensione.
+  ['Array[1..3] of Int', '1, 2, 3', '1, 2, 3'],
+  ['Array[1..4] of Int', '4(0)', '4(0)'],
+  ['Array[1..5] of Int', '2(1), 3', '2(1), 3'],
+  ['Array[1..5] of Int', ' 2 ( 1 ) ,3 ', '2(1), 3'],
+  ['Array[0..1, 1..2] of Bool', '4(TRUE)', '4(true)'],
+  ['Array[1..3] of Int', '7', '7'],
+  ['Array[1..2] of Char', "'a', ','", "'a', ','"],
+  ['Array[1..2] of String[4]', "'a$'b', 'c,d'", "'a$'b', 'c,d'"],
+  ['Array[1..2] of Word', '2#0000_0001, W#16#FF', '16#1, 16#FF'],
 ];
 
 describe('parseLiteral', () => {
@@ -59,6 +80,26 @@ describe('parseLiteral', () => {
     ['Bool', 'si', 'SYNTAX'],
     ['Time', 'T#1S2H', 'SYNTAX'],
     ['Date_And_Time', 'DT#2090-01-01-00:00:00', 'OUT_OF_RANGE'],
+    ['Date_And_Time', 'DT#1989-12-31-23:59:59', 'OUT_OF_RANGE'],
+    ['Date_And_Time', 'DT#90-2-30-0:0:0.000', 'OUT_OF_RANGE'],
+    ['Date_And_Time', 'DT#090-1-1-0:0:0.000', 'SYNTAX'],
+    ['Date_And_Time', 'DT#9-1-1-0:0:0.000', 'SYNTAX'],
+    ['Word', '2#_0001', 'SYNTAX'],
+    ['Word', '16#FF__FF', 'SYNTAX'],
+    ['Word', '16#FF_', 'SYNTAX'],
+    ['Word', '1_000', 'SYNTAX'],
+    ['Word', '2#1_0000_0000_0000_0000', 'OUT_OF_RANGE'],
+    ['Array[1..3] of Int', '1, 2, 3, 4', 'TOO_LONG'],
+    ['Array[1..3] of Int', '2(1), 2(2)', 'TOO_LONG'],
+    ['Array[0..1, 1..2] of Int', '5(0)', 'TOO_LONG'],
+    ['Array[1..3] of Int', '1, 40000', 'OUT_OF_RANGE'],
+    ['Array[1..3] of Int', '1, , 2', 'SYNTAX'],
+    ['Array[1..3] of Int', '0(1)', 'SYNTAX'],
+    ['Array[1..3] of Int', '2()', 'SYNTAX'],
+    ['Array[1..3] of Int', '2(1', 'SYNTAX'],
+    ['Array[1..3] of Int', '', 'SYNTAX'],
+    ['Array[1..2] of Struct', '1', 'NO_VALUE'],
+    ['Array[1..2] of "Asse"', '1', 'NO_VALUE'],
   ])('parseLiteral(%s, %s) rifiuta con %s', (type, text, error) => {
     expect(parseLiteral(t(type), text)).toEqual({ ok: false, error });
   });

@@ -1,0 +1,34 @@
+ORGANIZATION_BLOCK OB 1
+TITLE = Ciclo principale
+VERSION : 0.1
+
+BEGIN
+NETWORK
+TITLE = Chiamata nastro
+// Richiama il nastro.
+	CALL "Nastro", "Nastro_DB"
+	(
+	   Avvio   := %I0.0,
+	   Arresto := %I0.1,
+	   Marcia  => %Q0.0
+	);
+NETWORK
+TITLE = Con etichette
+	A %I0.2;
+	JCN fine;
+	// salta il resto
+	S %M1.0; // memoria
+
+fine:
+	BE;
+NETWORK
+TITLE =
+NETWORK
+TITLE = Somma
+	CALL "Somma"
+	(
+	   A       := %MW0,
+	   B       := 5,
+	   RET_VAL => %MW2
+	);
+END_ORGANIZATION_BLOCK

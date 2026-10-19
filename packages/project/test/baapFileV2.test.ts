@@ -185,9 +185,9 @@ describe('file .baap formato 2', () => {
     expect(readBaap(writeBaap(p, { appVersion: 'x' }))).toEqual(p);
   });
 
-  it('formato 3 → NEWER_FORMAT', () => {
+  it('formato 4 → NEWER_FORMAT', () => {
     const f = baseFiles(makeProject());
-    put(f, 'baaportal.json', { format: 'baaportal-project', formatVersion: 3 });
+    put(f, 'baaportal.json', { format: 'baaportal-project', formatVersion: 4 });
     expect(code(bytes(f))).toBe('NEWER_FORMAT');
   });
 });

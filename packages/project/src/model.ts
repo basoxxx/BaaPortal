@@ -1,4 +1,4 @@
-export const FORMAT_VERSION = 2;
+export const FORMAT_VERSION = 3;
 
 export interface ProjectMeta {
   name: string;
@@ -64,9 +64,11 @@ export interface Udt {
   name: string;
   number: number;
   group: string;
+  title: string;
   comment: string;
   author: string;
   family: string;
+  headerName: string;
   version: string;
   members: Member[];
 }
@@ -133,6 +135,16 @@ export interface InstanceDb extends BlockBase {
 
 export type Block = CodeBlock | GlobalDb | InstanceDb;
 
+/** Sorgente AWL esterna (file di testo del dispositivo); `name` e un nome di file, es. 'Motori.awl'. */
+export interface ExternalSource {
+  id: string;
+  name: string;
+  /** Testo esatto del file (a capo e accenti compresi). */
+  text: string;
+  /** Chiavi sconosciute della voce in device.json (di versioni piu recenti): si riscrivono com'erano. */
+  listExtras?: Record<string, unknown>;
+}
+
 export interface PlcDevice {
   id: string;
   name: string;
@@ -141,6 +153,7 @@ export interface PlcDevice {
   tagTables: TagTable[];
   udts: Udt[];
   blocks: Block[];
+  sources: ExternalSource[];
   /** Percorsi di gruppo, es. 'A' e 'A/B'. */
   groups: { blocks: string[]; tags: string[]; types: string[] };
   /** Chiavi sconosciute della voce del dispositivo in project.json: si riscrivono com'erano. */
@@ -148,14 +161,14 @@ export interface PlcDevice {
 }
 
 export interface Project {
-  formatVersion: 2;
+  formatVersion: 3;
   meta: ProjectMeta;
   devices: PlcDevice[];
 }
 
 export type ObjectRef =
   | { kind: 'device'; deviceId: string }
-  | { kind: 'block' | 'udt' | 'tagTable'; deviceId: string; id: string }
+  | { kind: 'block' | 'udt' | 'tagTable' | 'source'; deviceId: string; id: string }
   | { kind: 'tag' | 'constant'; deviceId: string; tableId: string; id: string }
   | {
       kind: 'member';

@@ -287,6 +287,61 @@ describe('editor della tabella delle variabili', () => {
   });
 });
 
+describe('rinomina nel codice dalla griglia', () => {
+  const withCode = (d: ReturnType<typeof dev>) => {
+    const b = d.blocks[0]!;
+    if (b.kind === 'DB' || b.kind === 'IDB') throw new Error('serve un blocco di codice');
+    b.language = 'AWL';
+    b.networks = [
+      { id: 'n1', title: '', comment: '', source: 'A "Start"\n= %Q0.0' },
+      { id: 'n2', title: '', comment: '', source: 'A "Start"\nS %M0.0' },
+    ];
+  };
+  const sources = (app: RenderedApp) => {
+    const b = dev(app).blocks[0]!;
+    return b.kind === 'DB' || b.kind === 'IDB' ? [] : b.networks.map((n) => n.source);
+  };
+
+  it('rinominare un tag nella griglia aggiorna i segmenti AWL, in un solo passo di annulla', async () => {
+    const app = await open('tagTable', [tag('Start', 'Bool', '%I0.0')], withCode);
+    const before = past(app);
+    await app.user.click(cell('t-Start', 'name'));
+    await app.user.keyboard('{Enter}Avvio{Enter}');
+    expect(table(app).tags[0]!.name).toBe('Avvio');
+    expect(sources(app)).toEqual(['A "Avvio"\n= %Q0.0', 'A "Avvio"\nS %M0.0']);
+    expect(past(app)).toBe(before + 1);
+    act(() => app.store.getState().undo());
+    expect(table(app).tags[0]!.name).toBe('Start');
+    expect(sources(app)).toEqual(['A "Start"\n= %Q0.0', 'A "Start"\nS %M0.0']);
+  });
+
+  it('un nome non valido cambia il tag ma non il codice', async () => {
+    const app = await open('tagTable', [tag('Start', 'Bool', '%I0.0')], withCode);
+    await app.user.click(cell('t-Start', 'name'));
+    await app.user.keyboard('{Enter}a"b{Enter}');
+    expect(table(app).tags[0]!.name).toBe('a"b');
+    expect(sources(app)).toEqual(['A "Start"\n= %Q0.0', 'A "Start"\nS %M0.0']);
+  });
+
+  it('rinominare una costante utente aggiorna i segmenti AWL', async () => {
+    const app = await open('tagTable', [], (d) => {
+      withCode(d);
+      d.tagTables[0]!.constants.push({
+        id: 'c-Start',
+        name: 'Start',
+        type: 'Int',
+        value: '1',
+        comment: '',
+      });
+    });
+    await app.user.click(screen.getByRole('tab', { name: 'Costanti utente' }));
+    await app.user.click(cell('c-Start', 'name'));
+    await app.user.keyboard('{Enter}Avvio{Enter}');
+    expect(table(app).constants[0]!.name).toBe('Avvio');
+    expect(sources(app)[0]).toBe('A "Avvio"\n= %Q0.0');
+  });
+});
+
 describe('Mostra tutte le variabili', () => {
   it('colonna tabella e modifica che arriva alla tabella giusta', async () => {
     const app = await open('allTags', [tag('A', 'Int', '%MW0')], (d) => {

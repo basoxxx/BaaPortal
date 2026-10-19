@@ -274,6 +274,30 @@ describe('checkDevice: valori e costanti', () => {
     ]);
   });
 
+  it('valori di STEP 7 V5.5: DT a due cifre, array con elenco e ripetizione, binario con _', () => {
+    const d = fresh();
+    const db = createGlobalDb({ number: 1, name: 'Dati', newId });
+    db.members.push(
+      member('Ora', 'Date_And_Time', { initial: 'DT#90-1-1-0:0:0.000' }),
+      member('Lista', 'Array[1..3] of Int', { initial: '1, 2, 3' }),
+      member('Zeri', 'Array[0..3] of Int', { initial: '4(0)' }),
+      member('Misto', 'Array[1..5] of Int', { initial: '2(1), 3' }),
+      member('Bit', 'Word', { initial: '2#0000_0000_0000_0001' }),
+      member('Troppi', 'Array[1..3] of Int', { initial: '1, 2, 3, 4' }),
+      member('Fuori', 'Array[1..3] of Int', { initial: '2(40000)' }),
+      member('Anno', 'Date_And_Time', { initial: 'DT#2090-1-1-0:0:0.000' }),
+    );
+    d.blocks.push(db);
+    const ds = checkDevice(d, cpu).filter((x) => x.code === 'VALUE_INVALID');
+    expect(
+      ds.map((x) => [x.ref.kind === 'member' ? x.ref.memberId : '', x.params?.reason]),
+    ).toEqual([
+      [db.members[5]!.id, 'TOO_LONG'],
+      [db.members[6]!.id, 'OUT_OF_RANGE'],
+      [db.members[7]!.id, 'OUT_OF_RANGE'],
+    ]);
+  });
+
   it('override di un membro: [i] per gli elementi di un array, .percorso per i membri del tipo', () => {
     const d = fresh();
     const udt = createUdt({ name: 'Asse', number: 1, newId });
@@ -512,5 +536,52 @@ describe('checkDevice: proprietà della CPU', () => {
       'retentivity.counters',
       'cyclicInterrupts.ob35Ms',
     ]);
+  });
+});
+
+describe('SFB come tipo di istanza', () => {
+  it('DB di istanza di una SFB e multi-istanza "TON" senza errori', () => {
+    const d = fresh();
+    const fb = createCodeBlock({ kind: 'FB', number: 1, name: 'Ritardo', language: 'AWL', newId });
+    fb.interface.static.push(member('T1', '"TON"'));
+    const idb = createInstanceDb({ number: 1, name: 'T1_DB', instanceOf: 'TON', newId });
+    idb.overrides = { PT: 'T#5s' };
+    d.blocks.push(fb, idb);
+    expect(checkDevice(d, cpu)).toEqual([]);
+  });
+
+  it("un override su un'istanza di SFB e verificato sull'interfaccia della SFB", () => {
+    const d = fresh();
+    const idb = createInstanceDb({ number: 1, name: 'T1_DB', instanceOf: 'TON', newId });
+    idb.overrides = { PT: 'abc', Manca: '1' };
+    d.blocks.push(idb);
+    expect(checkDevice(d, cpu).map((x) => [x.code, x.params?.path])).toEqual([
+      ['VALUE_INVALID', 'PT'],
+      ['VALUE_INVALID', 'Manca'],
+    ]);
+  });
+
+  it('un nome che non e ne un FB ne una SFB resta INSTANCE_FB_MISSING', () => {
+    const d = fresh();
+    d.blocks.push(createInstanceDb({ number: 1, name: 'X_DB', instanceOf: 'Nonexistent', newId }));
+    expect(codes(checkDevice(d, cpu))).toEqual(['INSTANCE_FB_MISSING']);
+  });
+
+  it('un tag puo chiamarsi come una SFB: i blocchi di sistema non sono nei simboli del progetto', () => {
+    const d = fresh();
+    d.tagTables[0]!.tags.push(tag('TON', 'Bool', '%M0.0'));
+    expect(checkDevice(d, cpu)).toEqual([]);
+  });
+
+  it('un FB o un UDT del progetto con il nome di una SFB ha la precedenza', () => {
+    const d = fresh();
+    const fb = createCodeBlock({ kind: 'FB', number: 1, name: 'TON', language: 'AWL', newId });
+    fb.interface.input.push(member('Solo', 'Int'));
+    const idb = createInstanceDb({ number: 1, name: 'T_DB', instanceOf: 'TON', newId });
+    idb.overrides = { Solo: '3' };
+    d.blocks.push(fb, idb);
+    expect(checkDevice(d, cpu)).toEqual([]);
+    idb.overrides = { PT: 'T#5s' };
+    expect(codes(checkDevice(d, cpu))).toEqual(['VALUE_INVALID']);
   });
 });

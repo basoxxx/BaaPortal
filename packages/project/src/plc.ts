@@ -1,5 +1,6 @@
 import { formatType, incrementName, parseType, sameName } from '@baaportal/s7-types';
 import { findOb, type CpuType } from '@baaportal/catalog';
+import { renameSymbolInCode } from './codeRename';
 import { renameMemberWithOverrides } from './memberRename';
 import type {
   Block,
@@ -7,6 +8,7 @@ import type {
   CodeBlock,
   CpuProperties,
   DbAttributes,
+  ExternalSource,
   GlobalDb,
   InstanceDb,
   Language,
@@ -37,6 +39,14 @@ export function createTagTable(name: string, newId: NewId = defaultNewId): TagTa
   return { id: newId(), name, group: '', tags: [], constants: [] };
 }
 
+export function createSource(
+  name: string,
+  text: string,
+  newId: NewId = defaultNewId,
+): ExternalSource {
+  return { id: newId(), name, text };
+}
+
 export function createUdt(a: { name: string; number: number; newId?: NewId }): Udt {
   const newId = a.newId ?? defaultNewId;
   return {
@@ -44,9 +54,11 @@ export function createUdt(a: { name: string; number: number; newId?: NewId }): U
     name: a.name,
     number: a.number,
     group: '',
+    title: '',
     comment: '',
     author: '',
     family: '',
+    headerName: '',
     version: '0.1',
     members: [],
   };
@@ -164,6 +176,7 @@ export function createPlcDevice(a: {
     tagTables: [createTagTable(a.texts.defaultTagTable, newId)],
     udts: [],
     blocks: [createCodeBlock({ kind: 'OB', number: 1, name: 'Main', language: 'AWL', newId })],
+    sources: [],
     groups: { blocks: [], tags: [], types: [] },
   };
 }
@@ -237,8 +250,43 @@ export const findBlock = (d: PlcDevice, id: string): Block | undefined =>
   d.blocks.find((b) => b.id === id);
 export const findUdt = (d: PlcDevice, id: string): Udt | undefined =>
   d.udts.find((u) => u.id === id);
+export const findSource = (d: PlcDevice, id: string): ExternalSource | undefined =>
+  d.sources.find((s) => s.id === id);
 export const findTagTable = (d: PlcDevice, id: string): TagTable | undefined =>
   d.tagTables.find((t) => t.id === id);
+
+/** Aggiunge una sorgente con un nome di file libero (Nome.awl, Nome_1.awl...) e la restituisce. */
+export function addSource(
+  device: PlcDevice,
+  name: string,
+  text: string,
+  newId: NewId = defaultNewId,
+): ExternalSource {
+  const free = uniqueFileName(
+    name,
+    device.sources.map((s) => s.name),
+  );
+  const source = createSource(free, text, newId);
+  device.sources.push(source);
+  return source;
+}
+
+/** Come uniqueName, ma l'estensione resta in fondo: Motori.awl -> Motori_1.awl. */
+export function uniqueFileName(name: string, taken: Iterable<string>): string {
+  const dot = name.lastIndexOf('.');
+  const [stem, ext] = dot > 0 ? [name.slice(0, dot), name.slice(dot)] : [name, ''];
+  const stems = [...taken].map((t) =>
+    ext !== '' && t.toLowerCase().endsWith(ext.toLowerCase())
+      ? t.slice(0, t.length - ext.length)
+      : t,
+  );
+  return `${uniqueName(stem, stems)}${ext}`;
+}
+
+export function deleteSource(device: PlcDevice, id: string): void {
+  const at = device.sources.findIndex((s) => s.id === id);
+  if (at >= 0) device.sources.splice(at, 1);
+}
 
 function blockMemberLists(b: Block): Member[][] {
   if (b.kind === 'DB') return [b.members];
@@ -282,11 +330,20 @@ export function renameWithReferences(device: PlcDevice, ref: ObjectRef, newName:
       if (t) t.name = newName;
       return;
     }
+    case 'source': {
+      // Il nome e un nome di file: il testo non cambia.
+      const s = findSource(device, ref.id);
+      if (s) s.name = newName;
+      return;
+    }
     case 'tag':
     case 'constant': {
       const t = findTagTable(device, ref.tableId);
       const item = (ref.kind === 'tag' ? t?.tags : t?.constants)?.find((x) => x.id === ref.id);
-      if (item) item.name = newName;
+      if (!item) return;
+      const old = item.name;
+      item.name = newName;
+      renameSymbolInCode(device, old, newName);
       return;
     }
     case 'udt': {
@@ -302,6 +359,7 @@ export function renameWithReferences(device: PlcDevice, ref: ObjectRef, newName:
       if (!b) return;
       const old = b.name;
       b.name = newName;
+      renameSymbolInCode(device, old, newName);
       if (b.kind !== 'FB') return;
       for (const list of allMemberLists(device)) retypeMembers(list, old, newName);
       for (const x of device.blocks) {

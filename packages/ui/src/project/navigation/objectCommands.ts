@@ -1,8 +1,10 @@
 import type { StoreApi } from 'zustand/vanilla';
 import { findCpu } from '@baaportal/catalog';
 import {
+  deleteSource,
   findBlock,
   findDevice,
+  findSource,
   findTagTable,
   findUdt,
   renameWithReferences,
@@ -92,6 +94,16 @@ export function refsOfNodes(nodeIds: Iterable<string>): ObjectRef[] {
     if (p.kind === 'block' || p.kind === 'udt' || p.kind === 'tagTable') {
       out.push({ kind: p.kind, deviceId: p.dev, id: p.id });
     }
+  }
+  return out;
+}
+
+/** Sorgenti esterne rappresentate dai nodi. */
+export function sourcesOfNodes(nodeIds: Iterable<string>): { dev: string; id: string }[] {
+  const out: { dev: string; id: string }[] = [];
+  for (const n of nodeIds) {
+    const p = parseNodeId(n);
+    if (p.kind === 'source') out.push({ dev: p.dev, id: p.id });
   }
   return out;
 }
@@ -192,7 +204,9 @@ export const selectRef = (store: StoreApi<AppState>, r: ObjectRef | undefined) =
         ? ids.udt(r.deviceId, r.id)
         : r?.kind === 'tagTable'
           ? ids.tagTable(r.deviceId, r.id)
-          : null;
+          : r?.kind === 'source'
+            ? ids.source(r.deviceId, r.id)
+            : null;
   if (target) store.getState().select(target);
 };
 
@@ -248,10 +262,14 @@ export async function deleteNodes(ctx: ObjectCtx, nodeIds: Iterable<string>): Pr
   const refs = refsOfNodes(all);
   const removable = refs.filter((r) => !standard(r));
   const groups = groupsOfNodes(all);
+  const sources = sourcesOfNodes(all).filter((x) => {
+    const dev = deviceOf(doc, x.dev);
+    return !!dev && !!findSource(dev, x.id);
+  });
   if (removable.length < refs.length) {
     store.getState().pushMessage({ severity: 'warning', textKey: 'messages.standardTableLocked' });
   }
-  if (removable.length === 0 && groups.length === 0) return;
+  if (removable.length === 0 && groups.length === 0 && sources.length === 0) return;
 
   const names = [
     ...removable.flatMap((r) => {
@@ -260,6 +278,7 @@ export async function deleteNodes(ctx: ObjectCtx, nodeIds: Iterable<string>): Pr
       return items.map(itemName);
     }),
     ...groups.map((g) => lastOf(g.path)),
+    ...sources.map((x) => findSource(deviceOf(doc, x.dev)!, x.id)!.name),
   ];
   const listed = names.slice(0, MAX_LISTED);
   if (names.length > MAX_LISTED) {
@@ -282,6 +301,10 @@ export async function deleteNodes(ctx: ObjectCtx, nodeIds: Iterable<string>): Pr
       const dev = findDevice(p, r.deviceId);
       if (dev) deleteObjects(dev, [r]);
     }
+    for (const x of sources) {
+      const dev = findDevice(p, x.dev);
+      if (dev) deleteSource(dev, x.id);
+    }
   });
   const sel = store.getState().selection;
   const first = removable[0];
@@ -289,6 +312,9 @@ export async function deleteNodes(ctx: ObjectCtx, nodeIds: Iterable<string>): Pr
   const dev = first?.deviceId ?? groups[0]?.dev;
   // La selezione non deve restare su un nodo che non esiste più.
   if (sel && area && dev && all.includes(sel)) store.getState().select(folderNodeId(dev, area));
+  else if (sel && sources[0] && all.includes(sel)) {
+    store.getState().select(ids.folder(sources[0].dev, 'sources'));
+  }
 }
 
 // ---- rinomina -----------------------------------------------------------------------------
@@ -315,12 +341,17 @@ export function renameInfo(doc: OpenDoc | null, nodeId: string): { name: string 
       const tb = findTagTable(dev, p.id);
       return tb && !isStandardTable(dev, tb.id) ? { name: tb.name } : null;
     }
+    case 'source': {
+      const x = findSource(dev, p.id);
+      return x ? { name: x.name } : null;
+    }
     default:
       return null;
   }
 }
 
 export type RenameError = 'INVALID' | 'DUPLICATE';
+const FILE_NAME_FORBIDDEN = /[\\/:*?"<>|\u0000-\u001f]/;
 
 /** Verifica il nome senza modificare nulla. */
 export function checkRename(doc: OpenDoc | null, nodeId: string, name: string): RenameError | null {
@@ -336,6 +367,12 @@ export function checkRename(doc: OpenDoc | null, nodeId: string, name: string): 
   }
   if (p.kind === 'block' || p.kind === 'udt' || p.kind === 'tagTable') {
     return canRename(dev, { kind: p.kind, deviceId: dev.id, id: p.id }, name);
+  }
+  if (p.kind === 'source') {
+    // Il nome è un nome di file: non vuoto e senza i caratteri che i file system vietano.
+    if (name.trim() === '' || FILE_NAME_FORBIDDEN.test(name) || /[. ]$/.test(name))
+      return 'INVALID';
+    return dev.sources.some((x) => x.id !== p.id && sameName(x.name, name)) ? 'DUPLICATE' : null;
   }
   return 'INVALID';
 }
@@ -362,7 +399,7 @@ export function renameNode(
   const ref: ObjectRef | null =
     p.kind === 'plc'
       ? { kind: 'device', deviceId: p.dev }
-      : p.kind === 'block' || p.kind === 'udt' || p.kind === 'tagTable'
+      : p.kind === 'block' || p.kind === 'udt' || p.kind === 'tagTable' || p.kind === 'source'
         ? { kind: p.kind, deviceId: p.dev, id: p.id }
         : null;
   if (ref) {

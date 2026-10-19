@@ -1,0 +1,99 @@
+TYPE "Misura"
+TITLE =
+VERSION : 0.1
+
+STRUCT
+  Valore : Int;
+  Attivo : Bool;
+END_STRUCT;
+
+END_TYPE
+
+FUNCTION_BLOCK "Ritardo"
+TITLE =
+VERSION : 0.1
+
+VAR_INPUT
+  Avvio : Bool;
+END_VAR
+
+VAR_OUTPUT
+  Pronto : Bool;
+END_VAR
+
+VAR
+  T1 : "TON";
+  Dati : "Misura";
+END_VAR
+
+BEGIN
+NETWORK
+TITLE = Temporizzatore
+	CALL #T1
+	(
+	   IN := #Avvio,
+	   PT := T#5s,
+	   Q  => #Pronto
+	);
+END_FUNCTION_BLOCK
+
+ORGANIZATION_BLOCK OB 1
+TITLE = Ciclo principale
+VERSION : 0.1
+
+BEGIN
+NETWORK
+TITLE = Marcia
+	A "Pulsante";
+	= %Q0.0;
+NETWORK
+TITLE = Memoria
+	A "Pulsante";
+	S %M0.0;
+NETWORK
+TITLE = Ritardo
+	A "Pulsante";
+	CALL "Ritardo", "Ritardo_DB"
+	(
+	   Avvio  := %I0.1,
+	   Pronto => %Q0.1
+	);
+END_ORGANIZATION_BLOCK
+
+FUNCTION "Doppio" : Int
+TITLE =
+VERSION : 0.1
+
+VAR_INPUT
+  X : Int;
+END_VAR
+
+BEGIN
+NETWORK
+TITLE = Raddoppia
+	L #X;
+	L 2;
+	*I;
+	T #RET_VAL;
+END_FUNCTION
+
+DATA_BLOCK "Dati"
+TITLE =
+VERSION : 0.1
+
+STRUCT
+  Giri : Int := 7;
+  Quota : "Misura";
+END_STRUCT;
+
+BEGIN
+END_DATA_BLOCK
+
+DATA_BLOCK "Ritardo_DB"
+TITLE =
+VERSION : 0.1
+
+"Ritardo"
+
+BEGIN
+END_DATA_BLOCK

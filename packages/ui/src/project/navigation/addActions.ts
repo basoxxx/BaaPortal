@@ -7,8 +7,10 @@ import {
   symbolNames,
   uniqueName,
 } from '@baaportal/project';
+import type { BaaBridge } from '../../bridge';
 import { t } from '../../i18n';
 import type { AppState } from '../../state/store';
+import { addSourceFiles } from './sourceActions';
 import { ids, parseNodeId } from './treeIds';
 
 /** Numero massimo degli UDT in S7-300. */
@@ -56,7 +58,7 @@ export function addUdt(store: StoreApi<AppState>, deviceId: string): void {
  * Doppio clic o Invio su un nodo "Aggiungi…". Restituisce true se il nodo lo era.
  * I blocchi hanno un dialogo, il dispositivo pure; tabella e UDT si aggiungono subito.
  */
-export function runAddNode(store: StoreApi<AppState>, nodeId: string): boolean {
+export function runAddNode(store: StoreApi<AppState>, nodeId: string, bridge: BaaBridge): boolean {
   if (nodeId === 'add-device') {
     store.getState().openDialog({ kind: 'addDevice' });
     return true;
@@ -72,6 +74,16 @@ export function runAddNode(store: StoreApi<AppState>, nodeId: string): boolean {
       return true;
     case 'types-add':
       addUdt(store, p.dev);
+      return true;
+    case 'sources-add':
+      // Un errore imprevisto finisce in Informazioni, non come rifiuto non gestito.
+      addSourceFiles({ store, bridge }, p.dev).catch((e: unknown) =>
+        store.getState().pushMessage({
+          severity: 'error',
+          textKey: 'messages.actionFailed',
+          params: { message: e instanceof Error ? e.message : String(e) },
+        }),
+      );
       return true;
     default:
       return false;

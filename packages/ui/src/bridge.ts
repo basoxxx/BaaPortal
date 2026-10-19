@@ -31,6 +31,11 @@ export interface RecoveryEntry {
   info: RecoveryInfo;
 }
 
+export interface FileFilter {
+  name: string; // già tradotto dal chiamante
+  extensions: string[]; // senza punto
+}
+
 export interface BaaBridge {
   platform: 'win32' | 'darwin' | 'linux';
   appVersion(): Promise<string>;
@@ -38,6 +43,8 @@ export interface BaaBridge {
   showOpenProjectDialog(): Promise<string | null>; // filtro *.baap
   showSaveProjectDialog(suggestedName: string): Promise<string | null>;
   showSelectFolderDialog(): Promise<string | null>;
+  showOpenFileDialog(opts: { filters: FileFilter[]; multi?: boolean }): Promise<string[]>; // [] se annullato
+  showSaveFileDialog(opts: { defaultName: string; filters: FileFilter[] }): Promise<string | null>;
   readFile(path: string): Promise<Uint8Array>;
   writeFileAtomic(path: string, data: Uint8Array): Promise<void>; // crea le cartelle mancanti
   fileExists(path: string): Promise<boolean>;

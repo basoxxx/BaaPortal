@@ -1,4 +1,5 @@
 import { parseType, type DataType } from '@baaportal/s7-types';
+import { renameMemberInCode } from './codeRename';
 import type { Block, CodeBlock, Member, PlcDevice, Udt } from './model';
 
 // Stessa chiave di sameName.
@@ -135,6 +136,8 @@ export function renameMemberWithOverrides(
   for (const l of lists) target ??= findIn(l, memberId);
   if (!target) return;
   if (target.name === newName) return;
+  // Il codice si aggiorna con i tipi com'erano; il nome del membro cambia dopo.
+  renameMemberInCode(device, owner, memberId, target.name, newName);
 
   if (pathSafe(newName)) {
     const types: Types = { udts: new Map(), fbs: new Map() };

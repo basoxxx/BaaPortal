@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import {
   findDevice,
   findTagTable,
+  renameWithReferences,
   symbolNames,
   uniqueName,
   type PlcDevice,
@@ -160,12 +161,18 @@ export function TagsView({ deviceId, tableId }: Props) {
           return;
         }
         // Il nome si salva come scritto: se non è valido lo segna la diagnostica.
-        if (columnId === 'name') tag.name = value;
+        // Il nome cambia anche nel codice AWL che lo usa, nello stesso passo.
+        if (columnId === 'name')
+          renameWithReferences(
+            dev,
+            { kind: 'tag', deviceId, tableId: found.table.id, id: tag.id },
+            value,
+          );
         else if (columnId === 'type') tag.type = normalizeType(value);
         else if (columnId === 'address') tag.address = normalizeAddress(value);
         else if (columnId === 'comment') tag.comment = value;
       }),
-    [edit, tableId],
+    [edit, tableId, deviceId],
   );
 
   const addRow = useMemo<NonNullable<DataGridProps<TagRow>['addRow']>>(

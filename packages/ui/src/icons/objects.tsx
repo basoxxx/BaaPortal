@@ -65,6 +65,10 @@ const shapes: Partial<Record<IconName, ReactNode>> = {
     </>,
   ),
   objUdt: page(COLOR.udt, <path d="M6 8.5v2a1.5 1.5 0 0 0 3 0v-2" stroke={COLOR.udt} />),
+  objSource: page(
+    COLOR.folder,
+    <path d="M7 8.2 5.8 9.6 7 11M9 8.2l1.2 1.4L9 11" stroke={COLOR.folder} />,
+  ),
   objTagTable: (
     <>
       <rect

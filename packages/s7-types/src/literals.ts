@@ -39,9 +39,11 @@ function parseBits(name: keyof typeof BIT_WIDTH, text: string): Result {
     }
   } else {
     if (s.startsWith(TYPED_PREFIX[name])) s = s.slice(TYPED_PREFIX[name].length);
+    // Nelle forme 16# e 2# le cifre si possono separare con un solo '_' (`2#0000_0001`, `16#FF_FF`).
     if (/^\d+$/.test(s)) value = BigInt(s);
-    else if (/^16#[0-9a-f]+$/.test(s)) value = BigInt(`0x${s.slice(3)}`);
-    else if (/^2#[01]+$/.test(s)) value = BigInt(`0b${s.slice(2)}`);
+    else if (/^16#[0-9a-f](?:_?[0-9a-f])*$/.test(s))
+      value = BigInt(`0x${s.slice(3).replace(/_/g, '')}`);
+    else if (/^2#[01](?:_?[01])*$/.test(s)) value = BigInt(`0b${s.slice(2).replace(/_/g, '')}`);
     else return fail('SYNTAX');
   }
   if (value > max) return fail('OUT_OF_RANGE');
@@ -164,13 +166,21 @@ function parseTimeOfDay(text: string): Result {
   return ok(`TOD#${pad(h, 2)}:${pad(mi, 2)}:${pad(s, 2)}.${fraction(m[4])}`);
 }
 
+/** Anno a due cifre di STEP 7 (`DT#90-1-1-0:0:0.000`): 90-99 → 1990-1999, 00-89 → 2000-2089. */
+const fullYear = (text: string): number => {
+  const y = Number(text);
+  return text.length === 2 ? (y >= 90 ? 1900 + y : 2000 + y) : y;
+};
+
 function parseDateAndTime(text: string): Result {
   const m =
-    /^(?:dt|date_and_time)#(\d{4})-(\d{1,2})-(\d{1,2})-(\d{1,2}):(\d{1,2}):(\d{1,2})(?:\.(\d{1,3}))?$/i.exec(
+    /^(?:dt|date_and_time)#(\d{4}|\d{2})-(\d{1,2})-(\d{1,2})-(\d{1,2}):(\d{1,2}):(\d{1,2})(?:\.(\d{1,3}))?$/i.exec(
       text,
     );
   if (!m) return fail('SYNTAX');
-  const [y, mo, d, h, mi, s] = [1, 2, 3, 4, 5, 6].map((i) => Number(m[i]));
+  const [y, mo, d, h, mi, s] = [1, 2, 3, 4, 5, 6].map((i) =>
+    i === 1 ? fullYear(m[1]!) : Number(m[i]),
+  );
   if (y! < 1990 || y! > 2089 || !validDate(y!, mo!, d!) || !validTime(h!, mi!, s!))
     return fail('OUT_OF_RANGE');
   return ok(
@@ -221,7 +231,67 @@ function parseString(length: number, text: string): Result {
   return r.count > length ? fail('TOO_LONG') : ok(text);
 }
 
+// ---- Valori iniziali di un array ----
+
+/** Le parti separate da ',' fuori dagli apici e dalle parentesi; null se le parentesi non tornano. */
+function splitTopLevel(text: string): string[] | null {
+  const parts: string[] = [];
+  let depth = 0;
+  let quoted = false;
+  let start = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quoted) {
+      if (c === '$') i++;
+      else if (c === "'") quoted = false;
+    } else if (c === "'") quoted = true;
+    else if (c === '(') depth++;
+    else if (c === ')') {
+      if (--depth < 0) return null;
+    } else if (c === ',' && depth === 0) {
+      parts.push(text.slice(start, i));
+      start = i + 1;
+    }
+  }
+  if (depth !== 0 || quoted) return null;
+  parts.push(text.slice(start));
+  return parts;
+}
+
+/** Numero di elementi di un array (prodotto delle dimensioni). */
+const arraySize = (type: Extract<DataType, { kind: 'array' }>): number =>
+  type.dims.reduce((n, d) => n * (d.hi - d.lo + 1), 1);
+
+/**
+ * Valori iniziali di un array come li scrive la sorgente: `1, 2, 3`, la ripetizione `4(0)` o un misto
+ * (`2(1), 3`). Ogni valore vale per il tipo degli elementi; gli elementi non possono essere più della
+ * dimensione dell'array (meno sì: gli altri tengono il valore predefinito).
+ */
+function parseArrayInitializer(type: Extract<DataType, { kind: 'array' }>, text: string): Result {
+  const el = type.element;
+  if (el.kind !== 'elementary' && el.kind !== 'string' && el.kind !== 'dateAndTime')
+    return fail('NO_VALUE');
+  const parts = splitTopLevel(text);
+  if (!parts) return fail('SYNTAX');
+  const out: string[] = [];
+  let count = 0;
+  for (const raw of parts) {
+    const part = raw.trim();
+    const rep = /^(\d+)\s*\((.*)\)$/s.exec(part);
+    const times = rep ? Number(rep[1]) : 1;
+    const value = (rep ? rep[2]! : part).trim();
+    if (value === '' || times === 0) return fail('SYNTAX');
+    const v = parseLiteral(el, value);
+    if (!v.ok) return v;
+    count += times;
+    out.push(rep ? `${times}(${v.canonical})` : v.canonical);
+  }
+  if (count > arraySize(type)) return fail('TOO_LONG');
+  return ok(out.join(', '));
+}
+
 export function parseLiteral(type: DataType, text: string): Result {
+  if (type.kind === 'array') return parseArrayInitializer(type, text);
   if (type.kind === 'string') return parseString(type.length, text);
   const s = text.trim();
   if (type.kind === 'dateAndTime') return parseDateAndTime(s);

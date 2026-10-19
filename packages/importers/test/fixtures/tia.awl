@@ -1,0 +1,45 @@
+FUNCTION_BLOCK "Pompa"
+TITLE = Comando pompa
+{ S7_Optimized_Access := 'FALSE' }
+AUTHOR : Diego
+FAMILY : Pompe
+VERSION : 0.1
+//Comanda una pompa con avvio e arresto.
+//Seconda riga del commento.
+   VAR_INPUT 
+      Avvio : Bool;
+      Arresto : Bool;
+   END_VAR
+
+   VAR_OUTPUT 
+      Marcia : Bool;
+   END_VAR
+
+   VAR 
+      Giri : Int := 100;
+      Ora : Date_And_Time := DT#2026-10-19-08:00:00.000;
+   END_VAR
+
+
+BEGIN
+NETWORK
+TITLE = Marcia
+//Avvio con autoritenuta.
+      A #Avvio;
+      AN #Arresto;
+      = #Marcia;
+
+END_FUNCTION_BLOCK
+
+DATA_BLOCK "Pompa_DB"
+{ S7_Optimized_Access := 'FALSE' }
+VERSION : 0.1
+NON_RETAIN
+//Istanza della pompa.
+"Pompa"
+
+BEGIN
+   Giri := 120;
+
+END_DATA_BLOCK
+

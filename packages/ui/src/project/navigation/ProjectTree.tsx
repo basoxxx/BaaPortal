@@ -18,6 +18,7 @@ import { useAppStore, useServices } from '../../state/AppContext';
 import type { EditAction } from '../../state/store';
 import { useEditTarget } from '../../state/useEditTarget';
 import { areaOfItem, isStandardTable } from '../objectActions';
+import { useMnemonic } from '../../editors/awl/mnemonicPreference';
 import { editorOfNode } from '../../state/workArea';
 import { runAddNode } from './addActions';
 import {
@@ -35,9 +36,17 @@ import {
   refsOfNodes,
   renameInfo,
   renameNode,
+  sourcesOfNodes,
 } from './objectCommands';
+import {
+  exportSource,
+  generateBlocksFromSource,
+  generateSourceFromNodes,
+  objectsToGenerate,
+} from './sourceActions';
 import { RenameInput } from './RenameInput';
 import { buildTree, type TreeNode } from './treeModel';
+import { parseNodeId } from './treeIds';
 
 const TARGET_ID = 'tree';
 
@@ -117,6 +126,8 @@ export function ProjectTree() {
   const selectedIds = [...selected];
   const objectRefs = refsOfNodes(selectedIds);
   const groups = groupsOfNodes(selectedIds);
+  const sourceNodes = sourcesOfNodes(selectedIds);
+  const [mnemonic] = useMnemonic();
   const clip = peekClipboardPayload();
   const pasteTarget = selection ? containerOf(doc, selection) : null;
   const can: Partial<Record<EditAction, boolean>> = {
@@ -128,7 +139,7 @@ export function ProjectTree() {
         return r.kind === 'tagTable' && !!d && isStandardTable(d, r.id);
       }),
     copy: objectRefs.length > 0,
-    delete: objectRefs.length > 0 || groups.length > 0,
+    delete: objectRefs.length > 0 || groups.length > 0 || sourceNodes.length > 0,
     rename: selectedIds.length === 1 && renameInfo(doc, selectedIds[0]!) !== null,
     paste:
       clip?.kind === 'objects' &&
@@ -141,10 +152,21 @@ export function ProjectTree() {
     const row = rows.find((r) => r.node.id === selection);
     if (!row) return;
     const siblings = rows.filter((r) => r.parent === row.parent).map((r) => r.node.id);
-    setPicked(
-      new Set(siblings.filter((id) => refsOfNodes([id]).length + groupsOfNodes([id]).length > 0)),
-    );
+    // Oggetti, gruppi e sorgenti: tutto ciò che si può eliminare insieme.
+    const selectable = (id: string) =>
+      refsOfNodes([id]).length + groupsOfNodes([id]).length + sourcesOfNodes([id]).length > 0;
+    setPicked(new Set(siblings.filter(selectable)));
   };
+  // Un'azione asincrona che fallisce (finestra, appunti) finisce in Informazioni, mai come rifiuto
+  // non gestito.
+  const settle = (p: void | Promise<void>): void | Promise<void> =>
+    p?.catch((e: unknown) =>
+      store.getState().pushMessage({
+        severity: 'error',
+        textKey: 'messages.actionFailed',
+        params: { message: e instanceof Error ? e.message : String(e) },
+      }),
+    );
   const run = (action: EditAction): void | Promise<void> => {
     const ctx = { store, bridge };
     switch (action) {
@@ -155,10 +177,10 @@ export function ProjectTree() {
         return;
       case 'paste':
         return selection
-          ? pasteAt(ctx, selection).then(() => setClipboardTick((n) => n + 1))
+          ? settle(pasteAt(ctx, selection).then(() => setClipboardTick((n) => n + 1)))
           : undefined;
       case 'delete':
-        return deleteNodes(ctx, selectedIds);
+        return settle(deleteNodes(ctx, selectedIds));
       case 'rename':
         if (selection && can.rename) setRenaming(selection);
         return;
@@ -221,6 +243,45 @@ export function ProjectTree() {
   const menuItems = (nodeId: string): ContextMenuItem[] => {
     const act = (a: EditAction) => () => void run(a);
     const group = containerOf(doc, nodeId);
+    const parsed = parseNodeId(nodeId);
+    const ctx = { store, bridge };
+    const sourceItems: ContextMenuItem[] =
+      parsed.kind === 'source'
+        ? [
+            {
+              id: 'generateBlocks',
+              label: t('source.generateBlocks'),
+              separator: true,
+              run: () => void settle(generateBlocksFromSource(ctx, parsed.dev, parsed.id)),
+            },
+            {
+              id: 'export',
+              label: t('source.export'),
+              run: () => void settle(exportSource(ctx, parsed.dev, parsed.id)),
+            },
+          ]
+        : [];
+    // Dei blocchi e dei tipi selezionati; sulle cartelle, di tutti quelli che contengono.
+    const generateItems: ContextMenuItem[] =
+      parsed.kind === 'block' ||
+      parsed.kind === 'udt' ||
+      (parsed.kind === 'folder' && (parsed.folder === 'blocks' || parsed.folder === 'types'))
+        ? [
+            {
+              id: 'generateFromBlocks',
+              label: t('source.generateFromBlocks'),
+              separator: true,
+              disabled: !objectsToGenerate(doc, selected.has(nodeId) ? selectedIds : [nodeId])?.refs
+                .length,
+              run: () =>
+                void generateSourceFromNodes(
+                  ctx,
+                  selected.has(nodeId) ? selectedIds : [nodeId],
+                  mnemonic,
+                ),
+            },
+          ]
+        : [];
     return [
       {
         id: 'open',
@@ -251,6 +312,8 @@ export function ProjectTree() {
           setRenaming(id);
         },
       },
+      ...sourceItems,
+      ...generateItems,
       {
         id: 'properties',
         label: t('objects.properties'),
@@ -330,7 +393,7 @@ export function ProjectTree() {
         break;
       case 'Enter':
         if (!row.node.enabled) return;
-        if (!runAddNode(store, row.node.id) && !openNode(row.node.id)) return;
+        if (!runAddNode(store, row.node.id, bridge) && !openNode(row.node.id)) return;
         break;
       default:
         return;
@@ -351,7 +414,11 @@ export function ProjectTree() {
       >
         {rows.map(({ node, level }, i) => {
           const hasKids = node.children.length > 0;
-          const draggable = !!node.ref && node.ref.kind !== 'device' && renaming !== node.id;
+          const draggable =
+            (node.ref?.kind === 'block' ||
+              node.ref?.kind === 'udt' ||
+              node.ref?.kind === 'tagTable') &&
+            renaming !== node.id;
           return (
             <li
               key={node.id}
@@ -367,7 +434,7 @@ export function ProjectTree() {
               draggable={draggable || undefined}
               onClick={(e) => onNodeClick(e, node)}
               onDoubleClick={() => {
-                if (!node.enabled || !(runAddNode(store, node.id) || openNode(node.id)))
+                if (!node.enabled || !(runAddNode(store, node.id, bridge) || openNode(node.id)))
                   toggle(node);
               }}
               onContextMenu={(e) => {

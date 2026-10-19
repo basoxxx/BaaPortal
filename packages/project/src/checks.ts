@@ -11,7 +11,7 @@ import {
   type DataType,
 } from '@baaportal/s7-types';
 import type { CpuType } from '@baaportal/catalog';
-import { toTypedMembers, typeResolver } from './members';
+import { findSystemFb, systemFbMembers, toTypedMembers, typeResolver } from './members';
 import type {
   Block,
   CodeBlock,
@@ -420,7 +420,10 @@ function childrenOf(ctx: Ctx, m: Member): Member[] | undefined {
   const udt = ctx.udtByName.get(nameKey(base.name));
   if (udt) return udt.members;
   const fb = ctx.fbByName.get(nameKey(base.name));
-  if (!fb) return undefined;
+  if (!fb) {
+    const sfb = findSystemFb(base.name);
+    return sfb ? systemFbMembers(sfb) : undefined;
+  }
   const i = fb.interface;
   return [...i.input, ...i.output, ...i.inOut, ...i.static];
 }
@@ -720,7 +723,10 @@ function checkBlocks(ctx: Ctx): void {
 
     if (b.kind === 'IDB') {
       const fb = ctx.fbByName.get(nameKey(b.instanceOf));
-      if (!fb) {
+      const sfb = fb ? undefined : findSystemFb(b.instanceOf);
+      if (sfb) {
+        checkOverrides(ctx, ref, systemFbMembers(sfb), b.overrides);
+      } else if (!fb) {
         add(ctx, {
           severity: 'error',
           code: 'INSTANCE_FB_MISSING',
@@ -774,7 +780,10 @@ export function checkDevice(device: PlcDevice, cpu: CpuType | undefined): Diagno
     out: [],
     udtByName,
     fbByName,
-    isFb: (name) => fbByName.has(nameKey(name)),
+    // I FB e gli UDT del progetto hanno la precedenza sulle SFB del catalogo.
+    isFb: (name) =>
+      fbByName.has(nameKey(name)) ||
+      (!udtByName.has(nameKey(name)) && findSystemFb(name) !== undefined),
     symbols,
   };
   if (!cpu) {
