@@ -3,8 +3,10 @@ import { useTranslation } from 'react-i18next';
 import {
   findDevice,
   findTagTable,
+  renameWithReferences,
   symbolNames,
   uniqueName,
+  type PlcDevice,
   type TagTable,
   type UserConstant,
 } from '@baaportal/project';
@@ -58,26 +60,28 @@ export function ConstantsView({ deviceId, tableId }: { deviceId: string; tableId
   const byKey = useMemo(() => new Map(rows.map((c) => [c.id, c])), [rows]);
 
   const edit = useCallback(
-    (label: string, recipe: (table: TagTable, names: string[]) => void) =>
+    (label: string, recipe: (table: TagTable, names: string[], dev: PlcDevice) => void) =>
       store.getState().edit(label, (p) => {
         const dev = findDevice(p, deviceId);
         const tbl = dev && findTagTable(dev, tableId);
-        if (dev && tbl) recipe(tbl, symbolNames(dev));
+        if (dev && tbl) recipe(tbl, symbolNames(dev), dev);
       }),
     [store, deviceId, tableId],
   );
 
   const onCommit = useCallback<DataGridProps<UserConstant>['onCommit']>(
     (key, columnId, value) =>
-      edit('history.editCell', (tbl) => {
+      edit('history.editCell', (tbl, _names, dev) => {
         const c = tbl.constants.find((x) => x.id === key);
         if (!c || typeof value === 'boolean') return;
-        if (columnId === 'name') c.name = value;
+        // Il nome cambia anche nel codice AWL che lo usa, nello stesso passo.
+        if (columnId === 'name')
+          renameWithReferences(dev, { kind: 'constant', deviceId, tableId, id: c.id }, value);
         else if (columnId === 'type') c.type = normalizeType(value);
         else if (columnId === 'value') c.value = value;
         else if (columnId === 'comment') c.comment = value;
       }),
-    [edit],
+    [edit, deviceId, tableId],
   );
 
   const addRow = useMemo<NonNullable<DataGridProps<UserConstant>['addRow']>>(
