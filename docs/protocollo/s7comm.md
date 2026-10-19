@@ -786,7 +786,7 @@ Risposta (parte dati, dopo i 4 byte return/TS/len; ~78 byte):
 | 74 | 4 | reserved2 | |
 
 ⚠️ Relazioni di lunghezza: "load memory length" ≈ MC7 length + header/footer
-(STEP7 mostra load+6). MC7 length = dimensione netta del codice compilato.
+(errata, vedi §13: nei blocchi reali load length = lunghezza del file = 36 + MC7 + SSB + ADD + 36; il "+6" di STEP 7 non è verificato). MC7 length = dimensione netta del codice compilato.
 **verificato** su `s7comm_program_blocklist_onlineview.pcap` (get-info DB1 e SDB1,
 timestamp e stringhe `"SIMATIC"`,`"TestHMI"`,`"DATADB"` leggibili).
 
@@ -817,30 +817,38 @@ Tre funzioni (ROSCTR 1 richiesta / 3 risposta), stesse strutture di snap7
 `TReqFunStartUploadParams`/`TResFunStartUploadParams`/`TReqFunUploadParams`/…:
 
 ### 9.1 Start upload (`0x1D`)
-Richiesta param: `1D` + function-status(1) + unknown(2) + **upload-id**(4, 0 all'inizio)
+Richiesta param (18 byte): `1D` + function-status(1) + unknown(2) + **upload-id**(4, 0 all'inizio)
 + filename: len(1)=`0x09` + `'_'` + type(2 ASCII) + number(5 ASCII) + filesystem(1).
 Es. `1d 00 …00 09 5f 30 42 30 30 30 30 30 41` = `_0B00000A` (SDB 0, filesystem A).
-Risposta param: `1D` + status(1) + unknown(3) + **upload-id**(4, assegnato dalla CPU)
-+ len-string(1) + **length string** (ASCII, lunghezza totale del blocco in byte).
-**verificato** su `cisa/snap7.pcap` (`1d 00 01 …00 07 07 "0000216"` → upload-id 0x07,
+Risposta param (16 byte): `1D` + status(1) + unknown(**2**, `01 00`) + **upload-id**(4, assegnato dalla CPU)
++ len-string(1) + **length string** (ASCII decimale a 7 cifre, lunghezza totale del blocco in byte).
+**verificato** su `cisa/snap7.pcap` (`1d 00 01 00 00 00 00 07 07 "0000216"` → upload-id 0x07,
 lunghezza 216 byte).
+*Errata (verificato su cattura `cisa/snap7.pcap`, 8 sequenze anche in `gymgit/snap7_s300_everything.pcapng`):*
+nella risposta gli ignoti sono 2 byte, non 3 (altrimenti l'upload-id sarebbe `0x0707`).
+Il codec tratta la stringa come opzionale: se manca o non è un numero la lunghezza totale è `null`
+e la stringa grezza si conserva per il round trip.
 
 ### 9.2 Upload (`0x1E`)
-Richiesta param: `1E` + unknown(6) + **upload-id**(4). Risposta param: `1E` +
+Richiesta param (8 byte): `1E` + status(1) + unknown(2) + **upload-id**(4). Risposta param: `1E` +
 **EoU**(1) (`0x00` = fine upload, `0x01` = in corso). Parte dati: len(2) + `0x00 0xFB`
-(2 byte) + **payload del blocco** (len−4 byte). Ripetere finché EoU=0.
+(2 byte) + **payload del blocco** (**len** byte). Ripetere finché EoU=0.
 **verificato**: `1e 00` + `00 d8 00 fb 7070…` → 216 byte di blocco, EoU=0 (ultimo).
+*Errata (verificato su cattura `cisa/snap7.pcap`):* la richiesta è di 8 byte (non 1+6+4) e `len`
+è la lunghezza del solo payload (0xd8 = 216 con parte dati di 220 byte), non `len−4`.
 Il payload comincia con il magic `"pp"` (0x7070) del blocco (§13).
 
 ### 9.3 End upload (`0x1F`)
-Richiesta param: `1F` + unknown(6) + **upload-id**(4). Risposta param: solo `1F`.
-**verificato**.
+Richiesta param (8 byte): `1F` + status(1) + unknown(2) + **upload-id**(4). Risposta param: solo `1F`.
+**verificato** su `cisa/snap7.pcap` (8 byte; errata: non 1+6+4).
 
 ### 9.4 Sequenza esatta
 `StartUpload(0x1D)` → la CPU assegna upload-id e dichiara la lunghezza totale →
 ripetere `Upload(0x1E)` finché EoU=`0x00`, concatenando i payload → `EndUpload(0x1F)`.
 Upload di blocco inesistente: la CPU risponde con ROSCTR=2 (ack) ed error header
 `0xD20C` (SDB non interpretabile) o `0xD209`. **verificato** su `cisa/snap7.pcap`.
+In `cisa/snap7.pcap` l'upload dell'OB 0 e le quattro richieste di `cisa/s7ident.pcap` hanno
+come risposta un ack senza parametro (nessun upload-id): non sono codificati dal codec upload.
 
 Fonti: snap7 `opUpload`, `s7_types.h`; `packet-s7comm.c`
 (`s7comm_decode_plc_controls_updownload`). **verificato**.
@@ -991,35 +999,47 @@ Header (parte iniziale del payload del blocco):
 | off | dim | campo | note |
 |-----|-----|-------|------|
 | 0 | 2 | magic | `0x7070` ASCII `"pp"` |
-| 2 | 1 | version/attr | spesso `0x01` |
+| 2 | 1 | attr | `0x01` (OB/DB), `0x03` (SDB) nelle catture |
 | 3 | 1 | block flags | |
 | 4 | 1 | language | §8.5 |
 | 5 | 1 | subblk type | §8.4 |
 | 6 | 2 | block number | |
 | 8 | 4 | load memory length | |
 | 12 | 4 | block security | |
-| 16 | 4 | code timestamp (ms) | + 2 byte giorni |
-| 22 | 4 | interface timestamp (ms) | + 2 byte giorni |
+| 16 | 6 | code timestamp | ms dalla mezzanotte (4) + giorni dal 1984-01-01 (2) |
+| 22 | 6 | interface timestamp | come sopra |
 | 28 | 2 | SSB length | |
 | 30 | 2 | ADD length | |
 | 32 | 2 | local data length | |
 | 34 | 2 | **MC7 length** | |
 | 36 | … | codice MC7 (MC7 length byte) | |
 
-Footer/trailer (snap7 `TS7BlockFooter`, in coda al blocco):
+Tra l'MC7 e il footer ci sono `SSB length + ADD length` byte di sezioni che il codec
+conserva grezze (`rest`).
 
-| off | dim | campo |
+Footer/trailer (snap7 `TS7BlockFooter`, **sempre gli ultimi 36 byte** del blocco):
+
+| off nel footer | dim | campo |
 |-----|-----|-------|
-| … | 8 | author (ASCII) |
-| … | 8 | family (ASCII) |
-| … | 8 | name/header (ASCII) |
-| … | 1 | version (`0x11`) |
-| … | 1 | unknown (`0x00`) |
-| … | 2 | **checksum** |
-| … | 8 | reserved |
+| 0 | 8 | author (ASCII, riempito con spazi o NUL) |
+| 8 | 8 | family (ASCII) |
+| 16 | 8 | name/header (ASCII) |
+| 24 | 1 | version (nibble x.y; `0x00` negli SDB, `0x01` nei DB delle catture) |
+| 25 | 1 | unknown (`0x00`) |
+| 26 | 2 | **checksum** |
+| 28 | 8 | reserved (non zero in alcuni blocchi: es. `3152481400000000`) |
 
-Relazioni: **load memory length** = header + MC7 length + footer + (allineamenti);
-STEP7 mostra load+6. Un finto server deve: memorizzare i byte così come arrivano nel
+Relazioni: **load memory length** = lunghezza dell'intero file = 36 (header) + MC7 length +
+(SSB length + ADD length) + 36 (footer); la local data length non occupa spazio nel file.
+*Errata, verificato su catture `cisa/snap7.pcap` (SDB 0, 216 byte: 36+144+0+36),
+`s7comm_downloading_block_db1.pcap` (DB1, 500 byte: 36+400+28+36), `tia_s300_downloadOb1.pcapng`
+(OB1, 332 byte: 36+212+(28+20)+36), `icspcap/4-S7comm-Download-DB1-with-password-request.pcap` (DB1,
+86 byte: 36+2+12+36), `step7_s300_download.pcapng` e i 7 blocchi di `tia_s300_downloadHwConfig.pcapng`:
+19 sessioni di blocco su 19 (8 upload dello stesso SDB 0 in due catture + 11 download), nessuna eccezione.* L'indicazione "load+6" (già nel testo di §8.3 e qui) non
+trova riscontro nei byte dei blocchi: in questi la load length coincide con la lunghezza del file.
+Il campo security può avere il bit alto
+(`0x80000000` negli SDB reali) e va conservato come intero a 32 bit.
+Un finto server deve: memorizzare i byte così come arrivano nel
 download, estrarre number/type/MC7-length/timestamps dall'header per rispondere a
 get-block-info (§8.3) in modo coerente, e restituire gli stessi byte all'upload.
 
@@ -1161,7 +1181,7 @@ cattura S7-300 confermano il layout.
 | 10 | download 0x1A/1B/1C + _INSE | **verificato**; `_DELE` **non verificato** |
 | 11 | stop/control/_MODU/_GARB/cold | **verificato**; hot/warm restart args parz. |
 | 12 | time read/set + BCD | **verificato** |
-| 13 | formato blocco (header pp, footer) | parz.: header leggibile **verificato**; offset footer **non verificati** byte-per-byte |
+| 13 | formato blocco (header pp, footer) | **verificato** byte-per-byte su 19 blocchi reali (header, rest SSB+ADD, footer di 36 byte, load length = lunghezza del file); la semantica MC7 non è coperta |
 | 14 | connessione, protezione, password | parz.: PDU/conn/protezione **verificato**; codifica XOR password **non verificata** |
 | 15 | allowlist read-only | analisi (non è un layout); upload side-effect **verificato** come PLC→PG |
 

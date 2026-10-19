@@ -14,3 +14,5 @@ export * from './s7/szl';
 export * from './s7/szlLists';
 export * from './s7/userdata';
 export * from './s7/userdataRequests';
+export * from './s7/upload';
+export * from './s7/blockFile';

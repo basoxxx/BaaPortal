@@ -41,6 +41,21 @@ export function blockTypeAscii(t: BlockType): string {
   return ASCII[t];
 }
 
+/** Codice binario del tipo (proto §8.4), come nel sottotipo di block info e nell'header del blocco. */
+export function blockTypeCode(t: BlockType): number {
+  return BINARY[t];
+}
+
+/** Tipo dal codice binario; `undefined` se sconosciuto. */
+export function blockTypeFromCode(code: number): BlockType | undefined {
+  return FROM_BINARY.get(code);
+}
+
+/** Tipo dai due caratteri ASCII dei nomi file e delle liste ("0A" = DB); `undefined` se sconosciuto. */
+export function blockTypeFromAscii(s: string): BlockType | undefined {
+  return FROM_ASCII.get(s);
+}
+
 function putAscii(out: Uint8Array, off: number, s: string): void {
   for (let i = 0; i < s.length; i++) out[off + i] = s.charCodeAt(i);
 }
