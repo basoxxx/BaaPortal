@@ -6,7 +6,8 @@ Questo documento divide tutte le tappe del progetto in **piani** più piccoli. O
 
 Il piano dettagliato, cioè i task passo per passo, si scrive per un piano alla volta, quando il precedente è chiuso, così parte dalle interfacce reali e non da ipotesi. Piani dettagliati scritti finora:
 - 1A: `docs/superpowers/plans/2026-10-18-tappa1a-shell-interfaccia.md` (chiuso);
-- 1B: `docs/superpowers/plans/2026-10-18-tappa1b-modello-dati-plc.md`.
+- 1B: `docs/superpowers/plans/2026-10-18-tappa1b-modello-dati-plc.md` (chiuso);
+- 1C: `docs/superpowers/plans/2026-10-19-tappa1c-linguaggio-awl.md`.
 
 ## Come si chiude ogni piano
 
@@ -21,10 +22,25 @@ Il piano dettagliato, cioè i task passo per passo, si scrive per un piano alla 
 | Cosa | Quando |
 |---|---|
 | Un computer Windows e un Mac per provare gli installatori | Fine piano 1A |
-| CPU di prova S7-300, consigliata 315-2 PN/DP, con alimentatore, Micro Memory Card e cavo Ethernet | Inizio piano 1D |
+| Una sessione con l'amico che ha una CPU S7-300: lancia il kit di raccolta in sola lettura (piano 1D) e ci manda il file prodotto | Fine piano 1D |
+| CPU S7-300 **non in produzione** (usata, consigliata 315-2 PN/DP o 314C-2 PN/DP, con alimentatore, Micro Memory Card e cavo Ethernet) per le prove di scrittura e di conformità | Prima del collaudo della tappa 1 (fine 1E/1F) |
 | Elenco delle CPU sulle macchine e di come ci si collega (Ethernet integrata, CP 343-1, MPI/DP con gateway) | Inizio tappa 3 |
 | Un CP 343-1 per il banco di prova | Inizio tappa 3 |
-| Programmi esistenti caricati dalle macchine, in sola lettura | Piano 1E (andata e ritorno) |
+| Programmi esistenti caricati dalle macchine, in sola lettura (anche tramite il kit di raccolta) | Piano 1E (andata e ritorno) |
+
+### Senza una CPU di prova propria (deciso il 19 ottobre 2026)
+
+La ditta per ora non ha una CPU S7-300; un amico che userà BaaPortal ce l'ha. Il lavoro si divide così:
+
+1. **Sviluppo e CI senza CPU.** Il client `s7comm` si sviluppa contro un **finto PLC** scritto da noi in TypeScript, che risponde come una CPU S7-300 per le funzioni del piano 1D: connessione, lettura/scrittura, SZL, elenco blocchi, carica nel/dal dispositivo e RUN/STOP. Gira nei test e nella CI. Il finto PLC rispecchia la nostra comprensione del protocollo, quindi da solo non basta: va confrontato con i dati veri del punto 2.
+2. **Dati veri, in sola lettura, dall'amico.** Il **kit di raccolta** è un piccolo comando, senza alcuna funzione di scrittura. L'amico lo lancia una volta sul suo PC collegato alla CPU, con il suo consenso e a macchina ferma o non critica. Il kit:
+   - legge l'identità della CPU (SZL);
+   - legge l'elenco dei blocchi;
+   - carica dal PLC tutti i blocchi;
+   - registra i telegrammi scambiati.
+
+   Tutto finisce in un file che ci manda. Con quei blocchi si fanno i test di andata e ritorno del piano 1E; con i telegrammi si verifica il finto PLC.
+3. **Scrittura e conformità solo su una CPU non in produzione.** Caricare blocchi di prova ed eseguirli serve alla verifica indipendente del compilatore (spec §10). **Mai sulla CPU di una macchina che lavora.** Si usa una CPU usata comprata allo scopo o una CPU di scorta dell'amico. Fino ad allora queste prove restano in sospeso. Il punto di decisione qui sotto si fa quando girano, e la tappa 1 si chiude solo dopo di esse (spec §6).
 
 ## Tappa 1 — Fondamenta
 
@@ -33,11 +49,11 @@ Il piano dettagliato, cioè i task passo per passo, si scrive per un piano alla 
 | **1A Shell e interfaccia** | Monorepo, app Electron, Vista portale, Vista progetto con i 13 elementi, file `.baap` (nuovo/apri/salva/chiudi/recenti), italiano/inglese, installatori Windows e macOS, CI | — | L'app si installa e si avvia su Windows e macOS; un progetto si crea, si salva e si riapre; tutti gli elementi di spec §8.1–8.2 sono presenti |
 | **1B Modello dati PLC** | CPU S7-300 dal catalogo (solo CPU) e proprietà; tipi di dati S7; tabelle variabili con editor a griglia; costanti; UDT; blocchi OB/FB/FC/DB/DB di istanza con interfaccia e multi-istanza; annulla/ripeti; taglia/copia/incolla; trascinamento; recupero automatico; editor nella barra degli editor (con raggruppamento); divisione dell'area di lavoro ed editor in finestra separata | 1A | Un progetto con CPU, tabelle variabili, UDT e blocchi (interfaccia) si crea, si modifica con annulla/ripeti e si salva |
 | **1C Linguaggio AWL** | Parser e controllo semantico AWL (tutte le istruzioni S7-300); editor AWL con evidenziazione, completamento simboli ed errori; interfacce SFC/SFB dal manuale pubblico; sorgenti esterne AWL (genera blocchi da sorgente e viceversa) | 1B | Sorgenti AWL di prova si importano, si modificano, si controllano con errori precisi e si riesportano identiche |
-| **1D Banco di prova PLC** | Nucleo `s7comm` in TypeScript (ISO-on-TCP, lettura/scrittura, SZL, elenco blocchi, carica nel/dal dispositivo, RUN/STOP), come strumento interno a riga di comando, senza interfaccia; raccolta dei blocchi reali | 1A (può partire in parallelo a 1B/1C appena c'è la CPU di prova) | Sulla CPU di prova si leggono e scrivono variabili, si scaricano dal PLC tutti i blocchi e si ricaricano identici |
-| **1E Compilatore MC7** | Formato del blocco (testata, interfaccia, codice, tabella reti); codificatore AWL → MC7; decodificatore MC7 → AWL; flag know-how; *Compila* con messaggi in *Informazioni → Compila*; test di andata e ritorno e di conformità sulla CPU | 1C, 1D | Andata e ritorno identica byte per byte sui blocchi della ditta; ogni istruzione AWL supera il test di conformità sulla CPU di prova |
+| **1D Banco di prova PLC** | Nucleo `s7comm` in TypeScript (ISO-on-TCP, lettura/scrittura, SZL, elenco blocchi, carica nel/dal dispositivo, RUN/STOP), come strumento interno a riga di comando, senza interfaccia; **finto PLC** per test e CI; **kit di raccolta in sola lettura** per l'amico | 1A | Contro il finto PLC tutte le funzioni passano in CI; il kit, eseguito dall'amico, restituisce identità, elenco e tutti i blocchi della sua CPU senza scrivere nulla; il finto PLC risponde come la CPU vera nei telegrammi raccolti |
+| **1E Compilatore MC7** | Formato del blocco (testata, interfaccia, codice, tabella reti); codificatore AWL → MC7; decodificatore MC7 → AWL; flag know-how; *Compila* con messaggi in *Informazioni → Compila*; test di andata e ritorno; test di conformità pronti da eseguire | 1C, 1D | Andata e ritorno identica byte per byte sui blocchi raccolti dal kit; i test di conformità girano sulla CPU non in produzione appena disponibile (vedi sopra) |
 | **1F Completamento tappa 1** | Import/export tabelle variabili (xlsx/csv); archivia/ritira archivio (`.baapz`); progetti di riferimento; trova e sostituisci; *Opzioni → Impostazioni*; collaudo finale della tappa | 1B–1E | Tutti i criteri "Fatto quando" della tappa 1 nella spec sono verificati |
 
-**Punto di decisione dopo 1E.** Se la CPU di prova rifiuta i blocchi generati da BaaPortal e non si trova la causa, ci si ferma e si decide insieme prima di andare avanti. È il rischio più grande del progetto, ed è per questo che si affronta subito.
+**Punto di decisione dopo 1E** (quando girano i test di conformità sulla CPU non in produzione). Se la CPU rifiuta i blocchi generati da BaaPortal e non si trova la causa, ci si ferma e si decide insieme prima di andare avanti. È il rischio più grande del progetto, ed è per questo che si affronta subito. Intanto le tappe che non scrivono nel PLC (simulatore, KOP/FUP, SCL) possono andare avanti.
 
 ## Tappa 2 — Simulatore
 
