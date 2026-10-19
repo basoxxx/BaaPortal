@@ -6,6 +6,8 @@ import {
   expect,
   launchApp,
   shownDialogs,
+  shownFileDialogs,
+  stubFileDialogs,
   stubMessageBox,
   test,
   removeDir,
@@ -148,4 +150,70 @@ test('un userData riusato con launchApp({ userData }) conserva i file di recuper
   expect((await b.page.evaluate(() => window.baa.recoveryList())).map((e) => e.key)).toEqual([
     'k2',
   ]);
+});
+
+const awlFilters = [{ name: 'Sorgenti AWL', extensions: ['awl', 'txt'] }];
+
+test('showOpenFileDialog restituisce i percorsi scelti, al massimo uno senza multi, [] se annullato', async () => {
+  const { app, page } = await launchApp();
+  const open = (multi?: boolean) =>
+    page.evaluate(([f, m]) => window.baa.showOpenFileDialog({ filters: f, multi: m }), [
+      awlFilters,
+      multi,
+    ] as const);
+  await stubFileDialogs(app, { open: ['/x/a.awl', '/x/b.awl'] });
+  expect(await open()).toEqual(['/x/a.awl']);
+  expect(await open(true)).toEqual(['/x/a.awl', '/x/b.awl']);
+  const shown = await shownFileDialogs(app);
+  expect(shown[0]?.opts).toMatchObject({ properties: ['openFile'], filters: awlFilters });
+  expect(shown[1]?.opts).toMatchObject({ properties: ['openFile', 'multiSelections'] });
+  await stubFileDialogs(app, { open: null });
+  expect(await open(true)).toEqual([]);
+});
+
+test('showSaveFileDialog restituisce il percorso o null se annullato', async () => {
+  const { app, page } = await launchApp();
+  const save = () =>
+    page.evaluate(
+      (f) => window.baa.showSaveFileDialog({ defaultName: 'OB1.awl', filters: f }),
+      awlFilters,
+    );
+  await stubFileDialogs(app, { save: '/x/OB1.awl' });
+  expect(await save()).toBe('/x/OB1.awl');
+  expect((await shownFileDialogs(app))[0]?.opts).toMatchObject({
+    defaultPath: 'OB1.awl',
+    filters: awlFilters,
+  });
+  await stubFileDialogs(app, { save: null });
+  expect(await save()).toBeNull();
+});
+
+test('i dialoghi di file rifiutano opzioni malformate senza aprire nulla', async () => {
+  const { app, page } = await launchApp();
+  await stubFileDialogs(app, { open: ['/x/a.awl'], save: '/x/a.awl' });
+  const r = await page.evaluate(async () => {
+    const bad = async (f: () => Promise<unknown>) => {
+      try {
+        await f();
+        return 'ok';
+      } catch {
+        return 'rifiutato';
+      }
+    };
+    const any = window.baa as unknown as Record<string, (o: unknown) => Promise<unknown>>;
+    const good = [{ name: 'a', extensions: ['awl'] }];
+    return [
+      await bad(() =>
+        any['showOpenFileDialog']!({ filters: [{ name: 'a', extensions: ['.awl'] }] }),
+      ),
+      await bad(() =>
+        any['showOpenFileDialog']!({ filters: [{ name: 'a', extensions: ['a/b'] }] }),
+      ),
+      await bad(() => any['showOpenFileDialog']!({ filters: 'x' })),
+      await bad(() => any['showSaveFileDialog']!({ defaultName: '../a.awl', filters: good })),
+      await bad(() => any['showSaveFileDialog']!({ defaultName: 5, filters: good })),
+    ];
+  });
+  expect(r).toEqual(Array(5).fill('rifiutato'));
+  expect(await shownFileDialogs(app)).toEqual([]);
 });

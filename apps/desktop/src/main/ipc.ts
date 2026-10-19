@@ -15,6 +15,7 @@ import { writeFileAtomic } from './fsAtomic';
 import { toIpcResult } from '../shared/ipcResult';
 import { isTrustedFrame, type FrameLike, type TrustOptions } from './trust';
 import { deleteRecovery, listRecovery, readRecovery, writeRecovery } from './recoveryStore';
+import { parseOpenOptions, parseSaveOptions } from './fileDialogOptions';
 import { addRecent, removeRecent, type Platform, type StoredRecent } from './recentProjects';
 
 const platform = process.platform as Platform;
@@ -77,6 +78,23 @@ export function registerIpc(
       defaultPath: suggestedName,
       filters: [{ name: 'BaaPortal', extensions: ['baap'] }],
     };
+    const r = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts);
+    return r.canceled ? null : (r.filePath ?? null);
+  });
+  handle('dialog:open-file', async (_e, raw: unknown) => {
+    const { filters, multi } = parseOpenOptions(raw);
+    const win = getWindow();
+    const opts = {
+      properties: multi ? ['openFile' as const, 'multiSelections' as const] : ['openFile' as const],
+      filters,
+    };
+    const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
+    return r.canceled ? [] : multi ? r.filePaths : r.filePaths.slice(0, 1);
+  });
+  handle('dialog:save-file', async (_e, raw: unknown) => {
+    const { defaultName, filters } = parseSaveOptions(raw);
+    const win = getWindow();
+    const opts = { defaultPath: defaultName, filters };
     const r = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts);
     return r.canceled ? null : (r.filePath ?? null);
   });

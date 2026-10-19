@@ -1,5 +1,6 @@
 import type {
   BaaBridge,
+  FileFilter,
   ConfirmTexts,
   QuestionTexts,
   RecentEntry,
@@ -17,6 +18,11 @@ export class FakeBridge implements BaaBridge {
   confirmTexts: ConfirmTexts[] = [];
   openDialogResults: (string | null)[] = [];
   saveDialogResults: (string | null)[] = [];
+  // Come i dialoghi di progetto: una risposta per chiamata; a coda vuota [] / null. Le chiamate si registrano.
+  openFileResults: string[][] = [];
+  saveFileResults: (string | null)[] = [];
+  openFileCalls: { filters: FileFilter[]; multi?: boolean }[] = [];
+  saveFileCalls: { defaultName: string; filters: FileFilter[] }[] = [];
   clipboard = '';
   // Risposte a askQuestion, consumate una per chiamata; a coda vuota la risposta è sì (true).
   questionAnswers: boolean[] = [];
@@ -59,6 +65,14 @@ export class FakeBridge implements BaaBridge {
   }
   async showSelectFolderDialog() {
     return null;
+  }
+  async showOpenFileDialog(opts: { filters: FileFilter[]; multi?: boolean }) {
+    this.openFileCalls.push(opts);
+    return this.openFileResults.shift() ?? [];
+  }
+  async showSaveFileDialog(opts: { defaultName: string; filters: FileFilter[] }) {
+    this.saveFileCalls.push(opts);
+    return this.saveFileResults.shift() ?? null;
   }
   async readFile(path: string) {
     const f = this.files.get(path);
