@@ -48,7 +48,10 @@
     "sourceExported": "Sorgente \"{{name}}\" esportata in \"{{path}}\".",
     "sourceExportFailed": "Impossibile esportare la sorgente \"{{name}}\": {{message}}",
     "sourceStartValuesSkipped": "\"{{name}}\": i valori iniziali di {{members}} non sono scritti nella sorgente (la sorgente non ha una forma per i membri composti). Restano nel progetto quando la sorgente sostituisce l'oggetto.",
-    "sourceLanguageSkipped": "\"{{name}}\" non esportato: lingua {{language}}."
+    "sourceLanguageSkipped": "\"{{name}}\" non esportato: lingua {{language}}.",
+    "fileDialogFailed": "Impossibile aprire la finestra di scelta dei file: {{message}}",
+    "sourceReplaceChanged": "Sorgente \"{{name}}\": mentre si confermava il progetto è cambiato e gli oggetti da sostituire non sono più quelli elencati. Nessuna modifica: ripetere \"Genera blocchi dalla sorgente\".",
+    "actionFailed": "Operazione non riuscita: {{message}}"
   },
   "commands": {
     "project.new": "Nuovo…",

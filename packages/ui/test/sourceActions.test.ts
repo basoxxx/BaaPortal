@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SOURCE_ERROR_CODES } from '@baaportal/importers';
+import { parseAwlSource, SOURCE_ERROR_CODES } from '@baaportal/importers';
 import { createProject, createSource } from '@baaportal/project';
 import itJson from '../src/i18n/it.json';
 import enJson from '../src/i18n/en.json';
@@ -107,5 +107,28 @@ describe('Posizione nel testo', () => {
     // Oltre la fine: l'ultima posizione della riga o del testo.
     expect(offsetOfLineCol(text, 2, 99)).toBe(3 + 3);
     expect(offsetOfLineCol(text, 99, 1)).toBe(text.replace(/\r\n/g, '\n').length);
+  });
+
+  it('un CR isolato è un a capo, come per il lettore delle sorgenti: l errore si trova al suo posto', () => {
+    expect(offsetOfLineCol('ab\rcd\r\nef', 2, 2)).toBe(4);
+    expect(offsetOfLineCol('ab\rcd\r\nef', 3, 1)).toBe(6);
+    const text = [
+      'FUNCTION_BLOCK "Prova"',
+      'VERSION : 0.1',
+      'BEGIN',
+      'NETWORK',
+      'TITLE =',
+      '    A %I0.0;',
+      '    FOO %I0.1;',
+      'END_FUNCTION_BLOCK',
+      '',
+    ].join('\r');
+    const r = parseAwlSource(text);
+    if (r.ok) throw new Error('atteso un errore');
+    const e = r.errors[0]!;
+    expect(e).toMatchObject({ line: 7, code: 'UNKNOWN_INSTRUCTION' });
+    const shown = text.replace(/\r\n?/g, '\n');
+    const at = offsetOfLineCol(text, e.line, e.col);
+    expect(shown.slice(at, at + 3)).toBe('FOO');
   });
 });

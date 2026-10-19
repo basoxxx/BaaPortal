@@ -48,7 +48,10 @@
     "sourceExported": "Source \"{{name}}\" exported to \"{{path}}\".",
     "sourceExportFailed": "The source \"{{name}}\" could not be exported: {{message}}",
     "sourceStartValuesSkipped": "\"{{name}}\": the start values of {{members}} are not written to the source (the source has no form for composite members). They are kept in the project when the source replaces the object.",
-    "sourceLanguageSkipped": "\"{{name}}\" not exported: language {{language}}."
+    "sourceLanguageSkipped": "\"{{name}}\" not exported: language {{language}}.",
+    "fileDialogFailed": "The file selection window could not be opened: {{message}}",
+    "sourceReplaceChanged": "Source \"{{name}}\": the project changed while confirming and the objects to replace are no longer the ones listed. Nothing was changed: run \"Generate blocks from source\" again.",
+    "actionFailed": "The operation failed: {{message}}"
   },
   "commands": {
     "project.new": "New…",

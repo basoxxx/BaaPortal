@@ -34,9 +34,9 @@ describe('evidenziazione AWL', () => {
     expect(kinds('CALL FC1(a:=5, b:=#x)')).toEqual([
       ['CALL', 'instruction'],
       ['FC1', 'address'],
-      ['a', 'address'],
+      ['a', 'param'],
       ['5', 'constant'],
-      ['b', 'address'],
+      ['b', 'param'],
       ['#x', 'local'],
     ]);
   });

@@ -15,6 +15,7 @@ vi.mock('@baaportal/importers', async (orig) => {
   };
 });
 import { createCodeBlock, findDevice, type CodeBlock } from '@baaportal/project';
+import { generateSourceFromNodes } from '../src/project/navigation/sourceActions';
 import { ids } from '../src/project/navigation/treeIds';
 import { renderApp, type RenderedApp } from './renderApp';
 
@@ -132,6 +133,25 @@ describe('Sorgenti esterne: aggiungere file', () => {
   );
 
   it(
+    'la finestra di scelta dei file fallisce: errore in Informazioni, niente cambia',
+    async () => {
+      const app = await setup();
+      app.bridge.showOpenFileDialog = () => Promise.reject(new Error('IPC rotto'));
+      await app.user.dblClick(tn(ids.folder(PLC, 'sources-add')));
+      await waitFor(() =>
+        expect(app.store.getState().messages.map((m) => [m.severity, m.textKey])).toContainEqual([
+          'error',
+          'messages.fileDialogFailed',
+        ]),
+      );
+      expect(app.store.getState().messages.at(-1)!.params).toMatchObject({ message: 'IPC rotto' });
+      expect(dev(app).sources).toHaveLength(0);
+      expect(past(app)).toBe(0);
+    },
+    T,
+  );
+
+  it(
     'dialogo annullato: niente cambia',
     async () => {
       const app = await setup();
@@ -183,6 +203,25 @@ describe('Sorgenti esterne: albero', () => {
       await waitFor(() => expect(dev(app).sources.map((s) => s.name)).toEqual(['B.awl']));
       expect(app.bridge.questions.at(-1)!.message).toContain('Nuova.awl');
       expect(past(app)).toBe(2);
+    },
+    T,
+  );
+
+  it(
+    'Mod+A seleziona anche le sorgenti: si eliminano tutte insieme',
+    async () => {
+      const app = await setup([
+        { name: 'A.awl', text: 'a' },
+        { name: 'B.awl', text: 'b' },
+      ]);
+      await app.user.click(tn(ids.source(PLC, 'src0')));
+      await app.user.keyboard('{Control>}a{/Control}');
+      await app.user.keyboard('{Delete}');
+      await waitFor(() => expect(dev(app).sources).toHaveLength(0));
+      const msg = app.bridge.questions.at(-1)!.message;
+      expect(msg).toContain('A.awl');
+      expect(msg).toContain('B.awl');
+      expect(past(app)).toBe(1);
     },
     T,
   );
@@ -241,6 +280,53 @@ describe('Genera blocchi dalla sorgente', () => {
       act(() => app.store.getState().undo());
       expect(past(app)).toBe(1);
       expect(dev(app).blocks.some((b) => b.name === 'Motore')).toBe(true);
+    },
+    T,
+  );
+
+  it(
+    "il progetto cambia mentre si conferma: se cambia l'elenco da sostituire non si applica",
+    async () => {
+      const app = await setup([{ name: 'M.awl', text: SRC }]);
+      const s = ids.source(PLC, 'src0');
+      await menuOf(app, s);
+      await app.user.click(item('Genera blocchi dalla sorgente'));
+      await waitFor(() => expect(past(app)).toBe(1));
+      const ask = app.bridge.askQuestion.bind(app.bridge);
+      app.bridge.askQuestion = async (q) => {
+        // Durante la domanda il DB "Dati" sparisce (ad esempio da un'altra finestra).
+        app.store.getState().edit('history.delete', (p) => {
+          const d = findDevice(p, PLC)!;
+          d.blocks = d.blocks.filter((b) => b.name !== 'Dati');
+        });
+        return ask(q);
+      };
+      await menuOf(app, s);
+      await app.user.click(item('Genera blocchi dalla sorgente'));
+      await waitFor(() =>
+        expect(app.store.getState().messages.at(-1)!.textKey).toBe('messages.sourceReplaceChanged'),
+      );
+      // Solo la cancellazione fatta durante la domanda: la sorgente non è applicata.
+      expect(past(app)).toBe(2);
+      expect(dev(app).blocks.some((b) => b.name === 'Dati')).toBe(false);
+      expect(app.store.getState().history.past.at(-1)!.labelKey).toBe('history.delete');
+    },
+    T,
+  );
+
+  it(
+    'una sorgente che non crea e non sostituisce niente: nessun passo e nessun riepilogo',
+    async () => {
+      const app = await setup([{ name: 'Vuota.awl', text: '// solo un commento\n' }]);
+      await menuOf(app, ids.source(PLC, 'src0'));
+      await app.user.click(item('Genera blocchi dalla sorgente'));
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 20));
+      });
+      expect(past(app)).toBe(0);
+      expect(
+        app.store.getState().messages.some((m) => m.textKey === 'messages.sourceApplied'),
+      ).toBe(false);
     },
     T,
   );
@@ -481,6 +567,46 @@ describe('Genera sorgente dai blocchi ed Esporta', () => {
         ['messages.sourceLanguageSkipped', { name: 'Calcolo', language: 'SCL' }],
       ]);
       expect(app.store.getState().inspectorTab).toBe('info');
+    },
+    T,
+  );
+
+  it(
+    'la bozza nel codice di un segmento conta: si conferma prima di generare la sorgente',
+    async () => {
+      const app = await setup();
+      let id = '';
+      act(() => {
+        app.store.getState().edit('history.addBlock', (p) => {
+          const b = createCodeBlock({ kind: 'FC', number: 3, name: 'Nastro', language: 'AWL' });
+          (b as CodeBlock).networks[0]!.source = 'NOP 0';
+          findDevice(p, PLC)!.blocks.push(b);
+          id = b.id;
+        });
+      });
+      act(() => app.store.getState().setDoc(app.store.getState().doc));
+      await app.user.dblClick(tn(ids.block(PLC, id)));
+      const box = await screen.findByRole('textbox', { name: 'Codice del segmento 1' });
+      const view = EditorView.findFromDOM(box.closest('.cm-editor') as HTMLElement)!;
+      act(() => view.contentDOM.focus());
+      act(() =>
+        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: 'NOP 1' } }),
+      );
+      const stored = () =>
+        (dev(app).blocks.find((b) => b.id === id) as CodeBlock).networks[0]!.source;
+      expect(stored()).toBe('NOP 0');
+      // Senza passare dal menu (che sposta il focus): il fuoco resta nell'editor.
+      expect(view.hasFocus).toBe(true);
+      act(() => {
+        generateSourceFromNodes(
+          { store: app.store, bridge: app.bridge },
+          [ids.block(PLC, id)],
+          'international',
+        );
+      });
+      await waitFor(() => expect(dev(app).sources).toHaveLength(1));
+      expect(stored()).toBe('NOP 1');
+      expect(dev(app).sources[0]!.text).toContain('\tNOP 1;');
     },
     T,
   );

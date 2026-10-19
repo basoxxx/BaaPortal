@@ -1,6 +1,6 @@
-import { RangeSetBuilder, type Extension } from '@codemirror/state';
-import { Decoration, ViewPlugin, type DecorationSet, type EditorView } from '@codemirror/view';
-import { awlSpans, type AwlSpan } from '../awl/awlExtensions';
+import type { Extension, Text } from '@codemirror/state';
+import type { DecorationSet } from '@codemirror/view';
+import { awlSpans, decorateRanges, visibleHighlight, type AwlSpan } from '../awl/awlExtensions';
 import type { EditorCodec } from '../awl/CommittedEditor';
 
 export type SourceSpanKind = AwlSpan['kind'] | 'keyword';
@@ -49,6 +49,7 @@ const WORD = /[A-Za-z_][A-Za-z0-9_]*/g;
 /**
  * Gli intervalli da colorare in una sorgente: parole chiave della sorgente più il codice AWL
  * (istruzioni, indirizzi, simboli, commenti). Le parole chiave dentro commenti e nomi tra virgolette no.
+ * Lineare: le due liste sono in ordine e si scorrono una volta; ogni riga si colora da sola.
  */
 export function sourceSpans(text: string): SourceSpan[] {
   const awl = awlSpans(text);
@@ -56,44 +57,42 @@ export function sourceSpans(text: string): SourceSpan[] {
     (s) => s.kind === 'comment' || s.kind === 'symbol' || s.kind === 'constant',
   );
   const keywords: SourceSpan[] = [];
+  let o = 0;
   for (const m of text.matchAll(WORD)) {
-    const from = m.index!;
+    const from = m.index;
     const to = from + m[0].length;
     const upper = m[0].toUpperCase();
     if (!LINE_KEYWORDS.has(upper)) continue;
-    if (opaque.some((s) => s.from <= from && from < s.to)) continue;
+    while (o < opaque.length && opaque[o]!.to <= from) o++;
+    if (o < opaque.length && opaque[o]!.from <= from) continue;
     const lineStart = text.lastIndexOf('\n', from - 1) + 1;
     const first = text.slice(lineStart, from).trim() === '';
     if (!first && !INLINE_KEYWORDS.has(upper)) continue;
     keywords.push({ from, to, kind: 'keyword' });
   }
-  const rest = awl.filter((s) => !keywords.some((k) => s.from < k.to && k.from < s.to));
-  return [...rest, ...keywords].sort((a, b) => a.from - b.from || a.to - b.to);
-}
-
-function decorate(text: string): DecorationSet {
-  const b = new RangeSetBuilder<Decoration>();
-  // Gli intervalli arrivano già in ordine di inizio.
-  for (const s of sourceSpans(text)) {
-    if (s.to > s.from) b.add(s.from, s.to, Decoration.mark({ class: `baa-awl-${s.kind}` }));
+  // Unione delle due liste ordinate; gli intervalli AWL coperti da una parola chiave cedono.
+  const out: SourceSpan[] = [];
+  let k = 0;
+  for (const s of awl) {
+    while (k < keywords.length && keywords[k]!.from < s.from) out.push(keywords[k++]!);
+    let j = k;
+    while (j < keywords.length && keywords[j]!.to <= s.from) j++;
+    if (j < keywords.length && keywords[j]!.from < s.to) continue;
+    out.push(s);
   }
-  return b.finish();
+  while (k < keywords.length) out.push(keywords[k++]!);
+  return out;
 }
 
-/** Evidenziazione di una sorgente: classi `baa-awl-<tipo>`, colori in awl.css. */
+/** Le decorazioni della sorgente nelle righe degli intervalli dati (le righe visibili). */
+export const sourceDecorations = (
+  doc: Text,
+  ranges: readonly { from: number; to: number }[],
+): DecorationSet => decorateRanges(doc, ranges, sourceSpans);
+
+/** Evidenziazione di una sorgente, sulle righe visibili: classi `baa-awl-<tipo>`, colori in awl.css. */
 export function sourceHighlight(): Extension {
-  return ViewPlugin.fromClass(
-    class {
-      decorations: DecorationSet;
-      constructor(view: EditorView) {
-        this.decorations = decorate(view.state.doc.toString());
-      }
-      update(u: { docChanged: boolean; state: EditorView['state'] }) {
-        if (u.docChanged) this.decorations = decorate(u.state.doc.toString());
-      }
-    },
-    { decorations: (v) => v.decorations },
-  );
+  return visibleHighlight(sourceDecorations);
 }
 
 /** Una sorgente è un file: il testo si mostra com'è (nessuna conversione di mnemonica), con a capo LF. */

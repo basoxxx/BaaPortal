@@ -41,6 +41,9 @@
 .baa-awl-label {
   color: var(--baa-awl-label);
 }
+.baa-awl-param {
+  color: var(--baa-awl-param);
+}
 .baa-awl-keyword {
   color: var(--baa-awl-keyword);
   font-weight: 600;

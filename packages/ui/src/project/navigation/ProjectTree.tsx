@@ -152,10 +152,21 @@ export function ProjectTree() {
     const row = rows.find((r) => r.node.id === selection);
     if (!row) return;
     const siblings = rows.filter((r) => r.parent === row.parent).map((r) => r.node.id);
-    setPicked(
-      new Set(siblings.filter((id) => refsOfNodes([id]).length + groupsOfNodes([id]).length > 0)),
-    );
+    // Oggetti, gruppi e sorgenti: tutto ciò che si può eliminare insieme.
+    const selectable = (id: string) =>
+      refsOfNodes([id]).length + groupsOfNodes([id]).length + sourcesOfNodes([id]).length > 0;
+    setPicked(new Set(siblings.filter(selectable)));
   };
+  // Un'azione asincrona che fallisce (finestra, appunti) finisce in Informazioni, mai come rifiuto
+  // non gestito.
+  const settle = (p: void | Promise<void>): void | Promise<void> =>
+    p?.catch((e: unknown) =>
+      store.getState().pushMessage({
+        severity: 'error',
+        textKey: 'messages.actionFailed',
+        params: { message: e instanceof Error ? e.message : String(e) },
+      }),
+    );
   const run = (action: EditAction): void | Promise<void> => {
     const ctx = { store, bridge };
     switch (action) {
@@ -166,10 +177,10 @@ export function ProjectTree() {
         return;
       case 'paste':
         return selection
-          ? pasteAt(ctx, selection).then(() => setClipboardTick((n) => n + 1))
+          ? settle(pasteAt(ctx, selection).then(() => setClipboardTick((n) => n + 1)))
           : undefined;
       case 'delete':
-        return deleteNodes(ctx, selectedIds);
+        return settle(deleteNodes(ctx, selectedIds));
       case 'rename':
         if (selection && can.rename) setRenaming(selection);
         return;
@@ -241,12 +252,12 @@ export function ProjectTree() {
               id: 'generateBlocks',
               label: t('source.generateBlocks'),
               separator: true,
-              run: () => void generateBlocksFromSource(ctx, parsed.dev, parsed.id),
+              run: () => void settle(generateBlocksFromSource(ctx, parsed.dev, parsed.id)),
             },
             {
               id: 'export',
               label: t('source.export'),
-              run: () => void exportSource(ctx, parsed.dev, parsed.id),
+              run: () => void settle(exportSource(ctx, parsed.dev, parsed.id)),
             },
           ]
         : [];

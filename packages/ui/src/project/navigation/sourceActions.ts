@@ -99,7 +99,17 @@ export function openSourceAt(
 export async function addSourceFiles(ctx: SourceCtx, deviceId: string): Promise<void> {
   const { store, bridge } = ctx;
   if (!deviceOf(store.getState().doc, deviceId)) return;
-  const paths = await bridge.showOpenFileDialog({ filters: [awlFilter()], multi: true });
+  let paths: string[];
+  try {
+    paths = await bridge.showOpenFileDialog({ filters: [awlFilter()], multi: true });
+  } catch (e) {
+    store.getState().pushMessage({
+      severity: 'error',
+      textKey: 'messages.fileDialogFailed',
+      params: { message: errorText(e) },
+    });
+    return;
+  }
   const loaded: { name: string; text: string }[] = [];
   for (const path of paths) {
     const name = baseName(path);
@@ -135,6 +145,53 @@ const nameOfRef = (dev: PlcDevice, r: ObjectRef): string =>
       ? findUdt(dev, r.id)?.name
       : '') ?? '';
 
+interface ApplyPlan {
+  dev: PlcDevice;
+  name: string;
+  source: Extract<ReturnType<typeof parseAwlSource>, { ok: true }>['source'];
+  replaced: ObjectRef[];
+}
+
+/**
+ * Legge la sorgente e la prova a vuoto su una copia del dispositivo: dice che cosa sarebbe
+ * sostituito, senza toccare il progetto. Gli errori vanno in Informazioni (e il risultato è null).
+ */
+function planApply(
+  store: StoreApi<AppState>,
+  deviceId: string,
+  sourceId: string,
+): ApplyPlan | null {
+  const dev = deviceOf(store.getState().doc, deviceId);
+  const src = dev && findSource(dev, sourceId);
+  if (!dev || !src) return null;
+  const parsed = parseAwlSource(src.text, dev);
+  if (!parsed.ok) {
+    reportErrors(store, deviceId, sourceId, src.name, parsed.errors);
+    return null;
+  }
+  try {
+    let n = 0;
+    const { replaced } = applySource(structuredClone(dev), parsed.source, () => `dry${++n}`);
+    return { dev, name: src.name, source: parsed.source, replaced };
+  } catch (e) {
+    applyFailed(store, src.name, e);
+    return null;
+  }
+}
+
+const applyFailed = (store: StoreApi<AppState>, name: string, e: unknown) =>
+  store.getState().pushMessage({
+    severity: 'error',
+    textKey: 'messages.sourceApplyFailed',
+    params: { name, message: errorText(e) },
+  });
+
+const refKeys = (refs: ObjectRef[]): string =>
+  refs
+    .map((r) => `${r.kind}:${'id' in r ? r.id : ''}`)
+    .sort()
+    .join('|');
+
 /** "Genera blocchi dalla sorgente": errori in Informazioni, conferma se sostituisce, poi un solo passo. */
 export async function generateBlocksFromSource(
   ctx: SourceCtx,
@@ -144,57 +201,57 @@ export async function generateBlocksFromSource(
   const { store, bridge } = ctx;
   // La bozza nell'editor della sorgente conta: si conferma prima.
   flushPendingEdits();
-  const dev = deviceOf(store.getState().doc, deviceId);
-  const src = dev && findSource(dev, sourceId);
-  if (!dev || !src) return;
-  const parsed = parseAwlSource(src.text, dev);
-  if (!parsed.ok) {
-    reportErrors(store, deviceId, sourceId, src.name, parsed.errors);
-    return;
-  }
-  const failed = (e: unknown) =>
-    store.getState().pushMessage({
-      severity: 'error',
-      textKey: 'messages.sourceApplyFailed',
-      params: { name: src.name, message: errorText(e) },
-    });
-
-  // Prova a vuoto su una copia: dice che cosa sarebbe sostituito, senza toccare il progetto.
-  let replaced: ObjectRef[];
-  try {
-    let n = 0;
-    replaced = applySource(structuredClone(dev), parsed.source, () => `dry${++n}`).replaced;
-  } catch (e) {
-    failed(e);
-    return;
-  }
-  if (replaced.length > 0) {
-    const yes = await bridge.askQuestion({
-      title: t('source.replaceTitle'),
-      message: `${t('source.replaceMessage')}\n\n${listNames(replaced.map((r) => nameOfRef(dev, r)))}`,
-      yes: t('objects.yes'),
-      no: t('objects.no'),
-    });
+  let plan = planApply(store, deviceId, sourceId);
+  if (!plan) return;
+  if (plan.replaced.length > 0) {
+    const shown = plan;
+    let yes: boolean;
+    try {
+      yes = await bridge.askQuestion({
+        title: t('source.replaceTitle'),
+        message: `${t('source.replaceMessage')}\n\n${listNames(shown.replaced.map((r) => nameOfRef(shown.dev, r)))}`,
+        yes: t('objects.yes'),
+        no: t('objects.no'),
+      });
+    } catch (e) {
+      applyFailed(store, shown.name, e);
+      return;
+    }
     if (!yes) return;
+    // Mentre la domanda era aperta il progetto può essere cambiato: si rifà la prova e si applica
+    // solo se sostituisce ancora proprio gli oggetti confermati.
+    plan = planApply(store, deviceId, sourceId);
+    if (!plan) return;
+    if (refKeys(plan.replaced) !== refKeys(shown.replaced)) {
+      store.getState().pushMessage({
+        severity: 'warning',
+        textKey: 'messages.sourceReplaceChanged',
+        params: { name: shown.name },
+      });
+      return;
+    }
   }
+  const { name, source } = plan;
   let result: { created: ObjectRef[]; replaced: ObjectRef[] } | null = null;
+  let changed: boolean;
   try {
-    store.getState().edit('history.applySource', (p) => {
+    changed = store.getState().edit('history.applySource', (p) => {
       const d = findDevice(p, deviceId);
-      if (d) result = applySource(d, parsed.source, newId);
+      if (d) result = applySource(d, source, newId);
     });
   } catch (e) {
     // Una eccezione dentro `edit` lascia il progetto com'era.
-    failed(e);
+    applyFailed(store, name, e);
     return;
   }
   const done = result as { created: ObjectRef[]; replaced: ObjectRef[] } | null;
-  if (!done) return;
+  // Nessun cambiamento (una sorgente senza unità): nessun passo e nessun riepilogo.
+  if (!done || !changed) return;
   store.getState().pushMessage({
     severity: 'info',
     textKey: 'messages.sourceApplied',
     params: {
-      name: src.name,
+      name,
       created: String(done.created.length),
       replaced: String(done.replaced.length),
     },
@@ -302,6 +359,8 @@ export function generateSourceFromNodes(
   mnemonic: Mnemonic,
 ): string | null {
   const { store } = ctx;
+  // Le bozze negli editor (codice dei segmenti, interfaccia) contano: si confermano prima.
+  flushPendingEdits();
   const sel = objectsToGenerate(store.getState().doc, nodeIds);
   const dev = sel && deviceOf(store.getState().doc, sel.deviceId);
   if (!sel || !dev || sel.refs.length === 0) return null;

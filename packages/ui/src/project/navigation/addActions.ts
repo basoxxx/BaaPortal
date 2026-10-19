@@ -76,7 +76,14 @@ export function runAddNode(store: StoreApi<AppState>, nodeId: string, bridge: Ba
       addUdt(store, p.dev);
       return true;
     case 'sources-add':
-      void addSourceFiles({ store, bridge }, p.dev);
+      // Un errore imprevisto finisce in Informazioni, non come rifiuto non gestito.
+      addSourceFiles({ store, bridge }, p.dev).catch((e: unknown) =>
+        store.getState().pushMessage({
+          severity: 'error',
+          textKey: 'messages.actionFailed',
+          params: { message: e instanceof Error ? e.message : String(e) },
+        }),
+      );
       return true;
     default:
       return false;
