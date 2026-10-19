@@ -274,6 +274,30 @@ describe('checkDevice: valori e costanti', () => {
     ]);
   });
 
+  it('valori di STEP 7 V5.5: DT a due cifre, array con elenco e ripetizione, binario con _', () => {
+    const d = fresh();
+    const db = createGlobalDb({ number: 1, name: 'Dati', newId });
+    db.members.push(
+      member('Ora', 'Date_And_Time', { initial: 'DT#90-1-1-0:0:0.000' }),
+      member('Lista', 'Array[1..3] of Int', { initial: '1, 2, 3' }),
+      member('Zeri', 'Array[0..3] of Int', { initial: '4(0)' }),
+      member('Misto', 'Array[1..5] of Int', { initial: '2(1), 3' }),
+      member('Bit', 'Word', { initial: '2#0000_0000_0000_0001' }),
+      member('Troppi', 'Array[1..3] of Int', { initial: '1, 2, 3, 4' }),
+      member('Fuori', 'Array[1..3] of Int', { initial: '2(40000)' }),
+      member('Anno', 'Date_And_Time', { initial: 'DT#2090-1-1-0:0:0.000' }),
+    );
+    d.blocks.push(db);
+    const ds = checkDevice(d, cpu).filter((x) => x.code === 'VALUE_INVALID');
+    expect(
+      ds.map((x) => [x.ref.kind === 'member' ? x.ref.memberId : '', x.params?.reason]),
+    ).toEqual([
+      [db.members[5]!.id, 'TOO_LONG'],
+      [db.members[6]!.id, 'OUT_OF_RANGE'],
+      [db.members[7]!.id, 'OUT_OF_RANGE'],
+    ]);
+  });
+
   it('override di un membro: [i] per gli elementi di un array, .percorso per i membri del tipo', () => {
     const d = fresh();
     const udt = createUdt({ name: 'Asse', number: 1, newId });

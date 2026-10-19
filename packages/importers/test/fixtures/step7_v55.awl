@@ -40,6 +40,9 @@ END_VAR
 VAR
   Ora : DATE_AND_TIME  := DT#90-1-1-0:0:0.000;	//Ultimo fronte
   Conta : INT ;	
+  Soglie : ARRAY  [1 .. 3 ] OF INT  := 1, 2, 3;	
+  Zeri : ARRAY  [0 .. 3 ] OF INT  := 4(0);	
+  Maschera : WORD  := 2#0000_0000_0000_0001;	
 END_VAR
 BEGIN
 NETWORK
@@ -64,6 +67,14 @@ BEGIN
    Pronto := FALSE; 
    Ora := DT#90-1-1-0:0:0.000; 
    Conta := 0; 
+   Soglie[1] := 1; 
+   Soglie[2] := 2; 
+   Soglie[3] := 3; 
+   Zeri[0] := 0; 
+   Zeri[1] := 0; 
+   Zeri[2] := 0; 
+   Zeri[3] := 0; 
+   Maschera := W#16#1; 
 END_DATA_BLOCK
 
 DATA_BLOCK DB 2

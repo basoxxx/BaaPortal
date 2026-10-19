@@ -1,7 +1,8 @@
-import type { CodeBlock, PlcDevice } from '@baaportal/project';
+import { findCpu } from '@baaportal/catalog';
+import { checkDevice, type CodeBlock, type PlcDevice } from '@baaportal/project';
 import { describe, expect, it } from 'vitest';
-import { applySource, parseAwlSource } from '../src/index';
-import { emptyDevice, fixture, seq } from './helpers';
+import { applySource, generateAwlSource, parseAwlSource } from '../src/index';
+import { allRefs, emptyDevice, fixture, seq } from './helpers';
 
 // Sorgenti scritte da noi nella disposizione di STEP 7 V5.5 e di TIA Portal.
 
@@ -43,9 +44,23 @@ describe('sorgenti nella disposizione di STEP 7 V5.5 e di TIA', () => {
       initial: 'DT#90-1-1-0:0:0.000',
       comment: 'Ultimo fronte',
     });
+    // I valori iniziali degli array restano come scritti.
+    expect(fb.interface.static.slice(2).map((m) => [m.name, m.type, m.initial])).toEqual([
+      ['Soglie', 'Array[1..3] of Int', '1, 2, 3'],
+      ['Zeri', 'Array[0..3] of Int', '4(0)'],
+      ['Maschera', 'Word', '2#0000_0000_0000_0001'],
+    ]);
     expect(block(d, 'IDB', 1)).toMatchObject({
       instanceOf: 'FB1',
-      overrides: { Avvio: 'FALSE', Pronto: 'FALSE', Ora: 'DT#90-1-1-0:0:0.000', Conta: '0' },
+      overrides: {
+        Avvio: 'FALSE',
+        Pronto: 'FALSE',
+        Ora: 'DT#90-1-1-0:0:0.000',
+        Conta: '0',
+        'Soglie[1]': '1',
+        'Zeri[3]': '0',
+        Maschera: 'W#16#1',
+      },
     });
     const db2 = block(d, 'DB', 2);
     if (db2?.kind !== 'DB') throw new Error(db2?.kind);
@@ -77,5 +92,30 @@ describe('sorgenti nella disposizione di STEP 7 V5.5 e di TIA', () => {
       header: { comment: 'Istanza della pompa.' },
       attributes: { nonRetain: true },
     });
+  });
+
+  it.each(['step7_v55.awl', 'tia.awl'])(
+    '%s: il controllo del dispositivo non trova valori non validi',
+    (name) => {
+      const d = load(name);
+      const cpu = findCpu(d.cpu.typeId);
+      const bad = checkDevice(d, cpu).filter((x) => x.code === 'VALUE_INVALID');
+      expect(bad).toEqual([]);
+    },
+  );
+
+  it('i valori iniziali di un array si rileggono e si riscrivono come scritti', () => {
+    const r = parseAwlSource(
+      'FUNCTION_BLOCK "A"\nVAR\n  L : ARRAY [1..5] OF INT := 2(1),\n    3;\nEND_VAR\nBEGIN\nEND_FUNCTION_BLOCK\n',
+    );
+    if (!r.ok) throw new Error(JSON.stringify(r.errors));
+    const u = r.source.units[0]!;
+    if (u.kind !== 'FB') throw new Error();
+    expect(u.block.interface.static[0]!.initial).toBe('2(1), 3');
+    const d = emptyDevice();
+    applySource(d, r.source, seq('n'));
+    expect(generateAwlSource(d, allRefs(d), 'international').text).toContain(
+      '  L : Array[1..5] of Int := 2(1), 3;',
+    );
   });
 });
