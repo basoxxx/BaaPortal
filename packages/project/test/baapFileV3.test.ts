@@ -62,6 +62,21 @@ describe('file .baap formato 3: sorgenti esterne', () => {
     expect(readBaap(writeBaap(p, { appVersion: 'x' }))).toEqual(p);
   });
 
+  it('le chiavi sconosciute di una voce di sorgente si conservano', () => {
+    const p = withSources();
+    const d = p.devices[0]!;
+    const f = files(p);
+    const dev = json(f, `plc/${d.id}/device.json`);
+    dev.sources[0].futureKey = 1;
+    put(f, `plc/${d.id}/device.json`, dev);
+    const back = readBaap(zipSync(f));
+    expect(json(files(back), `plc/${d.id}/device.json`).sources[0]).toEqual({
+      id: 's1',
+      name: 'Motori.awl',
+      futureKey: 1,
+    });
+  });
+
   it('un file elencato ma mancante è INVALID_SCHEMA', () => {
     const p = withSources();
     const f = files(p);

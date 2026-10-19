@@ -8,8 +8,12 @@ import type { CodeBlock, Member, PlcDevice, Udt } from './model';
 const nameKey = (name: string): string => name.normalize('NFC').toLowerCase();
 const MAX_DEPTH = 24;
 
+// Solo i blocchi AWL: il testo di SCL, KOP e FUP non e AWL e non va analizzato come tale.
+// Le altre lingue avranno la loro rinomina nelle tappe che le introducono.
 const codeBlocks = (device: PlcDevice): CodeBlock[] =>
-  device.blocks.filter((b): b is CodeBlock => b.kind !== 'DB' && b.kind !== 'IDB');
+  device.blocks.filter(
+    (b): b is CodeBlock => b.kind !== 'DB' && b.kind !== 'IDB' && b.language === 'AWL',
+  );
 
 type Section = 'input' | 'output' | 'inOut' | 'static' | 'temp';
 const SECTIONS: Section[] = ['input', 'output', 'inOut', 'static', 'temp'];

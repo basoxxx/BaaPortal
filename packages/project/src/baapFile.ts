@@ -194,7 +194,7 @@ export function writeBaap(project: Project, opts: { appVersion: string }): Uint8
       tagTables: tagTables.map((t) => t.id),
       udts: udts.map((u) => u.id),
       blocks: blocks.map((b) => b.id),
-      sources: sources.map((x) => ({ id: x.id, name: x.name })),
+      sources: sources.map((x) => ({ ...x.listExtras, id: x.id, name: x.name })),
     });
     for (const t of tagTables) files[`${dir}/tags/${t.id}.json`] = toJson(t);
     for (const u of udts) files[`${dir}/types/${u.id}.json`] = toJson(u);
@@ -282,7 +282,13 @@ function readSources(
     seen.add(l.id);
     const bytes = files.get(`${dir}/sources/${l.id}.awl`);
     if (!bytes) throw invalid();
-    return { id: l.id, name: l.name, text: textDecoder.decode(bytes) };
+    const extras = Object.entries(l).filter(([k]) => k !== 'id' && k !== 'name');
+    return {
+      id: l.id,
+      name: l.name,
+      text: textDecoder.decode(bytes),
+      ...(extras.length > 0 ? { listExtras: Object.fromEntries(extras) } : {}),
+    };
   });
 }
 

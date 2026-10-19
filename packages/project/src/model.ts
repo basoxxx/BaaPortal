@@ -139,6 +139,8 @@ export interface ExternalSource {
   name: string;
   /** Testo esatto del file (a capo e accenti compresi). */
   text: string;
+  /** Chiavi sconosciute della voce in device.json (di versioni piu recenti): si riscrivono com'erano. */
+  listExtras?: Record<string, unknown>;
 }
 
 export interface PlcDevice {
