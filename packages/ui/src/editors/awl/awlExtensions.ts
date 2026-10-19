@@ -1,7 +1,7 @@
 import { RangeSetBuilder, type Extension } from '@codemirror/state';
 import { Decoration, ViewPlugin, type DecorationSet, type EditorView } from '@codemirror/view';
 import type { Diagnostic } from '@codemirror/lint';
-import { lex, type AwlDiagnostic } from '@baaportal/awl';
+import { convertMnemonics, lex, type AwlDiagnostic, type Mnemonic } from '@baaportal/awl';
 
 export type AwlKind =
   'instruction' | 'address' | 'symbol' | 'local' | 'constant' | 'label' | 'comment';
@@ -102,4 +102,20 @@ export function toLintDiagnostics(
       source: d.code,
     };
   });
+}
+
+/** Il testo salvato (internazionale) come lo mostra l'editor: mnemonica scelta, a capo sempre `\n`. */
+export function displayText(stored: string, m: Mnemonic): string {
+  return convertMnemonics(stored, 'international', m).replace(/\r\n?/g, '\n');
+}
+
+/** I segmenti salvati con CRLF lo conservano; gli altri restano con LF. */
+export function lineEndingOf(stored: string): '\n' | '\r\n' {
+  return stored.includes('\r\n') ? '\r\n' : '\n';
+}
+
+/** Dal testo dell'editor (LF) al testo salvato: mnemonica internazionale e a capo originale. */
+export function storedText(shownText: string, m: Mnemonic, eol: '\n' | '\r\n'): string {
+  const stored = convertMnemonics(shownText, m, 'international');
+  return eol === '\n' ? stored : stored.replace(/\n/g, eol);
 }

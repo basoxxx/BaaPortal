@@ -1,9 +1,16 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { EditorView } from '@codemirror/view';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { setDiagnostics } from '@codemirror/lint';
 import { createCodeBlock, readBaap, type CodeBlock } from '@baaportal/project';
 import { dev, fb, mem, openEditor, past } from './blockFixtures';
 import { PROJECT_PATH, type RenderedApp } from './renderApp';
+
+// Conta quante volte un editor riapplica le diagnostiche.
+vi.mock('@codemirror/lint', async (orig) => {
+  const real = await orig<typeof import('@codemirror/lint')>();
+  return { ...real, setDiagnostics: vi.fn(real.setDiagnostics) };
+});
 
 const T = 30_000;
 const block = (app: RenderedApp, id: string) =>
@@ -182,6 +189,86 @@ describe("segmenti AWL con l'editor CodeMirror", () => {
         expect.stringContaining('blocchi AWL'),
       );
       expect(screen.queryByRole('combobox', { name: 'Mnemonica' })).toBeNull();
+    },
+    T,
+  );
+
+  it(
+    'CRLF: gli errori cadono sui caratteri giusti',
+    async () => {
+      const f = fb('Nastro');
+      f.networks[0]!.source = 'A I 0.0\r\nA "Nope"';
+      await openEditor('block', f.id, (d) => void d.blocks.push(f));
+      await waitFor(() => expect(viewOf().dom.querySelector('.cm-lintRange-error')).not.toBeNull());
+      expect(viewOf().dom.querySelector('.cm-lintRange-error')!.textContent).toBe('"Nope"');
+    },
+    T,
+  );
+
+  it(
+    'con 50 segmenti, scrivere in uno non rifà le diagnostiche negli altri',
+    async () => {
+      const f = fb('Nastro');
+      f.networks = Array.from({ length: 50 }, (_, i) => ({
+        id: `n${i}`,
+        title: '',
+        comment: '',
+        source: 'A I 0.0',
+      }));
+      await openEditor('block', f.id, (d) => void d.blocks.push(f));
+      await new Promise((r) => setTimeout(r, 400));
+      vi.mocked(setDiagnostics).mockClear();
+      const v = viewOf(7);
+      focus(v);
+      for (let i = 0; i < 5; i++) set(v, `A I 0.${i}`);
+      // Cinque tasti: nessun editor riapplica le diagnostiche.
+      expect(vi.mocked(setDiagnostics)).not.toHaveBeenCalled();
+      set(v, 'A "Nope"');
+      await waitFor(() => expect(v.dom.querySelector('.cm-lintRange-error')).not.toBeNull());
+      await new Promise((r) => setTimeout(r, 400));
+      // Dopo il controllo si aggiorna il solo segmento con errori, non i 49 senza.
+      expect(vi.mocked(setDiagnostics).mock.calls.length).toBeLessThanOrEqual(2);
+    },
+    T,
+  );
+
+  it(
+    "un blocco eliminato con una bozza nell'editor: nessun errore",
+    async () => {
+      const f = fb('Nastro');
+      const app = await openEditor('block', f.id, (d) => void d.blocks.push(f));
+      const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const v = viewOf();
+      focus(v);
+      set(v, 'A I 0.0');
+      act(() =>
+        app.store.getState().edit('history.deleteBlock', (p) => {
+          const d = p.devices[0]!;
+          d.blocks = d.blocks.filter((b) => b.id !== f.id);
+        }),
+      );
+      expect(dev(app).blocks.find((b) => b.id === f.id)).toBeUndefined();
+      expect(err).not.toHaveBeenCalled();
+      err.mockRestore();
+    },
+    T,
+  );
+
+  it(
+    'cambiare il linguaggio con una bozza la conferma prima',
+    async () => {
+      const f = fb('Nastro');
+      const app = await openEditor('block', f.id, (d) => void d.blocks.push(f));
+      const v = viewOf();
+      focus(v);
+      set(v, 'A I 0.0');
+      act(() =>
+        app.store.getState().edit('history.editBlockHeader', (p) => {
+          (p.devices[0]!.blocks.find((b) => b.id === f.id) as CodeBlock).language = 'KOP';
+        }),
+      );
+      expect(block(app, f.id).networks[0]!.source).toBe('A I 0.0');
+      expect(textbox().tagName).toBe('TEXTAREA');
     },
     T,
   );

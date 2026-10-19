@@ -139,10 +139,12 @@ describe('AwlEditor', () => {
 
       const f = setup({ value: 'A I 0.0' });
       focus(f.view());
+      act(() => f.view().dispatch({ selection: { anchor: 3 } }));
       f.again({ value: 'A I 9.9' });
-      expect(f.view().state.doc.toString()).toBe('A I 0.0');
-      blur(f.view());
+      // Con il focus ma senza modifiche locali il valore nuovo si vede subito, col cursore dov'era.
       expect(f.view().state.doc.toString()).toBe('A I 9.9');
+      expect(f.view().state.selection.main.head).toBe(3);
+      blur(f.view());
       expect(f.onCommit).not.toHaveBeenCalled();
     },
     T,
@@ -208,6 +210,76 @@ describe('AwlEditor', () => {
       await new Promise((r) => setTimeout(r, 150));
       fireEvent.keyDown(e.view().contentDOM, { key: 'Enter', keyCode: 13 });
       expect(e.view().state.doc.toString()).toBe('A #Motore');
+    },
+    T,
+  );
+
+  it(
+    'CRLF: scritto e annullato non produce conferme; modificato si salva con CRLF',
+    () => {
+      const e = setup({ value: 'A I 0.0\r\nA I 0.1' });
+      expect(e.view().state.doc.toString()).toBe('A I 0.0\nA I 0.1');
+      focus(e.view());
+      e.set('A I 0.0\nA I 0.1\n');
+      e.set('A I 0.0\nA I 0.1');
+      blur(e.view());
+      expect(e.onCommit).not.toHaveBeenCalled();
+      focus(e.view());
+      e.set('A I 0.0\nA I 0.2');
+      blur(e.view());
+      expect(e.onCommit).toHaveBeenCalledWith('A I 0.0\r\nA I 0.2');
+    },
+    T,
+  );
+
+  it(
+    'CRLF: un valore esterno con CRLF si mostra con LF',
+    () => {
+      const e = setup({ value: 'A I 0.0\r\nA I 0.1' });
+      e.again({ value: 'A I 0.0\r\nA I 0.1\r\nA I 0.2' });
+      expect(e.view().state.doc.toString()).toBe('A I 0.0\nA I 0.1\nA I 0.2');
+    },
+    T,
+  );
+
+  it(
+    'Ctrl+Spazio apre il completamento',
+    async () => {
+      const complete = vi.fn(() => ({
+        from: 0,
+        options: [{ label: 'AN', kind: 'instruction' as const, apply: 'AN' }],
+      }));
+      const e = setup({ complete });
+      focus(e.view());
+      fireEvent.keyDown(e.view().contentDOM, {
+        key: ' ',
+        code: 'Space',
+        keyCode: 32,
+        ctrlKey: true,
+      });
+      await waitFor(() => expect(completionStatus(e.view().state)).toBe('active'));
+    },
+    T,
+  );
+
+  it.each(['"', '.'])(
+    'digitare %s apre il completamento',
+    async (ch) => {
+      const complete = vi.fn(() => ({
+        from: 2,
+        options: [{ label: 'x', kind: 'tag' as const, apply: 'x' }],
+      }));
+      const e = setup({ complete });
+      focus(e.view());
+      e.set('A ');
+      act(() =>
+        e.view().dispatch({
+          changes: { from: 2, insert: ch },
+          selection: { anchor: 3 },
+          userEvent: 'input.type',
+        }),
+      );
+      await waitFor(() => expect(completionStatus(e.view().state)).toBe('active'));
     },
     T,
   );

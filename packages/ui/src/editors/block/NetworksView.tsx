@@ -1,12 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  checkBlockCode,
-  completeAt,
-  convertMnemonics,
-  type AwlDiagnostic,
-  type Mnemonic,
-} from '@baaportal/awl';
+import { checkBlockCode, completeAt, type AwlDiagnostic, type Mnemonic } from '@baaportal/awl';
 import { findCpu } from '@baaportal/catalog';
 import {
   createAwlContext,
@@ -18,12 +12,14 @@ import {
 import { CommitInput, CommitTextarea } from '../../components/CommitField';
 import { ContextMenu } from '../../components/ContextMenu';
 import { AwlEditor, type AwlEditorHandle } from '../awl/AwlEditor';
+import { displayText } from '../awl/awlExtensions';
 import { useMnemonic } from '../awl/mnemonicPreference';
 import { useAppStore, useServices } from '../../state/AppContext';
 
 const newId = () => globalThis.crypto.randomUUID();
 const CHECK_DELAY_MS = 250;
-const shown = (source: string, m: Mnemonic) => convertMnemonics(source, 'international', m);
+const NO_DIAGNOSTICS: AwlDiagnostic[] = [];
+const shown = displayText;
 
 /** Testo non ancora confermato di un segmento, valido finché sorgente e mnemonica sono quelli da cui parte. */
 interface Draft {
@@ -55,8 +51,9 @@ export function NetworksView({ deviceId, blockId }: Props) {
   );
   const drafts = useRef(new Map<string, Draft>());
   const handles = useRef(new Map<string, AwlEditorHandle>());
-  const [draftRev, setDraftRev] = useState(0);
-  const [diagnostics, setDiagnostics] = useState<AwlDiagnostic[]>([]);
+  // Le diagnostiche di ogni segmento: un segmento che non cambia tiene lo stesso array, e il suo editor non ricalcola.
+  const [byNetwork, setByNetwork] = useState<AwlDiagnostic[][]>([]);
+  const problems = useMemo(() => byNetwork.flat(), [byNetwork]);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ id: string; x: number; y: number; anchor: Element } | null>(
     null,
@@ -97,18 +94,34 @@ export function NetworksView({ deviceId, blockId }: Props) {
         ? d.text
         : shown(n.source, mnemonic);
     });
+  // Il controllo gira 250 ms dopo l'ultima modifica; le bozze stanno in un ref, quindi scrivere non ridisegna i segmenti.
+  const latest = useRef({ awlCtx, networks, mnemonic, textsShown });
   useEffect(() => {
-    if (!awlCtx || !networks) {
-      setDiagnostics([]);
-      return;
-    }
-    const timer = setTimeout(
-      () => setDiagnostics(checkBlockCode(textsShown(), awlCtx, mnemonic)),
-      CHECK_DELAY_MS,
-    );
-    return () => clearTimeout(timer);
-    // textsShown legge bozze e segmenti correnti: le dipendenze sono ciò che li cambia.
-  }, [awlCtx, networks, mnemonic, draftRev]);
+    latest.current = { awlCtx, networks, mnemonic, textsShown };
+  });
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const scheduleCheck = useCallback(() => {
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      const l = latest.current;
+      const next: AwlDiagnostic[][] = (l.networks ?? []).map(() => []);
+      if (l.awlCtx && l.networks) {
+        for (const d of checkBlockCode(l.textsShown(), l.awlCtx, l.mnemonic))
+          next[d.network]?.push(d);
+      }
+      setByNetwork((prev) => {
+        const merged = next.map((arr, i) =>
+          prev[i] && JSON.stringify(prev[i]) === JSON.stringify(arr) ? prev[i]! : arr,
+        );
+        const same = merged.length === prev.length && merged.every((a, i) => a === prev[i]);
+        return same ? prev : merged;
+      });
+    }, CHECK_DELAY_MS);
+  }, []);
+  useEffect(() => {
+    scheduleCheck();
+  }, [awlCtx, networks, mnemonic, scheduleCheck]);
+  useEffect(() => () => clearTimeout(timer.current), []);
 
   if (!block) return null;
   const editHeader = (field: 'title' | 'comment', value: string) =>
@@ -119,7 +132,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
   const onDraft = (n: Network, text: string) => {
     if (text === shown(n.source, mnemonic)) drafts.current.delete(n.id);
     else drafts.current.set(n.id, { base: n.source, mnemonic, text });
-    setDraftRev((r) => r + 1);
+    scheduleCheck();
   };
   const commitCode = (id: string, stored: string) => {
     drafts.current.delete(id);
@@ -128,7 +141,6 @@ export function NetworksView({ deviceId, blockId }: Props) {
       if (n) n.source = stored;
     });
   };
-  const problems = diagnostics.filter((d) => d.network < block.networks.length);
   return (
     <div className="baa-block-networks">
       <div className="baa-block-header">
@@ -199,7 +211,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
                 value={n.source}
                 mnemonic={mnemonic}
                 aria-label={`${t('block.source')} ${i + 1}`}
-                diagnostics={problems.filter((d) => d.network === i)}
+                diagnostics={byNetwork[i] ?? NO_DIAGNOSTICS}
                 complete={(offset, text) =>
                   awlCtx
                     ? completeAt(textsShown({ index: i, text }), i, offset, awlCtx, mnemonic)

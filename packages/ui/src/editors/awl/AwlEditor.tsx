@@ -11,13 +11,14 @@ import {
   type CompletionResult,
 } from '@codemirror/autocomplete';
 import { setDiagnostics } from '@codemirror/lint';
+import { type AwlDiagnostic, type Completion, type Mnemonic } from '@baaportal/awl';
 import {
-  convertMnemonics,
-  type AwlDiagnostic,
-  type Completion,
-  type Mnemonic,
-} from '@baaportal/awl';
-import { awlHighlight, toLintDiagnostics } from './awlExtensions';
+  awlHighlight,
+  displayText,
+  lineEndingOf,
+  storedText,
+  toLintDiagnostics,
+} from './awlExtensions';
 import './awl.css';
 
 export { useMnemonic } from './mnemonicPreference';
@@ -47,8 +48,6 @@ export interface AwlEditorProps {
 
 const external = Annotation.define<boolean>();
 const TRIGGERS = new Set(['"', '#', '.']);
-const display = (v: string, m: Mnemonic) => convertMnemonics(v, 'international', m);
-const toStored = (v: string, m: Mnemonic) => convertMnemonics(v, m, 'international');
 
 const CM_TYPE: Record<Completion['kind'], string> = {
   instruction: 'keyword',
@@ -64,6 +63,8 @@ const CM_TYPE: Record<Completion['kind'], string> = {
 interface Session {
   /** Il testo salvato (internazionale) a cui l'editor si riferisce. */
   baseline: string;
+  /** Gli a capo del testo salvato, che la conferma ripristina. */
+  eol: '\n' | '\r\n';
   /** La mnemonica del testo oggi nel documento. */
   shown: Mnemonic;
   /** Modifiche dell'utente non ancora confermate. */
@@ -82,6 +83,7 @@ export function AwlEditor(p: AwlEditorProps): React.JSX.Element {
   const label = useRef(new Compartment());
   const s = useRef<Session>({
     baseline: p.value,
+    eol: lineEndingOf(p.value),
     shown: p.mnemonic,
     dirty: false,
     focused: false,
@@ -108,7 +110,7 @@ export function AwlEditor(p: AwlEditorProps): React.JSX.Element {
     const st = s.current;
     if (!v || !st.dirty) return;
     st.dirty = false;
-    const stored = toStored(v.state.doc.toString(), st.shown);
+    const stored = storedText(v.state.doc.toString(), st.shown, st.eol);
     if (stored === st.baseline) return;
     st.baseline = stored;
     st.pending = null;
@@ -142,7 +144,7 @@ export function AwlEditor(p: AwlEditorProps): React.JSX.Element {
       parent: el,
       root: el.ownerDocument,
       state: EditorState.create({
-        doc: display(st.baseline, st.shown),
+        doc: displayText(st.baseline, st.shown),
         extensions: [
           history(),
           keymap.of([...defaultKeymap, ...historyKeymap]),
@@ -167,7 +169,10 @@ export function AwlEditor(p: AwlEditorProps): React.JSX.Element {
               u.changes.iterChanges((_a, _b, _c, _d, ins) => {
                 last = ins.toString().slice(-1);
               });
-              if (TRIGGERS.has(last)) queueMicrotask(() => startCompletion(view));
+              if (TRIGGERS.has(last))
+                queueMicrotask(() => {
+                  if (viewRef.current === view) startCompletion(view);
+                });
             }
           }),
           EditorView.domEventHandlers({
@@ -181,7 +186,8 @@ export function AwlEditor(p: AwlEditorProps): React.JSX.Element {
               st.pending = null;
               if (pending !== null && pending !== st.baseline) {
                 st.baseline = pending;
-                replaceDoc(display(pending, st.shown));
+                st.eol = lineEndingOf(pending);
+                replaceDoc(displayText(pending, st.shown));
                 st.dirty = false;
               }
             },
@@ -217,13 +223,16 @@ export function AwlEditor(p: AwlEditorProps): React.JSX.Element {
       st.pending = null;
       return;
     }
-    if (st.focused) {
+    // Chi sta scrivendo non perde il testo; se non ha scritto nulla il valore nuovo si vede subito.
+    if (st.focused && st.dirty) {
       st.pending = p.value;
       return;
     }
+    st.pending = null;
     st.baseline = p.value;
+    st.eol = lineEndingOf(p.value);
     st.dirty = false;
-    replaceDoc(display(p.value, st.shown));
+    replaceDoc(displayText(p.value, st.shown));
   }, [p.value]);
 
   // Cambio di mnemonica: prima si conferma la bozza (con la mnemonica di allora), poi si converte la vista.
@@ -232,7 +241,7 @@ export function AwlEditor(p: AwlEditorProps): React.JSX.Element {
     if (p.mnemonic === st.shown) return;
     commitDraft();
     st.shown = p.mnemonic;
-    replaceDoc(display(st.baseline, p.mnemonic));
+    replaceDoc(displayText(st.baseline, p.mnemonic));
     st.dirty = false;
   }, [p.mnemonic]);
 
