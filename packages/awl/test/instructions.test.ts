@@ -114,9 +114,9 @@ describe('tabella delle istruzioni', () => {
     }
     expect(byId('BEC')?.german).toBe('BEB');
     expect(byId('BEB')).toBeUndefined();
-    // ENT e LEAVE non esistono sull'S7-300 (solo CPU a quattro ACCU)
-    expect(byId('ENT')).toBeUndefined();
-    expect(byId('LEAVE')).toBeUndefined();
+    // ENT e LEAVE richiedono CPU a quattro accumulatori (es. CPU 318)
+    expect(byId('ENT')?.german).toBe('ENT');
+    expect(byId('LEAVE')?.operands).toEqual(['none']);
   });
 
   it('classi di operando, parentesi e fine blocco', () => {
@@ -165,7 +165,7 @@ describe('tabella delle istruzioni', () => {
     }
     expect(INSTRUCTIONS.filter((i) => i.category === 'comparison')).toHaveLength(18);
     expect(INSTRUCTIONS.filter((i) => i.category === 'jump')).toHaveLength(18);
-    expect(INSTRUCTIONS.length).toBeGreaterThanOrEqual(150);
+    expect(INSTRUCTIONS.length).toBe(155);
   });
 });
 

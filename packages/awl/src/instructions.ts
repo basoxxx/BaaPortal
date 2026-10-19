@@ -210,8 +210,8 @@ export const INSTRUCTIONS: readonly InstructionDef[] = [
   def('wordLogic', 'OD', 'OD', ['none', 'dwordConstant']),
   def('wordLogic', 'XOD', 'XOD', ['none', 'dwordConstant']),
 
-  // Accumulatori (ENT e LEAVE esistono solo sulle CPU a 4 ACCU, non sull'S7-300)
-  ...same('accumulator', ['TAK', 'PUSH', 'POP'], ['none']),
+  // Accumulatori (ENT e LEAVE richiedono CPU a quattro accumulatori, es. CPU 318)
+  ...same('accumulator', ['TAK', 'PUSH', 'POP', 'ENT', 'LEAVE'], ['none']),
   ...same('accumulator', ['INC', 'DEC', 'BLD'], ['byteConstant']),
   def('accumulator', 'NOP', 'NOP', ['nopValue']),
   ...same('accumulator', ['+AR1', '+AR2'], ['none', 'pointerOrDword']),
@@ -230,6 +230,8 @@ export function findInstruction(text: string, mnemonic: Mnemonic): InstructionDe
   return (mnemonic === 'international' ? byInternational : byGerman).get(key);
 }
 
+// Attenzione: 'A'/'AW'/'AD' tedeschi sono prefissi dell'area Q, ma internazionali sono istruzioni:
+// il parser sceglie la mappa in base alla posizione del token.
 // Prefissi di area (chiavi in maiuscolo: il chiamante normalizza). Ogni grafia (internazionale o tedesca) porta alla stessa coppia.
 const AREAS: { international: string; german: string }[] = [
   ...['', 'B', 'W', 'D'].map((s) => ({ international: 'I' + s, german: 'E' + s })),
