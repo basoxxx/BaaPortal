@@ -46,7 +46,9 @@
     "sourceApplyFailed": "The blocks could not be generated from source \"{{name}}\": {{message}}",
     "sourceApplied": "Source \"{{name}}\": {{created}} objects created, {{replaced}} replaced.",
     "sourceExported": "Source \"{{name}}\" exported to \"{{path}}\".",
-    "sourceExportFailed": "The source \"{{name}}\" could not be exported: {{message}}"
+    "sourceExportFailed": "The source \"{{name}}\" could not be exported: {{message}}",
+    "sourceStartValuesSkipped": "\"{{name}}\": the start values of {{members}} are not written to the source (the source has no form for composite members). They are kept in the project when the source replaces the object.",
+    "sourceLanguageSkipped": "\"{{name}}\" not exported: language {{language}}."
   },
   "commands": {
     "project.new": "New…",

@@ -14,6 +14,7 @@ import type {
 } from '@baaportal/project';
 import { parseType, sameName } from '@baaportal/s7-types';
 import { commentLines, quoteName, quotePathKey, quoted } from './text';
+import type { GeneratedSource, GenerateWarning } from './types';
 
 const CALLS = new Set(['CALL', 'UC', 'CC']);
 
@@ -213,19 +214,31 @@ function dbLines(b: GlobalDb | InstanceDb): string[] {
   return out;
 }
 
+/** Percorsi dei membri con valori iniziali composti (`overrides`), che la sorgente non scrive. */
+function startValueMembers(list: Member[], prefix = '', out: string[] = []): string[] {
+  for (const m of list) {
+    const path = prefix === '' ? m.name : `${prefix}.${m.name}`;
+    if (m.overrides && Object.keys(m.overrides).length > 0) out.push(path);
+    if (m.members) startValueMembers(m.members, path, out);
+  }
+  return out;
+}
+
 /**
  * Sorgente AWL (stile TIA) degli oggetti indicati: UDT in ordine di dipendenza, poi i blocchi di
- * codice con i richiamati prima dei chiamanti, poi DB e DB di istanza. Un'unità per volta, separate da
- * una riga vuota.
+ * codice AWL con i richiamati prima dei chiamanti, poi DB e DB di istanza. Un'unità per volta, separate
+ * da una riga vuota. `warnings` dice, per oggetto, che cosa non è stato scritto: i blocchi in un'altra
+ * lingua e i valori iniziali dei membri composti di UDT e interfacce (i DB li scrivono in BEGIN).
  */
 export function generateAwlSource(
   device: PlcDevice,
   refs: ObjectRef[],
   mnemonic: Mnemonic,
-): string {
+): GeneratedSource {
   const seen = new Set<string>();
   const udts: Udt[] = [];
   const blocks: Block[] = [];
+  const warnings: GenerateWarning[] = [];
   for (const r of refs) {
     if (r.kind !== 'udt' && r.kind !== 'block') continue;
     if (seen.has(`${r.kind}:${r.id}`)) continue;
@@ -238,11 +251,28 @@ export function generateAwlSource(
       if (b) blocks.push(b);
     }
   }
+  const startValues = (ref: ObjectRef, name: string, list: Member[]) => {
+    const members = startValueMembers(list);
+    if (members.length > 0) warnings.push({ kind: 'startValues', ref, name, members });
+  };
+  for (const u of udts) {
+    startValues({ kind: 'udt', deviceId: device.id, id: u.id }, u.name, u.members);
+  }
+  const code: CodeBlock[] = [];
+  for (const b of blocks) {
+    if (b.kind === 'DB' || b.kind === 'IDB') continue;
+    const ref: ObjectRef = { kind: 'block', deviceId: device.id, id: b.id };
+    // SCL, KOP e FUP non sono AWL: scritti come reti AWL non si potrebbero rileggere.
+    if (b.language !== 'AWL') {
+      warnings.push({ kind: 'language', ref, name: b.name, language: b.language });
+      continue;
+    }
+    const i = b.interface;
+    startValues(ref, b.name, [...i.input, ...i.output, ...i.inOut, ...i.static, ...i.temp]);
+    code.push(b);
+  }
   const sortedUdts = orderByDeps(udts, (u) =>
     namedTypes(u.members).flatMap((n) => udts.filter((x) => x !== u && sameName(x.name, n))),
-  );
-  const code = blocks.filter(
-    (b): b is CodeBlock => b.kind === 'OB' || b.kind === 'FB' || b.kind === 'FC',
   );
   const sortedCode = orderByDeps(code, (b) => {
     const i = b.interface;
@@ -256,5 +286,6 @@ export function generateAwlSource(
     ...sortedCode.map((b) => codeLines(b, mnemonic)),
     ...dbs.map(dbLines),
   ];
-  return units.map((u) => u.join('\n')).join('\n\n') + (units.length > 0 ? '\n' : '');
+  const text = units.map((u) => u.join('\n')).join('\n\n') + (units.length > 0 ? '\n' : '');
+  return { text, warnings };
 }

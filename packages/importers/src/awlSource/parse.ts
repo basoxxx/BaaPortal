@@ -28,6 +28,7 @@ const SECTION = /^(VAR_INPUT|VAR_OUTPUT|VAR_IN_OUT|VAR_TEMP|VAR)(\s+\S.*)?$/i;
 const BODY_WORD = /^(VAR|VAR_INPUT|VAR_OUTPUT|VAR_IN_OUT|VAR_TEMP|BEGIN|STRUCT)\b/i;
 const END_ANY = /^END_(TYPE|ORGANIZATION_BLOCK|FUNCTION_BLOCK|FUNCTION|DATA_BLOCK)\b/i;
 const UNKNOWN_ATTR = /^[A-Za-z_][A-Za-z0-9_]*\s*[:=]/;
+const BARE_WORD = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 /** Inizio di un'unità; esclude `Type := 1` e simili (un membro di nome uguale a una parola chiave). */
 const isUnitStart = (code: string): boolean =>
@@ -101,15 +102,37 @@ function readUnitName(r: Reader, line: number, rest: string, keyword: string): U
   return { name: path[0]!.name, ...(returnType === undefined ? {} : { returnType }) };
 }
 
-/** Legge TITLE, commento, AUTHOR, FAMILY, NAME, VERSION e i flag fino al corpo dell'unità. */
-function readHeader(r: Reader): Header {
+/** Parole dell'intestazione di STEP 7 che si accettano senza effetto (il modello non le ha). */
+const IGNORED_HEADER_WORDS = new Set(['CODE_VERSION1']);
+
+/** La prima riga utile dopo la corrente è BEGIN? */
+function beginFollows(r: Reader): boolean {
+  for (let j = r.i + 1; j < r.lines.length; j++) {
+    const { code } = cleanLine(r.lines[j]!);
+    if (code !== '') return /^BEGIN$/i.test(code);
+  }
+  return false;
+}
+
+/**
+ * Legge TITLE, AUTHOR, FAMILY, NAME, VERSION e i flag fino al corpo dell'unità. Le righe di commento
+ * `//` al margine sinistro, in qualsiasi punto dell'intestazione (dopo TITLE in STEP 7, dopo VERSION
+ * in TIA), formano in ordine il commento del blocco.
+ */
+function readHeader(r: Reader, kind: 'UDT' | 'OB' | 'FB' | 'FC' | 'DB'): Header {
   const h: Header = {
     header: emptyHeader(),
     knowHowProtected: false,
     attributes: { unlinked: false, readOnly: false, nonRetain: false },
   };
+  const comment: string[] = [];
   while (!r.done) {
     const raw = r.lines[r.i]!;
+    if (raw.startsWith('//')) {
+      comment.push(commentText(raw));
+      r.i++;
+      continue;
+    }
     const { code } = cleanLine(raw);
     if (code === '') {
       r.i++;
@@ -121,12 +144,6 @@ function readHeader(r: Reader): Header {
       const full = /^\s*TITLE\s*=(.*)$/i.exec(raw);
       h.header.title = (full?.[1] ?? title[1]!).trim();
       r.i++;
-      const lines: string[] = [];
-      while (!r.done && r.lines[r.i]!.startsWith('//')) {
-        lines.push(commentText(r.lines[r.i]!));
-        r.i++;
-      }
-      h.header.comment = lines.join('\n');
       continue;
     }
     const field = /^(AUTHOR|FAMILY|NAME|VERSION)\s*:(.*)$/i.exec(code);
@@ -145,11 +162,19 @@ function readHeader(r: Reader): Header {
     else if (flag === 'UNLINKED') h.attributes.unlinked = true;
     else if (flag === 'READ_ONLY') h.attributes.readOnly = true;
     else if (flag === 'NON_RETAIN') h.attributes.nonRetain = true;
-    else if (BODY_WORD.test(code) || END_ANY.test(code) || !UNKNOWN_ATTR.test(code)) return h;
-    else if (isUnitStart(code)) return h;
-    else r.error(r.i, r.indent(r.i), 'UNKNOWN_ATTRIBUTE', { name: code.split(/[\s:=]/)[0]! });
+    else if (IGNORED_HEADER_WORDS.has(flag)) {
+      // accettata e ignorata
+    } else if (BODY_WORD.test(code) || END_ANY.test(code) || isUnitStart(code)) break;
+    else if (BARE_WORD.test(code)) {
+      // In un DB un nome senza virgolette subito prima di BEGIN è il tipo (FB o UDT), non un flag.
+      if (kind === 'DB' && beginFollows(r)) break;
+      r.error(r.i, r.indent(r.i), 'UNKNOWN_ATTRIBUTE', { name: code });
+    } else if (UNKNOWN_ATTR.test(code)) {
+      r.error(r.i, r.indent(r.i), 'UNKNOWN_ATTRIBUTE', { name: code.split(/[\s:=]/)[0]! });
+    } else break;
     r.i++;
   }
+  h.header.comment = comment.join('\n');
   return h;
 }
 
@@ -277,6 +302,83 @@ function readAssignments(
   missingEnd(r, 'END_DATA_BLOCK');
 }
 
+/** Un valore di BEGIN di un DB con tipo, da applicare quando il tipo è noto. */
+interface Assign {
+  path: string;
+  value: string;
+  line: number;
+  col: number;
+}
+
+/** DB dichiarato con un tipo (`"Nome"`, `FB n`, `SFB n`, `UDT n`): FB/SFB o UDT si sa solo a fine lettura. */
+interface TypedDb {
+  unit: SourceUnit;
+  type: { name: string } | { udt: number } | { instanceOf: string };
+  assigns: Assign[];
+  /** Riga (0-based) e testo della riga del tipo. */
+  line: number;
+  text: string;
+}
+
+/**
+ * Un DB il cui tipo è un UDT (della sorgente, anche scritto dopo, o del dispositivo; per nome o con
+ * `UDT n`) diventa un DB globale con una copia dei membri dell'UDT e i valori di BEGIN. Un FB, un SFB o
+ * un nome sconosciuto restano un DB di istanza (un nome sconosciuto lo segnala il controllo).
+ */
+function resolveTypedDbs(
+  r: Reader,
+  units: SourceUnit[],
+  typed: TypedDb[],
+  device: PlcDevice | undefined,
+): void {
+  const sourceUdts = units.filter(
+    (u): u is Extract<SourceUnit, { kind: 'UDT' }> => u.kind === 'UDT',
+  );
+  const byName = (name: string): Member[] | undefined => {
+    const own = units.find((u) => (u.kind === 'UDT' || u.kind === 'FB') && sameName(u.name, name));
+    if (own) return own.kind === 'UDT' ? own.udt.members : undefined;
+    return device?.udts.find((u) => sameName(u.name, name))?.members;
+  };
+  const byNumber = (n: number): Member[] | undefined => {
+    const own = sourceUdts.find((u) => u.number === n);
+    if (own) return own.udt.members;
+    const dev = device?.udts.find((u) => u.number === n);
+    if (!dev) return undefined;
+    // L'UDT del dispositivo ridefinito nella stessa sorgente (per nome): vale la definizione nuova.
+    return sourceUdts.find((u) => sameName(u.name, dev.name))?.udt.members ?? dev.members;
+  };
+  for (const t of typed) {
+    const found =
+      'udt' in t.type ? byNumber(t.type.udt) : 'name' in t.type ? byName(t.type.name) : undefined;
+    if (!found) {
+      if ('udt' in t.type) r.error(t.line, r.indent(t.line), 'BAD_DECLARATION', { text: t.text });
+      continue;
+    }
+    const u = t.unit;
+    if (u.kind !== 'IDB') continue;
+    const members = structuredClone(found);
+    for (const a of t.assigns) {
+      if (!assignToMembers(members, a.path, a.value)) {
+        r.error(a.line, a.col, 'UNKNOWN_MEMBER', { path: a.path });
+      }
+    }
+    const db: SourceUnit = {
+      kind: 'DB',
+      name: u.name,
+      ...(u.number === undefined ? {} : { number: u.number }),
+      db: {
+        kind: 'DB',
+        name: u.name,
+        header: u.header,
+        knowHowProtected: u.knowHowProtected,
+        members,
+        attributes: u.attributes,
+      },
+    };
+    units[units.indexOf(u)] = db;
+  }
+}
+
 const unitKey = (u: SourceUnit): string => {
   const fam = u.kind === 'IDB' ? 'DB' : u.kind;
   return u.number !== undefined
@@ -290,13 +392,14 @@ function readUnit(
   rest: string,
   nets: RawNetwork[],
   device: PlcDevice | undefined,
+  typed: TypedDb[],
 ): SourceUnit | null {
   const startLine = r.i;
   const keyword = rawKeyword.toUpperCase();
   const kind = KIND_OF[keyword]!;
   r.i++;
   const un = readUnitName(r, startLine, rest, keyword);
-  const h = readHeader(r);
+  const h = readHeader(r, kind);
   if (!un) {
     // Unità illeggibile: si salta fino alla fine per non produrre errori a catena.
     skipToEnd(r, keyword);
@@ -343,7 +446,7 @@ function readUnit(
     const code = peekCode(r);
     const lineAt = r.i;
     let members: Member[] | undefined;
-    let instanceOf: string | undefined;
+    let type: TypedDb['type'] | undefined;
     if (code !== undefined && SECTION.test(code)) {
       // I DB con VAR ... END_VAR sono dell'S7-1x00; l'S7-300 usa STRUCT.
       r.error(lineAt, r.indent(lineAt), 'UNSUPPORTED_SECTION', { section: code });
@@ -353,41 +456,51 @@ function readUnit(
     if (code !== undefined && /^STRUCT$/i.test(code)) members = readStruct(r).members;
     else if (code !== undefined && !/^BEGIN$/i.test(code) && !END_OF.DATA_BLOCK!.test(code)) {
       const abs = ABSOLUTE.exec(code);
+      const absKind = abs?.[1]!.toUpperCase();
       const path = parsePath(code);
-      if (abs && ['FB', 'SFB'].includes(abs[1]!.toUpperCase())) {
-        instanceOf = `@${abs[1]!.toUpperCase()}:${abs[2]}`;
-      } else if (path && path.length === 1 && path[0]!.index === undefined)
-        instanceOf = path[0]!.name;
-      else r.error(lineAt, r.indent(lineAt), 'BAD_DECLARATION', { text: code });
+      if (abs && (absKind === 'FB' || absKind === 'SFB')) {
+        type = { instanceOf: `@${absKind}:${abs[2]}` };
+      } else if (abs && absKind === 'UDT') type = { udt: Number(abs[2]) };
+      else if (path && path.length === 1 && path[0]!.index === undefined) {
+        type = { name: path[0]!.name };
+      } else r.error(lineAt, r.indent(lineAt), 'BAD_DECLARATION', { text: code });
       r.i++;
     }
     if (!r.done && /^BEGIN$/i.test(peekCode(r) ?? '')) r.i++;
     const overrides: Record<string, string> = {};
+    const assigns: Assign[] = [];
     const mem = members ?? [];
     readAssignments(r, END_OF.DATA_BLOCK!, startLine, (path, value, line, col) => {
-      if (instanceOf !== undefined || members === undefined) {
-        const p = parsePath(path);
-        if (!p) r.error(line, col, 'BAD_ASSIGNMENT', { path });
-        else overrides[pathKey(p)] = value;
-      } else if (!assignToMembers(mem, path, value)) {
-        r.error(line, col, 'UNKNOWN_MEMBER', { path });
+      if (members !== undefined) {
+        if (!assignToMembers(mem, path, value)) r.error(line, col, 'UNKNOWN_MEMBER', { path });
+        return;
+      }
+      const p = parsePath(path);
+      if (!p) r.error(line, col, 'BAD_ASSIGNMENT', { path });
+      else {
+        overrides[pathKey(p)] = value;
+        assigns.push({ path, value, line, col });
       }
     });
-    if (instanceOf !== undefined || members === undefined) {
-      if (instanceOf === undefined) {
+    if (members === undefined) {
+      if (type === undefined) {
         r.error(startLine, r.indent(startLine), 'BAD_DECLARATION', { text: 'DATA_BLOCK' });
         return null;
       }
-      return {
+      // Il tipo si risolve a fine lettura: un UDT (anche scritto dopo) fa un DB globale.
+      const unit: SourceUnit = {
         kind: 'IDB',
         name: un.name,
         ...num,
-        instanceOf,
+        instanceOf:
+          'instanceOf' in type ? type.instanceOf : 'udt' in type ? `@UDT:${type.udt}` : type.name,
         overrides,
         header: h.header,
         knowHowProtected: h.knowHowProtected,
         attributes: h.attributes,
       };
+      typed.push({ unit, type, assigns, line: lineAt, text: code! });
+      return unit;
     }
     return {
       kind: 'DB',
@@ -463,6 +576,7 @@ export function parseAwlSource(
   const r = new Reader(splitLines(text));
   const units: SourceUnit[] = [];
   const nets: RawNetwork[] = [];
+  const typed: TypedDb[] = [];
   const seen = new Set<string>();
   while (!r.done) {
     const line = r.lines[r.i]!;
@@ -478,7 +592,7 @@ export function parseAwlSource(
       continue;
     }
     const at = r.i;
-    const unit = readUnit(r, m[1]!, m[2]!, nets, device);
+    const unit = readUnit(r, m[1]!, m[2]!, nets, device, typed);
     if (!unit) continue;
     const key = unitKey(unit);
     if (seen.has(key))
@@ -486,6 +600,7 @@ export function parseAwlSource(
     seen.add(key);
     units.push(unit);
   }
+  resolveTypedDbs(r, units, typed, device);
   const mnemonic = detectMnemonic(nets);
   r.errors.push(...finishNetworks(nets, mnemonic));
   if (r.errors.length > 0) {

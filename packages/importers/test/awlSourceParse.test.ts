@@ -1,6 +1,7 @@
+import { createUdt } from '@baaportal/project';
 import { describe, expect, it } from 'vitest';
 import { parseAwlSource, type ParsedSource, type SourceError } from '../src/index';
-import { fixture } from './helpers';
+import { emptyDevice, fixture, seq } from './helpers';
 
 function ok(text: string): ParsedSource {
   const r = parseAwlSource(text);
@@ -267,5 +268,162 @@ describe('parseAwlSource: errori', () => {
       'FUNCTION "A" : Void\nBEGIN\nNETWORK\nTITLE =\n\tA "NonEsiste";\nEND_FUNCTION\n',
     );
     expect(r.ok).toBe(true);
+  });
+});
+
+describe('parseAwlSource: DB dichiarato con un UDT', () => {
+  const ASSE = [
+    'TYPE "Asse"',
+    'VERSION : 0.1',
+    'STRUCT',
+    '  Pos : Real := 1.0; // posizione',
+    '  Vel : Int;',
+    'END_STRUCT;',
+    'END_TYPE',
+    '',
+  ].join('\n');
+  const db = (type: string, begin: string[] = []) =>
+    [
+      'DATA_BLOCK "Dati"',
+      'TITLE =',
+      'VERSION : 0.1',
+      type,
+      'BEGIN',
+      ...begin,
+      'END_DATA_BLOCK',
+    ].join('\n');
+
+  it('UDT della stessa sorgente per nome: DB globale con una copia dei membri e i valori di BEGIN', () => {
+    const s = ok(`${ASSE}\n${db('"Asse"', ['  Vel := 5;'])}\n`);
+    const u = s.units[1]!;
+    if (u.kind !== 'DB') throw new Error(u.kind);
+    expect(u.db.members.map((m) => [m.name, m.type, m.initial, m.comment])).toEqual([
+      ['Pos', 'Real', '1.0', 'posizione'],
+      ['Vel', 'Int', '5', ''],
+    ]);
+    // La copia è indipendente: l'UDT non riceve il valore del DB.
+    const udt = s.units[0]!;
+    if (udt.kind !== 'UDT') throw new Error();
+    expect(udt.udt.members[1]!.initial).toBeUndefined();
+  });
+
+  it('forma assoluta UDT n, anche con il TYPE scritto dopo il DB', () => {
+    const s = ok(
+      `${db('UDT 4', ['  Pos := 2.5;'])}\n\n${ASSE.replace('TYPE "Asse"', 'TYPE UDT 4')}`,
+    );
+    const u = s.units[0]!;
+    if (u.kind !== 'DB') throw new Error(u.kind);
+    expect(u.db.members.map((m) => [m.name, m.initial])).toEqual([
+      ['Pos', '2.5'],
+      ['Vel', undefined],
+    ]);
+  });
+
+  it('UDT del dispositivo, per nome e per numero', () => {
+    const d = emptyDevice();
+    const asse = createUdt({ name: 'Asse', number: 3, newId: seq('u') });
+    asse.members.push({ id: 'm1', name: 'Pos', type: 'Real', comment: 'c', initial: '0.5' });
+    d.udts.push(asse);
+    for (const type of ['"Asse"', 'UDT 3']) {
+      const r = parseAwlSource(db(type, ['  Pos := 9.0;']), d);
+      if (!r.ok) throw new Error(JSON.stringify(r.errors));
+      const u = r.source.units[0]!;
+      if (u.kind !== 'DB') throw new Error(`${type}: ${u.kind}`);
+      expect(u.db.members).toEqual([
+        { id: 'm1', name: 'Pos', type: 'Real', comment: 'c', initial: '9.0' },
+      ]);
+    }
+    // Il membro dell'UDT del dispositivo non cambia.
+    expect(asse.members[0]!.initial).toBe('0.5');
+  });
+
+  it('il nome di un FB resta un DB di istanza; un nome sconosciuto anche', () => {
+    const fb = 'FUNCTION_BLOCK "Asse"\nBEGIN\nEND_FUNCTION_BLOCK\n';
+    expect(ok(`${fb}${db('"Asse"', ['  x := 1;'])}`).units[1]).toMatchObject({
+      kind: 'IDB',
+      instanceOf: 'Asse',
+      overrides: { x: '1' },
+    });
+    expect(ok(db('"Boh"')).units[0]).toMatchObject({ kind: 'IDB', instanceOf: 'Boh' });
+  });
+
+  it('un valore su un membro che l UDT non ha: UNKNOWN_MEMBER alla sua riga', () => {
+    const e = errors(`${ASSE}\n${db('"Asse"', ['  Pippo := 5;'])}\n`);
+    expect(e).toEqual([{ line: 14, col: 3, code: 'UNKNOWN_MEMBER', params: { path: 'Pippo' } }]);
+  });
+
+  it('UDT n che non esiste: errore sulla riga del tipo', () => {
+    const e = errors(db('UDT 9'));
+    expect(e).toEqual([{ line: 4, col: 1, code: 'BAD_DECLARATION', params: { text: 'UDT 9' } }]);
+  });
+});
+
+describe('parseAwlSource: mnemonico', () => {
+  it('codice tedesco con soli mnemonici comuni e aree tedesche si importa', () => {
+    const s = ok(
+      'FUNCTION "F" : Void\nVERSION : 0.1\nBEGIN\nNETWORK\nTITLE =\n\tL %EW0;\n\tT %AW0;\n\tO %E0.0;\n\t= %A4.0;\nEND_FUNCTION\n',
+    );
+    expect(s.mnemonic).toBe('german');
+    const u = s.units[0]!;
+    if (u.kind !== 'FC') throw new Error();
+    expect(u.block.networks[0]!.source).toBe('\tL %IW0;\n\tT %QW0;\n\tO %I0.0;\n\t= %Q4.0;');
+  });
+
+  it('a parità di errori vince il mnemonico internazionale', () => {
+    const s = ok(
+      'FUNCTION "F" : Void\nBEGIN\nNETWORK\nTITLE =\n\tL %MW0;\n\tT %MW2;\nEND_FUNCTION\n',
+    );
+    expect(s.mnemonic).toBe('international');
+  });
+});
+
+describe("parseAwlSource: righe dell'intestazione", () => {
+  it('CODE_VERSION1 si accetta e si ignora', () => {
+    const s = ok(
+      'FUNCTION_BLOCK FB 1\nTITLE =\nAUTHOR : Diego\nVERSION : 0.1\nCODE_VERSION1\n\nVAR_INPUT\n  a : Bool;\nEND_VAR\nBEGIN\nEND_FUNCTION_BLOCK\n',
+    );
+    const u = s.units[0]!;
+    if (u.kind !== 'FB') throw new Error();
+    expect(u.block.header).toMatchObject({ author: 'Diego', version: '0.1' });
+    expect(u.block.interface.input.map((m) => m.name)).toEqual(['a']);
+  });
+
+  it("una parola sconosciuta: un solo UNKNOWN_ATTRIBUTE e l'intestazione continua", () => {
+    const text =
+      'FUNCTION_BLOCK "A"\nTITLE =\nPIPPO\nVERSION : 0.2\nVAR_INPUT\n  a : Bool;\nEND_VAR\nBEGIN\nEND_FUNCTION_BLOCK\n';
+    expect(errors(text)).toEqual([
+      { line: 3, col: 1, code: 'UNKNOWN_ATTRIBUTE', params: { name: 'PIPPO' } },
+    ]);
+    expect(errors(text.replace('"A"', '"A"\nPIPPO'))).toHaveLength(2);
+  });
+
+  it('DB: la parola sconosciuta non diventa il tipo; un nome subito prima di BEGIN sì', () => {
+    expect(errors('DATA_BLOCK "D"\nPIPPO\n"Nastro"\nBEGIN\nEND_DATA_BLOCK\n')).toEqual([
+      { line: 2, col: 1, code: 'UNKNOWN_ATTRIBUTE', params: { name: 'PIPPO' } },
+    ]);
+    expect(
+      ok('DATA_BLOCK "D"\nVERSION : 0.1\nNastro\nBEGIN\nEND_DATA_BLOCK\n').units[0],
+    ).toMatchObject({ kind: 'IDB', instanceOf: 'Nastro' });
+  });
+
+  it('commento del blocco dopo VERSION (TIA), dopo TITLE (STEP 7) o in tutti e due i punti', () => {
+    const fb = ok(
+      'FUNCTION_BLOCK "A"\nTITLE = Titolo\nVERSION : 0.1\n//Riga 1\n//Riga 2\nVAR_INPUT\n  a : Bool;\nEND_VAR\nBEGIN\nEND_FUNCTION_BLOCK\n',
+    ).units[0]!;
+    if (fb.kind !== 'FB') throw new Error();
+    expect(fb.block.header).toMatchObject({ title: 'Titolo', comment: 'Riga 1\nRiga 2' });
+
+    const db = ok(
+      'DATA_BLOCK "D"\nTITLE =\nVERSION : 0.1\nNON_RETAIN\n//Commento del DB\nSTRUCT\n  a : Int;\nEND_STRUCT;\nBEGIN\nEND_DATA_BLOCK\n',
+    ).units[0]!;
+    if (db.kind !== 'DB') throw new Error();
+    expect(db.db.header.comment).toBe('Commento del DB');
+    expect(db.db.attributes.nonRetain).toBe(true);
+
+    const both = ok(
+      'FUNCTION "F" : Void\nTITLE =\n//uno\nAUTHOR : Me\n//due\nVERSION : 0.1\nBEGIN\nEND_FUNCTION\n',
+    ).units[0]!;
+    if (both.kind !== 'FC') throw new Error();
+    expect(both.block.header).toMatchObject({ comment: 'uno\ndue', author: 'Me' });
   });
 });

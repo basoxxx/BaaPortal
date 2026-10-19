@@ -12,6 +12,7 @@ import {
 } from './operands';
 
 export type * from './ast';
+export { PARSE_ERROR_CODES } from './ast';
 
 /** Una porzione di righe sorgente: serve a formatNetwork per riscrivere riga per riga. */
 export interface Unit {

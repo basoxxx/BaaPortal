@@ -82,17 +82,20 @@ export function splitNetworks(lines: string[], from: number, to: number): RawNet
   return out;
 }
 
-const unknownCount = (code: string, m: Mnemonic): number =>
-  parseNetwork(code, m).errors.filter((e) => e.code === 'UNKNOWN_INSTRUCTION').length;
+const errorCount = (code: string, m: Mnemonic): number => parseNetwork(code, m).errors.length;
 
-/** Sceglie il mnemonico del file: meno istruzioni sconosciute, a parità l'internazionale. */
+/**
+ * Sceglie il mnemonico del file: meno errori di analisi in tutto (istruzioni e operandi, perché il
+ * codice tedesco può usare solo istruzioni comuni, `L`, `T`, `=`, con aree tedesche come `EW`), a
+ * parità l'internazionale.
+ */
 export function detectMnemonic(nets: RawNetwork[]): Mnemonic {
   let intl = 0;
   let german = 0;
   for (const n of nets) {
     if (n.code === '') continue;
-    intl += unknownCount(n.code, 'international');
-    german += unknownCount(n.code, 'german');
+    intl += errorCount(n.code, 'international');
+    german += errorCount(n.code, 'german');
   }
   return german < intl ? 'german' : 'international';
 }

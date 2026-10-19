@@ -46,7 +46,9 @@
     "sourceApplyFailed": "Impossibile generare i blocchi dalla sorgente \"{{name}}\": {{message}}",
     "sourceApplied": "Sorgente \"{{name}}\": creati {{created}} oggetti, sostituiti {{replaced}}.",
     "sourceExported": "Sorgente \"{{name}}\" esportata in \"{{path}}\".",
-    "sourceExportFailed": "Impossibile esportare la sorgente \"{{name}}\": {{message}}"
+    "sourceExportFailed": "Impossibile esportare la sorgente \"{{name}}\": {{message}}",
+    "sourceStartValuesSkipped": "\"{{name}}\": i valori iniziali di {{members}} non sono scritti nella sorgente (la sorgente non ha una forma per i membri composti). Restano nel progetto quando la sorgente sostituisce l'oggetto.",
+    "sourceLanguageSkipped": "\"{{name}}\" non esportato: lingua {{language}}."
   },
   "commands": {
     "project.new": "Nuovo…",

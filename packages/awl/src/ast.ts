@@ -67,8 +67,17 @@ export interface Statement {
   range: Range;
 }
 
+/** Codici degli errori del parser (fonte unica: `ParseError['code']` ne deriva). */
+export const PARSE_ERROR_CODES = [
+  'SYNTAX',
+  'UNKNOWN_INSTRUCTION',
+  'BAD_OPERAND',
+  'UNCLOSED_STRING',
+  'UNCLOSED_PARAMS',
+] as const;
+
 export interface ParseError {
-  code: 'SYNTAX' | 'UNKNOWN_INSTRUCTION' | 'BAD_OPERAND' | 'UNCLOSED_STRING' | 'UNCLOSED_PARAMS';
+  code: (typeof PARSE_ERROR_CODES)[number];
   range: Range;
   params?: Record<string, string>;
 }

@@ -47,13 +47,16 @@ function freeNumber(device: PlcDevice, kind: Kind): number {
   return Math.max(0, ...used) + 1;
 }
 
+const familyOf = (kind: string): string => (kind === 'IDB' ? 'DB' : kind);
+
+/** Nome di un oggetto indicato solo per numero: quello del catalogo per un OB, altrimenti `FB3`, `DB5`. */
 function defaultName(device: PlcDevice, unitKind: SourceUnit['kind'], number: number): string {
   const base =
-    unitKind === 'OB' ? (findOb(number)?.defaultName ?? `OB${number}`) : `${unitKind}${number}`;
+    unitKind === 'OB'
+      ? (findOb(number)?.defaultName ?? `OB${number}`)
+      : `${familyOf(unitKind)}${number}`;
   return uniqueName(base, symbolNames(device));
 }
-
-const familyOf = (kind: string): string => (kind === 'IDB' ? 'DB' : kind);
 
 function findExisting(device: PlcDevice, unit: SourceUnit): Udt | Block | undefined {
   const byNumber = unit.number !== undefined;
@@ -87,6 +90,45 @@ function markStartInfo(block: CodeBlock): void {
 }
 
 type Target = { kind: 'udt'; obj: Udt } | { kind: 'block'; obj: Block };
+
+const typeKey = (type: string): string => type.replace(/\s+/g, '').normalize('NFC').toLowerCase();
+
+/**
+ * I valori iniziali dei membri composti (`overrides`) non hanno una forma nella sorgente: quando la
+ * sorgente sostituisce un oggetto, ogni membro allo stesso percorso (stesso nome, a ogni livello) e
+ * con lo stesso tipo riprende quelli dell'oggetto vecchio che la sorgente non dà. Un array con valori
+ * iniziali nella sorgente (`:= 1, 2, 3`) ha già i suoi elementi.
+ */
+function carryOverrides(from: Member[], to: Member[]): void {
+  for (const m of to) {
+    const old = from.find((o) => sameName(o.name, m.name));
+    if (!old || typeKey(old.type) !== typeKey(m.type)) continue;
+    const hasInitial = m.initial !== undefined && m.initial !== '';
+    for (const [key, value] of Object.entries(old.overrides ?? {})) {
+      if (hasInitial && key.startsWith('[')) continue;
+      if (m.overrides && Object.hasOwn(m.overrides, key)) continue;
+      (m.overrides ??= {})[key] = value;
+    }
+    if (old.members && m.members) carryOverrides(old.members, m.members);
+  }
+}
+
+const SECTIONS = ['input', 'output', 'inOut', 'static', 'temp'] as const;
+
+/**
+ * Riporta i valori composti dell'oggetto sostituito (UDT e interfacce; i DB li hanno in BEGIN).
+ * `old` è della stessa famiglia di `next` (lo garantisce findExisting).
+ */
+function keepStartValues(old: Udt | Block, next: Target): void {
+  if (next.kind === 'udt') {
+    carryOverrides((old as Udt).members, next.obj.members);
+    return;
+  }
+  const b = next.obj;
+  const o = old as Block;
+  if (b.kind === 'DB' || b.kind === 'IDB' || o.kind === 'DB' || o.kind === 'IDB') return;
+  for (const s of SECTIONS) carryOverrides(o.interface[s], b.interface[s]);
+}
 
 /**
  * Applica la sorgente al dispositivo, sul posto (da chiamare dentro un solo `edit`). Ordine: UDT, poi
@@ -175,6 +217,7 @@ export function applySource(
         unit.number !== undefined || (unit.kind === 'OB' && !sameName(existing.name, unit.name));
       const name = keepName ? existing.name : unit.name;
       const t = build(unit, existing.number, name);
+      keepStartValues(existing, t);
       t.obj.id = existing.id;
       t.obj.group = existing.group;
       if (t.kind === 'udt') device.udts[device.udts.indexOf(existing as Udt)] = t.obj;

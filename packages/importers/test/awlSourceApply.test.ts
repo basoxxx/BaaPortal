@@ -120,6 +120,43 @@ describe('applySource', () => {
     });
   });
 
+  it('un DB di istanza indicato solo per numero prende il nome DB<n>', () => {
+    const d = emptyDevice();
+    applySource(
+      d,
+      parse(
+        'FUNCTION_BLOCK "F"\nBEGIN\nEND_FUNCTION_BLOCK\nDATA_BLOCK DB 5\n"F"\nBEGIN\nEND_DATA_BLOCK\n',
+      ),
+      seq('n'),
+    );
+    expect(d.blocks.find((b) => b.kind === 'IDB')).toMatchObject({ name: 'DB5', number: 5 });
+  });
+
+  it('un DB dichiarato con un UDT diventa un DB globale con membri propri', () => {
+    const d = emptyDevice();
+    const asse = createUdt({ name: 'Asse', number: 1, newId: seq('u') });
+    asse.members.push({ id: 'u-pos', name: 'Pos', type: 'Real', comment: 'c' });
+    d.udts.push(asse);
+    const r = parseAwlSource(
+      'DATA_BLOCK "Dati"\n"Asse"\nBEGIN\n  Pos := 2.0;\nEND_DATA_BLOCK\n',
+      d,
+    );
+    if (!r.ok) throw new Error(JSON.stringify(r.errors));
+    applySource(d, r.source, seq('n'));
+    const db = d.blocks.find((b) => b.name === 'Dati');
+    if (db?.kind !== 'DB') throw new Error(db?.kind);
+    expect(db.members).toEqual([
+      {
+        id: expect.stringMatching(/^n\d+$/),
+        name: 'Pos',
+        type: 'Real',
+        comment: 'c',
+        initial: '2.0',
+      },
+    ]);
+    expect(asse.members[0]).toEqual({ id: 'u-pos', name: 'Pos', type: 'Real', comment: 'c' });
+  });
+
   it('i membri di avvio dell OB sono marcati in sola lettura', () => {
     const d = emptyDevice();
     applySource(

@@ -1,7 +1,12 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { SOURCE_ERROR_CODES, SOURCE_STRUCTURE_ERROR_CODES } from '../src/index';
+import { PARSE_ERROR_CODES } from '@baaportal/awl';
+import {
+  SOURCE_AWL_ERROR_CODES,
+  SOURCE_ERROR_CODES,
+  SOURCE_STRUCTURE_ERROR_CODES,
+} from '../src/index';
 
 describe('codici di errore delle sorgenti', () => {
   it("l'elenco esportato contiene ogni codice emesso dal lettore", () => {
@@ -14,5 +19,10 @@ describe('codici di errore delle sorgenti', () => {
     expect(used.size).toBeGreaterThan(8);
     for (const code of used) expect(SOURCE_STRUCTURE_ERROR_CODES, code).toContain(code);
     expect(new Set(SOURCE_ERROR_CODES).size).toBe(SOURCE_ERROR_CODES.length);
+  });
+
+  it('i codici del codice AWL sono quelli del parser (stesso elenco, non una copia)', () => {
+    expect(SOURCE_AWL_ERROR_CODES).toBe(PARSE_ERROR_CODES);
+    for (const code of PARSE_ERROR_CODES) expect(SOURCE_ERROR_CODES).toContain(code);
   });
 });

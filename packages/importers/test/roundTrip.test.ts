@@ -1,3 +1,4 @@
+import { createCodeBlock } from '@baaportal/project';
 import { describe, expect, it } from 'vitest';
 import {
   applySource,
@@ -28,7 +29,7 @@ function roundTrip(text: string): string {
   if (!parsed.ok) throw new Error(JSON.stringify(parsed.errors));
   const d = emptyDevice();
   applySource(d, parsed.source, seq('n'));
-  return generateAwlSource(d, allRefs(d), parsed.source.mnemonic);
+  return generateAwlSource(d, allRefs(d), parsed.source.mnemonic).text;
 }
 
 describe('andata e ritorno', () => {
@@ -54,7 +55,7 @@ describe('andata e ritorno', () => {
     expect(d.blocks.length + d.udts.length).toBe(first);
     expect(r.created).toHaveLength(0);
     expect(r.replaced).toHaveLength(first);
-    expect(normalize(generateAwlSource(d, allRefs(d), 'international'))).toBe(normalize(text));
+    expect(normalize(generateAwlSource(d, allRefs(d), 'international').text)).toBe(normalize(text));
   });
 });
 
@@ -97,4 +98,44 @@ describe('prestazioni', () => {
       expect(ms).toBeLessThan(2000);
     },
   );
+});
+
+describe('andata e ritorno in tedesco', () => {
+  it('un blocco con soli mnemonici comuni (L, T, O, =) generato in tedesco si reimporta pulito', () => {
+    const d = emptyDevice();
+    const fc = createCodeBlock({
+      kind: 'FC',
+      number: 1,
+      name: 'Copia',
+      language: 'AWL',
+      newId: seq('g'),
+    });
+    fc.networks[0]!.source = '\tL %IW0;\n\tT %QW0;\n\tO %I0.0;\n\t= %Q4.0;';
+    d.blocks.push(fc);
+    const german = generateAwlSource(d, allRefs(d), 'german').text;
+    expect(german).toContain('\tL %EW0;');
+    const again = parseAwlSource(german, d);
+    if (!again.ok) throw new Error(JSON.stringify(again.errors));
+    expect(again.source.mnemonic).toBe('german');
+    const unit = again.source.units[0]!;
+    if (unit.kind !== 'FC') throw new Error();
+    expect(unit.block.networks[0]!.source).toBe(fc.networks[0]!.source);
+  });
+
+  it.each(CANONICAL)('generata in tedesco si reimporta pulita: %s', (name) => {
+    const text = fixture(name);
+    const p = parseAwlSource(text);
+    if (!p.ok) throw new Error(JSON.stringify(p.errors));
+    const d = emptyDevice();
+    applySource(d, p.source, seq('n'));
+    const german = generateAwlSource(d, allRefs(d), 'german').text;
+    const again = parseAwlSource(german, d);
+    if (!again.ok) throw new Error(JSON.stringify(again.errors));
+    // Se il codice ha istruzioni o aree, il mnemonico rilevato è il tedesco.
+    const fresh = emptyDevice();
+    applySource(fresh, again.source, seq('m'));
+    expect(normalize(generateAwlSource(fresh, allRefs(fresh), 'international').text)).toBe(
+      normalize(text),
+    );
+  });
 });

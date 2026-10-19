@@ -27,7 +27,7 @@ describe('OB con numero', () => {
         newId: seq('g'),
       }),
     );
-    const text = generateAwlSource(d, allRefs(d), 'international');
+    const text = generateAwlSource(d, allRefs(d), 'international').text;
     expect(text).toContain('ORGANIZATION_BLOCK OB 35\n');
     expect(text).not.toContain('ORGANIZATION_BLOCK "');
   });
@@ -103,7 +103,7 @@ describe('titolo e nome degli UDT', () => {
     const d = emptyDevice();
     applySource(d, s, seq('n'));
     expect(d.udts[0]).toMatchObject({ title: 'Titolo', headerName: 'Nm', comment: 'commento' });
-    expect(generateAwlSource(d, allRefs(d), 'international')).toBe(text);
+    expect(generateAwlSource(d, allRefs(d), 'international').text).toBe(text);
   });
 
   it('createUdt: titolo e nome vuoti', () => {

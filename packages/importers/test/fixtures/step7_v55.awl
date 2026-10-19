@@ -1,0 +1,97 @@
+TYPE UDT 1
+VERSION : 0.1
+
+
+  STRUCT 	
+   Pos : REAL ;	//Posizione dell'asse
+   Vel : INT  := 10;	
+  END_STRUCT ;	
+END_TYPE
+
+FUNCTION FC 1 : VOID
+TITLE =Copia ingressi
+VERSION : 0.1
+
+
+BEGIN
+NETWORK
+TITLE =
+
+      L     EW     0; 
+      T     AW     0; 
+      L     EW     2; 
+      T     MW    20; 
+END_FUNCTION
+
+FUNCTION_BLOCK FB 1
+TITLE =Contatore
+//Conta i fronti dell'ingresso.
+AUTHOR : Diego
+VERSION : 0.1
+CODE_VERSION1
+
+
+VAR_INPUT
+  Avvio : BOOL ;	
+END_VAR
+VAR_OUTPUT
+  Pronto : BOOL ;	
+END_VAR
+VAR
+  Ora : DATE_AND_TIME  := DT#90-1-1-0:0:0.000;	//Ultimo fronte
+  Conta : INT ;	
+END_VAR
+BEGIN
+NETWORK
+TITLE =
+
+      O     #Avvio; 
+      =     #Pronto; 
+NETWORK
+TITLE =Uscita
+
+      O     E      0.0; 
+      =     A      4.0; 
+END_FUNCTION_BLOCK
+
+DATA_BLOCK DB 1
+TITLE =
+VERSION : 0.1
+
+ FB 1
+BEGIN
+   Avvio := FALSE; 
+   Pronto := FALSE; 
+   Ora := DT#90-1-1-0:0:0.000; 
+   Conta := 0; 
+END_DATA_BLOCK
+
+DATA_BLOCK DB 2
+TITLE =Dati asse
+VERSION : 0.1
+
+ UDT 1
+BEGIN
+   Pos := 0.000000e+000; 
+   Vel := 10; 
+END_DATA_BLOCK
+
+ORGANIZATION_BLOCK OB 1
+TITLE =Ciclo
+VERSION : 0.1
+
+
+BEGIN
+NETWORK
+TITLE =
+
+      CALL FC     1 ;
+NETWORK
+TITLE =
+
+      CALL FB     1 , DB     1 (
+           Avvio                    := E      0.1,
+           Pronto                   := A      4.1);
+
+END_ORGANIZATION_BLOCK
+

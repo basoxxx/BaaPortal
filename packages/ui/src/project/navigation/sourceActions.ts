@@ -7,6 +7,7 @@ import {
   generateAwlSource,
   parseAwlSource,
   SOURCE_AWL_ERROR_CODES,
+  type GenerateWarning,
   type SourceError,
 } from '@baaportal/importers';
 import {
@@ -119,11 +120,12 @@ export async function addSourceFiles(ctx: SourceCtx, deviceId: string): Promise<
   });
 }
 
-function listNames(names: string[]): string {
+/** Al più MAX_LISTED nomi, poi "e altri N". */
+function listNames(names: string[], separator = '\n'): string {
   const listed = names.slice(0, MAX_LISTED);
   if (names.length > MAX_LISTED)
     listed.push(t('objects.deleteMore', { count: names.length - MAX_LISTED }));
-  return listed.join('\n');
+  return listed.join(separator);
 }
 
 const nameOfRef = (dev: PlcDevice, r: ObjectRef): string =>
@@ -270,6 +272,29 @@ export function objectsToGenerate(
   return deviceId === null ? null : { deviceId, refs };
 }
 
+/** Ciò che la generazione non ha scritto: un avviso in Informazioni per oggetto. */
+function reportGenerateWarnings(store: StoreApi<AppState>, warnings: GenerateWarning[]): void {
+  if (warnings.length === 0) return;
+  const s = store.getState();
+  for (const w of warnings) {
+    s.pushMessage(
+      w.kind === 'startValues'
+        ? {
+            severity: 'warning',
+            textKey: 'messages.sourceStartValuesSkipped',
+            params: { name: w.name, members: listNames(w.members, ', ') },
+          }
+        : {
+            severity: 'warning',
+            textKey: 'messages.sourceLanguageSkipped',
+            params: { name: w.name, language: w.language },
+          },
+    );
+  }
+  s.setInspectorTab('info');
+  s.setPanel('inspector', { open: true });
+}
+
 /** "Genera sorgente dai blocchi": crea `<primo nome>.awl` (unico), la seleziona e la apre. Un solo passo. */
 export function generateSourceFromNodes(
   ctx: SourceCtx,
@@ -280,10 +305,17 @@ export function generateSourceFromNodes(
   const sel = objectsToGenerate(store.getState().doc, nodeIds);
   const dev = sel && deviceOf(store.getState().doc, sel.deviceId);
   if (!sel || !dev || sel.refs.length === 0) return null;
-  const text = generateAwlSource(dev, sel.refs, mnemonic);
-  // Il nome di un oggetto può avere caratteri che un nome di file non ammette.
-  const first =
-    nameOfRef(dev, sel.refs[0]!).replace(/[\\/:*?"<>|]/g, '_') || t('source.defaultName');
+  const { text, warnings } = generateAwlSource(dev, sel.refs, mnemonic);
+  reportGenerateWarnings(store, warnings);
+  // Solo blocchi in altre lingue: niente da scrivere.
+  if (text === '') return null;
+  // Il nome è quello del primo oggetto scritto (un blocco in un'altra lingua non c'è); può avere
+  // caratteri che un nome di file non ammette.
+  const skipped = new Set(
+    warnings.flatMap((w) => (w.kind === 'language' && 'id' in w.ref ? [w.ref.id] : [])),
+  );
+  const firstRef = sel.refs.find((r) => !('id' in r) || !skipped.has(r.id)) ?? sel.refs[0]!;
+  const first = nameOfRef(dev, firstRef).replace(/[\\/:*?"<>|]/g, '_') || t('source.defaultName');
   let created: string | null = null;
   store.getState().edit('history.generateSource', (p) => {
     const d = findDevice(p, sel.deviceId);

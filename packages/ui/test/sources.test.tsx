@@ -450,6 +450,42 @@ describe('Genera sorgente dai blocchi ed Esporta', () => {
   );
 
   it(
+    'avvisi in Informazioni: valori iniziali composti non scritti e blocchi non AWL non esportati',
+    async () => {
+      const app = await setup();
+      act(() => {
+        app.store.getState().edit('history.addBlock', (p) => {
+          const fb = createCodeBlock({ kind: 'FB', number: 4, name: 'Misura', language: 'AWL' });
+          fb.interface.static.push(
+            { id: 's1', name: 'T1', type: '"TON"', comment: '', overrides: { '.PT': 'T#5S' } },
+            {
+              id: 's2',
+              name: 'Lista',
+              type: 'Array[1..3] of Int',
+              comment: '',
+              overrides: { '[1]': '7' },
+            },
+          );
+          const scl = createCodeBlock({ kind: 'FC', number: 5, name: 'Calcolo', language: 'SCL' });
+          findDevice(p, PLC)!.blocks.push(fb, scl);
+        });
+      });
+      act(() => app.store.getState().setDoc(app.store.getState().doc));
+      await menuOf(app, ids.folder(PLC, 'blocks'));
+      await app.user.click(item('Genera sorgente dai blocchi'));
+      await waitFor(() => expect(dev(app).sources).toHaveLength(1));
+      expect(dev(app).sources[0]!.text).not.toContain('"Calcolo"');
+      const warnings = app.store.getState().messages.filter((m) => m.severity === 'warning');
+      expect(warnings.map((m) => [m.textKey, m.params])).toEqual([
+        ['messages.sourceStartValuesSkipped', { name: 'Misura', members: 'T1, Lista' }],
+        ['messages.sourceLanguageSkipped', { name: 'Calcolo', language: 'SCL' }],
+      ]);
+      expect(app.store.getState().inspectorTab).toBe('info');
+    },
+    T,
+  );
+
+  it(
     'Esporta con la finestra annullata o con un errore di scrittura',
     async () => {
       const app = await setup([{ name: 'A.awl', text: 'x' }]);

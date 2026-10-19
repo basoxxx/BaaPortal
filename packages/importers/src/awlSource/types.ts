@@ -1,10 +1,12 @@
-import type { Mnemonic } from '@baaportal/awl';
+import { PARSE_ERROR_CODES, type Mnemonic } from '@baaportal/awl';
 import type {
   CodeBlock,
   DbAttributes,
   BlockHeader,
   GlobalDb,
+  Language,
   Member,
+  ObjectRef,
   Udt,
 } from '@baaportal/project';
 
@@ -30,14 +32,8 @@ export const SOURCE_STRUCTURE_ERROR_CODES = [
   'UNSUPPORTED_SECTION',
 ] as const;
 
-/** Codici del codice AWL, inoltrati dal parser dei segmenti. */
-export const SOURCE_AWL_ERROR_CODES = [
-  'SYNTAX',
-  'UNKNOWN_INSTRUCTION',
-  'BAD_OPERAND',
-  'UNCLOSED_STRING',
-  'UNCLOSED_PARAMS',
-] as const;
+/** Codici del codice AWL, inoltrati dal parser dei segmenti: lo stesso elenco del parser. */
+export const SOURCE_AWL_ERROR_CODES = PARSE_ERROR_CODES;
 
 /** Tutti i codici possibili di `SourceError.code`: chi li mostra deve avere un messaggio per ciascuno. */
 export const SOURCE_ERROR_CODES: readonly string[] = [
@@ -79,6 +75,25 @@ export type SourceUnit =
 export interface ParsedSource {
   mnemonic: Mnemonic;
   units: SourceUnit[];
+}
+
+/**
+ * Ciò che la generazione non ha potuto scrivere, per oggetto: i valori iniziali dei membri composti
+ * (non c'è una forma verificata nella sorgente) o un blocco non AWL (non si esporta).
+ */
+export type GenerateWarning =
+  | {
+      kind: 'startValues';
+      ref: ObjectRef;
+      name: string;
+      /** Percorsi dei membri, es. `T1`, `Gruppo.Asse`. */
+      members: string[];
+    }
+  | { kind: 'language'; ref: ObjectRef; name: string; language: Language };
+
+export interface GeneratedSource {
+  text: string;
+  warnings: GenerateWarning[];
 }
 
 export type { Member };

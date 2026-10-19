@@ -31,7 +31,7 @@ describe('generateAwlSource', () => {
     assi.members.push({ id: newId(), name: 'L', type: 'Array[1..2] of "Asse"', comment: '' });
     d.udts.push(assi, asse);
     d.blocks.push(idb, dati, main, linea, nastro, fc);
-    const text = generateAwlSource(d, allRefs(d), 'international');
+    const text = generateAwlSource(d, allRefs(d), 'international').text;
     const order = text
       .split('\n')
       .filter((l) => /^(TYPE|ORGANIZATION_BLOCK|FUNCTION_BLOCK|FUNCTION|DATA_BLOCK) /.test(l));
@@ -55,7 +55,7 @@ describe('generateAwlSource', () => {
     a.networks[0]!.source = '\tCALL "B";';
     b.networks[0]!.source = '\tCALL "A";';
     d.blocks.push(a, b);
-    const text = generateAwlSource(d, allRefs(d), 'international');
+    const text = generateAwlSource(d, allRefs(d), 'international').text;
     expect(line(text, 'FUNCTION "A" : Void')).toBeGreaterThan(-1);
     expect(line(text, 'FUNCTION "B" : Void')).toBeGreaterThan(-1);
   });
@@ -64,7 +64,7 @@ describe('generateAwlSource', () => {
     const d = emptyDevice();
     applySource(d, parseOk(fixture('tutto.awl')), seq('n'));
     const refs = allRefs(d).filter((r) => r.kind === 'udt');
-    const text = generateAwlSource(d, [...refs, ...refs], 'international');
+    const text = generateAwlSource(d, [...refs, ...refs], 'international').text;
     expect(text.match(/^TYPE /gm)).toHaveLength(1);
     expect(text).not.toContain('FUNCTION');
   });
@@ -74,16 +74,46 @@ describe('generateAwlSource', () => {
     const db = createGlobalDb({ number: 1, name: 'D', newId: seq('g') });
     db.members.push({ id: 'm', name: 'a', type: 'Int', comment: '' });
     d.blocks.push(db);
-    const text = generateAwlSource(d, allRefs(d), 'international');
+    const text = generateAwlSource(d, allRefs(d), 'international').text;
     expect(text).toBe(
       'DATA_BLOCK "D"\nTITLE =\nVERSION : 0.1\n\nSTRUCT\n  a : Int;\nEND_STRUCT;\n\nBEGIN\nEND_DATA_BLOCK\n',
     );
   });
 
+  it('i blocchi non AWL non si scrivono: avviso "lingua X"', () => {
+    const d = emptyDevice();
+    const newId = seq('g');
+    const scl = createCodeBlock({ kind: 'FB', number: 1, name: 'Calc', language: 'SCL', newId });
+    scl.networks[0]!.source = 'x := 1;';
+    const kop = createCodeBlock({ kind: 'FC', number: 2, name: 'Ko', language: 'KOP', newId });
+    const awl = createCodeBlock({ kind: 'FC', number: 3, name: 'Aw', language: 'AWL', newId });
+    d.blocks.push(scl, kop, awl);
+    const { text, warnings } = generateAwlSource(d, allRefs(d), 'international');
+    expect(text).not.toContain('"Calc"');
+    expect(text).not.toContain('"Ko"');
+    expect(text).toContain('FUNCTION "Aw" : Void');
+    expect(warnings).toEqual([
+      {
+        kind: 'language',
+        ref: { kind: 'block', deviceId: d.id, id: scl.id },
+        name: 'Calc',
+        language: 'SCL',
+      },
+      {
+        kind: 'language',
+        ref: { kind: 'block', deviceId: d.id, id: kop.id },
+        name: 'Ko',
+        language: 'KOP',
+      },
+    ]);
+    // Solo blocchi non AWL: nessuna unità, testo vuoto.
+    expect(generateAwlSource(d, allRefs(d).slice(0, 2), 'international').text).toBe('');
+  });
+
   it('mnemonico tedesco richiesto', () => {
     const d = emptyDevice();
     applySource(d, parseOk(fixture('tutto.awl')), seq('n'));
-    const text = generateAwlSource(d, allRefs(d), 'german');
+    const text = generateAwlSource(d, allRefs(d), 'german').text;
     expect(text).toContain('\tU #Avvio;');
     expect(text).not.toContain('\tA #Avvio;');
   });
