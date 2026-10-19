@@ -890,15 +890,15 @@ Prove ("Fatto quando" del piano 1C):
 3. **Mnemonico tedesco:** si scrive in tedesco, si salva, si riapre il progetto. Il codice è salvato in internazionale e mostrato in tedesco.
 4. **Finestra separata:** l'editor AWL di un blocco aperto nella finestra separata conferma all'uscita dal focus e con Mod+S.
 
-- [ ] **Step 1: Scrivi le prove e verifica che falliscano dove manca la funzione**
+- [x] **Step 1: Scrivi le prove e verifica che falliscano dove manca la funzione**
 
   Run: `npm run e2e`
 
-- [ ] **Step 2: Correggi quello che le prove trovano**
+- [x] **Step 2: Correggi quello che le prove trovano**
 
   Ogni correzione di logica ha il suo test unitario.
 
-- [ ] **Step 3: Esegui tutto tre volte di fila**
+- [x] **Step 3: Esegui tutto tre volte di fila**
 
   Run: `npm test && for i in 1 2 3; do npm run e2e || break; done && npm run typecheck && npm run lint && npm run format:check`
   Expected: verde 3 volte su 3.
@@ -910,7 +910,7 @@ Prove ("Fatto quando" del piano 1C):
   - [ ] Scrittura veloce in un segmento di 500 righe: niente scatti.
   - [ ] Completamento con Ctrl+Spazio su Windows e ⌃Spazio su macOS. Su macOS Ctrl+Spazio può essere preso dal sistema per le sorgenti di input: verificare.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
   ```bash
   git add apps/desktop docs/superpowers/plans/2026-10-19-tappa1c-linguaggio-awl.md

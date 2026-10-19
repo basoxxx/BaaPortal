@@ -327,3 +327,11 @@ export function shownFileDialogs(
       (globalThis as unknown as { __fileDialogs: { kind: string; opts: unknown }[] }).__fileDialogs,
   );
 }
+
+/** Salva una schermata in `BAA_SCREENSHOT_DIR` per un controllo a occhio; con la variabile non impostata non scrive nulla. */
+export async function screenshot(page: Page, name: string): Promise<void> {
+  const dir = process.env['BAA_SCREENSHOT_DIR'];
+  if (!dir) return;
+  mkdirSync(dir, { recursive: true });
+  await page.screenshot({ path: join(dir, name) });
+}

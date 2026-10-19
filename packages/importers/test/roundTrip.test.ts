@@ -20,6 +20,7 @@ const CANONICAL = [
   'attributi.awl',
   'nomi.awl',
   'tutto.awl',
+  'collaudo.awl',
 ];
 
 function roundTrip(text: string): string {
