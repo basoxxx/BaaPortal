@@ -76,4 +76,12 @@ describe('planReads / splitArea', () => {
     expect(() => splitArea('T', 0, 0, 10, 240)).toThrow(RangeError);
     expect(() => splitArea('DB', 1, 0, 10, 18)).toThrow(RangeError);
   });
+
+  it('splitArea: lunghezza o start fuori dallo spazio a 3 byte -> RangeError', () => {
+    expect(() => splitArea('DB', 1, 0, 0x200000, 480)).toThrow(RangeError);
+    expect(() => splitArea('DB', 1, 0x200000, 1, 480)).toThrow(RangeError);
+    expect(() => splitArea('DB', 1, 0x1fffff, 2, 480)).toThrow(RangeError);
+    expect(splitArea('DB', 1, 0x1fffff, 1, 480).length).toBe(1);
+    expect(splitArea('DB', 1, 0, 0x1fffff, 480).length).toBeGreaterThan(1);
+  });
 });

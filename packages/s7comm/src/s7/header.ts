@@ -19,6 +19,12 @@ function headerLength(rosctr: number): number {
 
 export function encodeS7(p: S7Pdu): Uint8Array {
   const hl = headerLength(p.rosctr);
+  if (!Number.isInteger(p.pduRef) || p.pduRef < 0 || p.pduRef > 0xffff) {
+    throw new RangeError(`pduRef ${p.pduRef} fuori 0-65535`);
+  }
+  if (p.param.length > 0xffff || p.data.length > 0xffff) {
+    throw new RangeError('parametro o dati oltre 65535 byte');
+  }
   const out = new Uint8Array(hl + p.param.length + p.data.length);
   out[0] = PROTOCOL_ID;
   out[1] = p.rosctr;

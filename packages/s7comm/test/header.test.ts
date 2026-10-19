@@ -80,6 +80,21 @@ describe('header S7', () => {
     bad('32 03 0000 0001 0000 0000'); // ack-data senza i 2 byte di errore
   });
 
+  it('encodeS7: pduRef o lunghezze fuori da 16 bit -> RangeError', () => {
+    const base = {
+      rosctr: 1 as const,
+      pduRef: 1,
+      errorClass: 0,
+      errorCode: 0,
+      param: new Uint8Array(0),
+      data: new Uint8Array(0),
+    };
+    expect(() => encodeS7({ ...base, pduRef: 0x10000 })).toThrow(RangeError);
+    expect(() => encodeS7({ ...base, param: new Uint8Array(0x10000) })).toThrow(RangeError);
+    expect(() => encodeS7({ ...base, data: new Uint8Array(0x10000) })).toThrow(RangeError);
+    expect(encodeS7({ ...base, pduRef: 0xffff }).length).toBe(10);
+  });
+
   it('errorName copre la tabella §3.3 e dà "sconosciuto" altrimenti', () => {
     expect(errorName(0x00, 0x00)).toMatch(/nessun errore/);
     expect(errorName(0xd2, 0x09)).toMatch(/non trovato/);

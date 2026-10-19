@@ -1,7 +1,10 @@
-import { itemResponseBytes, type Area, type ReadItem } from './readVar';
+import { itemByteLength, type Area, type ReadItem } from './readVar';
 
 /** Massimo item per richiesta (proto §5.11, come snap7). */
 export const MAX_ITEMS_PER_REQUEST = 20;
+
+/** Ultimo byte indirizzabile: l'indirizzo è in bit su 3 byte, quindi 0x1FFFFF byte. */
+const MAX_ADDR_BYTES = 0x1fffff;
 
 const REQ_HEADER = 10;
 const RES_HEADER = 12;
@@ -11,7 +14,7 @@ function fits(group: ReadItem[], pdu: number): boolean {
   if (REQ_HEADER + 2 + 12 * group.length > pdu) return false;
   let res = RES_HEADER + 2;
   group.forEach((it, i) => {
-    const n = itemResponseBytes(it);
+    const n = itemByteLength(it);
     res += 4 + n + (n % 2 === 1 && i < group.length - 1 ? 1 : 0);
   });
   return res <= pdu;
@@ -53,8 +56,12 @@ export function splitArea(
 ): ReadItem[] {
   if (area === 'C' || area === 'T')
     throw new RangeError('splitArea non vale per timer e contatori');
-  if (!Number.isInteger(length) || length < 1)
-    throw new RangeError(`lunghezza ${length} non valida`);
+  if (!Number.isInteger(length) || length < 1 || length > MAX_ADDR_BYTES) {
+    throw new RangeError(`lunghezza ${length} fuori 1-${MAX_ADDR_BYTES}`);
+  }
+  if (!Number.isInteger(start) || start < 0 || start + length - 1 > MAX_ADDR_BYTES) {
+    throw new RangeError(`start ${start} fuori dallo spazio di indirizzi a 3 byte`);
+  }
   const chunk = pduLength - (RES_HEADER + 2 + 4);
   if (chunk < 1) throw new RangeError(`PDU ${pduLength} troppo piccola`);
   const out: ReadItem[] = [];

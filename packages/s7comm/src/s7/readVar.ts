@@ -17,8 +17,15 @@ export interface ReadItem {
   count: number;
 }
 
+/**
+ * Risultato di un item. `transportSize` è il byte TS dei dati come sul filo (proto §5.7);
+ * `rawLength` è il campo lunghezza grezzo (bit o byte secondo il TS), derivato dai dati se
+ * assente. Negli item con errore TS e lunghezza grezzi sono conservati per il round trip
+ * (una CPU reale risponde p.es. `0a 00 00 04`).
+ */
 export type ItemResult =
-  { ok: true; data: Uint8Array } | { ok: false; returnCode: number; name: string };
+  | { ok: true; data: Uint8Array; transportSize: number; rawLength?: number }
+  | { ok: false; returnCode: number; name: string; transportSize?: number; rawLength?: number };
 
 const FN_READ = 0x04;
 const RC_OK = 0xff;
@@ -53,9 +60,26 @@ export const ELEMENT_BYTES: Record<Exclude<TransportSize, 'BIT'>, number> = {
   TIMER: 2,
 };
 
-/** Byte attesi nella risposta per un item (stessa regola usata da planReads). */
-export function itemResponseBytes(it: ReadItem): number {
+/**
+ * Byte di dati che una CPU restituisce per un item (verificato sulle catture reali:
+ * INT x1 = 2, REAL x1 = 4, 8 timer = 16, BIT x1 = 1).
+ */
+export function itemByteLength(it: ReadItem): number {
   return it.size === 'BIT' ? Math.ceil(it.count / 8) : it.count * ELEMENT_BYTES[it.size];
+}
+
+/**
+ * Transport size dei dati con cui una CPU reale risponde a un item (proto §5.7, verificato
+ * sulle catture): timer e counter 0x09 (lunghezza in byte), BIT 0x03, REAL 0x07, INT 0x05,
+ * tutto il resto 0x04 (lunghezza in bit).
+ */
+export function responseTransportFor(it: ReadItem): number {
+  if (it.area === 'C' || it.area === 'T' || it.size === 'COUNTER' || it.size === 'TIMER')
+    return 0x09;
+  if (it.size === 'BIT') return 0x03;
+  if (it.size === 'REAL') return 0x07;
+  if (it.size === 'INT') return 0x05;
+  return 0x04;
 }
 
 function bad(msg: string): S7Error {
@@ -73,60 +97,39 @@ function checkItem(it: ReadItem): void {
   if (!Number.isInteger(it.start) || it.start < 0)
     throw new RangeError(`start ${it.start} non valido`);
   const isCT = it.area === 'C' || it.area === 'T';
-  if (isCT) {
-    if (it.size !== (it.area === 'C' ? 'COUNTER' : 'TIMER')) {
-      throw new RangeError(
-        `area ${it.area} richiede transport size ${it.area === 'C' ? 'COUNTER' : 'TIMER'}`,
-      );
-    }
-    if (it.start > 0xffffff) throw new RangeError(`numero ${it.start} troppo grande`);
-  } else {
-    if (it.size === 'COUNTER' || it.size === 'TIMER') {
-      throw new RangeError(`transport size ${it.size} solo per le aree C e T`);
-    }
-    if (it.start > 0x1fffff) throw new RangeError(`start ${it.start} oltre 0x1FFFFF`);
-  }
-  if (it.bit !== undefined) {
-    if (!Number.isInteger(it.bit) || it.bit < 0 || it.bit > 7)
-      throw new RangeError(`bit ${it.bit} fuori 0-7`);
-    if (it.size !== 'BIT') throw new RangeError('bit ammesso solo con transport size BIT');
+  if (it.start > (isCT ? 0xffffff : 0x1fffff))
+    throw new RangeError(`start ${it.start} oltre lo spazio di indirizzi`);
+  if (it.bit !== undefined && (!Number.isInteger(it.bit) || it.bit < 0 || it.bit > 7)) {
+    throw new RangeError(`bit ${it.bit} fuori 0-7`);
   }
 }
 
+const SIZE_CODE: Record<TransportSize, number> = {
+  BIT: 0x01,
+  BYTE: 0x02,
+  CHAR: 0x03,
+  WORD: 0x04,
+  INT: 0x05,
+  DWORD: 0x06,
+  DINT: 0x07,
+  REAL: 0x08,
+  COUNTER: 0x1c,
+  TIMER: 0x1d,
+};
+
 /**
- * Item S7ANY a 12 byte (proto §5.2). Per i tipi non BIT/TIMER/COUNTER la richiesta usa sempre
- * transport size BYTE (0x02) con count = numero di byte (proto §5.3), così la risposta è
- * sempre in byte indipendentemente dal tipo logico.
+ * Item S7ANY a 12 byte (proto §5.2). Transport size e count sono emessi così come sono
+ * (count in elementi di quel tipo); il nostro client usa BYTE (splitArea). L'indirizzo è
+ * start*8+bit; per le aree C e T è il numero (proto §5.8).
  */
 function encodeItem(it: ReadItem, out: Uint8Array, off: number): void {
   checkItem(it);
-  let ts: number;
-  let count = it.count;
-  let addr: number;
-  switch (it.size) {
-    case 'BIT':
-      ts = 0x01;
-      addr = it.start * 8 + (it.bit ?? 0);
-      break;
-    case 'COUNTER':
-      ts = 0x1c;
-      addr = it.start; // proto §5.8: numero, non moltiplicato per 8
-      break;
-    case 'TIMER':
-      ts = 0x1d;
-      addr = it.start;
-      break;
-    default:
-      ts = 0x02;
-      count = it.count * ELEMENT_BYTES[it.size];
-      addr = it.start * 8;
-  }
-  if (count > 0xffff) throw new RangeError(`${count} byte richiesti: oltre 65535`);
+  const addr = it.area === 'C' || it.area === 'T' ? it.start : it.start * 8 + (it.bit ?? 0);
   out[off] = 0x12;
   out[off + 1] = 0x0a;
   out[off + 2] = 0x10;
-  out[off + 3] = ts;
-  writeU16(out, off + 4, count);
+  out[off + 3] = SIZE_CODE[it.size];
+  writeU16(out, off + 4, it.count);
   writeU16(out, off + 6, it.db);
   out[off + 8] = AREA_CODE[it.area];
   out[off + 9] = (addr >>> 16) & 0xff;
@@ -210,30 +213,41 @@ function dataBytes(ts: number, len: number): number {
   }
 }
 
-/** Server side. I dati escono con TS 0x04 e lunghezza in bit; padding a 0x00 tra item dispari (proto §5.10). */
+/** Lunghezza grezza di un item ok: bit per TS 0x04/0x05, 1 per 0x03 (un bit), byte per gli altri. */
+function derivedLength(ts: number, n: number): number {
+  if (ts === 0x04 || ts === 0x05) return n * 8;
+  return n;
+}
+
+/**
+ * Server side. Ogni item ok usa il suo `transportSize`; il padding è 0x00 tra item dispari
+ * (proto §5.10). Gli item con errore escono come `rc ts len` con 4 byte e nessun dato.
+ */
 export function encodeReadResponse(results: ItemResult[]): { param: Uint8Array; data: Uint8Array } {
   if (results.length < 1 || results.length > 255)
     throw new RangeError(`${results.length} item: fuori 1-255`);
   let total = 0;
   results.forEach((r, i) => {
     const n = r.ok ? r.data.length : 0;
-    if (n > 0x1fff)
-      throw new RangeError(`item da ${n} byte: la lunghezza in bit non entra in 16 bit`);
     total += 4 + n + (n % 2 === 1 && i < results.length - 1 ? 1 : 0);
   });
   const data = new Uint8Array(total);
   let o = 0;
   results.forEach((r, i) => {
     if (r.ok) {
+      const len = r.rawLength ?? derivedLength(r.transportSize, r.data.length);
+      if (len < 0 || len > 0xffff)
+        throw new RangeError(`item da ${r.data.length} byte: lunghezza non codificabile`);
       data[o] = RC_OK;
-      data[o + 1] = 0x04;
-      writeU16(data, o + 2, r.data.length * 8);
+      data[o + 1] = r.transportSize & 0xff;
+      writeU16(data, o + 2, len);
       data.set(r.data, o + 4);
       o += 4 + r.data.length;
       if (r.data.length % 2 === 1 && i < results.length - 1) o += 1;
     } else {
       data[o] = r.returnCode & 0xff;
-      data[o + 1] = 0x00;
+      data[o + 1] = (r.transportSize ?? 0) & 0xff;
+      writeU16(data, o + 2, r.rawLength ?? 0);
       o += 4;
     }
   });
@@ -250,10 +264,21 @@ export function decodeReadResponse(param: Uint8Array, data: Uint8Array): ItemRes
     const rc = data[o]!;
     const ts = data[o + 1]!;
     const len = readU16(data, o + 2);
-    const nb = rc === RC_OK ? dataBytes(ts, len) : ts === 0x00 ? 0 : dataBytes(ts, len);
+    if (rc !== RC_OK) {
+      // Item con errore: 4 byte, nessun dato, TS e lunghezza arbitrari (le CPU reali mandano `0a 00 00 04`).
+      out.push({
+        ok: false,
+        returnCode: rc,
+        name: itemReturnName(rc),
+        transportSize: ts,
+        rawLength: len,
+      });
+      o += 4;
+      continue;
+    }
+    const nb = dataBytes(ts, len);
     if (o + 4 + nb > data.length) throw bad('dati item oltre la parte dati');
-    if (rc === RC_OK) out.push({ ok: true, data: data.slice(o + 4, o + 4 + nb) });
-    else out.push({ ok: false, returnCode: rc, name: itemReturnName(rc) });
+    out.push({ ok: true, data: data.slice(o + 4, o + 4 + nb), transportSize: ts, rawLength: len });
     o += 4 + nb;
     if (nb % 2 === 1 && i < n - 1) o += 1;
   }
