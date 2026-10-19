@@ -514,3 +514,50 @@ describe('checkDevice: proprietà della CPU', () => {
     ]);
   });
 });
+
+describe('SFB come tipo di istanza', () => {
+  it('DB di istanza di una SFB e multi-istanza "TON" senza errori', () => {
+    const d = fresh();
+    const fb = createCodeBlock({ kind: 'FB', number: 1, name: 'Ritardo', language: 'AWL', newId });
+    fb.interface.static.push(member('T1', '"TON"'));
+    const idb = createInstanceDb({ number: 1, name: 'T1_DB', instanceOf: 'TON', newId });
+    idb.overrides = { PT: 'T#5s' };
+    d.blocks.push(fb, idb);
+    expect(checkDevice(d, cpu)).toEqual([]);
+  });
+
+  it("un override su un'istanza di SFB e verificato sull'interfaccia della SFB", () => {
+    const d = fresh();
+    const idb = createInstanceDb({ number: 1, name: 'T1_DB', instanceOf: 'TON', newId });
+    idb.overrides = { PT: 'abc', Manca: '1' };
+    d.blocks.push(idb);
+    expect(checkDevice(d, cpu).map((x) => [x.code, x.params?.path])).toEqual([
+      ['VALUE_INVALID', 'PT'],
+      ['VALUE_INVALID', 'Manca'],
+    ]);
+  });
+
+  it('un nome che non e ne un FB ne una SFB resta INSTANCE_FB_MISSING', () => {
+    const d = fresh();
+    d.blocks.push(createInstanceDb({ number: 1, name: 'X_DB', instanceOf: 'Nonexistent', newId }));
+    expect(codes(checkDevice(d, cpu))).toEqual(['INSTANCE_FB_MISSING']);
+  });
+
+  it('un tag puo chiamarsi come una SFB: i blocchi di sistema non sono nei simboli del progetto', () => {
+    const d = fresh();
+    d.tagTables[0]!.tags.push(tag('TON', 'Bool', '%M0.0'));
+    expect(checkDevice(d, cpu)).toEqual([]);
+  });
+
+  it('un FB o un UDT del progetto con il nome di una SFB ha la precedenza', () => {
+    const d = fresh();
+    const fb = createCodeBlock({ kind: 'FB', number: 1, name: 'TON', language: 'AWL', newId });
+    fb.interface.input.push(member('Solo', 'Int'));
+    const idb = createInstanceDb({ number: 1, name: 'T_DB', instanceOf: 'TON', newId });
+    idb.overrides = { Solo: '3' };
+    d.blocks.push(fb, idb);
+    expect(checkDevice(d, cpu)).toEqual([]);
+    idb.overrides = { PT: 'T#5s' };
+    expect(codes(checkDevice(d, cpu))).toEqual(['VALUE_INVALID']);
+  });
+});

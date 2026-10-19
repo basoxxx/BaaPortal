@@ -1,5 +1,12 @@
-import { parseType, type DataType, type TypedMember, type TypeResolver } from '@baaportal/s7-types';
+import {
+  formatType,
+  parseType,
+  type DataType,
+  type TypedMember,
+  type TypeResolver,
+} from '@baaportal/s7-types';
 import { sameName } from '@baaportal/s7-types';
+import { findSystemBlock, type SystemBlock } from '@baaportal/catalog';
 import type { Member, PlcDevice } from './model';
 
 function withStructMembers(type: DataType, members: Member[] | undefined): DataType {
@@ -21,7 +28,23 @@ export function toTypedMembers(members: Member[]): TypedMember[] {
   return out;
 }
 
-/** Risolve i tipi con nome: prima gli UDT, poi gli FB. */
+/** La SFB con il nome indicato, se esiste (le SFC non sono tipi). */
+export function findSystemFb(name: string): SystemBlock | undefined {
+  const b = findSystemBlock({ name });
+  return b?.kind === 'SFB' ? b : undefined;
+}
+
+/** Interfaccia di una SFB come membri del progetto, per verifiche e valori sostituiti. */
+export function systemFbMembers(b: SystemBlock): Member[] {
+  return [...b.input, ...b.output, ...b.inOut, ...(b.static ?? [])].map((m) => ({
+    id: m.name,
+    name: m.name,
+    type: formatType(m.type),
+    comment: '',
+  }));
+}
+
+/** Risolve i tipi con nome: prima gli UDT, poi gli FB, infine le SFB del catalogo. */
 export function typeResolver(device: PlcDevice): TypeResolver {
   return (name) => {
     const udt = device.udts.find((u) => sameName(u.name, name));
@@ -36,6 +59,18 @@ export function typeResolver(device: PlcDevice): TypeResolver {
           output: toTypedMembers(i.output),
           inOut: toTypedMembers(i.inOut),
           static: toTypedMembers(i.static),
+        },
+      };
+    }
+    const sfb = findSystemFb(name);
+    if (sfb) {
+      return {
+        kind: 'fb',
+        sections: {
+          input: sfb.input,
+          output: sfb.output,
+          inOut: sfb.inOut,
+          static: sfb.static ?? [],
         },
       };
     }
