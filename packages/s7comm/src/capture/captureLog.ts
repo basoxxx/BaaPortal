@@ -14,6 +14,8 @@ export interface CaptureStream {
   client: string;
   server: string;
   frames: CapturedFrame[];
+  /** Byte TCP scartati perché dopo un buco della cattura non c'era un inizio di TPKT sicuro. */
+  droppedBytes: number;
 }
 
 /**

@@ -565,3 +565,101 @@ function s7Userdata(group: number, sub: number, type: number): Uint8Array {
     data: encodeS7({ rosctr: 7, pduRef: 1, errorClass: 0, errorCode: 0, param, data }),
   });
 }
+
+// ---- buchi nella cattura: nessun falso frame --------------------------------------------------
+
+/** Una connessione (con SYN) fatta di segmenti dati; `drop` dice quali segmenti mancano. */
+function gappy(segments: Uint8Array[], drop: Set<number>): Uint8Array {
+  const segs: Seg[] = [
+    { from: 'c', seq: 1000, flags: 0x02, ms: 0 },
+    { from: 's', seq: 5000, flags: 0x12, ms: 1 },
+  ];
+  let seq = 1001;
+  segments.forEach((payload, i) => {
+    if (!drop.has(i)) segs.push({ from: 'c', seq, payload, ms: 10 + i });
+    seq += payload.length;
+  });
+  return pcapFile(segs.map((x) => ({ ms: 1000 + (x.ms ?? 0), data: ether(ipTcp(x)) })));
+}
+
+const tpktDt = (n: number, fill: number): Uint8Array =>
+  tpktOf(dt('32010000000100080000f0' + fill.toString(16).padStart(2, '0').repeat(n)));
+
+describe('readPcap: buchi nella cattura', () => {
+  it('dopo un buco, un segmento che inizia con 03 xx ma non è un TPKT non dà frame falsi', () => {
+    const A = tpktDt(20, 0xa1);
+    const B = tpktDt(30, 0xb2);
+    // 03 00 00 20 05 ...: versione e lunghezza plausibili, ma LI 5 non lo è
+    const junk = Uint8Array.from([3, 0, 0, 0x20, 5, 0xf0, 0x80, ...new Array<number>(40).fill(7)]);
+    const junk2 = Uint8Array.from([3, 0x11, 0x22, 0x33, ...new Array<number>(40).fill(9)]);
+    const hole = new Uint8Array(10);
+    const s = readPcap(gappy([A, hole, junk, junk2, B], new Set([1])));
+    expect(s).toHaveLength(1);
+    expect(summary(s[0]!.frames)).toEqual([`tx:${hex(A.subarray(4))}`, `tx:${hex(B.subarray(4))}`]);
+    expect(s[0]!.droppedBytes).toBeGreaterThanOrEqual(junk.length + junk2.length);
+  });
+
+  it('buco a metà segmento: il TPKT che segue dentro lo stesso segmento è recuperato', () => {
+    const A = tpktDt(20, 0xa1);
+    const B = tpktDt(30, 0xb2);
+    const C = tpktDt(5, 0xc3);
+    const tail = new Uint8Array(12).fill(0x55); // coda di un frame di cui manca l'inizio
+    const joined = Uint8Array.from([...tail, ...B, ...C]);
+    const s = readPcap(gappy([A, new Uint8Array(8), joined], new Set([1])));
+    expect(summary(s[0]!.frames)).toEqual([
+      `tx:${hex(A.subarray(4))}`,
+      `tx:${hex(B.subarray(4))}`,
+      `tx:${hex(C.subarray(4))}`,
+    ]);
+    expect(s[0]!.droppedBytes).toBe(tail.length);
+  });
+
+  it('senza buchi droppedBytes vale 0', () => {
+    const s = readPcap(pcapFile(conversation()));
+    expect(s[0]!.droppedBytes).toBe(0);
+  });
+
+  it('buchi in posizioni casuali tra 200 frame noti: ogni frame restituito è uno dei noti', () => {
+    for (let seed = 1; seed <= 25; seed++) {
+      let x = seed * 7919;
+      const rnd = (n: number): number => {
+        x = (Math.imul(x, 1103515245) + 12345) >>> 0;
+        return (x >>> 8) % n;
+      };
+      const known: Uint8Array[] = [];
+      for (let i = 0; i < 200; i++) {
+        const body = new Uint8Array(3 + rnd(300));
+        for (let j = 0; j < body.length; j++) body[j] = rnd(256);
+        known.push(tpktOf(encodeCotp({ type: 'DT', eot: true, data: body })));
+      }
+      const all = Uint8Array.from(known.flatMap((f) => [...f]));
+      const segments: Uint8Array[] = [];
+      for (let o = 0; o < all.length;) {
+        const n = Math.min(1 + rnd(400), all.length - o);
+        segments.push(all.subarray(o, o + n));
+        o += n;
+      }
+      const drop = new Set<number>();
+      segments.forEach((_s, i) => {
+        if (rnd(100) < 5) drop.add(i);
+      });
+      const set = new Set(known.map((f) => hex(f.subarray(4))));
+      const s = readPcap(gappy(segments, drop));
+      const got = s.flatMap((c) => c.frames);
+      for (const f of got) expect(set.has(hex(f.bytes)), `seed ${seed}`).toBe(true);
+      expect(got.length, `seed ${seed}`).toBeGreaterThan(50);
+    }
+  });
+
+  it('Simple Packet pcapng troppo corto: PROTOCOL, mai una lunghezza negativa', () => {
+    const ok = pcapngFile([{ ms: 0, data: new Uint8Array(4), simple: true }]);
+    // sostituisce l'ultimo blocco con uno SPB lungo 12 byte (senza dati né lunghezza originale)
+    const le = new DataView(new ArrayBuffer(12));
+    le.setUint32(0, 3, true);
+    le.setUint32(4, 12, true);
+    le.setUint32(8, 12, true);
+    const head = ok.subarray(0, ok.length - 20);
+    const bad = Uint8Array.from([...head, ...new Uint8Array(le.buffer)]);
+    expect(() => readPcap(bad)).toThrow(S7Error);
+  });
+});

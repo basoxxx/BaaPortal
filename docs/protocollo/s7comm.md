@@ -1215,7 +1215,8 @@ volo.
 | `COTP_Example.pcapng.gz` | `0e5569a842e1b00ef5ba3c3ef43b692b0fdc3ea6b6b6146b40374561a73f6b58` | due PC che scambiano ISO 8073 su RFC 1006 (COTP puro, **non S7**). Utile solo per COTP |
 
 ### 16.2 automayt/ICS-pcap (GitHub, Git-LFS)
-URL base media: `https://media.githubusercontent.com/media/automayt/ICS-pcap/master/S7/<path>`
+URL base media: `https://media.githubusercontent.com/media/automayt/ICS-pcap/master/S7/<n>/<n>.pcap`
+(ogni cattura sta in una sottocartella con il suo nome; `raw.` darebbe il puntatore LFS)
 Repo: <https://github.com/automayt/ICS-pcap>. Licenza: **non dichiarata** (raccolta da
 digitalbond, 4SICS, netresec, scadahacker, Wireshark, kargs.net, Oak Ridge…). Trattare
 come terze parti, non ridistribuire.
@@ -1239,8 +1240,9 @@ Alliance) — licenza permissiva, dichiarata. La più adatta per un uso CI citab
 | `s7ident.pcap` | `7a2ae7f2992669a3eb36a878f0e4f124c86ecdf3fc3a284f78e2e6e1deeea680` | Client vs server (snap7-like) emulante **CPU 315-2EH14**; setup, SZL 0x0011/0x001C/0x0131/0x0424, start-upload rifiutato `0xD241` |
 | `snap7.pcap` | `2b91f6a8a203ec83e4f2dbb69d5e61602845f23da0baa31d95d029fb24cbd427` | **CPU reale 315-2PN/DP** (`6ES7 315-2EH14`, S7300/ET200M): setup, SZL 0x0011/0x001C/0x0131/0x0424, **upload OB/DB/FB (0x1D/1E/1F) completo**, read/write var multi-item (incl. timer/counter), **PLC stop 0x29**, **_MODU / _GARB / cold start**. ⚠️ Identico (stesso SHA) a `gymgit/snap7_s300_everything.pcapng` |
 
-### 16.4 gymgit/s7-pcaps (GitHub, Git-LFS) — di Gyorgy Miru
-URL base: `https://raw.githubusercontent.com/gymgit/s7-pcaps/master/<file>`
+### 16.4 gymgit/s7-pcaps (GitHub, **non** Git-LFS) — di Gyorgy Miru
+URL base: `https://raw.githubusercontent.com/gymgit/s7-pcaps/master/<file>` (i file sono git normali:
+`media.githubusercontent.com` dà 404, `raw.` dà i byte veri; stessi URL di `public.json`).
 Repo: <https://github.com/gymgit/s7-pcaps>. Licenza: non dichiarata esplicitamente;
 "created for public use", IP randomizzati. Catture S7-300/400 reali con Step7 5.5,
 TIA V13, snap7, WinCC. Sottoinsieme S7-300 rilevante:

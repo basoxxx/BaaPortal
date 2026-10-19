@@ -41,12 +41,41 @@ interface Seg {
 }
 
 /**
+ * Un inizio di TPKT plausibile in `d` a partire da `o`: versione 3, riservato 0, lunghezza >= 7,
+ * LI coerente col tipo COTP (DT: LI 2, EOT e numero 0; CR/CC/DR/ER: LI >= 6 e dentro il TPKT).
+ * Servono almeno 6 byte (7 per un DT); con meno non si può decidere e si scarta.
+ */
+function plausibleTpkt(d: Uint8Array, o: number): boolean {
+  if (d.length - o < 6 || d[o] !== 3 || d[o + 1] !== 0) return false;
+  const len = (d[o + 2]! << 8) | d[o + 3]!;
+  if (len < 7) return false; // il massimo, 65535, è il limite del campo
+  const li = d[o + 4]!;
+  const type = d[o + 5]!;
+  if (type === 0xf0) {
+    if (li !== 2 || d.length - o < 7) return false;
+    return d[o + 6] === 0x80 || d[o + 6] === 0x00;
+  }
+  if (type === 0xe0 || type === 0xd0 || type === 0x80 || type === 0x70) {
+    return li >= 6 && li + 1 <= len - 4;
+  }
+  return false;
+}
+
+/**
  * Un verso di una connessione: ricomposizione TCP in ordine di sequenza e poi TPKT.
  *
- * Le catture pubbliche hanno spesso dei buchi (pacchetti filtrati o persi). Un segmento oltre un
- * buco aspetta qualche segmento (può essere solo fuori ordine); se il buco non si chiude, si
- * riparte da lì: i byte mancanti sono persi e si riprende dal primo segmento che inizia con un
- * header TPKT.
+ * Le catture pubbliche hanno spesso dei buchi (pacchetti filtrati o persi). Strategia:
+ * - un segmento oltre un buco aspetta fino a MAX_PENDING segmenti (può essere solo fuori ordine);
+ * - se il buco non si chiude, si riparte da lì: i byte mancanti sono persi, il frame
+ *   parziale che si stava ricomponendo è scartato e si entra in "risincronizzazione";
+ * - in risincronizzazione si cerca, dentro il segmento, il primo offset che sembra l'inizio di un
+ *   TPKT (`plausibleTpkt`); i byte prima sono scartati. Lo stesso vale se manca il SYN (cattura
+ *   iniziata a connessione aperta) o se il FrameReader trova un header impossibile.
+ * Limiti: un falso inizio è possibile solo se i byte di un frame imitano un intero header TPKT +
+ * COTP (7 byte fissi, probabilità trascurabile su dati reali, non un'impossibilità); un inizio
+ * vero che cade negli ultimi byte di un segmento (meno di 7) non si può verificare e si perde con
+ * il resto del frame; la lunghezza dichiarata non si confronta con i segmenti seguenti. I byte
+ * scartati sono contati in `droppedBytes`.
  */
 class Direction {
   private next: number | null = null;
@@ -56,6 +85,9 @@ class Direction {
   private needSync = true;
   /** Un frame non può essere "arrivato" prima di quelli che lo precedono nel flusso. */
   private lastNs = 0n;
+  /** Byte nel FrameReader, non ancora in un frame completo. */
+  private buffered = 0;
+  dropped = 0;
 
   constructor(
     private readonly dir: 'tx' | 'rx',
@@ -91,8 +123,7 @@ class Direction {
       const diff = (s.seq - this.next!) | 0;
       if (diff > 0) {
         this.next = s.seq; // buco: i byte mancanti sono persi
-        this.reader = new FrameReader();
-        this.needSync = true;
+        this.resync();
       }
       const skip = Math.max(0, -diff);
       if (skip < s.data.length) this.apply(s.data.subarray(skip), s.ns);
@@ -115,21 +146,33 @@ class Direction {
     }
   }
 
+  private resync(): void {
+    this.dropped += this.buffered;
+    this.buffered = 0;
+    this.reader = new FrameReader();
+    this.needSync = true;
+  }
+
   private apply(data: Uint8Array, ns: bigint): void {
     this.next = (this.next! + data.length) >>> 0;
     if (this.needSync) {
-      if (data[0] !== 3) return; // continuazione di un frame di cui manca l'inizio
+      let off = 0;
+      while (off < data.length && !plausibleTpkt(data, off)) off++;
+      this.dropped += off;
+      if (off === data.length) return; // nessun inizio di frame qui
+      data = data.subarray(off);
       this.needSync = false;
     }
     if (ns > this.lastNs) this.lastNs = ns;
+    this.buffered += data.length;
     try {
       for (const bytes of this.reader.push(data)) {
+        this.buffered -= bytes.length + 4;
         this.out.push({ ns: this.lastNs, dir: this.dir, bytes });
       }
     } catch {
-      // Non è TPKT (o è disallineato): si scartano i byte e si aspetta un nuovo inizio.
-      this.reader = new FrameReader();
-      this.needSync = true;
+      // Header impossibile: si scarta quanto accumulato e si cerca un nuovo inizio.
+      this.resync();
     }
   }
 }
@@ -200,7 +243,12 @@ export function extractStreams(packets: RawPacket[]): CaptureStream[] {
       dir: f.dir,
       bytes: f.bytes,
     }));
-    out.push({ client: c.client, server: c.server, frames });
+    out.push({
+      client: c.client,
+      server: c.server,
+      frames,
+      droppedBytes: c.tx.dropped + c.rx.dropped,
+    });
   }
   return out;
 }

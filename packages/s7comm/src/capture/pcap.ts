@@ -107,6 +107,7 @@ function readPcapng(bytes: Uint8Array, dv: DataView): RawPacket[] {
     } else if (type === 3) {
       const iface = ifaces[0];
       if (!iface) throw bad('pcapng: Simple Packet senza interfaccia');
+      if (len < 16) throw bad('pcapng: Simple Packet troppo corto');
       const orig = dv.getUint32(o + 8, le);
       const cap = Math.min(orig, len - 16);
       out.push({ link: iface.link, ns: lastNs, data: bytes.subarray(o + 12, o + 12 + cap) });
