@@ -8,6 +8,7 @@ export type PlcFolder =
   | 'blocks-add'
   | 'system-blocks'
   | 'sources'
+  | 'sources-add'
   | 'tags'
   | 'tags-all'
   | 'tags-add'
@@ -25,6 +26,7 @@ const FOLDERS: ReadonlySet<string> = new Set<PlcFolder>([
   'blocks-add',
   'system-blocks',
   'sources',
+  'sources-add',
   'tags',
   'tags-all',
   'tags-add',
@@ -46,6 +48,9 @@ export const ids = {
   block: (dev: string, id: string) => `plc:${dev}:block:${id}`,
   tagTable: (dev: string, id: string) => `plc:${dev}:tagTable:${id}`,
   udt: (dev: string, id: string) => `plc:${dev}:udt:${id}`,
+  source: (dev: string, id: string) => `plc:${dev}:source:${id}`,
+  /** Blocco di sistema richiamato; `tag` è tipo e numero (SFB4). */
+  sysBlock: (dev: string, tag: string) => `plc:${dev}:sysBlock:${tag}`,
 };
 
 export type ParsedNodeId =
@@ -53,7 +58,7 @@ export type ParsedNodeId =
   | { kind: 'plc'; dev: string }
   | { kind: 'folder'; dev: string; folder: PlcFolder }
   | { kind: 'group'; dev: string; area: TreeArea; path: string }
-  | { kind: 'block' | 'tagTable' | 'udt'; dev: string; id: string };
+  | { kind: 'block' | 'tagTable' | 'udt' | 'source' | 'sysBlock'; dev: string; id: string };
 
 export function parseNodeId(id: string): ParsedNodeId {
   const parts = id.split(':');
@@ -71,7 +76,11 @@ export function parseNodeId(id: string): ParsedNodeId {
       return { kind: 'static', id };
     }
   }
-  if (parts.length === 4 && b && (a === 'block' || a === 'tagTable' || a === 'udt')) {
+  if (
+    parts.length === 4 &&
+    b &&
+    (a === 'block' || a === 'tagTable' || a === 'udt' || a === 'source' || a === 'sysBlock')
+  ) {
     return { kind: a, dev, id: b };
   }
   return { kind: 'static', id };
@@ -92,8 +101,7 @@ export function nodeIdForRef(ref: ObjectRef): string | null {
     case 'constant':
       return ids.tagTable(ref.deviceId, ref.tableId);
     case 'source':
-      // Le sorgenti esterne non hanno ancora un nodo nell'albero (arrivano con l'interfaccia AWL).
-      return null;
+      return ids.source(ref.deviceId, ref.id);
     case 'member':
       return ref.ownerKind === 'udt'
         ? ids.udt(ref.deviceId, ref.ownerId)

@@ -40,7 +40,13 @@
     "standardTableLocked": "The default tag table cannot be deleted.",
     "pasteNoNumber": "No free number: {{count}} objects were not pasted.",
     "recoveryWriteFailed": "The automatic recovery copy could not be written: unsaved changes may be lost if the application closes abnormally.",
-    "recovered": "Changes to \"{{name}}\" recovered."
+    "recovered": "Changes to \"{{name}}\" recovered.",
+    "sourceError": "Source {{name}}, line {{line}}, column {{col}}: {{message}}",
+    "sourceReadFailed": "The file \"{{name}}\" could not be read: {{message}}",
+    "sourceApplyFailed": "The blocks could not be generated from source \"{{name}}\": {{message}}",
+    "sourceApplied": "Source \"{{name}}\": {{created}} objects created, {{replaced}} replaced.",
+    "sourceExported": "Source \"{{name}}\" exported to \"{{path}}\".",
+    "sourceExportFailed": "The source \"{{name}}\" could not be exported: {{message}}"
   },
   "commands": {
     "project.new": "New…",
@@ -189,7 +195,8 @@
       "addUdt": "Add new data type",
       "watch": "Watch and force tables",
       "backup": "Online backups",
-      "progInfo": "Program info"
+      "progInfo": "Program info",
+      "addSource": "Add new external file"
     }
   },
   "navigation": {
@@ -237,7 +244,11 @@
     "addMember": "Add member",
     "editProperty": "Edit property",
     "removeOverride": "Remove overridden value",
-    "editNetworkCode": "Edit network code"
+    "editNetworkCode": "Edit network code",
+    "addSources": "Add external sources",
+    "applySource": "Generate blocks from source",
+    "generateSource": "Generate source from blocks",
+    "editSource": "Edit source"
   },
   "inspector": {
     "tab": {
@@ -268,7 +279,8 @@
       "info": "Information",
       "warning": "Warning",
       "error": "Error"
-    }
+    },
+    "goToSource": "Open the source at this point"
   },
   "taskcards": {
     "empty": "No items available in this section.",
@@ -404,7 +416,8 @@
       "block": "Blocks",
       "udt": "Data types",
       "tagTable": "Tag tables",
-      "allTags": "PLC tags"
+      "allTags": "PLC tags",
+      "source": "External sources"
     }
   },
   "objects": {
@@ -587,6 +600,28 @@
       "CONSTANT_OUT_OF_RANGE": "Constant out of range for the {{instruction}} instruction",
       "UNCLOSED_STRING": "Quotation mark is never closed",
       "UNCLOSED_PARAMS": "Parameter parenthesis is never closed"
+    }
+  },
+  "source": {
+    "filter": "AWL source (*.awl)",
+    "editor": "Source {{name}}",
+    "defaultName": "Source",
+    "generateBlocks": "Generate blocks from source",
+    "export": "Export…",
+    "generateFromBlocks": "Generate source from blocks",
+    "replaceTitle": "Replace objects",
+    "replaceMessage": "The source replaces these existing objects:",
+    "err": {
+      "UNEXPECTED_TOKEN": "Unexpected text: {{text}}",
+      "MISSING_END": "{{expected}} is missing",
+      "BAD_DECLARATION": "Invalid declaration",
+      "BAD_TYPE": "Invalid data type: {{type}}",
+      "BAD_ASSIGNMENT": "Invalid value assignment",
+      "UNKNOWN_ATTRIBUTE": "Unknown attribute: {{name}}",
+      "UNKNOWN_MEMBER": "The member {{path}} does not exist",
+      "DUPLICATE_UNIT": "{{name}} appears more than once in the source",
+      "OB_NUMBER_UNKNOWN": "The number of OB {{name}} cannot be determined: write ORGANIZATION_BLOCK OB <number>",
+      "UNSUPPORTED_SECTION": "Unsupported section: {{section}}"
     }
   }
 }

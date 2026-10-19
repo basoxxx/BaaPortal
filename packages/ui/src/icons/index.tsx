@@ -51,6 +51,7 @@ export type IconName =
   | 'objUdt'
   | 'objTagTable'
   | 'objGroup'
+  | 'objSource'
   | 'treeBlocks'
   | 'treeTags'
   | 'treeTypes'

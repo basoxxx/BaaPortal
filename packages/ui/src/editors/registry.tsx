@@ -6,6 +6,7 @@ import type { IconName } from '../icons';
 import { useAppStore } from '../state/AppContext';
 import { BlockEditor } from './block/BlockEditor';
 import { DbEditor } from './db/DbEditor';
+import { SourceEditor } from './source/SourceEditor';
 import { UdtEditor } from './udt/UdtEditor';
 import { AllTagsEditor } from './tags/AllTagsEditor';
 import { TagTableEditor } from './tags/TagTableEditor';
@@ -63,6 +64,13 @@ export const EDITORS: Record<EditorKind, EditorDef> = {
     title: (r, d) => device(r, d)?.udts.find((u) => u.id === r.objectId)?.name ?? '',
     exists: (r, d) => !!device(r, d)?.udts.some((u) => u.id === r.objectId),
     Component: UdtEditor,
+  },
+  source: {
+    kind: 'source',
+    icon: () => 'objSource',
+    title: (r, d) => device(r, d)?.sources.find((x) => x.id === r.objectId)?.name ?? '',
+    exists: (r, d) => !!device(r, d)?.sources.some((x) => x.id === r.objectId),
+    Component: SourceEditor,
   },
   tagTable: {
     kind: 'tagTable',

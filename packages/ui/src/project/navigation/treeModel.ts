@@ -2,6 +2,7 @@ import { findCpu } from '@baaportal/catalog';
 import type { Block, ObjectRef, PlcDevice } from '@baaportal/project';
 import type { IconName } from '../../icons';
 import type { OpenDoc } from '../../state/store';
+import { systemBlocksOf, type SystemBlockUse } from './systemBlocks';
 import { ids, type PlcFolder, type TreeArea } from './treeIds';
 
 export interface TreeNode {
@@ -13,6 +14,8 @@ export interface TreeNode {
   enabled: boolean;
   children: TreeNode[];
   ref?: ObjectRef;
+  /** Blocco di sistema richiamato (nodo in sola lettura). */
+  system?: SystemBlockUse;
   /** Cartelle e gruppi dove si può rilasciare un oggetto (Task 9). */
   dropArea?: TreeArea;
 }
@@ -136,6 +139,26 @@ function deviceNode(dev: PlcDevice): TreeNode {
       ref: { kind: 'udt', deviceId: dev.id, id: u.id },
     } satisfies TreeNode,
   }));
+  const sourceNodes = [...dev.sources]
+    .sort((a, b) => byName(a.name, b.name))
+    .map((x): TreeNode => ({
+      id: ids.source(dev.id, x.id),
+      labelKey: '',
+      label: x.name,
+      icon: 'objSource',
+      enabled: true,
+      children: [],
+      ref: { kind: 'source', deviceId: dev.id, id: x.id },
+    }));
+  const systemNodes = systemBlocksOf(dev).map((b): TreeNode => ({
+    id: ids.sysBlock(dev.id, `${b.kind}${b.number}`),
+    labelKey: '',
+    label: `${b.name} [${b.kind}${b.number}]`,
+    icon: b.kind === 'SFB' ? 'objFb' : 'objFc',
+    enabled: true,
+    children: [],
+    system: b,
+  }));
   const groupsOf = (area: TreeArea, objs: { group: string }[]) =>
     allGroupPaths(
       dev.groups[area],
@@ -165,11 +188,17 @@ function deviceNode(dev: PlcDevice): TreeNode {
         [
           leaf(ids.folder(dev.id, 'blocks-add'), 'tree.plc.addBlock', 'treeAdd'),
           ...blocks,
-          leaf(ids.folder(dev.id, 'system-blocks'), 'tree.plc.systemBlocks', 'objGroup'),
+          {
+            ...leaf(ids.folder(dev.id, 'system-blocks'), 'tree.plc.systemBlocks', 'objGroup'),
+            children: systemNodes,
+          },
         ],
         'blocks',
       ),
-      folderNode(dev, 'sources', 'tree.plc.sources', 'treeSources', false),
+      folderNode(dev, 'sources', 'tree.plc.sources', 'treeSources', true, [
+        leaf(ids.folder(dev.id, 'sources-add'), 'tree.plc.addSource', 'treeAdd'),
+        ...sourceNodes,
+      ]),
       folderNode(
         dev,
         'tags',

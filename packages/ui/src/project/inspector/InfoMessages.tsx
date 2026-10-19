@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { useAppStore } from '../../state/AppContext';
+import { useAppStore, useServices } from '../../state/AppContext';
 import type { InfoMessage } from '../../state/store';
 
 const SYMBOL: Record<InfoMessage['severity'], string> = { info: 'ℹ', warning: '⚠', error: '✖' };
@@ -7,6 +7,7 @@ const SYMBOL: Record<InfoMessage['severity'], string> = { info: 'ℹ', warning: 
 export function InfoMessages() {
   const { t, i18n } = useTranslation();
   const messages = useAppStore((s) => s.messages);
+  const { store } = useServices();
   const locale = i18n.language.startsWith('it') ? 'it-IT' : 'en-GB';
   const fmtDate = (iso: string) => {
     const [y, mo, d] = iso.split('-').map(Number) as [number, number, number];
@@ -35,7 +36,23 @@ export function InfoMessages() {
               <span aria-hidden="true">{SYMBOL[m.severity]}</span>
               <span className="baa-sr-only">{t(`inspector.sev.${m.severity}`)}</span>
             </td>
-            <td>{t(m.textKey, m.params)}</td>
+            <td>
+              {m.target ? (
+                <button
+                  type="button"
+                  className="baa-info-link"
+                  title={t('inspector.goToSource')}
+                  onClick={() => {
+                    const { deviceId, sourceId, line, col } = m.target!;
+                    store.getState().openSourceAt({ deviceId, sourceId, line, col });
+                  }}
+                >
+                  {t(m.textKey, m.params)}
+                </button>
+              ) : (
+                t(m.textKey, m.params)
+              )}
+            </td>
             <td>{fmtDate(m.date)}</td>
             <td>{m.time}</td>
           </tr>

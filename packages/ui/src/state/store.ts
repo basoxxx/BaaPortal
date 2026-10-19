@@ -30,6 +30,18 @@ export interface OpenDoc {
   revision: number;
   savedRevision: number;
 }
+/** Dove porta il clic su un messaggio: una sorgente, a riga e colonna (da 1). */
+export interface InfoTarget {
+  kind: 'source';
+  deviceId: string;
+  sourceId: string;
+  line: number;
+  col: number;
+}
+/** Richiesta all'editor di una sorgente di portare il cursore in un punto (`n` la rende ripetibile). */
+export interface SourceReveal extends Omit<InfoTarget, 'kind'> {
+  n: number;
+}
 export interface InfoMessage {
   id: number;
   /** Data locale AAAA-MM-GG. */
@@ -38,6 +50,7 @@ export interface InfoMessage {
   severity: 'info' | 'warning' | 'error';
   textKey: string;
   params?: Record<string, string>;
+  target?: InfoTarget;
 }
 export interface PanelState {
   open: boolean;
@@ -61,6 +74,7 @@ export interface AppState {
   editTarget: EditTarget | null;
   inspectorTab: InspectorTab;
   messages: InfoMessage[];
+  reveal: SourceReveal | null;
   status: { textKey: string; params?: Record<string, string> } | null;
   panels: Record<PanelName, PanelState>;
   referenceProjectsOpen: boolean;
@@ -82,6 +96,10 @@ export interface AppState {
   setEditTarget(t: EditTarget | null): void;
   setInspectorTab(t: InspectorTab): void;
   pushMessage(m: Omit<InfoMessage, 'id' | 'time' | 'date'>): void; // aggiorna anche status
+  /** Apre la sorgente (come editor) e chiede di portare il cursore alla riga e colonna. */
+  openSourceAt(t: Omit<InfoTarget, 'kind'>): void;
+  /** L'editor ha eseguito la richiesta. */
+  clearReveal(n: number): void;
   setPanel(name: PanelName, patch: Partial<PanelState>): void;
   setReferenceProjectsOpen(o: boolean): void;
   setTaskCard(t: TaskCardId): void;
@@ -125,6 +143,7 @@ export function createAppStore(now: () => Date = () => new Date()): StoreApi<App
     editTarget: null,
     inspectorTab: 'properties',
     messages: [],
+    reveal: null,
     status: null,
     panels: structuredClone(DEFAULT_PANELS),
     referenceProjectsOpen: false,
@@ -218,6 +237,16 @@ export function createAppStore(now: () => Date = () => new Date()): StoreApi<App
           status: { textKey: m.textKey, ...(m.params ? { params: m.params } : {}) },
         };
       }),
+    openSourceAt: (t) => {
+      if (!get().doc) return;
+      const target = { kind: 'source' as const, deviceId: t.deviceId, objectId: t.sourceId };
+      set((s) => ({
+        workArea: wa.openEditor(s.workArea, target),
+        selection: wa.nodeIdOfEditor(target),
+        reveal: { ...t, n: (s.reveal?.n ?? 0) + 1 },
+      }));
+    },
+    clearReveal: (n) => set((s) => (s.reveal?.n === n ? { reveal: null } : s)),
     setPanel: (name, patch) =>
       set((s) => ({ panels: { ...s.panels, [name]: { ...s.panels[name], ...patch } } })),
     setReferenceProjectsOpen: (referenceProjectsOpen) => set({ referenceProjectsOpen }),

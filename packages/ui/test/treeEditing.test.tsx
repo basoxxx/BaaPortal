@@ -421,6 +421,7 @@ describe('gruppi e menu contestuale', () => {
       'Elimina',
       'Rinomina',
       'Aggiungi nuovo gruppo',
+      'Genera sorgente dai blocchi',
       'Proprietà',
     ]);
     expect(items[0]).not.toHaveAttribute('aria-disabled'); // Apri: la tabella si apre

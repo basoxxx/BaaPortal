@@ -16,6 +16,35 @@ export interface SourceError {
   params?: Record<string, string>;
 }
 
+/** Codici di struttura che il lettore delle sorgenti produce. */
+export const SOURCE_STRUCTURE_ERROR_CODES = [
+  'UNEXPECTED_TOKEN',
+  'MISSING_END',
+  'BAD_DECLARATION',
+  'BAD_TYPE',
+  'BAD_ASSIGNMENT',
+  'UNKNOWN_ATTRIBUTE',
+  'UNKNOWN_MEMBER',
+  'DUPLICATE_UNIT',
+  'OB_NUMBER_UNKNOWN',
+  'UNSUPPORTED_SECTION',
+] as const;
+
+/** Codici del codice AWL, inoltrati dal parser dei segmenti. */
+export const SOURCE_AWL_ERROR_CODES = [
+  'SYNTAX',
+  'UNKNOWN_INSTRUCTION',
+  'BAD_OPERAND',
+  'UNCLOSED_STRING',
+  'UNCLOSED_PARAMS',
+] as const;
+
+/** Tutti i codici possibili di `SourceError.code`: chi li mostra deve avere un messaggio per ciascuno. */
+export const SOURCE_ERROR_CODES: readonly string[] = [
+  ...SOURCE_STRUCTURE_ERROR_CODES,
+  ...SOURCE_AWL_ERROR_CODES,
+];
+
 export type SourceUnit =
   | {
       kind: 'UDT';

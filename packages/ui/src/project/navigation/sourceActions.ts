@@ -1,0 +1,296 @@
+import type { StoreApi } from 'zustand/vanilla';
+import type { Mnemonic } from '@baaportal/awl';
+import {
+  applySource,
+  decodeSourceBytes,
+  encodeSourceText,
+  generateAwlSource,
+  parseAwlSource,
+  SOURCE_AWL_ERROR_CODES,
+  type SourceError,
+} from '@baaportal/importers';
+import {
+  addSource,
+  findBlock,
+  findDevice,
+  findSource,
+  findUdt,
+  type ObjectRef,
+  type PlcDevice,
+} from '@baaportal/project';
+import type { BaaBridge, FileFilter } from '../../bridge';
+import { flushPendingEdits } from '../../flushPendingEdits';
+import { t } from '../../i18n';
+import type { AppState, OpenDoc } from '../../state/store';
+import { ids, parseNodeId } from './treeIds';
+
+export interface SourceCtx {
+  store: StoreApi<AppState>;
+  bridge: BaaBridge;
+}
+
+const MAX_LISTED = 10;
+const newId = () => globalThis.crypto.randomUUID();
+const awlFilter = (): FileFilter => ({ name: t('source.filter'), extensions: ['awl'] });
+const deviceOf = (doc: OpenDoc | null, id: string) =>
+  doc ? findDevice(doc.project, id) : undefined;
+const baseName = (path: string) =>
+  path.slice(Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1);
+const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+/** Chiave i18n del messaggio di un codice di errore delle sorgenti. */
+export const sourceErrorKey = (code: string): string =>
+  (SOURCE_AWL_ERROR_CODES as readonly string[]).includes(code)
+    ? `awl.diag.${code}`
+    : `source.err.${code}`;
+
+/** Spostamento nel testo mostrato (a capo sempre LF) di riga e colonna da 1; oltre la fine, l'ultima posizione. */
+export function offsetOfLineCol(text: string, line: number, col: number): number {
+  const shown = text.replace(/\r\n?/g, '\n');
+  let start = 0;
+  for (let l = 1; l < line; l++) {
+    const next = shown.indexOf('\n', start);
+    if (next < 0) return shown.length;
+    start = next + 1;
+  }
+  const end = shown.indexOf('\n', start);
+  const lineEnd = end < 0 ? shown.length : end;
+  return Math.min(start + Math.max(col - 1, 0), lineEnd);
+}
+
+function reportErrors(
+  store: StoreApi<AppState>,
+  deviceId: string,
+  sourceId: string,
+  name: string,
+  errors: SourceError[],
+): void {
+  const s = store.getState();
+  for (const e of errors) {
+    s.pushMessage({
+      severity: 'error',
+      textKey: 'messages.sourceError',
+      params: {
+        name,
+        line: String(e.line),
+        col: String(e.col),
+        message: t(sourceErrorKey(e.code), e.params ?? {}),
+      },
+      target: { kind: 'source', deviceId, sourceId, line: e.line, col: e.col },
+    });
+  }
+  s.setInspectorTab('info');
+  s.setPanel('inspector', { open: true });
+}
+
+/** Apre la sorgente nell'editor, con il cursore alla riga e colonna (da 1) indicate. */
+export function openSourceAt(
+  store: StoreApi<AppState>,
+  deviceId: string,
+  sourceId: string,
+  line: number,
+  col: number,
+): void {
+  store.getState().openSourceAt({ deviceId, sourceId, line, col });
+}
+
+/** "Aggiungi nuovo file esterno": ogni file scelto diventa una sorgente, tutte in un solo passo. */
+export async function addSourceFiles(ctx: SourceCtx, deviceId: string): Promise<void> {
+  const { store, bridge } = ctx;
+  if (!deviceOf(store.getState().doc, deviceId)) return;
+  const paths = await bridge.showOpenFileDialog({ filters: [awlFilter()], multi: true });
+  const loaded: { name: string; text: string }[] = [];
+  for (const path of paths) {
+    const name = baseName(path);
+    try {
+      loaded.push({ name, text: decodeSourceBytes(await bridge.readFile(path)).text });
+    } catch (e) {
+      store.getState().pushMessage({
+        severity: 'error',
+        textKey: 'messages.sourceReadFailed',
+        params: { name, message: errorText(e) },
+      });
+    }
+  }
+  if (loaded.length === 0) return;
+  store.getState().edit('history.addSources', (p) => {
+    const dev = findDevice(p, deviceId);
+    if (dev) for (const l of loaded) addSource(dev, l.name, l.text, newId);
+  });
+}
+
+function listNames(names: string[]): string {
+  const listed = names.slice(0, MAX_LISTED);
+  if (names.length > MAX_LISTED)
+    listed.push(t('objects.deleteMore', { count: names.length - MAX_LISTED }));
+  return listed.join('\n');
+}
+
+const nameOfRef = (dev: PlcDevice, r: ObjectRef): string =>
+  (r.kind === 'block'
+    ? findBlock(dev, r.id)?.name
+    : r.kind === 'udt'
+      ? findUdt(dev, r.id)?.name
+      : '') ?? '';
+
+/** "Genera blocchi dalla sorgente": errori in Informazioni, conferma se sostituisce, poi un solo passo. */
+export async function generateBlocksFromSource(
+  ctx: SourceCtx,
+  deviceId: string,
+  sourceId: string,
+): Promise<void> {
+  const { store, bridge } = ctx;
+  // La bozza nell'editor della sorgente conta: si conferma prima.
+  flushPendingEdits();
+  const dev = deviceOf(store.getState().doc, deviceId);
+  const src = dev && findSource(dev, sourceId);
+  if (!dev || !src) return;
+  const parsed = parseAwlSource(src.text, dev);
+  if (!parsed.ok) {
+    reportErrors(store, deviceId, sourceId, src.name, parsed.errors);
+    return;
+  }
+  const failed = (e: unknown) =>
+    store.getState().pushMessage({
+      severity: 'error',
+      textKey: 'messages.sourceApplyFailed',
+      params: { name: src.name, message: errorText(e) },
+    });
+
+  // Prova a vuoto su una copia: dice che cosa sarebbe sostituito, senza toccare il progetto.
+  let replaced: ObjectRef[];
+  try {
+    let n = 0;
+    replaced = applySource(structuredClone(dev), parsed.source, () => `dry${++n}`).replaced;
+  } catch (e) {
+    failed(e);
+    return;
+  }
+  if (replaced.length > 0) {
+    const yes = await bridge.askQuestion({
+      title: t('source.replaceTitle'),
+      message: `${t('source.replaceMessage')}\n\n${listNames(replaced.map((r) => nameOfRef(dev, r)))}`,
+      yes: t('objects.yes'),
+      no: t('objects.no'),
+    });
+    if (!yes) return;
+  }
+  let result: { created: ObjectRef[]; replaced: ObjectRef[] } | null = null;
+  try {
+    store.getState().edit('history.applySource', (p) => {
+      const d = findDevice(p, deviceId);
+      if (d) result = applySource(d, parsed.source, newId);
+    });
+  } catch (e) {
+    // Una eccezione dentro `edit` lascia il progetto com'era.
+    failed(e);
+    return;
+  }
+  const done = result as { created: ObjectRef[]; replaced: ObjectRef[] } | null;
+  if (!done) return;
+  store.getState().pushMessage({
+    severity: 'info',
+    textKey: 'messages.sourceApplied',
+    params: {
+      name: src.name,
+      created: String(done.created.length),
+      replaced: String(done.replaced.length),
+    },
+  });
+}
+
+/** "Esporta…": scrive la sorgente in UTF-8 con BOM e CRLF. */
+export async function exportSource(
+  ctx: SourceCtx,
+  deviceId: string,
+  sourceId: string,
+): Promise<void> {
+  const { store, bridge } = ctx;
+  flushPendingEdits();
+  const first = findSourceIn(store, deviceId, sourceId);
+  if (!first) return;
+  try {
+    const path = await bridge.showSaveFileDialog({
+      defaultName: first.name,
+      filters: [awlFilter()],
+    });
+    if (!path) return;
+    // Il testo si rilegge dopo la finestra: è quello di adesso.
+    const text = findSourceIn(store, deviceId, sourceId)?.text ?? first.text;
+    await bridge.writeFileAtomic(path, encodeSourceText(text));
+    store.getState().pushMessage({
+      severity: 'info',
+      textKey: 'messages.sourceExported',
+      params: { name: first.name, path },
+    });
+  } catch (e) {
+    store.getState().pushMessage({
+      severity: 'error',
+      textKey: 'messages.sourceExportFailed',
+      params: { name: first.name, message: errorText(e) },
+    });
+  }
+}
+
+function findSourceIn(store: StoreApi<AppState>, deviceId: string, sourceId: string) {
+  const dev = deviceOf(store.getState().doc, deviceId);
+  return dev && findSource(dev, sourceId);
+}
+
+/** Blocchi e UDT da cui generare: gli oggetti dei nodi, oppure tutti quelli delle cartelle "Blocchi di programma" e "Tipi di dati PLC". */
+export function objectsToGenerate(
+  doc: OpenDoc | null,
+  nodeIds: Iterable<string>,
+): { deviceId: string; refs: ObjectRef[] } | null {
+  let deviceId: string | null = null;
+  const refs: ObjectRef[] = [];
+  const seen = new Set<string>();
+  const push = (dev: string, r: ObjectRef & { id: string }) => {
+    if (seen.has(`${r.kind}:${r.id}`)) return;
+    seen.add(`${r.kind}:${r.id}`);
+    refs.push(r);
+    deviceId ??= dev;
+  };
+  for (const n of nodeIds) {
+    const p = parseNodeId(n);
+    if (p.kind === 'static' || p.kind === 'plc' || p.kind === 'group') continue;
+    if (deviceId !== null && p.dev !== deviceId) continue;
+    const dev = deviceOf(doc, p.dev);
+    if (!dev) continue;
+    if (p.kind === 'block' && findBlock(dev, p.id)) {
+      push(p.dev, { kind: 'block', deviceId: p.dev, id: p.id });
+    } else if (p.kind === 'udt' && findUdt(dev, p.id)) {
+      push(p.dev, { kind: 'udt', deviceId: p.dev, id: p.id });
+    } else if (p.kind === 'folder' && p.folder === 'blocks') {
+      for (const b of dev.blocks) push(p.dev, { kind: 'block', deviceId: p.dev, id: b.id });
+    } else if (p.kind === 'folder' && p.folder === 'types') {
+      for (const u of dev.udts) push(p.dev, { kind: 'udt', deviceId: p.dev, id: u.id });
+    }
+  }
+  return deviceId === null ? null : { deviceId, refs };
+}
+
+/** "Genera sorgente dai blocchi": crea `<primo nome>.awl` (unico), la seleziona e la apre. Un solo passo. */
+export function generateSourceFromNodes(
+  ctx: SourceCtx,
+  nodeIds: Iterable<string>,
+  mnemonic: Mnemonic,
+): string | null {
+  const { store } = ctx;
+  const sel = objectsToGenerate(store.getState().doc, nodeIds);
+  const dev = sel && deviceOf(store.getState().doc, sel.deviceId);
+  if (!sel || !dev || sel.refs.length === 0) return null;
+  const text = generateAwlSource(dev, sel.refs, mnemonic);
+  // Il nome di un oggetto può avere caratteri che un nome di file non ammette.
+  const first =
+    nameOfRef(dev, sel.refs[0]!).replace(/[\\/:*?"<>|]/g, '_') || t('source.defaultName');
+  let created: string | null = null;
+  store.getState().edit('history.generateSource', (p) => {
+    const d = findDevice(p, sel.deviceId);
+    if (d) created = addSource(d, `${first}.awl`, text, newId).id;
+  });
+  const id = created as string | null;
+  if (!id) return null;
+  store.getState().openEditor({ kind: 'source', deviceId: sel.deviceId, objectId: id });
+  return ids.source(sel.deviceId, id);
+}

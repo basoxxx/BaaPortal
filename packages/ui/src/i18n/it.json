@@ -40,7 +40,13 @@
     "standardTableLocked": "La Tabella delle variabili standard non può essere eliminata.",
     "pasteNoNumber": "Nessun numero libero: {{count}} oggetti non sono stati incollati.",
     "recoveryWriteFailed": "Impossibile scrivere la copia di recupero automatico: le modifiche non salvate potrebbero andare perse in caso di chiusura anomala.",
-    "recovered": "Modifiche di \"{{name}}\" recuperate."
+    "recovered": "Modifiche di \"{{name}}\" recuperate.",
+    "sourceError": "Sorgente {{name}}, riga {{line}}, colonna {{col}}: {{message}}",
+    "sourceReadFailed": "Impossibile leggere il file \"{{name}}\": {{message}}",
+    "sourceApplyFailed": "Impossibile generare i blocchi dalla sorgente \"{{name}}\": {{message}}",
+    "sourceApplied": "Sorgente \"{{name}}\": creati {{created}} oggetti, sostituiti {{replaced}}.",
+    "sourceExported": "Sorgente \"{{name}}\" esportata in \"{{path}}\".",
+    "sourceExportFailed": "Impossibile esportare la sorgente \"{{name}}\": {{message}}"
   },
   "commands": {
     "project.new": "Nuovo…",
@@ -189,7 +195,8 @@
       "addUdt": "Aggiungi nuovo tipo di dati",
       "watch": "Tabelle di controllo e forzamento",
       "backup": "Backup online",
-      "progInfo": "Informazioni sul programma"
+      "progInfo": "Informazioni sul programma",
+      "addSource": "Aggiungi nuovo file esterno"
     }
   },
   "navigation": {
@@ -237,7 +244,11 @@
     "addMember": "Aggiungi membro",
     "editProperty": "Modifica proprietà",
     "removeOverride": "Rimuovi valore sostituito",
-    "editNetworkCode": "Modifica codice del segmento"
+    "editNetworkCode": "Modifica codice del segmento",
+    "addSources": "Aggiungi sorgenti esterne",
+    "applySource": "Genera blocchi dalla sorgente",
+    "generateSource": "Genera sorgente dai blocchi",
+    "editSource": "Modifica sorgente"
   },
   "inspector": {
     "tab": {
@@ -268,7 +279,8 @@
       "info": "Informazione",
       "warning": "Avviso",
       "error": "Errore"
-    }
+    },
+    "goToSource": "Apri la sorgente nel punto"
   },
   "taskcards": {
     "empty": "Nessun elemento disponibile in questa sezione.",
@@ -404,7 +416,8 @@
       "block": "Blocchi",
       "udt": "Tipi di dati",
       "tagTable": "Tabelle delle variabili",
-      "allTags": "Variabili PLC"
+      "allTags": "Variabili PLC",
+      "source": "Sorgenti esterne"
     }
   },
   "objects": {
@@ -587,6 +600,28 @@
       "CONSTANT_OUT_OF_RANGE": "Costante fuori dai limiti per l'istruzione {{instruction}}",
       "UNCLOSED_STRING": "Virgolette aperte e mai chiuse",
       "UNCLOSED_PARAMS": "Parentesi dei parametri aperta e mai chiusa"
+    }
+  },
+  "source": {
+    "filter": "Sorgente AWL (*.awl)",
+    "editor": "Sorgente {{name}}",
+    "defaultName": "Sorgente",
+    "generateBlocks": "Genera blocchi dalla sorgente",
+    "export": "Esporta…",
+    "generateFromBlocks": "Genera sorgente dai blocchi",
+    "replaceTitle": "Sostituisci oggetti",
+    "replaceMessage": "La sorgente sostituisce questi oggetti già presenti:",
+    "err": {
+      "UNEXPECTED_TOKEN": "Testo inatteso: {{text}}",
+      "MISSING_END": "Manca {{expected}}",
+      "BAD_DECLARATION": "Dichiarazione non valida",
+      "BAD_TYPE": "Tipo di dati non valido: {{type}}",
+      "BAD_ASSIGNMENT": "Assegnazione di valore non valida",
+      "UNKNOWN_ATTRIBUTE": "Attributo sconosciuto: {{name}}",
+      "UNKNOWN_MEMBER": "Il membro {{path}} non esiste",
+      "DUPLICATE_UNIT": "{{name}} compare più volte nella sorgente",
+      "OB_NUMBER_UNKNOWN": "Numero dell'OB {{name}} non ricavabile: scrivere ORGANIZATION_BLOCK OB <numero>",
+      "UNSUPPORTED_SECTION": "Sezione non supportata: {{section}}"
     }
   }
 }

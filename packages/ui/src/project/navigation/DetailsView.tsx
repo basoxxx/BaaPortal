@@ -65,6 +65,15 @@ function buildTable(
         ? parsed.area
         : null;
 
+  if (dev && parsed?.kind === 'folder' && parsed.folder === 'system-blocks') {
+    return {
+      columns: ['details.name', 'details.number', 'details.type'],
+      rows: children.map((c) => ({
+        ...plain(c, t),
+        cells: [c.system?.name ?? '', String(c.system?.number ?? ''), c.system?.kind ?? ''],
+      })),
+    };
+  }
   if (dev && area === 'blocks') {
     return {
       columns: ['details.name', 'details.number', 'details.type', 'details.language'],

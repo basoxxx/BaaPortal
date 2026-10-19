@@ -76,7 +76,6 @@ describe('buildTree', () => {
     expect(plc.children.filter((c) => !c.enabled).map((c) => c.labelKey)).toEqual([
       'tree.plc.deviceConfig',
       'tree.plc.onlineDiag',
-      'tree.plc.sources',
       'tree.plc.watch',
       'tree.plc.backup',
       'tree.plc.progInfo',
@@ -87,6 +86,7 @@ describe('buildTree', () => {
       'Main [OB1]',
       'tree.plc.systemBlocks',
     ]);
+    expect(plc.children[3]!.children.map((c) => labelOf(c))).toEqual(['tree.plc.addSource']);
     const tags = plc.children[4]!;
     expect(tags.children.map((c) => labelOf(c))).toEqual([
       'tree.plc.allTags',

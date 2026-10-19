@@ -41,6 +41,10 @@
 .baa-awl-label {
   color: var(--baa-awl-label);
 }
+.baa-awl-keyword {
+  color: var(--baa-awl-keyword);
+  font-weight: 600;
+}
 .baa-awl-comment {
   color: var(--baa-awl-comment);
   font-style: italic;
@@ -81,4 +85,12 @@
   display: flex;
   align-items: center;
   gap: 6px;
+}
+.baa-source-editor {
+  height: 100%;
+  overflow: auto;
+  padding: 4px;
+}
+.baa-source-editor .cm-scroller {
+  min-height: 20em;
 }

@@ -1,6 +1,6 @@
 import { ids, parseNodeId } from '../project/navigation/treeIds';
 
-export type EditorKind = 'tagTable' | 'allTags' | 'block' | 'udt';
+export type EditorKind = 'tagTable' | 'allTags' | 'block' | 'udt' | 'source';
 export interface EditorRef {
   /** `${kind}:${deviceId}:${objectId}`; "Mostra tutte le variabili" ha objectId ''. */
   key: string;
@@ -52,6 +52,8 @@ export function nodeIdOfEditor(e: EditorTarget): string {
       return ids.udt(e.deviceId, e.objectId);
     case 'tagTable':
       return ids.tagTable(e.deviceId, e.objectId);
+    case 'source':
+      return ids.source(e.deviceId, e.objectId);
     case 'allTags':
       return ids.folder(e.deviceId, 'tags-all');
   }
@@ -60,7 +62,7 @@ export function nodeIdOfEditor(e: EditorTarget): string {
 /** Editor che il nodo apre (blocco, UDT, tabella, "Mostra tutte le variabili"), altrimenti null. */
 export function editorOfNode(nodeId: string): EditorTarget | null {
   const p = parseNodeId(nodeId);
-  if (p.kind === 'block' || p.kind === 'udt' || p.kind === 'tagTable') {
+  if (p.kind === 'block' || p.kind === 'udt' || p.kind === 'tagTable' || p.kind === 'source') {
     return { kind: p.kind, deviceId: p.dev, objectId: p.id };
   }
   if (p.kind === 'folder' && p.folder === 'tags-all') {
