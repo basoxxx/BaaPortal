@@ -13,3 +13,9 @@ describe('TSAP', () => {
     expect(LOCAL_TSAP_PG).toBe(0x0100);
   });
 });
+
+describe('TSAP, tipo di connessione non valido', () => {
+  it('remoteTsap con tipo a runtime non valido -> RangeError', () => {
+    expect(() => remoteTsap('xx' as never, 0, 2)).toThrow(RangeError);
+  });
+});

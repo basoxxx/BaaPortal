@@ -10,5 +10,7 @@ export function remoteTsap(type: ConnectionType, rack: number, slot: number): nu
     throw new RangeError(`rack ${rack} fuori 0-7`);
   if (!Number.isInteger(slot) || slot < 0 || slot > 31)
     throw new RangeError(`slot ${slot} fuori 0-31`);
-  return (TYPE_CODE[type] << 8) | (rack * 32 + slot);
+  const code = TYPE_CODE[type];
+  if (code === undefined) throw new RangeError(`tipo di connessione ${String(type)} non valido`);
+  return (code << 8) | (rack * 32 + slot);
 }
