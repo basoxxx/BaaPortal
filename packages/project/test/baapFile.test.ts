@@ -42,10 +42,10 @@ describe('file .baap', () => {
       }),
     );
     expect(Object.keys(files).sort()).toEqual(['baaportal.json', 'project.json']);
-    expect(JSON.parse(strFromU8(files['project.json']!)).formatVersion).toBe(2);
+    expect(JSON.parse(strFromU8(files['project.json']!)).formatVersion).toBe(3);
     expect(JSON.parse(strFromU8(files['baaportal.json']!))).toEqual({
       format: 'baaportal-project',
-      formatVersion: 2,
+      formatVersion: 3,
       savedWith: 'BaaPortal 0.1.0',
     });
   });
@@ -98,7 +98,7 @@ describe('file .baap', () => {
         ),
       }),
     ],
-    ['NEWER_FORMAT', zipSync({ 'baaportal.json': manifest(3), 'project.json': strToU8('{}') })],
+    ['NEWER_FORMAT', zipSync({ 'baaportal.json': manifest(4), 'project.json': strToU8('{}') })],
     ['NOT_ZIP', truncatedValidBaap()],
     // formato 2: schema del progetto non valido
     [
@@ -109,7 +109,7 @@ describe('file .baap', () => {
     expect(catchError(() => readBaap(bytes))).toMatchObject({ name: 'BaapFormatError', code });
   });
 
-  it('un file del formato 1 si apre come formato 2 senza dispositivi', () => {
+  it('un file del formato 1 si apre come formato 3 senza dispositivi', () => {
     const meta = {
       name: 'Vecchio',
       author: 'A',
@@ -121,6 +121,6 @@ describe('file .baap', () => {
       'baaportal.json': manifest(1),
       'project.json': strToU8(JSON.stringify({ formatVersion: 1, meta })),
     });
-    expect(readBaap(v1)).toEqual({ formatVersion: 2, meta, devices: [] });
+    expect(readBaap(v1)).toEqual({ formatVersion: 3, meta, devices: [] });
   });
 });

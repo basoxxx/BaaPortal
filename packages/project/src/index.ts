@@ -5,3 +5,5 @@ export * from './plc';
 export * from './members';
 export * from './checks';
 export * from './memberRename';
+export * from './awlContext';
+export * from './codeRename';

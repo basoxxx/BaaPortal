@@ -91,6 +91,9 @@ export function nodeIdForRef(ref: ObjectRef): string | null {
     case 'tag':
     case 'constant':
       return ids.tagTable(ref.deviceId, ref.tableId);
+    case 'source':
+      // Le sorgenti esterne non hanno ancora un nodo nell'albero (arrivano con l'interfaccia AWL).
+      return null;
     case 'member':
       return ref.ownerKind === 'udt'
         ? ids.udt(ref.deviceId, ref.ownerId)

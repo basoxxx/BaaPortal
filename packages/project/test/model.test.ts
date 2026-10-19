@@ -4,9 +4,9 @@ import { createProject } from '../src/index';
 const now = new Date('2026-10-18T10:00:00.000Z');
 
 describe('createProject', () => {
-  it('createProject imposta i metadati e crea un progetto formato 2 senza dispositivi', () => {
+  it('createProject imposta i metadati e crea un progetto formato 3 senza dispositivi', () => {
     expect(createProject({ name: 'Linea 3', author: 'Mario', comment: '' }, now)).toEqual({
-      formatVersion: 2,
+      formatVersion: 3,
       meta: {
         name: 'Linea 3',
         author: 'Mario',
