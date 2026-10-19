@@ -7,8 +7,8 @@ export interface RawSystemBlock {
   kind: 'SFC' | 'SFB';
   number: number;
   name: string;
-  /** Capitolo o paragrafo del manuale di riferimento. */
-  section: string;
+  /** Paragrafo del manuale, solo se letto nel documento scaricato. */
+  section?: string;
   i?: string | string[];
   o?: string | string[];
   io?: string | string[];
@@ -17,16 +17,16 @@ export interface RawSystemBlock {
   ret?: string;
 }
 
-const MAN =
-  'System Software for S7-300/400 System and Standard Functions, Reference Manual, Volume 1/2 (05/2010, A5E02789976-01) and Volume 2/2 (05/2010, A5E02790283-01; edition 04/2017, A5E41675609-AA) (https://cache.industry.siemens.com/dl/files/604/44240604/att_67003/v1/s7sfc_en-EN.pdf)';
-const IL =
-  'S7-300 Instruction List, CPU 31xC, CPU 31x, 06/2008, A5E00105517-10, chapters System Functions (SFC) and System Function Blocks (SFB)';
-const CPU =
+// Un documento per costante: titolo, edizione e indirizzo di quello effettivamente scaricato.
+// I parametri sono stati letti nel manuale e riscontrati nell'edizione 05/2010 (stesso nome e tipo).
+export const MANUAL_2010 =
+  'System Software for S7-300/400 System and Standard Functions, Reference Manual, Volume 1/2 (05/2010, A5E02789976-01) and Volume 2/2 (05/2010, A5E02790283-01) (https://cache.industry.siemens.com/dl/files/604/44240604/att_67003/v1/s7sfc_en-EN.pdf)';
+// Elenco delle SFC/SFB dell'S7-300 (CPU 31xC, 31x, 317, 319); copia scaricata, indirizzo non registrato.
+export const INSTRUCTION_LIST_2008 =
+  'S7-300 Instruction List, CPU 31xC, CPU 31x, IM 151-7 CPU, IM 151-8 CPU, IM 154-8 CPU, BM 147-1 CPU, BM 147-2 CPU, 06/2008, A5E00105517-10, chapters System Functions (SFC) and System Function Blocks (SFB)';
+// Disponibilita su CPU PROFINET di SFC 99 e SFB 73, 74, 104; copia scaricata, indirizzo non registrato.
+export const CPU_MANUAL_2011 =
   'S7-300 CPU 31xC and CPU 31x: Technical specifications, Manual 03/2011, A5E00105475-12, section 4.1.3 Blocks for PROFINET IO';
-
-/** Documento di provenienza di ogni voce: il manuale con il paragrafo e l'elenco S7-300. */
-export const SOURCE_MANUAL = MAN;
-export const SOURCE_AVAILABILITY = { IL, CPU };
 
 const R = 'Int';
 
@@ -85,7 +85,6 @@ export const RAW_SYSTEM_BLOCKS: readonly RawSystemBlock[] = [
     kind: 'SFC',
     number: 12,
     name: 'D_ACT_DP',
-    section: '16.3',
     i: 'REQ:Bool MODE:Byte LADDR:Word',
     o: 'BUSY:Bool',
     ret: R,
@@ -103,7 +102,6 @@ export const RAW_SYSTEM_BLOCKS: readonly RawSystemBlock[] = [
     kind: 'SFC',
     number: 14,
     name: 'DPRD_DAT',
-    section: '16.5',
     i: 'LADDR:Word',
     o: 'RECORD:Any',
     ret: R,
@@ -112,7 +110,6 @@ export const RAW_SYSTEM_BLOCKS: readonly RawSystemBlock[] = [
     kind: 'SFC',
     number: 15,
     name: 'DPWR_DAT',
-    section: '16.6',
     i: 'LADDR:Word RECORD:Any',
     ret: R,
   },
@@ -128,7 +125,6 @@ export const RAW_SYSTEM_BLOCKS: readonly RawSystemBlock[] = [
     kind: 'SFC',
     number: 18,
     name: 'ALARM_S',
-    section: '25.13',
     i: 'SIG:Bool ID:Word EV_ID:DWord SD:Any',
     ret: R,
   },
@@ -136,7 +132,6 @@ export const RAW_SYSTEM_BLOCKS: readonly RawSystemBlock[] = [
     kind: 'SFC',
     number: 19,
     name: 'ALARM_SC',
-    section: '25.14',
     i: 'EV_ID:DWord',
     o: 'STATE:Bool Q_STATE:Bool',
     ret: R,
@@ -234,10 +229,10 @@ export const RAW_SYSTEM_BLOCKS: readonly RawSystemBlock[] = [
     o: 'PRGFLT_CLR:DWord ACCFLT_CLR:DWord',
     ret: R,
   },
-  { kind: 'SFC', number: 39, name: 'DIS_IRT', section: '12.2', i: 'MODE:Byte OB_NR:Int', ret: R },
-  { kind: 'SFC', number: 40, name: 'EN_IRT', section: '12.3', i: 'MODE:Byte OB_NR:Int', ret: R },
-  { kind: 'SFC', number: 41, name: 'DIS_AIRT', section: '12.4', ret: R },
-  { kind: 'SFC', number: 42, name: 'EN_AIRT', section: '12.5', ret: R },
+  { kind: 'SFC', number: 39, name: 'DIS_IRT', i: 'MODE:Byte OB_NR:Int', ret: R },
+  { kind: 'SFC', number: 40, name: 'EN_IRT', i: 'MODE:Byte OB_NR:Int', ret: R },
+  { kind: 'SFC', number: 41, name: 'DIS_AIRT', ret: R },
+  { kind: 'SFC', number: 42, name: 'EN_AIRT', ret: R },
   { kind: 'SFC', number: 43, name: 'RE_TRIGR', section: '4.1' },
   { kind: 'SFC', number: 44, name: 'REPL_VAL', section: '3.8', i: 'VAL:DWord', ret: R },
   { kind: 'SFC', number: 46, name: 'STP', section: '4.2' },
@@ -246,7 +241,6 @@ export const RAW_SYSTEM_BLOCKS: readonly RawSystemBlock[] = [
     kind: 'SFC',
     number: 49,
     name: 'LGC_GADR',
-    section: '15.2',
     i: 'IOID:Byte LADDR:Word',
     o: 'AREA:Byte RACK:Word SLOT:Word SUBADDR:Word',
     ret: R,
@@ -273,7 +267,6 @@ export const RAW_SYSTEM_BLOCKS: readonly RawSystemBlock[] = [
     kind: 'SFC',
     number: 52,
     name: 'WR_USMSG',
-    section: '13.4',
     i: 'SEND:Bool EVENTN:Word INFO1:Any INFO2:Any',
     ret: R,
   },
@@ -327,7 +320,6 @@ export const RAW_SYSTEM_BLOCKS: readonly RawSystemBlock[] = [
     kind: 'SFC',
     number: 65,
     name: 'X_SEND',
-    section: '23',
     i: 'REQ:Bool CONT:Bool DEST_ID:Word REQ_ID:DWord SD:Any',
     o: 'BUSY:Bool',
     ret: R,
@@ -336,7 +328,6 @@ export const RAW_SYSTEM_BLOCKS: readonly RawSystemBlock[] = [
     kind: 'SFC',
     number: 66,
     name: 'X_RCV',
-    section: '23',
     i: 'EN_DT:Bool',
     o: 'REQ_ID:DWord NDA:Bool RD:Any',
     ret: R,
@@ -345,7 +336,6 @@ export const RAW_SYSTEM_BLOCKS: readonly RawSystemBlock[] = [
     kind: 'SFC',
     number: 67,
     name: 'X_GET',
-    section: '23',
     i: 'REQ:Bool CONT:Bool DEST_ID:Word VAR_ADDR:Any',
     o: 'BUSY:Bool RD:Any',
     ret: R,
@@ -354,7 +344,6 @@ export const RAW_SYSTEM_BLOCKS: readonly RawSystemBlock[] = [
     kind: 'SFC',
     number: 68,
     name: 'X_PUT',
-    section: '23',
     i: 'REQ:Bool CONT:Bool DEST_ID:Word VAR_ADDR:Any SD:Any',
     o: 'BUSY:Bool',
     ret: R,
@@ -363,7 +352,6 @@ export const RAW_SYSTEM_BLOCKS: readonly RawSystemBlock[] = [
     kind: 'SFC',
     number: 69,
     name: 'X_ABORT',
-    section: '23',
     i: 'REQ:Bool DEST_ID:Word',
     o: 'BUSY:Bool',
     ret: R,
@@ -381,7 +369,6 @@ export const RAW_SYSTEM_BLOCKS: readonly RawSystemBlock[] = [
     kind: 'SFC',
     number: 71,
     name: 'LOG_GEO',
-    section: '15.5',
     i: 'LADDR:Word',
     o: 'AREA:Int MASTER:Int STATION:Int SLOT:Int SUBSLOT:Int OFFSET:Int',
     ret: R,
@@ -390,7 +377,6 @@ export const RAW_SYSTEM_BLOCKS: readonly RawSystemBlock[] = [
     kind: 'SFC',
     number: 72,
     name: 'I_GET',
-    section: '23',
     i: 'REQ:Bool CONT:Bool IOID:Byte LADDR:Word VAR_ADDR:Any',
     o: 'BUSY:Bool RD:Any',
     ret: R,
@@ -399,7 +385,6 @@ export const RAW_SYSTEM_BLOCKS: readonly RawSystemBlock[] = [
     kind: 'SFC',
     number: 73,
     name: 'I_PUT',
-    section: '23',
     i: 'REQ:Bool CONT:Bool IOID:Byte LADDR:Word VAR_ADDR:Any SD:Any',
     o: 'BUSY:Bool',
     ret: R,
@@ -408,7 +393,6 @@ export const RAW_SYSTEM_BLOCKS: readonly RawSystemBlock[] = [
     kind: 'SFC',
     number: 74,
     name: 'I_ABORT',
-    section: '23',
     i: 'REQ:Bool IOID:Byte LADDR:Word',
     o: 'BUSY:Bool',
     ret: R,
@@ -491,7 +475,6 @@ export const RAW_SYSTEM_BLOCKS: readonly RawSystemBlock[] = [
     kind: 'SFC',
     number: 107,
     name: 'ALARM_DQ',
-    section: '25.15',
     i: 'SIG:Bool ID:Word EV_ID:DWord CMP_ID:DWord SD:Any',
     ret: R,
   },
@@ -499,13 +482,12 @@ export const RAW_SYSTEM_BLOCKS: readonly RawSystemBlock[] = [
     kind: 'SFC',
     number: 108,
     name: 'ALARM_D',
-    section: '25.15',
     i: 'SIG:Bool ID:Word EV_ID:DWord CMP_ID:DWord SD:Any',
     ret: R,
   },
   { kind: 'SFC', number: 109, name: 'PROTECT', section: '4.6', i: 'MODE:Word', ret: R },
-  { kind: 'SFC', number: 112, name: 'PN_IN', section: '17.2', i: 'DBNO:Word', ret: R },
-  { kind: 'SFC', number: 113, name: 'PN_OUT', section: '17.3', i: 'DBNO:Word', ret: R },
+  { kind: 'SFC', number: 112, name: 'PN_IN', i: 'DBNO:Word', ret: R },
+  { kind: 'SFC', number: 113, name: 'PN_OUT', i: 'DBNO:Word', ret: R },
   {
     kind: 'SFC',
     number: 114,
@@ -519,7 +501,6 @@ export const RAW_SYSTEM_BLOCKS: readonly RawSystemBlock[] = [
     kind: 'SFC',
     number: 126,
     name: 'SYNC_PI',
-    section: '14.3',
     i: 'PART:Byte',
     o: 'FLADDR:Word',
     ret: R,
@@ -528,7 +509,6 @@ export const RAW_SYSTEM_BLOCKS: readonly RawSystemBlock[] = [
     kind: 'SFC',
     number: 127,
     name: 'SYNC_PO',
-    section: '14.4',
     i: 'PART:Byte',
     o: 'FLADDR:Word',
     ret: R,

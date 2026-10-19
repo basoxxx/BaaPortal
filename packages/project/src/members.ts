@@ -34,7 +34,12 @@ export function findSystemFb(name: string): SystemBlock | undefined {
   return b?.kind === 'SFB' ? b : undefined;
 }
 
-/** Interfaccia di una SFB come membri del progetto, per verifiche e valori sostituiti. */
+/**
+ * Interfaccia di una SFB come membri del progetto, per verifiche e valori sostituiti.
+ * Contiene solo i parametri documentati: le istanze reali delle SFB hanno anche dati statici
+ * interni non documentati, quindi dimensioni e offset calcolati da questi membri non sono quelli
+ * reali e non vanno usati per l'indirizzamento assoluto.
+ */
 export function systemFbMembers(b: SystemBlock): Member[] {
   return [...b.input, ...b.output, ...b.inOut, ...(b.static ?? [])].map((m) => ({
     id: m.name,
@@ -64,6 +69,7 @@ export function typeResolver(device: PlcDevice): TypeResolver {
     }
     const sfb = findSystemFb(name);
     if (sfb) {
+      // Il layout deriva solo dai parametri documentati (vedi systemFbMembers): non e quello reale.
       return {
         kind: 'fb',
         sections: {

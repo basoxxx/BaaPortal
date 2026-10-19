@@ -1,10 +1,14 @@
 import { parseType, sameName, type TypedMember } from '@baaportal/s7-types';
 import {
+  CPU_MANUAL_2011,
+  INSTRUCTION_LIST_2008,
+  MANUAL_2010,
   RAW_SYSTEM_BLOCKS,
-  SOURCE_AVAILABILITY,
-  SOURCE_MANUAL,
   type RawSystemBlock,
 } from './systemBlocksData';
+
+// Blocchi disponibili sulle CPU PROFINET secondo il manuale CPU, non nell'elenco istruzioni.
+const FROM_CPU_MANUAL = new Set(['SFC99', 'SFB73', 'SFB74', 'SFB104']);
 
 export interface SystemBlock {
   kind: 'SFC' | 'SFB';
@@ -44,7 +48,9 @@ function build(raw: RawSystemBlock): SystemBlock {
     input: members(owner, raw.i),
     output: members(owner, raw.o),
     inOut: members(owner, raw.io),
-    source: `${SOURCE_MANUAL}, section ${raw.section}; availability on S7-300: ${SOURCE_AVAILABILITY.IL}; ${SOURCE_AVAILABILITY.CPU}`,
+    source: `${MANUAL_2010}${raw.section ? `, section ${raw.section}` : ''}; availability on S7-300: ${
+      FROM_CPU_MANUAL.has(`${raw.kind}${raw.number}`) ? CPU_MANUAL_2011 : INSTRUCTION_LIST_2008
+    }`,
   };
   if (raw.s !== undefined) block.static = members(owner, raw.s);
   if (raw.ret !== undefined) block.returnType = raw.ret;
