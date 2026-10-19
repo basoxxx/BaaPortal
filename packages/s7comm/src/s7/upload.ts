@@ -95,13 +95,13 @@ export function encodeStartUpload(fileName: string): Uint8Array {
 
 /** Lato finto PLC. Il nome è restituito come sul filo (ASCII), senza altra convalida. */
 export function decodeStartUpload(param: Uint8Array): { fileName: string; uploadId: number } {
-  if (param.length !== 18) throw bad(`start upload di ${param.length} byte invece di 18`);
+  if (param.length < 9) throw bad(`start upload di ${param.length} byte, meno di 9`);
   if (param[0] !== F_START) throw bad(`start upload con funzione 0x${param[0]!.toString(16)}`);
-  if (param[8] !== 9) throw bad(`lunghezza del nome ${param[8]} invece di 9`);
-  for (let i = 9; i < 18; i++) {
-    if (param[i]! < 0x20 || param[i]! > 0x7e) throw bad('nome file con byte non stampabili');
+  if (param[8] !== param.length - 9) {
+    throw bad(`lunghezza del nome ${param[8]} <> ${param.length - 9} byte disponibili`);
   }
-  return { fileName: ascii(param.subarray(9, 18)), uploadId: readU32(param, 4) };
+  // il nome si restituisce com'è (Latin-1): sarà parseBlockFileName a giudicarlo
+  return { fileName: ascii(param.subarray(9)), uploadId: readU32(param, 4) };
 }
 
 export interface StartUploadResponse {
@@ -177,8 +177,10 @@ export function decodeUploadRequest(param: Uint8Array): { uploadId: number } {
 }
 
 export interface UploadResponse {
-  /** EoU: `true` se ne seguono altri pezzi. */
+  /** EoU: `true` se ne seguono altri pezzi (qualunque valore diverso da 0). */
   more: boolean;
+  /** Byte EoU come sul filo. */
+  eou: number;
   /** Il pezzo di blocco, dopo l'header dati di 4 byte. */
   chunk: Uint8Array;
   /** I 2 byte dopo la lunghezza nell'header dati (di norma `00 fb`), grezzi. */
@@ -188,18 +190,22 @@ export interface UploadResponse {
 export function decodeUploadResponse(param: Uint8Array, data: Uint8Array): UploadResponse {
   if (param.length !== 2) throw bad(`risposta upload di ${param.length} byte invece di 2`);
   if (param[0] !== F_UPLOAD) throw bad(`risposta upload con funzione 0x${param[0]!.toString(16)}`);
-  if (param[1] !== 0 && param[1] !== 1)
-    throw bad(`EoU 0x${param[1]!.toString(16)} diverso da 0 e 1`);
   if (data.length < 4) throw bad("dati upload più corti dell'header di 4 byte");
   const len = readU16(data, 0);
   if (len !== data.length - 4) throw bad(`lunghezza del pezzo ${len} <> ${data.length - 4}`);
-  return { more: param[1] === 1, chunk: data.slice(4), dataHeader: data.slice(2, 4) };
+  return {
+    more: param[1] !== 0,
+    eou: param[1]!,
+    chunk: data.slice(4),
+    dataHeader: data.slice(2, 4),
+  };
 }
 
 export function encodeUploadResponse(
   more: boolean,
   chunk: Uint8Array,
   dataHeader: Uint8Array = Uint8Array.of(0x00, 0xfb),
+  eou?: number,
 ): { param: Uint8Array; data: Uint8Array } {
   if (chunk.length > 0xffff) throw new RangeError('pezzo oltre 65535 byte');
   if (dataHeader.length !== 2) throw new RangeError('header dati di 2 byte');
@@ -207,7 +213,7 @@ export function encodeUploadResponse(
   writeU16(data, 0, chunk.length);
   data.set(dataHeader, 2);
   data.set(chunk, 4);
-  return { param: Uint8Array.of(F_UPLOAD, more ? 1 : 0), data };
+  return { param: Uint8Array.of(F_UPLOAD, eou ?? (more ? 1 : 0)), data };
 }
 
 // ---- end upload 0x1F -------------------------------------------------------------------------

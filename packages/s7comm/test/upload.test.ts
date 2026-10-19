@@ -124,7 +124,6 @@ describe('upload', () => {
   });
   it('lunghezza incoerente, EoU strano o dati troppo corti: S7Error', () => {
     expect(() => decodeUploadResponse(fromHex('1e00'), fromHex('000500fb0102'))).toThrow(S7Error);
-    expect(() => decodeUploadResponse(fromHex('1e02'), fromHex('000100fb01'))).toThrow(S7Error);
     expect(() => decodeUploadResponse(fromHex('1e00'), fromHex('00'))).toThrow(S7Error);
     expect(() => decodeUploadResponse(fromHex('1e'), fromHex('000100fb01'))).toThrow(S7Error);
   });
@@ -132,5 +131,21 @@ describe('upload', () => {
     expect(() => encodeUpload(-1)).toThrow(RangeError);
     expect(() => encodeUpload(2 ** 32)).toThrow(RangeError);
     expect(() => encodeUploadResponse(true, new Uint8Array(0x10000))).toThrow(RangeError);
+  });
+});
+
+describe('tolleranza sui campi non pienamente documentati', () => {
+  it('EoU diverso da 0 e 1: more true e byte grezzo, round trip', () => {
+    const d = fromHex('000100fb01');
+    const r = decodeUploadResponse(fromHex('1e02'), d);
+    expect(r.more).toBe(true);
+    expect(r.eou).toBe(2);
+    const e = encodeUploadResponse(r.more, r.chunk, r.dataHeader, r.eou);
+    expect(hex(e.param)).toBe('1e02');
+  });
+  it("nome file anomalo in start upload: restituito com'è, non lancia", () => {
+    const p = fromHex('1d0000000000000003' + 'ff0a41');
+    expect(decodeStartUpload(p).fileName.length).toBe(3);
+    expect(() => parseBlockFileName(decodeStartUpload(p).fileName)).toThrow(S7Error);
   });
 });

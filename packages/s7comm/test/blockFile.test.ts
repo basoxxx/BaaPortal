@@ -21,7 +21,7 @@ const REAL = fromHex(
 
 const T = { year: 2020, month: 5, day: 17, hour: 10, minute: 30, second: 15, ms: 250, weekday: 1 };
 
-function header(over: Partial<BlockHeader> = {}): Omit<BlockHeader, 'loadLength'> {
+function header(over: Partial<BlockHeader> = {}): Parameters<typeof buildBlockFile>[0] {
   return {
     attr: 1,
     type: 'DB',
@@ -60,8 +60,8 @@ describe('parseBlockFile sul blocco reale caricato', () => {
     expect(b.header.security).toBe(0x80000000);
     expect(b.header.mc7Length).toBe(144);
     expect(b.header.ssbLength).toBe(0);
-    expect(hex(encodeBlockTimestamp(b.header.codeTime))).toBe('003921002d98');
-    expect(hex(encodeBlockTimestamp(b.header.interfaceTime))).toBe('04ef6d80122c');
+    expect(hex(encodeBlockTimestamp(b.header.codeTime!))).toBe('003921002d98');
+    expect(hex(encodeBlockTimestamp(b.header.interfaceTime!))).toBe('04ef6d80122c');
   });
   it("MC7 dalla lunghezza dell'header, nessuna sezione in mezzo, footer da 36 byte", () => {
     const b = parseBlockFile(REAL);
@@ -88,7 +88,8 @@ describe('buildBlockFile', () => {
     const mc7 = Uint8Array.of(1, 2, 3, 4);
     const f = buildBlockFile(header(), mc7, FOOTER);
     const p = parseBlockFile(f);
-    expect(p.header).toEqual({ ...header(), loadLength: 76 });
+    expect(p.header).toMatchObject({ ...header(), loadLength: 76, typeCode: 0x0a });
+    expect(p.warnings).toEqual([]);
     expect(hex(p.mc7)).toBe('01020304');
     expect(p.footer).toMatchObject(FOOTER);
     expect(p.rest.length).toBe(0);
@@ -136,15 +137,14 @@ describe('parseBlockFile su input rovinati', () => {
       }
     }
   });
-  it('magic sbagliato, tipo ignoto, data non valida: PROTOCOL', () => {
+  it('magic sbagliato o MC7 oltre la fine: PROTOCOL', () => {
     const bad = (mut: (b: Uint8Array) => void): void => {
       const b = REAL.slice();
       mut(b);
       expect(() => parseBlockFile(b)).toThrow(S7Error);
     };
     bad((b) => (b[0] = 0x71));
-    bad((b) => (b[5] = 0x99));
-    bad((b) => b.fill(0xff, 16, 20)); // ms oltre un giorno
+    bad((b) => (b[34] = 0xff));
   });
   it('con meno di 36 byte restano i byte, nessun altro errore', () => {
     expect(() => parseBlockFile(new Uint8Array(0))).toThrow(S7Error);
@@ -154,5 +154,67 @@ describe('parseBlockFile su input rovinati', () => {
     const b = parseBlockFile(REAL.subarray(0, 190));
     expect(b.footer).toBeNull();
     expect(b.rest.length).toBe(10);
+  });
+});
+
+describe('parseBlockFile tollerante: campi strani si conservano e si ricostruiscono esatti', () => {
+  const mc7 = Uint8Array.of(1, 2, 3, 4);
+  const exact = (bytes: Uint8Array) => {
+    const p = parseBlockFile(bytes);
+    expect(hex(buildBlockFile(p.header, p.mc7, p.footer, p.rest))).toBe(hex(bytes));
+    return p;
+  };
+  const base = (): Uint8Array => buildBlockFile(header(), mc7, FOOTER);
+
+  it.each([0x00, 0x42, 0xff])('byte di tipo 0x%s: type undefined, typeCode grezzo', (code) => {
+    const b = base();
+    b[5] = code;
+    const p = exact(b);
+    expect(p.header.type).toBeUndefined();
+    expect(p.header.typeCode).toBe(code);
+    expect(p.warnings.length).toBe(1);
+  });
+  it('timestamp non valido (ms = 0xFFFFFFFF): undefined, byte grezzi', () => {
+    const b = base();
+    b.fill(0xff, 16, 20);
+    const p = exact(b);
+    expect(p.header.codeTime).toBeUndefined();
+    expect(hex(p.header.codeTimeRaw)).toBe(hex(b.subarray(16, 22)));
+    expect(p.header.interfaceTime).toBeDefined();
+    b.fill(0xff, 22, 26);
+    expect(exact(b).header.interfaceTime).toBeUndefined();
+  });
+  it('security 3 (know-how protect)', () => {
+    const b = base();
+    b[15] = 3;
+    const p = exact(b);
+    expect(p.header.security).toBe(3);
+    expect(p.warnings).toEqual([]);
+  });
+  it('footer di soli 0xFF', () => {
+    const b = base();
+    b.fill(0xff, b.length - 36);
+    const p = exact(b);
+    expect(p.footer).not.toBeNull();
+    expect(p.footer!.checksum).toBe(0xffff);
+    expect(p.footer!.version).toBe('15.15');
+  });
+  it('loadLength diverso dal file: avviso e byte identici', () => {
+    const b = base();
+    b[11] = 0x99;
+    const p = exact(b);
+    expect(p.warnings.some((w) => w.includes('loadLength'))).toBe(true);
+  });
+  it('coda corta (footer null): avviso e ricostruzione esatta', () => {
+    const p = exact(base().subarray(0, 36 + 4 + 10));
+    expect(p.footer).toBeNull();
+    expect(p.warnings.length).toBeGreaterThan(0);
+  });
+  it('rest di lunghezza diversa da SSB+ADD: avviso', () => {
+    const b = buildBlockFile(header(), mc7, FOOTER, Uint8Array.of(1, 2, 3));
+    expect(exact(b).warnings.some((w) => w.includes('SSB'))).toBe(true);
+  });
+  it('sui blocchi reali nessun avviso', () => {
+    expect(parseBlockFile(REAL).warnings).toEqual([]);
   });
 });

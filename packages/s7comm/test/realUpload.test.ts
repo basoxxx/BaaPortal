@@ -154,6 +154,7 @@ describe.skipIf(!HAVE)('upload su catture reali: encode(decode(x)) identico', ()
             `${what} rest ${b.rest.length} <> ssb+add ${b.header.ssbLength + b.header.addLength}`,
             b.rest.length === b.header.ssbLength + b.header.addLength,
           );
+          check(`${what} avvisi: ${b.warnings.join('; ')}`, b.warnings.length === 0);
           if (b.rest.length > 0) s.rest++;
           if (b.footer === null) {
             s.noFooter++;
@@ -230,7 +231,7 @@ describe.skipIf(!HAVE)('upload su catture reali: encode(decode(x)) identico', ()
           s.upRes++;
           guard(tag + ' upload res', () => {
             const r = decodeUploadResponse(pdu.param, pdu.data);
-            const e = encodeUploadResponse(r.more, r.chunk, r.dataHeader);
+            const e = encodeUploadResponse(r.more, r.chunk, r.dataHeader, r.eou);
             same(tag + ' upload res param', e.param, pdu.param);
             same(tag + ' upload res dati', e.data, pdu.data);
             // anche con l'header dati predefinito (00 fb)
