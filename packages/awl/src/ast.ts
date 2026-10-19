@@ -22,6 +22,8 @@ export type Operand =
       byte: number;
       bit?: number;
       db?: number;
+      /** DB simbolico con indirizzo assoluto: `"Dati".DBW4` (db resta undefined). */
+      dbSymbol?: { name: string; quoted: boolean; range: Range };
       range: Range;
     }
   | { kind: 'timerCounter'; area: 'T' | 'C'; number: number; range: Range }
@@ -44,7 +46,7 @@ export type Operand =
     }
   | { kind: 'labelRef'; name: string; range: Range }
   | { kind: 'status'; condition: string; range: Range }
-  | { kind: 'special'; name: 'STW' | 'DBLG' | 'DBNO' | 'DILG' | 'DINO'; range: Range };
+  | { kind: 'special'; name: 'STW' | 'DBLG' | 'DBNO' | 'DILG' | 'DINO' | 'AR2'; range: Range };
 
 export interface CallParam {
   name: string;

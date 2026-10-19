@@ -30,6 +30,13 @@ describe('formatNetwork', () => {
     ]);
   });
 
+  it('DB simbolico con indirizzo assoluto e LAR1 AR2', () => {
+    const src = 'a "DB".dbx0.0\nl "Dati x".%DBW 4\nlar1 ar2';
+    const once = formatNetwork(src, 'international');
+    expect(once).toBe('\tA "DB".DBX0.0;\n\tL "Dati x".DBW4;\n\tLAR1 AR2;');
+    expect(formatNetwork(once, 'international')).toBe(once);
+  });
+
   it('mnemonico tedesco', () => {
     expect(formatNetwork('u e 0.0\nspb m1\nse t 1', 'german')).toBe(
       '\tU %E0.0;\n\tSPB m1;\n\tSE %T1;',

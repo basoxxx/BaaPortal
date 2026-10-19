@@ -17,6 +17,10 @@ function formatOperand(source: string, op: Operand, mnemonic: Mnemonic): string 
   switch (op.kind) {
     case 'address': {
       const at = op.bit === undefined ? `${op.byte}` : `${op.byte}.${op.bit}`;
+      if (op.dbSymbol) {
+        const sym = source.slice(op.dbSymbol.range.from.offset, op.dbSymbol.range.to.offset);
+        return `${sym}.${areaPrefix(op.area, op.size, mnemonic)}${at}`;
+      }
       if (op.db !== undefined) {
         // DB qualificato: il nome del blocco resta DB/DI, il membro porta la dimensione
         return `%${op.area}${op.db}.${areaPrefix(op.area, op.size, mnemonic)}${at}`;

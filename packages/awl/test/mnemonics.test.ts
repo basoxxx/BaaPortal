@@ -40,6 +40,11 @@ describe('convertMnemonics', () => {
     );
   });
 
+  it('DB simbolico e AR2 restano intatti', () => {
+    const s = 'A "DB".DBX0.0\nLAR1 AR2';
+    expect(convertMnemonics(s, 'international', 'german')).toBe('U "DB".DBX0.0\nLAR1 AR2');
+  });
+
   it('stessa lingua: testo invariato', () => {
     expect(convertMnemonics('A I0.0', 'international', 'international')).toBe('A I0.0');
   });

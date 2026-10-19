@@ -296,6 +296,13 @@ function parseStatementOperand(
       };
     }
   }
+  if (def.id === 'LAR1' || def.id === 'TAR1') {
+    const m = sticky(WORD, src, k);
+    if (m && m[0].toUpperCase() === 'AR2') {
+      const end = k + m[0].length;
+      return { operand: { kind: 'special', name: 'AR2', range: idx.range(k, end) }, end };
+    }
+  }
   if (def.operands.includes('status')) {
     const st = matchStatus(ctx, k);
     if (st) return st;

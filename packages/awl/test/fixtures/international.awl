@@ -305,3 +305,9 @@ M002:	NOP 0
 	INC 1
 	DEC 1
 	BLD 255
+// --- DB simbolico con indirizzo assoluto, AR2 ---
+	A "DB".DBX0.0
+	L "Dati motore".DBW 4
+	T "Dati".DBD 12
+	LAR1 AR2
+	TAR1 AR2

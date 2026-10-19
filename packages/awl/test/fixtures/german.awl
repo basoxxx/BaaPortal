@@ -229,3 +229,5 @@ M001:	U	%E0.0;	// con etichetta
 	+AR1
 	+AR2 P#M 0.0
 	+AR2
+	U "DB".DBX0.0
+	LAR1 AR2

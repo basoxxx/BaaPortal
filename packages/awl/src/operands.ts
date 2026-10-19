@@ -311,6 +311,10 @@ function tryPath(ctx: Ctx, i: number): Parsed {
       j += m[0].length;
     }
     path.push(seg);
+    if (kind === 'symbol' && path.length === 1 && quoted && !seg.index) {
+      const abs = trySymbolicDb(ctx, i, j, name, seg.range);
+      if (abs) return abs;
+    }
     const nx = src[j + 1];
     if (src[j] === '.' && (nx === '"' || nx === '_' || isAlpha(nx))) j++;
     else break;
@@ -338,5 +342,33 @@ export function matchStatus(ctx: Ctx, i: number): { operand: Operand; end: numbe
   return {
     operand: { kind: 'status', condition: m[0].toUpperCase(), range: ctx.idx.range(i, end) },
     end,
+  };
+}
+
+const ABS_MEMBER = /\.%?DB([XBWD])(?![A-Za-z_])/iy;
+
+// `"Dati".DBW 4`: DB simbolico con indirizzo assoluto; altrimenti e' un membro normale.
+function trySymbolicDb(
+  ctx: Ctx,
+  start: number,
+  dot: number,
+  name: string,
+  nameRange: PathSegment['range'],
+): Parsed | null {
+  const m = match(ABS_MEMBER, ctx.src, dot);
+  if (!m) return null;
+  const size = m[1]!.toUpperCase() as AddressSize;
+  const part = numberPart(ctx.src, skipWs(ctx.src, dot + m[0].length), size);
+  if (!part) return null;
+  return {
+    operand: {
+      kind: 'address',
+      area: 'DB',
+      size,
+      ...part.at,
+      dbSymbol: { name, quoted: true, range: nameRange },
+      range: ctx.idx.range(start, part.end),
+    },
+    end: part.end,
   };
 }

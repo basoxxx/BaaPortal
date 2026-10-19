@@ -83,6 +83,32 @@ describe('parseNetwork', () => {
     expect(op('U BIE', 'german').operand).toMatchObject({ kind: 'status', condition: 'BIE' });
   });
 
+  it('DB simbolico con indirizzo assoluto', () => {
+    const src = 'A "DB".DBX0.0\r\nL "Dati motore è".DBW 4\r\nT "x".%DBD4';
+    const r = parseNetwork(src, 'international');
+    expect(r.errors).toEqual([]);
+    const [a, b, c] = r.statements.map((s) => s.operand!) as [Operand, Operand, Operand];
+    expect(a).toMatchObject({ kind: 'address', area: 'DB', size: 'X', byte: 0, bit: 0 });
+    expect(b).toMatchObject({ kind: 'address', area: 'DB', size: 'W', byte: 4 });
+    expect(c).toMatchObject({ kind: 'address', area: 'DB', size: 'D', byte: 4 });
+    expect((b as { db?: number }).db).toBeUndefined();
+    const sym = (b as Extract<Operand, { kind: 'address' }>).dbSymbol!;
+    expect(sym).toMatchObject({ name: 'Dati motore è', quoted: true });
+    expect(sym.range.from).toEqual({ line: 1, col: 2, offset: 17 });
+    expect(src.slice(sym.range.from.offset, sym.range.to.offset)).toBe('"Dati motore è"');
+    expect(src.slice(b.range.from.offset, b.range.to.offset)).toBe('"Dati motore è".DBW 4');
+    expect(op('A "DB".x').operand).toMatchObject({ kind: 'symbol' });
+    expect(op('A "DB".DBX').operand).toMatchObject({ kind: 'symbol' });
+  });
+
+  it('AR2 come operando solo di LAR1 e TAR1', () => {
+    expect(op('LAR1 AR2').operand).toMatchObject({ kind: 'special', name: 'AR2' });
+    expect(op('TAR1 ar2').operand).toMatchObject({ kind: 'special', name: 'AR2' });
+    for (const s of ['L AR2', 'LAR2 AR2', 'TAR2 AR2', 'T AR2']) {
+      expect(op(s).errors.map((e) => e.code)).toEqual(['BAD_OPERAND']);
+    }
+  });
+
   it('range esatti degli operandi', () => {
     const src = 'A I0.0\n   L DB10.DBW 4';
     const r = parseNetwork(src, 'international');
