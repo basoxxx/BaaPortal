@@ -344,6 +344,14 @@ describe('CALL', () => {
     ]);
   });
 
+  it('TRUE/FALSE: valide per un parametro Bool, CALL_PARAM_TYPE per un Int', () => {
+    const base =
+      'T1 := T 1, P := P#M0.0, Q := MW 0, Blk := FC 1, Tx := \'abc\', Tp := "Macchina", W := MW 2';
+    expect(check([`CALL "Prese" (${base}, B := TRUE)`])).toEqual([]);
+    expect(check([`CALL "Prese" (${base}, B := false)`])).toEqual([]);
+    expect(summary(['CALL "Calcola" (A := TRUE, R := MW 0)'])).toEqual(['CALL_PARAM_TYPE@0:TRUE']);
+  });
+
   it('tipi dei parametri: Timer, Pointer, Any, Block, complessi, costanti', () => {
     const ok = (v: string) => check([`CALL "Prese" (${v})`]);
     const all = (over: Record<string, string> = {}) => {

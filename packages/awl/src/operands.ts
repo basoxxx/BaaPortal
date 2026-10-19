@@ -36,7 +36,15 @@ export function badEnd(src: string, i: number): number {
   let j = i;
   while (j < src.length) {
     const c = src[j]!;
-    if (isWs(c) || c === ';' || c === '\r' || c === '\n' || (c === '/' && src[j + 1] === '/'))
+    if (
+      isWs(c) ||
+      c === ';' ||
+      c === ',' ||
+      c === ')' ||
+      c === '\r' ||
+      c === '\n' ||
+      (c === '/' && src[j + 1] === '/')
+    )
       break;
     j++;
   }
@@ -45,6 +53,7 @@ export function badEnd(src: string, i: number): number {
 
 const lineEndOf = (ctx: Ctx, i: number): number => ctx.idx.ends[ctx.idx.lineOf(i)]!;
 
+const BOOLS = new Set(['TRUE', 'FALSE']);
 const BLOCKS = new Set(['FB', 'FC', 'SFB', 'SFC']);
 const SIZES = new Set<string>(['B', 'W', 'D']);
 
@@ -126,6 +135,12 @@ function tryOperand(ctx: Ctx, i: number): Parsed {
     if (!m) return fail();
     prefix = m[0].toUpperCase();
     j += m[0].length;
+    if (c !== '%' && BOOLS.has(prefix) && boundary(src, j)) {
+      return {
+        operand: { kind: 'constant', text: m[0], range: ctx.idx.range(i, j) },
+        end: j,
+      };
+    }
   }
   const prefixStart = j - prefix.length;
   const range = (to: number) => ctx.idx.range(i, to);

@@ -129,6 +129,32 @@ describe('parseNetwork', () => {
     }
   });
 
+  it('TRUE e FALSE sono costanti; prefissi lunghi TIME_OF_DAY# e DATE_AND_TIME#', () => {
+    for (const t of [
+      'TRUE',
+      'false',
+      'TIME_OF_DAY#12:00:00',
+      'DATE_AND_TIME#2020-01-01-12:00:00',
+    ]) {
+      expect(op(`L ${t}`)).toMatchObject({ errors: [], operand: { kind: 'constant', text: t } });
+    }
+    const r = parseNetwork('CALL "FC" (X := TRUE);', 'international');
+    expect(r.errors).toEqual([]);
+    expect(r.statements[0]!.params![0]!.value).toMatchObject({ kind: 'constant', text: 'TRUE' });
+    expect(op('L TRUEX').errors).toHaveLength(1);
+  });
+
+  it('parametro errato in un CALL: un solo errore, la ")" non viene consumata', () => {
+    const r = parseNetwork(
+      'CALL "FC" (X := ?!, Y := 1);\nBE\nCALL "FC" (\n X := ?!\n);\nBE',
+      'international',
+    );
+    expect(r.errors.map((e) => e.code)).toEqual(['BAD_OPERAND', 'BAD_OPERAND']);
+    expect(r.statements.map((s) => s.instruction.text)).toEqual(['CALL', 'BE', 'CALL', 'BE']);
+    expect(r.statements[0]!.params!.map((p) => p.name)).toEqual(['X', 'Y']);
+    expect(r.statements[2]!.params!.map((p) => p.name)).toEqual(['X']);
+  });
+
   it('range esatti degli operandi', () => {
     const src = 'A I0.0\n   L DB10.DBW 4';
     const r = parseNetwork(src, 'international');

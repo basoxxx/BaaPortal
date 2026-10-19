@@ -83,9 +83,9 @@ const CHAR = /'[^'\r\n]{1,4}'/y;
 const POINTER =
   /P#(?:(?:DB|DI)\d+\.)?(?:[A-Za-z]+[ \t]?)?\d+(?:\.\d+)?(?:[ \t]+[A-Za-z]+[ \t]+\d+)?/iy;
 const BYTES = /B#\([ \t]*\d+(?:[ \t]*,[ \t]*\d+){1,3}[ \t]*\)/iy;
-const PREFIXED = /[A-Za-z0-9]+#[+-]?[0-9A-Za-z_.:#-]+/y;
+const PREFIXED = /[A-Za-z0-9_]+#[+-]?[0-9A-Za-z_.:#-]+/y;
 const NUMBER = /[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?(?![A-Za-z0-9_.])/y;
-const CONST_PREFIX = /[A-Za-z][A-Za-z0-9]*#/y;
+const CONST_PREFIX = /[A-Za-z][A-Za-z0-9_]*#/y;
 
 function sticky(re: RegExp, src: string, i: number): number {
   re.lastIndex = i;

@@ -422,7 +422,7 @@ function parseParams(
       value = r.operand;
       end = r.end;
       if (!value) {
-        i = recover(src, r.end);
+        i = recover(src, j);
         if (src[i] === ',') i++;
         params.push(param(ctx, name, nameStart, nameEnd, arrow, null, end));
         continue;
