@@ -153,20 +153,28 @@ test('sorgente di collaudo: importa, genera, modifica, errore, correzione, rigen
   await treeNode(page, 'Blocchi di programma').click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Genera sorgente dai blocchi' }).click();
   await expect.poll(async () => (await sourceNodeId(page, dev)).length).toBe(2);
-  const generated = (await sourceNodeId(page, dev))[1]!;
+  // La sorgente generata prende il nome del primo oggetto (l'UDT "Misura"): si sceglie per nome.
+  const generated = page.locator(`[data-testid^="tree-node-plc:${dev}:source:"]`, {
+    hasText: 'Misura.awl',
+  });
+  await expect(generated).toHaveCount(1);
   const out = join(tmp, 'uscita.awl');
   await stubFileDialogs(app, { save: out });
-  await page.getByTestId(generated).click({ button: 'right' });
+  await generated.click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Esporta…' }).click();
-  await expect.poll(() => (readFileOrNull(out) ? 1 : 0)).toBe(1);
 
-  // 7. Identico byte per byte alla fixture modificata (BOM e CRLF compresi)
-  const expected = encodeSourceText(fixtureText('collaudo_modificato.awl'));
+  // 7. Identico byte per byte alla fixture modificata (BOM e CRLF compresi): si aspetta l'uguaglianza,
+  // non solo che il file esista (la scrittura potrebbe essere ancora a metà).
+  const expected = Buffer.from(encodeSourceText(fixtureText('collaudo_modificato.awl')));
+  await expect
+    .poll(() => readFileOrNull(out)?.equals(expected) ?? false, { timeout: 30_000 })
+    .toBe(true);
   const actual = readFileSync(out);
   expect(actual.subarray(0, 3)).toEqual(Buffer.from([0xef, 0xbb, 0xbf]));
-  expect(actual.toString('utf8')).toContain('\r\n');
-  expect(actual.toString('utf8')).toBe(Buffer.from(expected).toString('utf8'));
-  expect(Buffer.from(expected).equals(actual)).toBe(true);
+  const text = actual.toString('utf8');
+  expect(text).toContain('\r\n');
+  // Nessun LF isolato: ogni a capo è CRLF.
+  expect(text.replace(/\r\n/g, '')).not.toContain('\n');
 
   // Completamento dopo "#" nel FB, con una bozza che non si conferma
   await treeNode(page, 'Ritardo [FB').dblclick();
@@ -268,7 +276,13 @@ test('editor AWL nella finestra separata: conferma all’uscita dal focus e con 
   await expect(network(det, 1)).toBeVisible();
 
   // (a) Scrive e esce dal focus: la modifica è nel progetto (la salva la finestra principale)
+  const undo = page.getByTestId('toolbar').getByRole('button', { name: 'Annulla' });
+  await expect(undo).toBeDisabled();
   await setCode(det, 1, 'A %I0.0;\n= %Q0.0;');
+  // Prima di salvare: il modello ha già la modifica (Annulla ne porta il nome) e niente è sul disco.
+  await expect(undo).toBeEnabled({ timeout: 30_000 });
+  await expect(undo).toHaveAttribute('title', /Modifica codice del segmento/);
+  expect(savedNetwork(file, 'FB', 'Nastro', 0) ?? '').not.toContain('%Q0.0');
   await page.bringToFront();
   await page.getByTestId('menu-bar').click();
   await page.keyboard.press(`${mod}+s`);
