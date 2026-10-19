@@ -135,3 +135,60 @@ describe('spazi prima delle parole chiave e MISSING_END', () => {
     expect(parseAwlSource(fixture('ob1.awl')).ok).toBe(true);
   });
 });
+
+describe('OB con nome di catalogo e numeri doppi', () => {
+  const dupes = (d: ReturnType<typeof emptyDevice>): string[] => {
+    const fam = (k: string) => (k === 'IDB' ? 'DB' : k);
+    const keys = [
+      ...d.blocks.map((b) => `${fam(b.kind)}${b.number}`),
+      ...d.udts.map((u) => `UDT${u.number}`),
+    ];
+    return keys.filter((k, i) => keys.indexOf(k) !== i);
+  };
+
+  it('un OB con nome di catalogo sostituisce l OB esistente con quel numero e ne tiene il nome', () => {
+    const d = emptyDevice();
+    const old = createCodeBlock({
+      kind: 'OB',
+      number: 1,
+      name: 'Zyx',
+      language: 'AWL',
+      newId: seq('o'),
+    });
+    old.group = 'G';
+    d.blocks.push(old);
+    const r = parseAwlSource('ORGANIZATION_BLOCK "Main"\nBEGIN\nEND_ORGANIZATION_BLOCK\n', d);
+    if (!r.ok) throw new Error();
+    const res = applySource(d, r.source, seq('n'));
+    expect(d.blocks).toHaveLength(1);
+    expect(d.blocks[0]).toMatchObject({ id: old.id, group: 'G', number: 1, name: 'Zyx' });
+    expect(res.replaced).toEqual([{ kind: 'block', deviceId: d.id, id: old.id }]);
+    expect(res.created).toEqual([]);
+  });
+
+  it('nessun numero doppio con nomi e numeri che collidono con oggetti esistenti', () => {
+    const d = emptyDevice();
+    const mk = (kind: 'OB' | 'FB' | 'FC', number: number, name: string) =>
+      createCodeBlock({ kind, number, name, language: 'AWL', newId: seq(`o${kind}${number}`) });
+    d.blocks.push(mk('OB', 1, 'Zyx'), mk('FB', 5, 'Altro'), mk('FC', 2, 'Calc'));
+    d.udts.push(createUdt({ name: 'U3', number: 3, newId: seq('u') }));
+    const text = [
+      'ORGANIZATION_BLOCK "Main"\nBEGIN\nEND_ORGANIZATION_BLOCK',
+      'ORGANIZATION_BLOCK OB 1\nBEGIN\nEND_ORGANIZATION_BLOCK',
+      'FUNCTION_BLOCK FB 5\nBEGIN\nEND_FUNCTION_BLOCK',
+      'FUNCTION_BLOCK "Nuovo"\nBEGIN\nEND_FUNCTION_BLOCK',
+      'FUNCTION FC 2 : Void\nBEGIN\nEND_FUNCTION',
+      'FUNCTION "Calc" : Void\nBEGIN\nEND_FUNCTION',
+      'TYPE UDT 3\nSTRUCT\nEND_STRUCT;\nEND_TYPE',
+      'TYPE "U3"\nSTRUCT\nEND_STRUCT;\nEND_TYPE',
+      'DATA_BLOCK DB 7\nFB 5\nBEGIN\nEND_DATA_BLOCK',
+      'DATA_BLOCK "D7"\nSTRUCT\nEND_STRUCT;\nBEGIN\nEND_DATA_BLOCK',
+      'DATA_BLOCK "I"\n"Nuovo"\nBEGIN\nEND_DATA_BLOCK',
+    ].join('\n\n');
+    const r = parseAwlSource(text, d);
+    if (!r.ok) throw new Error(JSON.stringify(r.errors));
+    applySource(d, r.source, seq('n'));
+    expect(dupes(d)).toEqual([]);
+    expect(d.blocks.filter((b) => b.kind === 'OB')).toHaveLength(1);
+  });
+});

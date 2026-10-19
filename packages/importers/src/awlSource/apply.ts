@@ -62,12 +62,21 @@ function findExisting(device: PlcDevice, unit: SourceUnit): Udt | Block | undefi
       byNumber ? u.number === unit.number : sameName(u.name, unit.name),
     );
   }
-  return device.blocks.find(
-    (b) =>
-      familyOf(b.kind) === familyOf(unit.kind) &&
-      (byNumber ? b.number === unit.number : sameName(b.name, unit.name)),
+  const sameFamily = (b: Block): boolean => familyOf(b.kind) === familyOf(unit.kind);
+  const hit = device.blocks.find(
+    (b) => sameFamily(b) && (byNumber ? b.number === unit.number : sameName(b.name, unit.name)),
   );
+  if (hit || byNumber || unit.kind !== 'OB') return hit;
+  // Un OB per nome del catalogo è l'OB di quel numero, anche se nel dispositivo ha un altro nome.
+  const catalog = catalogNumber(unit);
+  return catalog === undefined
+    ? undefined
+    : device.blocks.find((b) => sameFamily(b) && b.number === catalog);
 }
+
+/** Numero dell'OB del catalogo con il nome dell'unità, se c'è. */
+const catalogNumber = (unit: SourceUnit): number | undefined =>
+  OB_DEFINITIONS.find((o) => sameName(o.defaultName, unit.name))?.number;
 
 function markStartInfo(block: CodeBlock): void {
   if (block.kind !== 'OB') return;
@@ -161,7 +170,10 @@ export function applySource(
   function applyOne(unit: SourceUnit): void {
     const existing = findExisting(device, unit);
     if (existing) {
-      const name = unit.number !== undefined ? existing.name : unit.name;
+      // Per numero (anche quello del catalogo) l'oggetto tiene il proprio nome.
+      const keepName =
+        unit.number !== undefined || (unit.kind === 'OB' && !sameName(existing.name, unit.name));
+      const name = keepName ? existing.name : unit.name;
       const t = build(unit, existing.number, name);
       t.obj.id = existing.id;
       t.obj.group = existing.group;
@@ -172,11 +184,18 @@ export function applySource(
       return;
     }
     const kind: Kind = unit.kind === 'IDB' ? 'DB' : unit.kind;
-    const catalogOb =
-      unit.kind === 'OB' && unit.number === undefined
-        ? OB_DEFINITIONS.find((o) => sameName(o.defaultName, unit.name))
-        : undefined;
-    const number = unit.number ?? catalogOb?.number ?? freeNumber(device, kind);
+    const number =
+      unit.number ??
+      (unit.kind === 'OB' ? catalogNumber(unit) : undefined) ??
+      freeNumber(device, kind);
+    // Non si crea mai un oggetto con un numero già usato: lo evitano la sostituzione e freeNumber.
+    const taken =
+      unit.kind === 'UDT'
+        ? device.udts.some((u) => u.number === number)
+        : device.blocks.some(
+            (b) => familyOf(b.kind) === familyOf(unit.kind) && b.number === number,
+          );
+    if (taken) throw new Error(`Numero ${unit.kind} ${number} già in uso`);
     const name = unit.name !== '' ? unit.name : defaultName(device, unit.kind, number);
     const t = build(unit, number, name);
     if (t.kind === 'udt') device.udts.push(t.obj);
