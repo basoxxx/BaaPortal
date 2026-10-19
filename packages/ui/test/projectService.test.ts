@@ -108,7 +108,9 @@ describe('projectService', () => {
     async (answer, result, finalPath) => {
       await openValid('/a.baap');
       bridge.files.set('/b.baap', bytes('b'));
-      store.getState().updateMeta({ author: 'X' });
+      store.getState().edit('history.author', (p) => {
+        p.meta.author = 'X';
+      });
       bridge.confirmAnswers.push(answer);
       expect(await svc.open('/b.baap')).toBe(result);
       expect(store.getState().doc?.filePath).toBe(finalPath);
@@ -118,7 +120,9 @@ describe('projectService', () => {
   it('con risposta save salva prima e poi apre', async () => {
     await openValid('/a.baap');
     bridge.files.set('/b.baap', bytes('b'));
-    store.getState().updateMeta({ author: 'X' });
+    store.getState().edit('history.author', (p) => {
+      p.meta.author = 'X';
+    });
     bridge.confirmAnswers.push('save');
     expect(await svc.open('/b.baap')).toBe(true);
     expect(readBaap(bridge.files.get('/a.baap')!).meta.author).toBe('X');
@@ -128,7 +132,9 @@ describe('projectService', () => {
   it('con risposta save ma salvataggio fallito, interrompe', async () => {
     await openValid('/a.baap');
     bridge.files.set('/b.baap', bytes('b'));
-    store.getState().updateMeta({ author: 'X' });
+    store.getState().edit('history.author', (p) => {
+      p.meta.author = 'X';
+    });
     bridge.confirmAnswers.push('save');
     bridge.failNextWrite('EBUSY');
     expect(await svc.open('/b.baap')).toBe(false);
@@ -137,7 +143,9 @@ describe('projectService', () => {
 
   it("salvataggio fallito: messaggio d'errore, resta dirty, il file su disco non cambia", async () => {
     await openValid('/a.baap');
-    store.getState().updateMeta({ author: 'X' });
+    store.getState().edit('history.author', (p) => {
+      p.meta.author = 'X';
+    });
     bridge.failNextWrite('EACCES');
     expect(await svc.save()).toBe(false);
     expect(store.getState().doc?.dirty).toBe(true);
@@ -148,7 +156,9 @@ describe('projectService', () => {
 
   it('save aggiorna modifiedAt e azzera dirty', async () => {
     await openValid('/a.baap');
-    store.getState().updateMeta({ comment: 'c' });
+    store.getState().edit('history.comment', (p) => {
+      p.meta.comment = 'c';
+    });
     expect(await svc.save()).toBe(true);
     expect(readBaap(bridge.files.get('/a.baap')!).meta.modifiedAt).toBe(NOW.toISOString());
     expect(store.getState().doc?.dirty).toBe(false);
@@ -187,7 +197,9 @@ describe('projectService', () => {
 
   it('richiesta di chiusura con modifiche e Annulla: la finestra non si chiude', async () => {
     await openValid('/a.baap');
-    store.getState().updateMeta({ comment: 'c' });
+    store.getState().edit('history.comment', (p) => {
+      p.meta.comment = 'c';
+    });
     bridge.confirmAnswers.push('cancel');
     await bridge.emitCloseRequest();
     expect(bridge.closeConfirmed).toBe(false);
@@ -196,7 +208,9 @@ describe('projectService', () => {
   it('richiesta di apertura dal sistema con modifiche non salvate chiede prima di sostituire', async () => {
     await openValid('/a.baap');
     bridge.files.set('/b.baap', bytes('b'));
-    store.getState().updateMeta({ comment: 'c' });
+    store.getState().edit('history.comment', (p) => {
+      p.meta.comment = 'c';
+    });
     bridge.confirmAnswers.push('cancel');
     await bridge.emitOpenFile('/b.baap');
     expect(store.getState().doc?.filePath).toBe('/a.baap');
@@ -215,11 +229,15 @@ describe('projectService', () => {
 
     it('una modifica durante il salvataggio resta e il documento resta modificato', async () => {
       await openValid('/a.baap');
-      store.getState().updateMeta({ author: 'AB' });
+      store.getState().edit('history.author', (p) => {
+        p.meta.author = 'AB';
+      });
       const releases = deferWrites();
       const saving = svc.save();
       await flush();
-      store.getState().updateMeta({ author: 'ABC' });
+      store.getState().edit('history.author', (p) => {
+        p.meta.author = 'ABC';
+      });
       releases[0]!();
       await saving;
       const doc = store.getState().doc!;
@@ -230,12 +248,20 @@ describe('projectService', () => {
 
     it('aprire un altro documento durante il salvataggio non viene sovrascritto', async () => {
       await openValid('/a.baap');
-      store.getState().updateMeta({ author: 'AB' });
+      store.getState().edit('history.author', (p) => {
+        p.meta.author = 'AB';
+      });
       const releases = deferWrites();
       const saving = svc.save();
       await flush();
       bridge.files.set('/b.baap', bytes('b'));
-      store.getState().setDoc({ project: readBaap(bytes('b')), filePath: '/b.baap', dirty: false });
+      store.getState().setDoc({
+        project: readBaap(bytes('b')),
+        filePath: '/b.baap',
+        dirty: false,
+        revision: 0,
+        savedRevision: 0,
+      });
       releases[0]!();
       await saving;
       expect(store.getState().doc?.filePath).toBe('/b.baap');
@@ -243,13 +269,28 @@ describe('projectService', () => {
       expect(store.getState().doc?.dirty).toBe(false);
     });
 
+    it('annullare dopo un salvataggio lascia il documento modificato', async () => {
+      await openValid('/a.baap');
+      store.getState().edit('history.author', (p) => {
+        p.meta.author = 'AB';
+      });
+      expect(await svc.save()).toBe(true);
+      expect(store.getState().doc?.dirty).toBe(false);
+      store.getState().undo();
+      expect(store.getState().doc?.dirty).toBe(true);
+    });
+
     it('due save() concorrenti: stato finale corretto e disco allineato', async () => {
       await openValid('/a.baap');
-      store.getState().updateMeta({ author: 'AB' });
+      store.getState().edit('history.author', (p) => {
+        p.meta.author = 'AB';
+      });
       const releases = deferWrites();
       const first = svc.save();
       await flush();
-      store.getState().updateMeta({ author: 'ABC' });
+      store.getState().edit('history.author', (p) => {
+        p.meta.author = 'ABC';
+      });
       const second = svc.save();
       await flush();
       expect(releases).toHaveLength(1);
@@ -264,7 +305,9 @@ describe('projectService', () => {
 
     it('due save() concorrenti senza nuove modifiche scrivono una volta sola', async () => {
       await openValid('/a.baap');
-      store.getState().updateMeta({ author: 'AB' });
+      store.getState().edit('history.author', (p) => {
+        p.meta.author = 'AB';
+      });
       const releases = deferWrites();
       const first = svc.save();
       const second = svc.save();
@@ -312,7 +355,9 @@ describe('projectService', () => {
       };
       bridge.files.set('/a.baap', bytes('a'));
       expect(await svc.open('/a.baap')).toBe(true);
-      store.getState().updateMeta({ author: 'Z' });
+      store.getState().edit('history.author', (p) => {
+        p.meta.author = 'Z';
+      });
       expect(await svc.save()).toBe(true);
       expect(store.getState().doc?.dirty).toBe(false);
       expect(await svc.createNew({ name: 'N', dir: '/d', author: '', comment: '' })).toEqual({

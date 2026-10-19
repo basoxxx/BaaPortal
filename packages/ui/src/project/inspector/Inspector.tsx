@@ -1,16 +1,44 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useAppStore, useServices } from '../../state/AppContext';
+import type { InspectorTab } from '../../state/store';
 import { InfoMessages } from './InfoMessages';
+import { parseNodeId } from '../navigation/treeIds';
 import { ProjectProperties } from './ProjectProperties';
+import { BlockProperties } from './properties/BlockProperties';
+import { PlcProperties } from './properties/PlcProperties';
+import { TagTableProperties } from './properties/TagTableProperties';
+import { UdtProperties } from './properties/UdtProperties';
 
-type Tab = 'properties' | 'info' | 'diagnostics';
 type SubTab = 'general' | 'crossRefs' | 'compile';
-const TABS: Tab[] = ['properties', 'info', 'diagnostics'];
+const TABS: InspectorTab[] = ['properties', 'info', 'diagnostics'];
 const SUBTABS: SubTab[] = ['general', 'crossRefs', 'compile'];
+
+/** Il pannello delle proprietà dipende dal nodo selezionato. */
+function Properties() {
+  const { t } = useTranslation();
+  const selection = useAppStore((s) => s.selection);
+  if (selection === 'project') return <ProjectProperties />;
+  const node = selection ? parseNodeId(selection) : null;
+  switch (node?.kind) {
+    case 'plc':
+      return <PlcProperties deviceId={node.dev} />;
+    case 'block':
+      return <BlockProperties deviceId={node.dev} blockId={node.id} />;
+    case 'udt':
+      return <UdtProperties deviceId={node.dev} udtId={node.id} />;
+    case 'tagTable':
+      return <TagTableProperties deviceId={node.dev} tableId={node.id} />;
+    default:
+      return <p className="baa-placeholder">{t('inspector.noProperties')}</p>;
+  }
+}
 
 export function Inspector() {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<Tab>('properties');
+  const { store } = useServices();
+  const tab = useAppStore((s) => s.inspectorTab);
+  const setTab = (id: InspectorTab) => store.getState().setInspectorTab(id);
   const [sub, setSub] = useState<SubTab>('general');
   return (
     <div className="baa-inspector">
@@ -37,7 +65,7 @@ export function Inspector() {
         aria-labelledby={`inspector-tab-${tab}`}
         className="baa-tabpanel"
       >
-        {tab === 'properties' ? <ProjectProperties /> : null}
+        {tab === 'properties' ? <Properties /> : null}
         {tab === 'diagnostics' ? (
           <p className="baa-placeholder">{t('inspector.diagnosticsEmpty')}</p>
         ) : null}

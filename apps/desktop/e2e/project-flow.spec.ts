@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -9,6 +9,7 @@ import {
   spawnSecondInstance,
   stubMessageBox,
   test,
+  removeDir,
 } from './helpers';
 
 const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
@@ -18,7 +19,7 @@ test.beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), 'baa-flow-'));
 });
 test.afterEach(() => {
-  rmSync(tmp, { recursive: true, force: true });
+  removeDir(tmp);
 });
 
 test('crea, modifica, salva, chiude e riapre dai recenti, con nome non ASCII in cartella con spazi', async () => {

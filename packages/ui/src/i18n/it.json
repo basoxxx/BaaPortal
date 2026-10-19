@@ -32,10 +32,15 @@
     }
   },
   "messages": {
+    "detachBlocked": "Impossibile aprire la finestra separata: l'editor resta nell'area di lavoro.",
     "created": "Progetto \"{{name}}\" creato.",
     "opened": "Progetto \"{{name}}\" aperto.",
     "saved": "Progetto \"{{name}}\" salvato.",
-    "recentMissing": "Il progetto \"{{name}}\" non è stato trovato: è stato tolto dall'elenco."
+    "recentMissing": "Il progetto \"{{name}}\" non è stato trovato: è stato tolto dall'elenco.",
+    "standardTableLocked": "La Tabella delle variabili standard non può essere eliminata.",
+    "pasteNoNumber": "Nessun numero libero: {{count}} oggetti non sono stati incollati.",
+    "recoveryWriteFailed": "Impossibile scrivere la copia di recupero automatico: le modifiche non salvate potrebbero andare perse in caso di chiusura anomala.",
+    "recovered": "Modifiche di \"{{name}}\" recuperate."
   },
   "commands": {
     "project.new": "Nuovo…",
@@ -169,13 +174,69 @@
     "commonData": "Dati di base comuni",
     "docSettings": "Impostazioni della documentazione",
     "languages": "Lingue e risorse",
-    "onlineAccess": "Accessi online"
+    "onlineAccess": "Accessi online",
+    "plc": {
+      "deviceConfig": "Configurazione dispositivi",
+      "onlineDiag": "Online e diagnostica",
+      "blocks": "Blocchi di programma",
+      "addBlock": "Aggiungi nuovo blocco",
+      "systemBlocks": "Blocchi di sistema",
+      "sources": "Sorgenti esterne",
+      "tags": "Variabili PLC",
+      "allTags": "Mostra tutte le variabili",
+      "addTagTable": "Aggiungi nuova tabella delle variabili",
+      "types": "Tipi di dati PLC",
+      "addUdt": "Aggiungi nuovo tipo di dati",
+      "watch": "Tabelle di controllo e forzamento",
+      "backup": "Backup online",
+      "progInfo": "Informazioni sul programma"
+    }
   },
   "navigation": {
     "referenceEmpty": "Nessun progetto di riferimento."
   },
   "details": {
-    "name": "Nome"
+    "name": "Nome",
+    "number": "Numero",
+    "type": "Tipo",
+    "language": "Linguaggio",
+    "tags": "Variabili",
+    "dataType": "Tipo di dati",
+    "address": "Indirizzo",
+    "tagComment": "Commento dei tag",
+    "blockKind": {
+      "OB": "OB",
+      "FB": "FB",
+      "FC": "FC",
+      "DB": "DB",
+      "IDB": "DB di istanza"
+    }
+  },
+  "history": {
+    "author": "Autore del progetto",
+    "comment": "Commento del progetto",
+    "addDevice": "Aggiungi dispositivo",
+    "addBlock": "Aggiungi blocco",
+    "addTagTable": "Aggiungi tabella delle variabili",
+    "addUdt": "Aggiungi tipo di dati",
+    "paste": "Incolla oggetti",
+    "move": "Sposta oggetti",
+    "delete": "Elimina oggetti",
+    "rename": "Rinomina",
+    "addGroup": "Aggiungi gruppo",
+    "moveTags": "Sposta variabili",
+    "addRow": "Aggiungi riga",
+    "editCell": "Modifica cella",
+    "deleteRows": "Elimina righe",
+    "pasteRows": "Incolla righe",
+    "fillRows": "Riempimento automatico",
+    "editBlockHeader": "Modifica intestazione del blocco",
+    "addNetwork": "Inserisci segmento",
+    "deleteNetwork": "Elimina segmento",
+    "editNetwork": "Modifica segmento",
+    "addMember": "Aggiungi membro",
+    "editProperty": "Modifica proprietà",
+    "removeOverride": "Rimuovi valore sostituito"
   },
   "inspector": {
     "tab": {
@@ -236,5 +297,257 @@
         "globalLibraries": "Librerie globali"
       }
     }
+  },
+  "defaults": {
+    "plc": "PLC_1",
+    "defaultTagTable": "Tabella delle variabili standard",
+    "tagTable": "Tabella delle variabili_1",
+    "udt": "Tipo di dati utente_1",
+    "block": "Blocco_1",
+    "dataBlock": "Blocco_dati_1",
+    "ob": {
+      "1": "Main",
+      "10": "Allarme dall'orologio",
+      "20": "Allarme di ritardo",
+      "35": "Schedulazione orologio",
+      "40": "Allarme di processo",
+      "80": "Errore di tempo",
+      "82": "Allarme di diagnostica",
+      "85": "Errore di esecuzione del programma",
+      "86": "Guasto del telaio di montaggio",
+      "100": "Nuovo avviamento",
+      "121": "Errore di programmazione",
+      "122": "Errore di accesso alla periferia"
+    },
+    "group": "Gruppo_1",
+    "tag": "Variabile_1",
+    "constant": "Costante_1"
+  },
+  "dialog": {
+    "ok": "OK",
+    "cancel": "Annulla"
+  },
+  "addDevice": {
+    "title": "Aggiungi nuovo dispositivo",
+    "catalog": "Catalogo dei dispositivi",
+    "controllers": "Controllori",
+    "family": "SIMATIC S7-300",
+    "cpu": "CPU",
+    "group": {
+      "standard": "CPU standard",
+      "compact": "CPU compatte",
+      "failsafe": "CPU F"
+    },
+    "name": "Nome del dispositivo",
+    "cpuName": "CPU",
+    "orderNumber": "Numero di articolo",
+    "workMemory": "Memoria di lavoro",
+    "interfaces": "Interfacce",
+    "firmware": "Versione firmware",
+    "nameEmpty": "Inserisci un nome.",
+    "nameExists": "Esiste già un dispositivo con questo nome."
+  },
+  "addBlock": {
+    "title": "Aggiungi nuovo blocco",
+    "type": "Tipo",
+    "kind": {
+      "OB": "Blocco organizzativo",
+      "FB": "Blocco funzionale",
+      "FC": "Funzione",
+      "DB": "Blocco dati"
+    },
+    "name": "Nome",
+    "nameEmpty": "Inserisci un nome.",
+    "language": "Linguaggio",
+    "number": "Numero",
+    "auto": "Automatico",
+    "numberTaken": "Questo numero è già in uso.",
+    "numberRange": "Il numero deve essere compreso tra 1 e {{max}}.",
+    "numberNone": "Non ci sono numeri liberi.",
+    "event": "Evento",
+    "noEvent": "Tutti gli eventi disponibili sono già in uso.",
+    "dbKind": "Tipo di blocco dati",
+    "globalDb": "DB globale",
+    "instanceDb": "DB di istanza di",
+    "instanceOf": "Blocco funzionale",
+    "noFb": "Nel dispositivo non c'è nessun FB.",
+    "openAfter": "Aggiungi e apri",
+    "nameExists": "Il nome è già in uso."
+  },
+  "ob": {
+    "event": {
+      "1": "Ciclo del programma",
+      "10": "Allarme dall'orologio",
+      "20": "Allarme di ritardo",
+      "35": "Allarme ciclico",
+      "40": "Allarme di processo",
+      "80": "Errore di tempo",
+      "82": "Allarme di diagnostica",
+      "85": "Errore di esecuzione del programma",
+      "86": "Guasto del telaio di montaggio",
+      "100": "Riavvio (avviamento)",
+      "121": "Errore di programmazione",
+      "122": "Errore di accesso alla periferia"
+    }
+  },
+  "editor": {
+    "allTags": "Variabili PLC",
+    "empty": "Nessun editor aperto. Fai doppio clic su un oggetto nell'albero del progetto.",
+    "pane": "Riquadro {{n}}",
+    "detach": "Apri in una finestra separata",
+    "attach": "Riporta nell'area di lavoro",
+    "close": "Chiudi",
+    "inWindow": "(in una finestra separata)",
+    "groupMenu": "Editor del gruppo",
+    "kind": {
+      "block": "Blocchi",
+      "udt": "Tipi di dati",
+      "tagTable": "Tabelle delle variabili",
+      "allTags": "Variabili PLC"
+    }
+  },
+  "objects": {
+    "deleteTitle": "Elimina",
+    "deleteMessage": "Eliminare gli oggetti selezionati?",
+    "deleteMore": "e altri {{count}}",
+    "yes": "Sì",
+    "no": "No",
+    "renameLabel": "Nuovo nome",
+    "errInvalid": "Il nome non è valido.",
+    "errDuplicate": "Il nome è già in uso.",
+    "menuLabel": "Menu contestuale",
+    "open": "Apri",
+    "addGroup": "Aggiungi nuovo gruppo",
+    "properties": "Proprietà"
+  },
+  "grid": {
+    "addRow": "<Aggiungi>",
+    "expand": "Espandi",
+    "collapse": "Comprimi",
+    "rowNumber": "Riga",
+    "fillHandle": "Maniglia di riempimento",
+    "suggestions": "Suggerimenti"
+  },
+  "tags": {
+    "tabs": "Schede della tabella",
+    "tab": {
+      "tags": "Variabili",
+      "constants": "Costanti utente"
+    },
+    "col": {
+      "name": "Nome",
+      "type": "Tipo di dati",
+      "address": "Indirizzo",
+      "retentive": "Ritenzione",
+      "retentiveHint": "Si imposta nelle proprietà della CPU",
+      "hmi": "Accessibile da HMI",
+      "table": "Tabella delle variabili",
+      "comment": "Commento",
+      "value": "Valore"
+    }
+  },
+  "diag": {
+    "NAME_INVALID": "Il nome non è valido.",
+    "NAME_DUPLICATE": "Il nome è già in uso.",
+    "TYPE_INVALID": "Il tipo di dati non è valido.",
+    "TYPE_NOT_ALLOWED": "Il tipo di dati non è ammesso qui.",
+    "TYPE_UNKNOWN": "Il tipo di dati non esiste.",
+    "TYPE_CYCLE": "Il tipo di dati contiene se stesso.",
+    "ADDRESS_INVALID": "L'indirizzo non è valido.",
+    "ADDRESS_TYPE_MISMATCH": "L'indirizzo non è adatto al tipo di dati.",
+    "ADDRESS_OUT_OF_RANGE": "L'indirizzo è fuori dai limiti della CPU.",
+    "ADDRESS_OVERLAP": "L'indirizzo si sovrappone a {{other}}",
+    "ADDRESS_OVERLAP_other": "L'indirizzo si sovrappone a {{count}} variabili, fra cui {{other}}",
+    "VALUE_INVALID": "Il valore non è valido per il tipo di dati.",
+    "NUMBER_DUPLICATE": "Il numero è già in uso.",
+    "NUMBER_OUT_OF_RANGE": "Il numero è fuori intervallo.",
+    "OB_NOT_SUPPORTED": "Questa CPU non supporta l'OB.",
+    "INSTANCE_FB_MISSING": "Il blocco funzionale dell'istanza non esiste.",
+    "HEADER_INVALID": "L'intestazione non è valida.",
+    "PROPERTY_INVALID": "Il valore della proprietà non è valido.",
+    "CPU_UNKNOWN": "La CPU non è nel catalogo."
+  },
+  "block": {
+    "interface": "Interfaccia del blocco",
+    "collapseInterface": "Comprimi l'interfaccia",
+    "expandInterface": "Espandi l'interfaccia",
+    "gridBlock": "Interfaccia del blocco",
+    "gridDb": "Dati del blocco dati",
+    "gridUdt": "Membri del tipo di dati",
+    "col": {
+      "name": "Nome",
+      "type": "Tipo di dati",
+      "offset": "Offset",
+      "default": "Valore predefinito",
+      "initial": "Valore iniziale",
+      "comment": "Commento",
+      "defaultHint": "Se è vuoto vale il valore di partenza del tipo, mostrato in grigio"
+    },
+    "title": "Titolo del blocco",
+    "comment": "Commento",
+    "networks": "Segmenti",
+    "network": "Segmento {{n}}",
+    "networkTitle": "Titolo del segmento",
+    "networkComment": "Commento del segmento",
+    "source": "Codice del segmento",
+    "sourceHint": "Per ora è solo testo: l'evidenziazione e i controlli arrivano con l'editor AWL.",
+    "insertNetwork": "Inserisci segmento",
+    "networkMenu": "Menu del segmento",
+    "removeOverride": "Rimuovi",
+    "removeOverrideLabel": "Rimuovi il valore di {{path}}",
+    "deleteNetwork": "Elimina segmento",
+    "instanceFbMissing": "Il DB di istanza si riferisce all'FB {{name}}, che non esiste",
+    "problems": "Problemi"
+  },
+  "props": {
+    "banner": "Queste proprietà servono al simulatore e ai controlli offline. Fino alla tappa 6 non vengono caricate nel PLC.",
+    "integer": "Inserisci un numero intero.",
+    "section": {
+      "general": "Generale",
+      "pn": "Interfaccia PROFINET",
+      "mpi": "Interfaccia MPI",
+      "dp": "Interfaccia DP",
+      "cycle": "Ciclo",
+      "clock": "Merker di clock",
+      "retentivity": "Ritenzione",
+      "schedule": "Schedulazione orologio",
+      "info": "Informazioni",
+      "attributes": "Attributi"
+    },
+    "orderNumber": "Numero di articolo",
+    "firmware": "Versione firmware",
+    "ip": "Indirizzo IP",
+    "mask": "Maschera di sottorete",
+    "useRouter": "Utilizza router",
+    "router": "Indirizzo router",
+    "mpiAddress": "Indirizzo MPI",
+    "dpAddress": "Indirizzo DP",
+    "maxCycle": "Tempo di ciclo massimo (ms)",
+    "minCycle": "Tempo di ciclo minimo (ms)",
+    "commLoad": "Carico del ciclo dovuto alla comunicazione (%)",
+    "clockEnabled": "Attiva",
+    "clockByte": "Byte di memoria",
+    "retM": "Numero di byte di merker a partire da MB0",
+    "retT": "Numero di temporizzatori S7 a partire da T0",
+    "retC": "Numero di contatori S7 a partire da C0",
+    "ob35": "Periodo OB35 (ms)",
+    "title": "Titolo",
+    "version": "Versione",
+    "family": "Famiglia",
+    "headerName": "Nome nell'intestazione",
+    "knowHow": "Protezione know-how",
+    "knowHowHint": "Il contrassegno viene scritto nel blocco caricato: chi lo apre con altri strumenti vede solo l'interfaccia.",
+    "unlinked": "Solo nella memoria di caricamento",
+    "readOnly": "Protetto da scrittura nel dispositivo",
+    "nonRetain": "Non ritentivo",
+    "group": "Gruppo",
+    "tagCount": "Numero di variabili",
+    "constantCount": "Numero di costanti"
+  },
+  "recovery": {
+    "title": "Recupero modifiche",
+    "message": "BaaPortal non è stato chiuso correttamente. Recuperare le modifiche di «{{name}}» salvate il {{date}}?",
+    "yes": "Recupera",
+    "no": "Elimina"
   }
 }

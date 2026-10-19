@@ -27,6 +27,8 @@ export interface ProjectService {
   save(): Promise<boolean>;
   saveAs(): Promise<boolean>;
   close(): Promise<boolean>;
+  /** Apre un progetto recuperato come documento modificato (revisione 1, mai salvata). */
+  openRecovered(project: Project, filePath: string): Promise<boolean>;
   handleCloseRequest(): Promise<void>;
   /** Annulla le registrazioni sul bridge (StrictMode, smontaggio). */
   dispose(): void;
@@ -38,6 +40,10 @@ export interface ProjectServiceDeps {
   t: TFunction;
   appVersion: string;
   now?: () => Date;
+  /** Conferma le bozze dei campi in modifica prima di salvare, chiudere o aprire. */
+  flushPendingEdits?: () => void;
+  /** Chiamata alla chiusura confermata della finestra, prima di chiuderla (es. cancella la copia di recupero). */
+  beforeWindowClose?: () => Promise<void>;
 }
 
 const APP_TITLE = 'BaaPortal';
@@ -60,6 +66,7 @@ export function joinPath(dir: string, file: string): string {
 export function createProjectService(deps: ProjectServiceDeps): ProjectService {
   const { store, bridge, t, appVersion } = deps;
   const now = deps.now ?? (() => new Date());
+  const flush = () => deps.flushPendingEdits?.();
 
   const showError = (message: string) => bridge.showError(t('errors.title'), message);
 
@@ -88,6 +95,7 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
   }
 
   async function ensureCanDiscard(): Promise<boolean> {
+    flush();
     const doc = store.getState().doc;
     if (!doc?.dirty) return true;
     const answer = await bridge.confirmUnsaved({
@@ -128,7 +136,9 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
       now(),
     );
     if (!(await writeProject(project, path))) return { ok: false, error: 'WRITE_FAILED' };
-    store.getState().setDoc({ project, filePath: path, dirty: false });
+    store
+      .getState()
+      .setDoc({ project, filePath: path, dirty: false, revision: 0, savedRevision: 0 });
     await addRecentBestEffort(path, project.meta.name);
     announce('created', project.meta.name);
     return { ok: true };
@@ -147,7 +157,9 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
       await showError(message);
       return false;
     }
-    store.getState().setDoc({ project, filePath: path, dirty: false });
+    store
+      .getState()
+      .setDoc({ project, filePath: path, dirty: false, revision: 0, savedRevision: 0 });
     await addRecentBestEffort(path, project.meta.name);
     announce('opened', project.meta.name);
     return true;
@@ -163,20 +175,14 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
     const doc = before.doc;
     if (!doc) return false;
     const loadId = before.docLoadId;
-    const project: Project = {
-      ...doc.project,
-      meta: { ...doc.project.meta, modifiedAt: now().toISOString() },
-    };
+    const revision = doc.revision;
+    const modifiedAt = now().toISOString();
+    const project: Project = { ...doc.project, meta: { ...doc.project.meta, modifiedAt } };
     if (!(await writeProject(project, path))) return false;
-    // Durante la scrittura l'utente può aver modificato o sostituito il documento.
-    const cur = store.getState();
-    if (cur.docLoadId === loadId && cur.doc) {
-      if (cur.doc.project === doc.project) {
-        cur.replaceDoc({ project, filePath: path, dirty: false });
-      } else {
-        const meta = { ...cur.doc.project.meta, modifiedAt: project.meta.modifiedAt };
-        cur.replaceDoc({ project: { ...cur.doc.project, meta }, filePath: path, dirty: true });
-      }
+    // Durante la scrittura l'utente può aver modificato (la revisione catturata resta quella scritta,
+    // quindi il documento resta "modificato") o sostituito il documento.
+    if (store.getState().docLoadId === loadId) {
+      store.getState().markSaved({ filePath: path, revision, modifiedAt });
     }
     await addRecentBestEffort(path, project.meta.name);
     announce('saved', project.meta.name);
@@ -200,6 +206,7 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
   }
 
   function save(): Promise<boolean> {
+    flush();
     return enqueueSave(async (waited) => {
       const doc = store.getState().doc;
       if (!doc) return false;
@@ -209,6 +216,7 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
   }
 
   async function saveAs(): Promise<boolean> {
+    flush();
     const doc = store.getState().doc;
     if (!doc) return false;
     const path = await bridge.showSaveProjectDialog(`${doc.project.meta.name}.baap`);
@@ -222,8 +230,21 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
     return true;
   }
 
+  async function openRecovered(project: Project, filePath: string): Promise<boolean> {
+    if (!(await ensureCanDiscard())) return false;
+    store.getState().setDoc({ project, filePath, dirty: true, revision: 1, savedRevision: 0 });
+    await addRecentBestEffort(filePath, project.meta.name);
+    return true;
+  }
+
   async function handleCloseRequest(): Promise<void> {
-    if (await ensureCanDiscard()) bridge.closeWindowConfirmed();
+    if (!(await ensureCanDiscard())) return;
+    try {
+      await deps.beforeWindowClose?.();
+    } catch {
+      /* la chiusura non deve dipendere dalla pulizia */
+    }
+    bridge.closeWindowConfirmed();
   }
 
   // Titolo della finestra sempre allineato al documento.
@@ -248,6 +269,7 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
     save,
     saveAs,
     close,
+    openRecovered,
     handleCloseRequest,
     dispose() {
       unsubscribeStore();

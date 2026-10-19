@@ -41,7 +41,27 @@ export type IconName =
   | 'treeCommonData'
   | 'treeDocSettings'
   | 'treeLanguages'
-  | 'treeOnlineAccess';
+  | 'treeOnlineAccess'
+  | 'objCpu'
+  | 'objOb'
+  | 'objFb'
+  | 'objFc'
+  | 'objDb'
+  | 'objIdb'
+  | 'objUdt'
+  | 'objTagTable'
+  | 'objGroup'
+  | 'treeBlocks'
+  | 'treeTags'
+  | 'treeTypes'
+  | 'treeDeviceConfig'
+  | 'treeOnlineDiag'
+  | 'treeSources'
+  | 'treeWatch'
+  | 'treeBackup'
+  | 'treeProgInfo'
+  | 'treeAdd'
+  | 'editorWindow';
 
 const registry = new Map<IconName, FC<{ size: number }>>();
 

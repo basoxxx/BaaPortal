@@ -2,7 +2,8 @@ import type { StoreApi } from 'zustand/vanilla';
 import type { BaaBridge } from '../bridge';
 import type { IconName } from '../icons';
 import type { ProjectService } from '../services/projectService';
-import type { AppState, PanelName } from '../state/store';
+import type { AppState, EditAction, PanelName } from '../state/store';
+import { targetPlcId } from '../project/navigation/treeIds';
 
 export type CommandId =
   | 'project.new'
@@ -61,12 +62,14 @@ export interface Command {
   labelKey: string;
   icon?: IconName;
   shortcut?: string;
+  altShortcuts?: string[];
   isEnabled(s: AppState): boolean;
   isChecked?(s: AppState): boolean;
   run(ctx: CommandContext): void | Promise<void>;
 }
 
 const hasDoc = (s: AppState) => s.doc !== null;
+const hasPlc = (s: AppState) => (s.doc?.project.devices.length ?? 0) > 0;
 const always = () => true;
 const never = () => false;
 const noop = () => {};
@@ -81,6 +84,34 @@ function panelToggle(id: CommandId, panel: PanelName): Command {
     isChecked: (s) => s.panels[panel].open,
     run: ({ store }) =>
       store.getState().setPanel(panel, { open: !store.getState().panels[panel].open }),
+  });
+}
+
+/** Accende e spegne la divisione dell'area di lavoro nella modalità data. */
+function splitToggle(id: CommandId, mode: 'vertical' | 'horizontal'): Command {
+  return def(id, {
+    icon: 'splitWorkArea',
+    isEnabled: hasDoc,
+    isChecked: (s) => s.workArea.split === mode,
+    run: ({ store }) =>
+      store.getState().setSplit(store.getState().workArea.split === mode ? 'none' : mode),
+  });
+}
+
+/** Comando di Modifica: agisce sull'elemento col focus (`editTarget`) se questo lo permette. */
+function editCommand(
+  id: CommandId,
+  action: EditAction,
+  shortcut: string,
+  icon?: IconName,
+): Command {
+  return def(id, {
+    ...(icon ? { icon } : {}),
+    shortcut,
+    isEnabled: (s) => !!s.editTarget?.can[action],
+    run: async ({ store }) => {
+      await store.getState().editTarget?.run(action);
+    },
   });
 }
 
@@ -122,23 +153,44 @@ const list: Command[] = [
   def('project.print', { icon: 'print' }),
   def('project.printPreview'),
   def('project.exit', { isEnabled: always, run: ({ service }) => service.handleCloseRequest() }),
-  def('edit.undo', { icon: 'undo' }),
-  def('edit.redo', { icon: 'redo' }),
-  def('edit.cut', { icon: 'cut' }),
-  def('edit.copy', { icon: 'copy' }),
-  def('edit.paste', { icon: 'paste' }),
-  def('edit.delete', { icon: 'delete' }),
-  def('edit.rename'),
+  def('edit.undo', {
+    icon: 'undo',
+    shortcut: 'Mod+Z',
+    isEnabled: (s) => s.history.past.length > 0,
+    run: ({ store }) => store.getState().undo(),
+  }),
+  def('edit.redo', {
+    icon: 'redo',
+    shortcut: 'Mod+Y',
+    altShortcuts: ['Mod+Shift+Z'],
+    isEnabled: (s) => s.history.future.length > 0,
+    run: ({ store }) => store.getState().redo(),
+  }),
+  editCommand('edit.cut', 'cut', 'Mod+X', 'cut'),
+  editCommand('edit.copy', 'copy', 'Mod+C', 'copy'),
+  editCommand('edit.paste', 'paste', 'Mod+V', 'paste'),
+  editCommand('edit.delete', 'delete', 'Delete', 'delete'),
+  editCommand('edit.rename', 'rename', 'F2'),
   def('edit.findReplace', { icon: 'search' }),
-  def('edit.selectAll'),
+  editCommand('edit.selectAll', 'selectAll', 'Mod+A'),
   def('edit.compile', { icon: 'compile' }),
   panelToggle('view.navigation', 'navigation'),
   panelToggle('view.details', 'details'),
   panelToggle('view.inspector', 'inspector'),
   panelToggle('view.taskCards', 'taskCards'),
   def('view.portal', { isEnabled: always, run: ({ store }) => store.getState().setView('portal') }),
-  def('insert.device', { icon: 'treeAddDevice' }),
-  def('insert.block'),
+  def('insert.device', {
+    icon: 'treeAddDevice',
+    isEnabled: hasDoc,
+    run: ({ store }) => store.getState().openDialog({ kind: 'addDevice' }),
+  }),
+  def('insert.block', {
+    isEnabled: hasPlc,
+    run: ({ store }) => {
+      const deviceId = targetPlcId(store.getState());
+      if (deviceId) store.getState().openDialog({ kind: 'addBlock', deviceId });
+    },
+  }),
   def('online.goOnline', { icon: 'goOnline' }),
   def('online.goOffline', { icon: 'goOffline' }),
   def('online.simulation', { icon: 'simulation' }),
@@ -151,9 +203,12 @@ const list: Command[] = [
   def('options.settings'),
   def('tools.crossReferences'),
   def('tools.callStructure'),
-  def('window.splitVertical', { icon: 'splitWorkArea' }),
-  def('window.splitHorizontal', { icon: 'splitWorkArea' }),
-  def('window.closeAllEditors'),
+  splitToggle('window.splitVertical', 'vertical'),
+  splitToggle('window.splitHorizontal', 'horizontal'),
+  def('window.closeAllEditors', {
+    isEnabled: (s) => s.workArea.editors.length > 0,
+    run: ({ store }) => store.getState().closeAllEditors(),
+  }),
   def('help.show'),
   def('help.about', {
     isEnabled: always,

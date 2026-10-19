@@ -6,6 +6,7 @@ import { ReferenceProjects } from './navigation/ReferenceProjects';
 import { Inspector } from './inspector/Inspector';
 import { TaskCards } from './taskcards/TaskCards';
 import { PanelLayout } from './PanelLayout';
+import { WorkArea } from './workarea/WorkArea';
 import { StatusBar } from './StatusBar';
 import { Toolbar } from './Toolbar';
 import './project.css';
@@ -20,7 +21,7 @@ export function ProjectView() {
         navigation={<ProjectTree />}
         referenceProjects={<ReferenceProjects />}
         details={<DetailsView />}
-        workArea={<div />}
+        workArea={<WorkArea />}
         inspector={<Inspector />}
         taskCards={<TaskCards />}
       />

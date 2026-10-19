@@ -42,9 +42,10 @@ describe('file .baap', () => {
       }),
     );
     expect(Object.keys(files).sort()).toEqual(['baaportal.json', 'project.json']);
+    expect(JSON.parse(strFromU8(files['project.json']!)).formatVersion).toBe(2);
     expect(JSON.parse(strFromU8(files['baaportal.json']!))).toEqual({
       format: 'baaportal-project',
-      formatVersion: 1,
+      formatVersion: 2,
       savedWith: 'BaaPortal 0.1.0',
     });
   });
@@ -97,9 +98,29 @@ describe('file .baap', () => {
         ),
       }),
     ],
-    ['NEWER_FORMAT', zipSync({ 'baaportal.json': manifest(2), 'project.json': strToU8('{}') })],
+    ['NEWER_FORMAT', zipSync({ 'baaportal.json': manifest(3), 'project.json': strToU8('{}') })],
     ['NOT_ZIP', truncatedValidBaap()],
+    // formato 2: schema del progetto non valido
+    [
+      'INVALID_SCHEMA',
+      zipSync({ 'baaportal.json': manifest(2), 'project.json': strToU8('{"formatVersion":2}') }),
+    ],
   ])('readBaap rifiuta con %s', (code, bytes) => {
     expect(catchError(() => readBaap(bytes))).toMatchObject({ name: 'BaapFormatError', code });
+  });
+
+  it('un file del formato 1 si apre come formato 2 senza dispositivi', () => {
+    const meta = {
+      name: 'Vecchio',
+      author: 'A',
+      comment: '',
+      createdAt: now.toISOString(),
+      modifiedAt: now.toISOString(),
+    };
+    const v1 = zipSync({
+      'baaportal.json': manifest(1),
+      'project.json': strToU8(JSON.stringify({ formatVersion: 1, meta })),
+    });
+    expect(readBaap(v1)).toEqual({ formatVersion: 2, meta, devices: [] });
   });
 });

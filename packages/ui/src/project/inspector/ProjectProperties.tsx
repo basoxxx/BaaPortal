@@ -1,5 +1,6 @@
 import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
+import { CommitInput, CommitTextarea } from '../../components/CommitField';
 import { useAppStore, useServices } from '../../state/AppContext';
 
 export function useDateTimeFormat() {
@@ -13,11 +14,9 @@ export function ProjectProperties() {
   const { t } = useTranslation();
   const { store } = useServices();
   const doc = useAppStore((s) => s.doc);
-  const selection = useAppStore((s) => s.selection);
   const fmt = useDateTimeFormat();
   const uid = useId();
-  if (selection !== 'project' || !doc)
-    return <p className="baa-placeholder">{t('inspector.noProperties')}</p>;
+  if (!doc) return <p className="baa-placeholder">{t('inspector.noProperties')}</p>;
   const m = doc.project.meta;
   const ro = (key: string, label: string, value: string) => (
     <>
@@ -32,17 +31,25 @@ export function ProjectProperties() {
       {ro('created', t('inspector.created'), fmt(new Date(m.createdAt)))}
       {ro('modified', t('inspector.modified'), fmt(new Date(m.modifiedAt)))}
       <label htmlFor={`${uid}-author`}>{t('inspector.author')}</label>
-      <input
+      <CommitInput
         id={`${uid}-author`}
         value={m.author}
-        onChange={(e) => store.getState().updateMeta({ author: e.target.value })}
+        onCommit={(v) =>
+          store.getState().edit('history.author', (p) => {
+            p.meta.author = v;
+          })
+        }
       />
       <label htmlFor={`${uid}-comment`}>{t('inspector.comment')}</label>
-      <textarea
+      <CommitTextarea
         id={`${uid}-comment`}
         rows={4}
         value={m.comment}
-        onChange={(e) => store.getState().updateMeta({ comment: e.target.value })}
+        onCommit={(v) =>
+          store.getState().edit('history.comment', (p) => {
+            p.meta.comment = v;
+          })
+        }
       />
     </form>
   );

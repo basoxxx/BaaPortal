@@ -1,0 +1,107 @@
+import type { ObjectRef } from '@baaportal/project';
+import type { AppState } from '../../state/store';
+
+export type PlcFolder =
+  | 'device-config'
+  | 'online-diag'
+  | 'blocks'
+  | 'blocks-add'
+  | 'system-blocks'
+  | 'sources'
+  | 'tags'
+  | 'tags-all'
+  | 'tags-add'
+  | 'types'
+  | 'types-add'
+  | 'watch'
+  | 'backup'
+  | 'prog-info';
+export type TreeArea = 'blocks' | 'tags' | 'types';
+
+const FOLDERS: ReadonlySet<string> = new Set<PlcFolder>([
+  'device-config',
+  'online-diag',
+  'blocks',
+  'blocks-add',
+  'system-blocks',
+  'sources',
+  'tags',
+  'tags-all',
+  'tags-add',
+  'types',
+  'types-add',
+  'watch',
+  'backup',
+  'prog-info',
+]);
+const AREAS: ReadonlySet<string> = new Set<TreeArea>(['blocks', 'tags', 'types']);
+
+// Gli id di dispositivi e oggetti sono UUID: non contengono ':'. I percorsi dei gruppi, scelti
+// dall'utente, sì (e anche '/'): per questo sono codificati.
+export const ids = {
+  plc: (dev: string) => `plc:${dev}`,
+  folder: (dev: string, f: PlcFolder) => `plc:${dev}:${f}`,
+  group: (dev: string, area: TreeArea, path: string) =>
+    `plc:${dev}:${area}:group:${encodeURIComponent(path)}`,
+  block: (dev: string, id: string) => `plc:${dev}:block:${id}`,
+  tagTable: (dev: string, id: string) => `plc:${dev}:tagTable:${id}`,
+  udt: (dev: string, id: string) => `plc:${dev}:udt:${id}`,
+};
+
+export type ParsedNodeId =
+  | { kind: 'static'; id: string }
+  | { kind: 'plc'; dev: string }
+  | { kind: 'folder'; dev: string; folder: PlcFolder }
+  | { kind: 'group'; dev: string; area: TreeArea; path: string }
+  | { kind: 'block' | 'tagTable' | 'udt'; dev: string; id: string };
+
+export function parseNodeId(id: string): ParsedNodeId {
+  const parts = id.split(':');
+  const dev = parts[1];
+  if (parts[0] !== 'plc' || !dev) return { kind: 'static', id };
+  const [, , a, b, c] = parts;
+  if (parts.length === 2) return { kind: 'plc', dev };
+  if (parts.length === 3 && a && FOLDERS.has(a)) {
+    return { kind: 'folder', dev, folder: a as PlcFolder };
+  }
+  if (parts.length === 5 && a && AREAS.has(a) && b === 'group' && c !== undefined) {
+    try {
+      return { kind: 'group', dev, area: a as TreeArea, path: decodeURIComponent(c) };
+    } catch {
+      return { kind: 'static', id };
+    }
+  }
+  if (parts.length === 4 && b && (a === 'block' || a === 'tagTable' || a === 'udt')) {
+    return { kind: a, dev, id: b };
+  }
+  return { kind: 'static', id };
+}
+
+/** Nodo che rappresenta l'oggetto: tag e costanti stanno nella loro tabella, i membri nel proprietario. */
+export function nodeIdForRef(ref: ObjectRef): string | null {
+  switch (ref.kind) {
+    case 'device':
+      return ids.plc(ref.deviceId);
+    case 'block':
+      return ids.block(ref.deviceId, ref.id);
+    case 'udt':
+      return ids.udt(ref.deviceId, ref.id);
+    case 'tagTable':
+      return ids.tagTable(ref.deviceId, ref.id);
+    case 'tag':
+    case 'constant':
+      return ids.tagTable(ref.deviceId, ref.tableId);
+    case 'member':
+      return ref.ownerKind === 'udt'
+        ? ids.udt(ref.deviceId, ref.ownerId)
+        : ids.block(ref.deviceId, ref.ownerId);
+  }
+}
+
+/** PLC su cui agiscono "Nuovo blocco": quello della selezione, altrimenti il primo. */
+export function targetPlcId(s: Pick<AppState, 'doc' | 'selection'>): string | null {
+  const devices = s.doc?.project.devices ?? [];
+  const p = s.selection ? parseNodeId(s.selection) : null;
+  if (p && p.kind !== 'static' && devices.some((d) => d.id === p.dev)) return p.dev;
+  return devices[0]?.id ?? null;
+}

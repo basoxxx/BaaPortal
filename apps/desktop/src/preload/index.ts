@@ -30,6 +30,14 @@ const bridge: RawBridge = {
   onCloseRequest: (cb) => subscribe<[]>('app:close-requested', cb),
   closeWindowConfirmed: () => ipcRenderer.send('window:close-confirmed'),
   rendererReady: () => ipcRenderer.send('app:renderer-ready'),
+  clipboardWriteText: (text) => ipcRenderer.send('clipboard:write-text', text),
+  clipboardReadText: () => ipcRenderer.invoke('clipboard:read-text'),
+  askQuestion: (texts) => ipcRenderer.invoke('dialog:question', texts),
+  recoveryWrite: (key, data, info) => ipcRenderer.invoke('recovery:write', key, data, info),
+  recoveryList: () => ipcRenderer.invoke('recovery:list'),
+  recoveryRead: (key) => ipcRenderer.invoke('recovery:read', key),
+  recoveryDelete: (key) => ipcRenderer.invoke('recovery:delete', key),
+  testOverrides: () => ipcRenderer.invoke('app:test-overrides'),
 };
 
 contextBridge.exposeInMainWorld('baaRaw', bridge);

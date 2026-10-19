@@ -32,10 +32,15 @@
     }
   },
   "messages": {
+    "detachBlocked": "The separate window could not be opened: the editor stays in the work area.",
     "created": "Project \"{{name}}\" created.",
     "opened": "Project \"{{name}}\" opened.",
     "saved": "Project \"{{name}}\" saved.",
-    "recentMissing": "The project \"{{name}}\" was not found: it was removed from the list."
+    "recentMissing": "The project \"{{name}}\" was not found: it was removed from the list.",
+    "standardTableLocked": "The default tag table cannot be deleted.",
+    "pasteNoNumber": "No free number: {{count}} objects were not pasted.",
+    "recoveryWriteFailed": "The automatic recovery copy could not be written: unsaved changes may be lost if the application closes abnormally.",
+    "recovered": "Changes to \"{{name}}\" recovered."
   },
   "commands": {
     "project.new": "New…",
@@ -169,13 +174,69 @@
     "commonData": "Common data",
     "docSettings": "Documentation settings",
     "languages": "Languages & resources",
-    "onlineAccess": "Online access"
+    "onlineAccess": "Online access",
+    "plc": {
+      "deviceConfig": "Device configuration",
+      "onlineDiag": "Online & diagnostics",
+      "blocks": "Program blocks",
+      "addBlock": "Add new block",
+      "systemBlocks": "System blocks",
+      "sources": "External source files",
+      "tags": "PLC tags",
+      "allTags": "Show all tags",
+      "addTagTable": "Add new tag table",
+      "types": "PLC data types",
+      "addUdt": "Add new data type",
+      "watch": "Watch and force tables",
+      "backup": "Online backups",
+      "progInfo": "Program info"
+    }
   },
   "navigation": {
     "referenceEmpty": "No reference projects."
   },
   "details": {
-    "name": "Name"
+    "name": "Name",
+    "number": "Number",
+    "type": "Type",
+    "language": "Language",
+    "tags": "Tags",
+    "dataType": "Data type",
+    "address": "Address",
+    "tagComment": "Tag comment",
+    "blockKind": {
+      "OB": "OB",
+      "FB": "FB",
+      "FC": "FC",
+      "DB": "DB",
+      "IDB": "Instance DB"
+    }
+  },
+  "history": {
+    "author": "Project author",
+    "comment": "Project comment",
+    "addDevice": "Add device",
+    "addBlock": "Add block",
+    "addTagTable": "Add tag table",
+    "addUdt": "Add data type",
+    "paste": "Paste objects",
+    "move": "Move objects",
+    "delete": "Delete objects",
+    "rename": "Rename",
+    "addGroup": "Add group",
+    "moveTags": "Move tags",
+    "addRow": "Add row",
+    "editCell": "Edit cell",
+    "deleteRows": "Delete rows",
+    "pasteRows": "Paste rows",
+    "fillRows": "Auto fill",
+    "editBlockHeader": "Edit block header",
+    "addNetwork": "Insert network",
+    "deleteNetwork": "Delete network",
+    "editNetwork": "Edit network",
+    "addMember": "Add member",
+    "editProperty": "Edit property",
+    "removeOverride": "Remove overridden value"
   },
   "inspector": {
     "tab": {
@@ -236,5 +297,257 @@
         "globalLibraries": "Global libraries"
       }
     }
+  },
+  "defaults": {
+    "plc": "PLC_1",
+    "defaultTagTable": "Default tag table",
+    "tagTable": "Tag table_1",
+    "udt": "User data type_1",
+    "block": "Block_1",
+    "dataBlock": "Data_block_1",
+    "ob": {
+      "1": "Main",
+      "10": "Time of day",
+      "20": "Time delay interrupt",
+      "35": "Cyclic interrupt",
+      "40": "Hardware interrupt",
+      "80": "Time error interrupt",
+      "82": "Diagnostic error interrupt",
+      "85": "Program execution error",
+      "86": "Rack failure",
+      "100": "Startup",
+      "121": "Programming error",
+      "122": "IO access error"
+    },
+    "group": "Group_1",
+    "tag": "Tag_1",
+    "constant": "Constant_1"
+  },
+  "dialog": {
+    "ok": "OK",
+    "cancel": "Cancel"
+  },
+  "addDevice": {
+    "title": "Add new device",
+    "catalog": "Device catalog",
+    "controllers": "Controllers",
+    "family": "SIMATIC S7-300",
+    "cpu": "CPU",
+    "group": {
+      "standard": "Standard CPUs",
+      "compact": "Compact CPUs",
+      "failsafe": "Fail-safe CPUs"
+    },
+    "name": "Device name",
+    "cpuName": "CPU",
+    "orderNumber": "Order number",
+    "workMemory": "Work memory",
+    "interfaces": "Interfaces",
+    "firmware": "Firmware version",
+    "nameEmpty": "Enter a name.",
+    "nameExists": "A device with this name already exists."
+  },
+  "addBlock": {
+    "title": "Add new block",
+    "type": "Type",
+    "kind": {
+      "OB": "Organization block",
+      "FB": "Function block",
+      "FC": "Function",
+      "DB": "Data block"
+    },
+    "name": "Name",
+    "nameEmpty": "Enter a name.",
+    "language": "Language",
+    "number": "Number",
+    "auto": "Automatic",
+    "numberTaken": "This number is already in use.",
+    "numberRange": "The number must be between 1 and {{max}}.",
+    "numberNone": "There are no free numbers.",
+    "event": "Event",
+    "noEvent": "All available events are already in use.",
+    "dbKind": "Data block type",
+    "globalDb": "Global DB",
+    "instanceDb": "Instance DB of",
+    "instanceOf": "Function block",
+    "noFb": "The device has no FB.",
+    "openAfter": "Add new and open",
+    "nameExists": "This name is already in use."
+  },
+  "ob": {
+    "event": {
+      "1": "Program cycle",
+      "10": "Time-of-day interrupt",
+      "20": "Time-delay interrupt",
+      "35": "Cyclic interrupt",
+      "40": "Hardware interrupt",
+      "80": "Time error",
+      "82": "Diagnostic interrupt",
+      "85": "Program execution error",
+      "86": "Rack failure",
+      "100": "Restart (startup)",
+      "121": "Programming error",
+      "122": "I/O access error"
+    }
+  },
+  "editor": {
+    "allTags": "PLC tags",
+    "empty": "No editor open. Double-click an object in the project tree.",
+    "pane": "Pane {{n}}",
+    "detach": "Open in a separate window",
+    "attach": "Move back to the work area",
+    "close": "Close",
+    "inWindow": "(in a separate window)",
+    "groupMenu": "Editors in the group",
+    "kind": {
+      "block": "Blocks",
+      "udt": "Data types",
+      "tagTable": "Tag tables",
+      "allTags": "PLC tags"
+    }
+  },
+  "objects": {
+    "deleteTitle": "Delete",
+    "deleteMessage": "Delete the selected objects?",
+    "deleteMore": "and {{count}} more",
+    "yes": "Yes",
+    "no": "No",
+    "renameLabel": "New name",
+    "errInvalid": "The name is not valid.",
+    "errDuplicate": "The name is already in use.",
+    "menuLabel": "Context menu",
+    "open": "Open",
+    "addGroup": "Add new group",
+    "properties": "Properties"
+  },
+  "grid": {
+    "addRow": "<Add>",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "rowNumber": "Row",
+    "fillHandle": "Fill handle",
+    "suggestions": "Suggestions"
+  },
+  "tags": {
+    "tabs": "Table tabs",
+    "tab": {
+      "tags": "Tags",
+      "constants": "User constants"
+    },
+    "col": {
+      "name": "Name",
+      "type": "Data type",
+      "address": "Address",
+      "retentive": "Retain",
+      "retentiveHint": "Set in the CPU properties",
+      "hmi": "Accessible from HMI",
+      "table": "Tag table",
+      "comment": "Comment",
+      "value": "Value"
+    }
+  },
+  "diag": {
+    "NAME_INVALID": "The name is not valid.",
+    "NAME_DUPLICATE": "The name is already in use.",
+    "TYPE_INVALID": "The data type is not valid.",
+    "TYPE_NOT_ALLOWED": "The data type is not allowed here.",
+    "TYPE_UNKNOWN": "The data type does not exist.",
+    "TYPE_CYCLE": "The data type contains itself.",
+    "ADDRESS_INVALID": "The address is not valid.",
+    "ADDRESS_TYPE_MISMATCH": "The address does not suit the data type.",
+    "ADDRESS_OUT_OF_RANGE": "The address is outside the CPU limits.",
+    "ADDRESS_OVERLAP": "The address overlaps {{other}}",
+    "ADDRESS_OVERLAP_other": "The address overlaps {{count}} tags, including {{other}}",
+    "VALUE_INVALID": "The value is not valid for the data type.",
+    "NUMBER_DUPLICATE": "The number is already in use.",
+    "NUMBER_OUT_OF_RANGE": "The number is out of range.",
+    "OB_NOT_SUPPORTED": "This CPU does not support the OB.",
+    "INSTANCE_FB_MISSING": "The instance function block does not exist.",
+    "HEADER_INVALID": "The header is not valid.",
+    "PROPERTY_INVALID": "The property value is not valid.",
+    "CPU_UNKNOWN": "The CPU is not in the catalog."
+  },
+  "block": {
+    "interface": "Block interface",
+    "collapseInterface": "Collapse the interface",
+    "expandInterface": "Expand the interface",
+    "gridBlock": "Block interface",
+    "gridDb": "Data block contents",
+    "gridUdt": "Data type members",
+    "col": {
+      "name": "Name",
+      "type": "Data type",
+      "offset": "Offset",
+      "default": "Default value",
+      "initial": "Start value",
+      "comment": "Comment",
+      "defaultHint": "When empty, the type's starting value applies, shown in grey"
+    },
+    "title": "Block title",
+    "comment": "Comment",
+    "networks": "Networks",
+    "network": "Network {{n}}",
+    "networkTitle": "Network title",
+    "networkComment": "Network comment",
+    "source": "Network code",
+    "sourceHint": "For now this is plain text: highlighting and checks arrive with the AWL editor.",
+    "insertNetwork": "Insert network",
+    "networkMenu": "Network menu",
+    "removeOverride": "Remove",
+    "removeOverrideLabel": "Remove the value of {{path}}",
+    "deleteNetwork": "Delete network",
+    "instanceFbMissing": "The instance DB refers to FB {{name}}, which does not exist",
+    "problems": "Problems"
+  },
+  "props": {
+    "banner": "These properties are used by the simulator and the offline checks. Until stage 6 they are not downloaded to the PLC.",
+    "integer": "Enter a whole number.",
+    "section": {
+      "general": "General",
+      "pn": "PROFINET interface",
+      "mpi": "MPI interface",
+      "dp": "DP interface",
+      "cycle": "Cycle",
+      "clock": "Clock memory",
+      "retentivity": "Retentivity",
+      "schedule": "Clock scheduling",
+      "info": "Information",
+      "attributes": "Attributes"
+    },
+    "orderNumber": "Order number",
+    "firmware": "Firmware version",
+    "ip": "IP address",
+    "mask": "Subnet mask",
+    "useRouter": "Use router",
+    "router": "Router address",
+    "mpiAddress": "MPI address",
+    "dpAddress": "DP address",
+    "maxCycle": "Maximum cycle time (ms)",
+    "minCycle": "Minimum cycle time (ms)",
+    "commLoad": "Cycle load due to communication (%)",
+    "clockEnabled": "Enable",
+    "clockByte": "Memory byte",
+    "retM": "Number of memory bytes from MB0",
+    "retT": "Number of S7 timers from T0",
+    "retC": "Number of S7 counters from C0",
+    "ob35": "OB35 period (ms)",
+    "title": "Title",
+    "version": "Version",
+    "family": "Family",
+    "headerName": "Name in the header",
+    "knowHow": "Know-how protection",
+    "knowHowHint": "The flag is written into the downloaded block: anyone opening it with other tools sees only the interface.",
+    "unlinked": "Only in load memory",
+    "readOnly": "Write-protected in the device",
+    "nonRetain": "Non-retentive",
+    "group": "Group",
+    "tagCount": "Number of tags",
+    "constantCount": "Number of constants"
+  },
+  "recovery": {
+    "title": "Recover changes",
+    "message": "BaaPortal was not closed correctly. Recover the changes to \"{{name}}\" saved on {{date}}?",
+    "yes": "Recover",
+    "no": "Delete"
   }
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createProject } from '@baaportal/project';
-import { commands, matchShortcut } from '../src/commands/commands';
+import { commands, matchShortcut, type CommandContext } from '../src/commands/commands';
+import { handleShortcutKeydown } from '../src/commands/useShortcuts';
 import { createAppStore } from '../src/state/store';
 
 describe('matchShortcut', () => {
@@ -32,6 +33,8 @@ describe('comandi', () => {
       project: createProject({ name: 'P', author: '', comment: '' }, new Date()),
       filePath: '/p.baap',
       dirty: false,
+      revision: 0,
+      savedRevision: 0,
     });
     for (const id of ['project.save', 'project.saveAs', 'project.close'] as const) {
       expect(commands[id].isEnabled(store.getState())).toBe(true);
@@ -69,5 +72,108 @@ describe('comandi', () => {
     } as never;
     await commands['project.exit'].run({ store: createAppStore(), service, bridge: {} as never });
     expect(called).toBe(1);
+  });
+});
+
+describe('annulla e ripeti', () => {
+  function setup(platform: 'darwin' | 'win32') {
+    const store = createAppStore();
+    store.getState().setDoc({
+      project: createProject({ name: 'P', author: 'Mario', comment: '' }, new Date()),
+      filePath: '/p.baap',
+      dirty: false,
+      revision: 0,
+      savedRevision: 0,
+    });
+    const ctx = { store, service: {} as never, bridge: { platform } as never } as CommandContext;
+    const author = () => store.getState().doc!.project.meta.author;
+    store.getState().edit('history.author', (p) => {
+      p.meta.author = 'A';
+    });
+    return { store, ctx, author };
+  }
+  const key = (init: KeyboardEventInit & { key: string }, target?: Element) => {
+    const e = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
+    if (target) Object.defineProperty(e, 'target', { value: target });
+    return e;
+  };
+
+  it("abilitati solo quando c'è qualcosa da annullare o ripetere", () => {
+    const { store } = setup('win32');
+    expect(commands['edit.undo'].isEnabled(store.getState())).toBe(true);
+    expect(commands['edit.redo'].isEnabled(store.getState())).toBe(false);
+    store.getState().undo();
+    expect(commands['edit.undo'].isEnabled(store.getState())).toBe(false);
+    expect(commands['edit.redo'].isEnabled(store.getState())).toBe(true);
+  });
+
+  it('su macOS Cmd+Z annulla, Cmd+Y e Cmd+Shift+Z ripetono', () => {
+    const { ctx, author } = setup('darwin');
+    expect(handleShortcutKeydown(key({ metaKey: true, key: 'z' }), ctx)).toBe(true);
+    expect(author()).toBe('Mario');
+    expect(handleShortcutKeydown(key({ metaKey: true, key: 'y' }), ctx)).toBe(true);
+    expect(author()).toBe('A');
+    handleShortcutKeydown(key({ metaKey: true, key: 'z' }), ctx);
+    expect(handleShortcutKeydown(key({ metaKey: true, shiftKey: true, key: 'Z' }), ctx)).toBe(true);
+    expect(author()).toBe('A');
+  });
+
+  it('dentro un campo di testo Cmd+Z non tocca il progetto', () => {
+    const { store, ctx, author } = setup('darwin');
+    const input = document.createElement('input');
+    expect(handleShortcutKeydown(key({ metaKey: true, key: 'z' }, input), ctx)).toBe(false);
+    expect(author()).toBe('A');
+    expect(store.getState().history.past).toHaveLength(1);
+  });
+
+  it('un tasto che si ripete non esegue il comando', () => {
+    const { ctx, author } = setup('win32');
+    expect(handleShortcutKeydown(key({ ctrlKey: true, key: 'z', repeat: true }), ctx)).toBe(false);
+    expect(author()).toBe('A');
+  });
+});
+
+describe('comandi Inserisci', () => {
+  const doc = (devices: boolean) => {
+    const project = createProject({ name: 'P', author: '', comment: '' }, new Date());
+    if (devices) {
+      for (const id of ['d1', 'd2']) {
+        project.devices.push({
+          id,
+          name: id,
+          cpu: { typeId: 'x', orderNumber: '', firmware: '' },
+        } as never);
+      }
+    }
+    return { project, filePath: '/p.baap', dirty: false, revision: 0, savedRevision: 0 };
+  };
+  const ctx = (store: ReturnType<typeof createAppStore>) =>
+    ({ store }) as unknown as CommandContext;
+
+  it('Nuovo dispositivo serve un progetto; Nuovo blocco serve almeno un PLC', () => {
+    const store = createAppStore();
+    expect(commands['insert.device'].isEnabled(store.getState())).toBe(false);
+    expect(commands['insert.block'].isEnabled(store.getState())).toBe(false);
+    store.getState().setDoc(doc(false));
+    expect(commands['insert.device'].isEnabled(store.getState())).toBe(true);
+    expect(commands['insert.block'].isEnabled(store.getState())).toBe(false);
+    store.getState().setDoc(doc(true));
+    expect(commands['insert.block'].isEnabled(store.getState())).toBe(true);
+  });
+
+  it('Nuovo blocco apre il dialogo sul PLC della selezione, altrimenti sul primo', () => {
+    const store = createAppStore();
+    store.getState().setDoc(doc(true));
+    void commands['insert.block'].run(ctx(store));
+    expect(store.getState().dialog).toEqual({ kind: 'addBlock', deviceId: 'd1' });
+    store.getState().closeDialog();
+    store.getState().select('plc:d2:blocks');
+    void commands['insert.block'].run(ctx(store));
+    expect(store.getState().dialog).toEqual({ kind: 'addBlock', deviceId: 'd2' });
+    store.getState().closeDialog();
+    void commands['insert.device'].run(ctx(store));
+    expect(store.getState().dialog).toEqual({ kind: 'addDevice' });
+    store.getState().setDoc(null);
+    expect(store.getState().dialog).toBeNull();
   });
 });

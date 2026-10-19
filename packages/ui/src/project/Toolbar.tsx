@@ -38,6 +38,14 @@ export function Toolbar() {
             const cmd = commands[id];
             const label = t(cmd.labelKey);
             const checked = cmd.isChecked?.(appState);
+            // Annulla/Ripeti dicono quale modifica toccano.
+            const entry =
+              id === 'edit.undo'
+                ? appState.history.past.at(-1)
+                : id === 'edit.redo'
+                  ? appState.history.future[0]
+                  : undefined;
+            const name = entry ? `${label}: ${t(entry.labelKey)}` : label;
             return (
               <button
                 key={id}
@@ -47,8 +55,8 @@ export function Toolbar() {
                 aria-pressed={checked}
                 title={
                   cmd.shortcut
-                    ? `${label} (${shortcutLabel(cmd.shortcut, ctx.bridge.platform)})`
-                    : label
+                    ? `${name} (${shortcutLabel(cmd.shortcut, ctx.bridge.platform)})`
+                    : name
                 }
                 disabled={!cmd.isEnabled(appState)}
                 onClick={() => void cmd.run(ctx)}

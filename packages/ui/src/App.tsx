@@ -6,11 +6,17 @@ import type { BaaBridge } from './bridge';
 import { ErrorBoundary, FatalError } from './ErrorBoundary';
 import { useShortcuts } from './commands/useShortcuts';
 import { i18next, initI18n, t } from './i18n';
+import { flushPendingEdits } from './flushPendingEdits';
 import { createProjectService } from './services/projectService';
+import { createRecoveryService, type RecoveryService } from './services/recoveryService';
+import { AddBlockDialog } from './project/dialogs/AddBlockDialog';
+import { AddDeviceDialog } from './project/dialogs/AddDeviceDialog';
+import { DetachedWindows } from './project/workarea/DetachedWindow';
 import { PortalView } from './portal/PortalView';
 import { ProjectView } from './project/ProjectView';
 import { loadLayout, saveLayout } from './project/layoutStorage';
-import { AppProvider, useAppStore, type AppServices } from './state/AppContext';
+import { AppProvider, useAppStore, useServices, type AppServices } from './state/AppContext';
+import { attachEditorReconciler } from './state/editorReconciler';
 import { attachPortalReaction } from './state/portalReaction';
 import { createAppStore } from './state/store';
 import './theme/tokens.css';
@@ -33,10 +39,28 @@ function layoutStorage(): Storage | null {
 
 function Shell() {
   useShortcuts();
+  const { store } = useServices();
   const view = useAppStore((s) => s.view);
+  const dialog = useAppStore((s) => s.dialog);
+  const close = () => store.getState().closeDialog();
   return (
     <div data-testid="app-root" className="baa-app">
       {view === 'portal' ? <PortalView /> : <ProjectView />}
+      {dialog?.kind === 'addDevice' ? <AddDeviceDialog onClose={close} /> : null}
+      {dialog?.kind === 'addBlock' ? (
+        <AddBlockDialog
+          deviceId={dialog.deviceId}
+          onClose={close}
+          onAdded={(ref, open) => {
+            if (open && ref.kind === 'block') {
+              store
+                .getState()
+                .openEditor({ kind: 'block', deviceId: ref.deviceId, objectId: ref.id });
+            }
+          }}
+        />
+      ) : null}
+      <DetachedWindows />
     </div>
   );
 }
@@ -65,16 +89,34 @@ export function App({ bridge, onReady }: AppProps) {
       const detachLayout = store.subscribe((s, prev) => {
         if (s.panels !== prev.panels) saveLayout(storage, s.panels);
       });
-      const service = createProjectService({ store, bridge, t, appVersion });
+      const ref: { recovery?: RecoveryService } = {};
+      const service = createProjectService({
+        store,
+        bridge,
+        t,
+        appVersion,
+        flushPendingEdits,
+        // "Non salvare" all'uscita non deve lasciare una copia di recupero.
+        beforeWindowClose: async () => {
+          const doc = store.getState().doc;
+          if (doc) await ref.recovery?.clear(doc.filePath);
+        },
+      });
+      const recovery = createRecoveryService({ store, bridge, t, appVersion, service });
+      ref.recovery = recovery;
       const detachPortal = attachPortalReaction(store);
+      const detachEditors = attachEditorReconciler(store);
       dispose = () => {
         detachPortal();
+        detachEditors();
         detachLayout();
+        recovery.dispose();
         service.dispose();
       };
       const services = { store, service, bridge };
       setServices(services);
       onReady?.(services);
+      void recovery.offerRecovery();
     }
     return () => {
       cancelled = true;

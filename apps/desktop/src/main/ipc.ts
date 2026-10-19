@@ -1,6 +1,7 @@
 import {
   app,
   BrowserWindow,
+  clipboard,
   dialog,
   ipcMain,
   type IpcMainEvent,
@@ -9,10 +10,11 @@ import {
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { ConfirmTexts, RecentEntry } from '@baaportal/ui';
+import type { ConfirmTexts, QuestionTexts, RecentEntry, RecoveryInfo } from '@baaportal/ui';
 import { writeFileAtomic } from './fsAtomic';
 import { toIpcResult } from '../shared/ipcResult';
 import { isTrustedFrame, type FrameLike, type TrustOptions } from './trust';
+import { deleteRecovery, listRecovery, readRecovery, writeRecovery } from './recoveryStore';
 import { addRecent, removeRecent, type Platform, type StoredRecent } from './recentProjects';
 
 const platform = process.platform as Platform;
@@ -124,10 +126,46 @@ export function registerIpc(
     const r = win ? await dialog.showMessageBox(win, opts) : await dialog.showMessageBox(opts);
     return r.response === 0 ? 'save' : r.response === 1 ? 'discard' : 'cancel';
   });
+  handle('dialog:question', async (_e, t: QuestionTexts) => {
+    const opts = {
+      type: 'question' as const,
+      title: t.title,
+      message: t.message,
+      buttons: [t.yes, t.no],
+      defaultId: 0,
+      cancelId: 1,
+    };
+    const win = getWindow();
+    const r = win ? await dialog.showMessageBox(win, opts) : await dialog.showMessageBox(opts);
+    return r.response === 0;
+  });
   handle('dialog:error', async (_e, title: string, message: string) => {
     const opts = { type: 'error' as const, title, message, buttons: ['OK'] };
     const win = getWindow();
     if (win) await dialog.showMessageBox(win, opts);
     else await dialog.showMessageBox(opts);
+  });
+
+  on('clipboard:write-text', (_e, text: string) => {
+    if (typeof text === 'string') clipboard.writeText(text);
+  });
+  handle('clipboard:read-text', () => clipboard.readText());
+
+  // File di recupero: la chiave è validata da recoveryStore prima di formare qualunque percorso.
+  const recoveryDir = () => join(app.getPath('userData'), 'recovery');
+  handle('recovery:write', (_e, key: string, data: Uint8Array, info: RecoveryInfo) =>
+    toIpcResult(() => writeRecovery(recoveryDir(), key, data, info)),
+  );
+  handle('recovery:list', () => listRecovery(recoveryDir()));
+  handle('recovery:read', (_e, key: string) => toIpcResult(() => readRecovery(recoveryDir(), key)));
+  handle('recovery:delete', (_e, key: string) =>
+    toIpcResult(() => deleteRecovery(recoveryDir(), key)),
+  );
+
+  // Valori solo per i test e2e: come BAA_USER_DATA, mai onorati nelle build pacchettizzate.
+  handle('app:test-overrides', () => {
+    const ms = Number(process.env['BAA_RECOVERY_MS']);
+    const enabled = !app.isPackaged && !!process.env['BAA_USER_DATA'];
+    return enabled && Number.isInteger(ms) && ms > 0 ? { recoveryIntervalMs: ms } : {};
   });
 }
