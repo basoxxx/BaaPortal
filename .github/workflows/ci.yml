@@ -24,6 +24,7 @@ jobs:
       - name: Scarica catture S7 pubbliche
         run: node scripts/fetch-s7-captures.mjs
         continue-on-error: true
+        timeout-minutes: 10
       - run: npm test
       - run: npm run e2e
       - if: failure()

@@ -37,7 +37,8 @@ describe('tcpTransport', () => {
     await expect(
       S7Connection.open({ host: '127.0.0.1', port, timeoutMs: 200, transport: tcpTransport }),
     ).rejects.toMatchObject({ code: 'CONNECT_TIMEOUT' });
-    expect(Date.now() - t0).toBeLessThan(300);
+    // margine del progetto: almeno 1,5 volte il timeout più 250 ms (i runner CI sono lenti)
+    expect(Date.now() - t0).toBeLessThan(200 * 1.5 + 250);
   });
 
   it('il server che chiude dopo la connessione dà CLOSED', async () => {

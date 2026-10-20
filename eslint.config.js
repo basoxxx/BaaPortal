@@ -9,6 +9,11 @@ const TCP_TRANSPORT_PATTERNS = [
   },
 ];
 
+// La rete la usa solo @baaportal/s7comm/node (connectTcp/collectTcp), che passa dal filtro di
+// sola lettura: né le app né la UI importano socket direttamente.
+const NETWORK_MESSAGE = 'usa @baaportal/s7comm/node (connectTcp/collectTcp)';
+const NETWORK_MODULES = ['net', 'node:net', 'tls', 'node:tls', 'dgram', 'node:dgram'];
+
 export default tseslint.config(
   {
     ignores: [
@@ -89,6 +94,19 @@ export default tseslint.config(
         {
           selector: "CallExpression[callee.name='require']",
           message: 'require() vietato nel nucleo di s7-server.',
+        },
+      ],
+    },
+  },
+  {
+    // Nessuna eccezione nelle app: nemmeno il processo principale di desktop importa socket.
+    files: ['apps/**/src/**/*.{ts,tsx,mjs,js}', 'packages/ui/**/*.{ts,tsx,mjs,js}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: NETWORK_MODULES.map((name) => ({ name, message: NETWORK_MESSAGE })),
+          patterns: TCP_TRANSPORT_PATTERNS,
         },
       ],
     },

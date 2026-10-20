@@ -2,6 +2,7 @@
 // Scarica le catture pubbliche di S7-300 elencate in packages/s7comm/test/captures/public.json
 // in .cache/s7-captures/ (o in S7_CAPTURES_DIR), controllando lo SHA-256. Node puro, nessuna
 // dipendenza; funziona su Windows e macOS. Un file che manca o ha un SHA diverso dà un avviso.
+// Dopo 8 minuti in tutto (S7_CAPTURES_DEADLINE_MS) i file rimasti da scaricare si saltano con un avviso.
 // Codice di uscita 0, salvo che tutti i file siano falliti (1).
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
@@ -13,6 +14,9 @@ const listPath = join(root, 'packages', 's7comm', 'test', 'captures', 'public.js
 const destDir = process.env.S7_CAPTURES_DIR ?? join(root, '.cache', 's7-captures');
 const ATTEMPTS = 3;
 const TIMEOUT_MS = 60_000;
+// Tetto al tempo totale: oltre, i file che restano si saltano con un avviso (la CI non resta appesa).
+const DEADLINE_MS = Number(process.env.S7_CAPTURES_DEADLINE_MS ?? 8 * 60_000);
+const deadline = Date.now() + DEADLINE_MS;
 
 const sha256 = (buf) => createHash('sha256').update(buf).digest('hex');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -28,6 +32,7 @@ async function sha256OfFile(path) {
 async function download(entry) {
   let last = 'errore sconosciuto';
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
+    if (attempt > 1 && Date.now() >= deadline) break;
     try {
       const res = await fetch(entry.url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -40,7 +45,7 @@ async function download(entry) {
     } catch (e) {
       last = e instanceof Error ? e.message : String(e);
     }
-    if (attempt < ATTEMPTS) await sleep(1000 * 2 ** (attempt - 1));
+    if (attempt < ATTEMPTS && Date.now() < deadline) await sleep(1000 * 2 ** (attempt - 1));
   }
   return { error: last };
 }
@@ -64,6 +69,13 @@ for (const entry of list) {
   if ((await sha256OfFile(target)) === entry.sha256) {
     console.log(`OK        ${entry.file} (già presente)`);
     ok++;
+    continue;
+  }
+  if (Date.now() >= deadline) {
+    console.warn(
+      `AVVISO    ${entry.file}: tempo massimo (${DEADLINE_MS / 1000} s) esaurito, saltato`,
+    );
+    failed++;
     continue;
   }
   const r = await download(entry);

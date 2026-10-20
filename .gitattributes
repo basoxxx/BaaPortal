@@ -3,3 +3,9 @@
 *.png binary
 *.ico binary
 *.icns binary
+*.pcap binary
+*.pcapng binary
+*.blk binary
+*.zip binary
+*.dmg binary
+*.exe binary
