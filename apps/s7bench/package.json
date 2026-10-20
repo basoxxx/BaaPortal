@@ -1,0 +1,15 @@
+{
+  "name": "@baaportal/s7bench",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Strumento interno a riga di comando per il banco di prova S7 (sola lettura). Non è incluso nell'app.",
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@baaportal/s7-server": "*",
+    "@baaportal/s7comm": "*"
+  }
+}
