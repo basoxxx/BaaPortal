@@ -674,6 +674,7 @@
     "errors": "Errori: {{count}}",
     "savedTo": "Salvato in: {{path}}",
     "notSaved": "non salvato",
+    "autoSaveFailed": "Salvataggio non riuscito: {{error}}. Usa «Salva…» per riprovare.",
     "saveFailed": "Salvataggio non riuscito: {{error}}",
     "failed": "Raccolta non riuscita: {{error}}",
     "noConnection": "La CPU non ha risposto: controlla indirizzo, cavo di rete e slot. Lo zip contiene comunque il registro."

@@ -41,6 +41,7 @@ export function KitDialog({ onClose }: { onClose(): void }) {
   const [progress, setProgress] = useState<KitProgress | null>(null);
   const [summary, setSummary] = useState<KitSummary | null>(null);
   const [savedTo, setSavedTo] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const stageRef = useRef<Stage>('form');
   stageRef.current = stage;
@@ -81,6 +82,7 @@ export function KitDialog({ onClose }: { onClose(): void }) {
       if (r.ok) {
         setSummary(r.summary);
         setSavedTo(r.savedTo);
+        setSaveError(r.saveError ?? null);
         setStage('done');
       } else {
         setError(t('kit.failed', { error: r.error }));
@@ -96,7 +98,10 @@ export function KitDialog({ onClose }: { onClose(): void }) {
     setError(null);
     try {
       const path = await bridge.saveKitResult();
-      if (path) setSavedTo(path);
+      if (path) {
+        setSavedTo(path);
+        setSaveError(null);
+      }
     } catch (e) {
       setError(t('kit.saveFailed', { error: e instanceof Error ? e.message : String(e) }));
     }
@@ -272,7 +277,11 @@ export function KitDialog({ onClose }: { onClose(): void }) {
               </ul>
             </details>
             <div data-testid="kit-saved">
-              {savedTo ? t('kit.savedTo', { path: savedTo }) : t('kit.notSaved')}
+              {savedTo
+                ? t('kit.savedTo', { path: savedTo })
+                : saveError
+                  ? t('kit.autoSaveFailed', { error: saveError })
+                  : t('kit.notSaved')}
             </div>
           </div>
         ) : null}

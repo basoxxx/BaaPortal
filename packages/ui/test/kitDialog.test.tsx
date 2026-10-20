@@ -155,4 +155,21 @@ describe('Raccolta dati CPU: finestra', () => {
     expect(await within(dlg).findByRole('alert')).toHaveTextContent('Una raccolta è già in corso.');
     expect(within(dlg).getByRole('button', { name: 'Avvia' })).toBeEnabled();
   });
+
+  it('se il salvataggio automatico fallisce, la finestra mostra il motivo e offre Salva…', async () => {
+    const { user, bridge } = await renderApp({ view: 'project' });
+    bridge.kitResults.push({
+      ok: true,
+      savedTo: null,
+      summary: SUMMARY,
+      saveError: 'EACCES: permesso negato',
+    });
+    const dlg = await openViaMenu(user);
+    await user.type(within(dlg).getByLabelText('Indirizzo IP'), '10.0.0.5');
+    await user.click(within(dlg).getByRole('button', { name: 'Avvia' }));
+    expect(await within(dlg).findByTestId('kit-saved')).toHaveTextContent(
+      'Salvataggio non riuscito: EACCES: permesso negato. Usa «Salva…» per riprovare.',
+    );
+    expect(within(dlg).getByRole('button', { name: 'Salva…' })).toBeInTheDocument();
+  });
 });

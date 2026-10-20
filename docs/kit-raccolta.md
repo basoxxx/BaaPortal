@@ -11,8 +11,9 @@ si può verificare che le richieste rifiutate siano state 0.
 ## Passo per passo
 
 1. **Scarica e installa BaaPortal.**
-   Vai alla pagina _Releases_ del progetto su GitHub e scarica l'ultima versione per il tuo
-   sistema (Windows o macOS), poi installala.
+   Vai alla pagina delle release, <https://github.com/basoxxx/BaaPortal/releases>, e scarica
+   la **release più recente** (dalla v0.2.0 in poi: le versioni precedenti non hanno la raccolta)
+   per il tuo sistema (Windows o macOS), poi installala.
    - L'installatore **non è firmato**, quindi il sistema mostra un avviso:
      - Windows: _"Windows ha protetto il PC"_ (SmartScreen). Scegli **Ulteriori informazioni**,
        poi **Esegui comunque**.
@@ -65,8 +66,10 @@ la CPU deve rispondere alle richieste e il caricamento dei blocchi le dà un po'
 
 ## Quanto dura
 
-Qualche minuto in genere (di solito 2-10 minuti). Senza blocchi, molto meno. Con un programma
-grande può arrivare a 20-30 minuti: il programma legge con calma, per non disturbare la CPU.
+Dipende dalla grandezza del programma. Il programma aspetta almeno 50 ms tra una richiesta e
+l'altra, per non disturbare la CPU. Una S7-300 tipica con un centinaio di blocchi richiede
+qualche centinaio di richieste, quindi la raccolta dura **alcuni minuti**. Con un programma più
+grande le richieste aumentano e il tempo cresce in proporzione. Senza blocchi è molto più breve.
 
 ## Se qualcosa va storto
 

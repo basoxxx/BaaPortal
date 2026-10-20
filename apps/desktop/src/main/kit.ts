@@ -7,6 +7,8 @@ import { kitFileName, parseKitOptions } from './kitOptions';
 
 const PROGRESS_INTERVAL_MS = 100; // al massimo 10 eventi al secondo
 
+export type KitSaveReply = { ok: true; path: string | null } | { ok: false; error: string };
+
 type Handle = (
   channel: string,
   listener: (e: IpcMainInvokeEvent, ...args: unknown[]) => unknown,
@@ -19,7 +21,9 @@ type Handle = (
 export function registerKit(handle: Handle): void {
   let abort: AbortController | null = null;
   // Solo l'ultima raccolta resta in memoria, per poterla salvare di nuovo.
-  let last: { bytes: Uint8Array; fileName: string } | null = null;
+  // Ogni raccolta appartiene alla finestra che l'ha avviata: solo quella può interromperla o salvarla.
+  let runOwner: WebContents | null = null;
+  let last: { bytes: Uint8Array; fileName: string; owner: WebContents } | null = null;
 
   const saveLast = async (sender: WebContents): Promise<string | null> => {
     if (!last) throw new Error('Nessuna raccolta da salvare');
@@ -45,6 +49,7 @@ export function registerKit(handle: Handle): void {
     const ctl = new AbortController();
     abort = ctl;
     const sender = e.sender;
+    runOwner = sender;
     const onGone = () => ctl.abort();
     sender.once('destroyed', onGone);
 
@@ -73,29 +78,49 @@ export function registerKit(handle: Handle): void {
       flush();
       const bytes = kitZip(result);
       const summary = result.summary;
-      last = { bytes, fileName: kitFileName(summary.identity?.orderNumber, new Date()) };
+      last = {
+        bytes,
+        fileName: kitFileName(summary.identity?.orderNumber, new Date()),
+        owner: sender,
+      };
       let savedTo: string | null = null;
+      let saveError: string | undefined;
       // Una raccolta interrotta non apre il salvataggio da sola: la finestra offre "Salva…".
       if (!ctl.signal.aborted && !sender.isDestroyed()) {
         try {
           savedTo = await saveLast(sender);
-        } catch {
-          savedTo = null; // la finestra offre "Salva…", che riporta l'errore
+        } catch (err) {
+          savedTo = null; // la finestra mostra l'errore e offre "Salva…" per riprovare
+          saveError = err instanceof Error ? err.message : String(err);
         }
       }
-      return { ok: true, savedTo, summary };
+      return saveError === undefined
+        ? { ok: true, savedTo, summary }
+        : { ok: true, savedTo, summary, saveError };
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     } finally {
       if (timer) clearTimeout(timer);
       sender.removeListener('destroyed', onGone);
       abort = null;
+      runOwner = null;
     }
   });
 
-  handle('kit:cancel', () => {
-    abort?.abort();
+  handle('kit:cancel', (e) => {
+    if (!abort || e.sender !== runOwner) return false;
+    abort.abort();
+    return true;
   });
 
-  handle('kit:save', (e) => saveLast(e.sender));
+  handle('kit:save', async (e): Promise<KitSaveReply> => {
+    if (!last || e.sender !== last.owner) {
+      return { ok: false, error: 'Nessuna raccolta da salvare per questa finestra' };
+    }
+    try {
+      return { ok: true, path: await saveLast(e.sender) };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  });
 }

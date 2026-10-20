@@ -43,7 +43,12 @@ const bridge: RawBridge = {
   cancelKit: () => {
     ipcRenderer.invoke('kit:cancel').catch(() => undefined);
   },
-  saveKitResult: () => ipcRenderer.invoke('kit:save'),
+  saveKitResult: async () => {
+    const r = (await ipcRenderer.invoke('kit:save')) as
+      { ok: true; path: string | null } | { ok: false; error: string };
+    if (!r.ok) throw new Error(r.error);
+    return r.path;
+  },
   onKitProgress: (cb) => subscribe<[KitProgress]>('kit:progress', cb),
   testOverrides: () => ipcRenderer.invoke('app:test-overrides'),
 };

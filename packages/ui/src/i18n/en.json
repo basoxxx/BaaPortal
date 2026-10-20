@@ -674,6 +674,7 @@
     "errors": "Errors: {{count}}",
     "savedTo": "Saved to: {{path}}",
     "notSaved": "not saved",
+    "autoSaveFailed": "Saving failed: {{error}}. Use “Save…” to try again.",
     "saveFailed": "Saving failed: {{error}}",
     "failed": "Collection failed: {{error}}",
     "noConnection": "The CPU did not answer: check the address, the network cable and the slot. The zip still contains the log."

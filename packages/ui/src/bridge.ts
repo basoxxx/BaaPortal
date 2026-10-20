@@ -66,7 +66,8 @@ export interface KitSummary {
 }
 
 export type KitStartResult =
-  { ok: true; savedTo: string | null; summary: KitSummary } | { ok: false; error: string };
+  | { ok: true; savedTo: string | null; summary: KitSummary; saveError?: string }
+  | { ok: false; error: string };
 
 export interface BaaBridge {
   platform: 'win32' | 'darwin' | 'linux';
