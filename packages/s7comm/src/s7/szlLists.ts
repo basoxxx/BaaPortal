@@ -107,7 +107,7 @@ export interface ProtectionInfo {
 
 /** 0x0232 index 4: sch_schal, sch_par, sch_rel, bart_sch (proto §7.3). I campi che non ci sono restano assenti. */
 export function protectionFrom(s0232: SzlList): ProtectionInfo {
-  expectList(s0232, 0x32, 'protezione 0x0232');
+  expectList(s0232, 0x32, 'protezione 0x0132/0x0232');
   const r = s0232.records[0];
   const out: ProtectionInfo = {};
   const sw = word(r, 2);

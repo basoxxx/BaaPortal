@@ -231,18 +231,39 @@ export class S7Client {
     return identityFrom(base, extra);
   }
 
+  /**
+   * Modo CPU (SZL 0x0424). I campi mancanti degradano (restano assenti), ma un rifiuto dell'intera lista da parte
+   * della CPU (p.es. 0xD402) lancia `CPU_ERROR`: chi chiama (il kit) lo registra per passo.
+   */
   async mode(): Promise<CpuMode> {
     return modeFrom(await this.readSzl(0x0424, 0));
   }
 
+  /**
+   * Protezione (SZL 0x0132 indice 4, poi 0x0232 se la CPU rifiuta la prima: STEP 7/TIA usano la 0x0132). I campi mancanti degradano (restano assenti), ma un rifiuto dell'intera lista da parte
+   * della CPU (p.es. 0xD402) lancia `CPU_ERROR`: chi chiama (il kit) lo registra per passo.
+   */
   async protection(): Promise<ProtectionInfo> {
+    try {
+      return protectionFrom(await this.readSzl(0x0132, 4));
+    } catch (e) {
+      if (!(e instanceof S7Error && e.code === 'CPU_ERROR')) throw e;
+    }
     return protectionFrom(await this.readSzl(0x0232, 4));
   }
 
+  /**
+   * Comunicazione (SZL 0x0131). I campi mancanti degradano (restano assenti), ma un rifiuto dell'intera lista da parte
+   * della CPU (p.es. 0xD402) lancia `CPU_ERROR`: chi chiama (il kit) lo registra per passo.
+   */
   async communication(): Promise<CommCapabilities> {
     return commFrom(await this.readSzl(0x0131, 1));
   }
 
+  /**
+   * Buffer diagnostico (SZL 0x00A0). I campi mancanti degradano (restano assenti), ma un rifiuto dell'intera lista da parte
+   * della CPU (p.es. 0xD402) lancia `CPU_ERROR`: chi chiama (il kit) lo registra per passo.
+   */
   async diagnosticBuffer(): Promise<DiagEntry[]> {
     return diagFrom(await this.readSzl(0x00a0, 0));
   }
@@ -287,6 +308,19 @@ export class S7Client {
    * un suo errore non nasconde mai quello originale.
    */
   async upload(type: BlockType, number: number): Promise<Uint8Array> {
+    return (await this.uploadWithInfo(type, number)).bytes;
+  }
+
+  /**
+   * Come `upload`, ma una lunghezza dichiarata diversa dai byte ricevuti non è un errore:
+   * resta un avviso (la CPU può dichiarare p.es. la lunghezza in memoria di caricamento).
+   * Solo il tetto di 16 MiB è un errore duro. Una risposta di start malformata chiude la
+   * connessione (libera la sessione della CPU, proto §15.3) e dà PROTOCOL.
+   */
+  async uploadWithInfo(
+    type: BlockType,
+    number: number,
+  ): Promise<{ bytes: Uint8Array; declaredLength: number | null; warnings: string[] }> {
     const name = `blocco ${type}${number}`;
     const start = await this.#conn.request(
       encodeStartUpload(blockFileName(type, number, FILESYSTEM)),
@@ -297,7 +331,17 @@ export class S7Client {
     if (start.rosctr !== 3) {
       throw new S7Error('PROTOCOL', `risposta allo start upload con ROSCTR ${start.rosctr}`);
     }
-    const started = decodeStartUploadResponse(start.param);
+    let started: ReturnType<typeof decodeStartUploadResponse>;
+    try {
+      started = decodeStartUploadResponse(start.param);
+    } catch (e) {
+      // Nessun id per l'EndUpload: si chiude la connessione per liberare la sessione.
+      await this.#conn.close();
+      throw e instanceof S7Error
+        ? e
+        : new S7Error('PROTOCOL', `risposta allo start upload malformata: ${String(e)}`);
+    }
+    const warnings: string[] = [];
     const chunks: Uint8Array[] = [];
     let total = 0;
     try {
@@ -313,22 +357,13 @@ export class S7Client {
         if (total > MAX_UPLOAD_BYTES) {
           throw new S7Error('PROTOCOL', `upload ${name}: oltre ${MAX_UPLOAD_BYTES} byte`);
         }
-        if (started.totalLength !== null && total > started.totalLength) {
-          throw new S7Error(
-            'PROTOCOL',
-            `upload ${name}: ricevuti più dei ${started.totalLength} byte dichiarati`,
-          );
-        }
         if (!r.more) break;
         if (r.chunk.length === 0) {
           throw new S7Error('PROTOCOL', `upload ${name}: pezzo vuoto con altri in arrivo`);
         }
       }
       if (started.totalLength !== null && total !== started.totalLength) {
-        throw new S7Error(
-          'PROTOCOL',
-          `upload ${name}: ricevuti ${total} byte, dichiarati ${started.totalLength}`,
-        );
+        warnings.push(`lunghezza dichiarata ${started.totalLength}, ricevuti ${total}`);
       }
     } finally {
       await this.#endUpload(started.uploadId);
@@ -339,7 +374,7 @@ export class S7Client {
       out.set(c, at);
       at += c.length;
     }
-    return out;
+    return { bytes: out, declaredLength: started.totalLength, warnings };
   }
 
   /**

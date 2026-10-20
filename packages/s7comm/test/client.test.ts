@@ -135,7 +135,7 @@ function errorReply(group: number, sub: number, code: number): Reply {
 
 /** Liste che il vettore reale non contiene: costruite con i codificatori lato CPU. */
 function builtSzl(id: number, index: number): Reply | undefined {
-  if (id === 0x0232 && index === 4) {
+  if ((id === 0x0232 || id === 0x0132) && index === 4) {
     const rec = Uint8Array.of(0, 4, 0, 1, 0, 2, 0, 3, 0, 2, 0, 0, 0, 0);
     return szlReply(encodeSzl({ id, index, recordLength: 14, records: [rec] }, 200)[0]!, false, 1);
   }
@@ -441,6 +441,27 @@ describe('SZL, identità, modo, protezione, comunicazione', () => {
   });
 });
 
+describe('protezione', () => {
+  it('prima 0x0132 indice 4 (STEP 7/TIA)', async () => {
+    const { client, ud } = await rig();
+    expect(await client.protection()).toMatchObject({ switchLevel: 1, modeSwitch: 'RUN-P' });
+    expect(ud.map((x) => decodeSzlRequest(x.u.payload).id)).toEqual([0x0132]);
+  });
+
+  it('se la CPU rifiuta la 0x0132 ripiega sulla 0x0232', async () => {
+    const { client, ud } = await rig({
+      override: (_p, u) =>
+        u?.param.methodByte === 0x11 &&
+        u.param.group === 4 &&
+        decodeSzlRequest(u.payload).id === 0x0132
+          ? errorReply(4, 1, 0xd401)
+          : undefined,
+    });
+    expect(await client.protection()).toMatchObject({ switchLevel: 1, modeSwitch: 'RUN-P' });
+    expect(ud.map((x) => decodeSzlRequest(x.u.payload).id)).toEqual([0x0132, 0x0232]);
+  });
+});
+
 describe('variabili', () => {
   it('readArea di 1000 byte con PDU 240: 5 richieste, dati ricomposti in ordine', async () => {
     const { client, log, cpu } = await rig({ pdu: 240 });
@@ -629,17 +650,35 @@ describe('upload', () => {
     expect(log).toEqual(['fn1d', 'fn1e', 'fn1f']);
   });
 
-  it('lunghezza dichiarata diversa dai byte ricevuti: PROTOCOL, EndUpload inviato', async () => {
-    const { client, log } = await rig({
-      override: (p) => (p.param[0] === 0x1d ? sdbStart(217) : undefined),
+  it('lunghezza dichiarata diversa dai byte ricevuti: avviso, non errore (più grande e più piccola)', async () => {
+    for (const declared of [217, 100]) {
+      const { client, log } = await rig({
+        override: (p) => (p.param[0] === 0x1d ? sdbStart(declared) : undefined),
+      });
+      const r = await client.uploadWithInfo('SDB', 0);
+      expect(r.bytes.length).toBe(216);
+      expect(r.declaredLength).toBe(declared);
+      expect(r.warnings).toEqual([`lunghezza dichiarata ${declared}, ricevuti 216`]);
+      expect((await client.upload('SDB', 0)).length).toBe(216);
+      expect(log.slice(0, 3)).toEqual(['fn1d', 'fn1e', 'fn1f']);
+    }
+    const ok = await rig();
+    expect(await ok.client.uploadWithInfo('SDB', 0)).toMatchObject({
+      declaredLength: 216,
+      warnings: [],
     });
-    const e = await client.upload('SDB', 0).catch((x) => x);
-    expect(e).toMatchObject({ code: 'PROTOCOL' });
-    expect(e.message).toContain('217');
-    expect(log).toEqual(['fn1d', 'fn1e', 'fn1f']);
-    const m = await rig({ override: (p) => (p.param[0] === 0x1d ? sdbStart(100) : undefined) });
-    await expect(m.client.upload('SDB', 0)).rejects.toMatchObject({ code: 'PROTOCOL' });
-    expect(m.log).toEqual(['fn1d', 'fn1e', 'fn1f']);
+  });
+
+  it('start malformato: PROTOCOL, connessione chiusa, poi CLOSED', async () => {
+    const { client, log } = await rig({
+      override: (p) =>
+        p.param[0] === 0x1d
+          ? { rosctr: 3, param: Uint8Array.of(0x1d, 0, 1), data: none }
+          : undefined,
+    });
+    await expect(client.upload('SDB', 0)).rejects.toMatchObject({ code: 'PROTOCOL' });
+    await expect(client.mode()).rejects.toMatchObject({ code: 'CLOSED' });
+    expect(log).toEqual(['fn1d']);
   });
 
   it('oltre 16 MiB: PROTOCOL, EndUpload inviato', async () => {
@@ -704,6 +743,7 @@ describe('sola lettura', () => {
         'readItems',
         'readSzl',
         'upload',
+        'uploadWithInfo',
       ].sort(),
     );
     expect(Object.getOwnPropertyNames(S7Client).sort()).toEqual(
