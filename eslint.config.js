@@ -63,4 +63,34 @@ export default tseslint.config(
       'no-restricted-imports': ['error', { patterns: TCP_TRANSPORT_PATTERNS }],
     },
   },
+  {
+    // Come s7comm: il nucleo del finto PLC è neutro rispetto alla piattaforma, sockets solo in src/node/.
+    files: ['packages/s7-server/src/**/*.ts'],
+    ignores: ['packages/s7-server/src/node/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            ...TCP_TRANSPORT_PATTERNS,
+            {
+              group: ['node:*', 'net', 'tls', 'dgram', 'http', 'https', 'fs', 'child_process'],
+              message: 'Solo packages/s7-server/src/node/ può importare moduli di Node.',
+            },
+          ],
+        },
+      ],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'ImportExpression',
+          message: 'import() dinamico vietato nel nucleo di s7-server.',
+        },
+        {
+          selector: "CallExpression[callee.name='require']",
+          message: 'require() vietato nel nucleo di s7-server.',
+        },
+      ],
+    },
+  },
 );
