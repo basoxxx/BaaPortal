@@ -120,9 +120,11 @@ Osservati nelle catture:
 - Su **CPU 31x-2 PN/DP** la CPU risponde allo slot 2 (interfaccia PN integrata),
   rack 0. Verificato su `cisa/snap7.pcap` (CPU 315-2EH14, IM151-8 PN/DP in
   `s7comm_reading_plc_status.pcap`): dst `0x0102`/`0x0101`.
-- Con un **CP 343-1** inserito in un altro slot, lo slot del TSAP deve puntare allo
-  slot del CP (p.es. slot 4). Il CP instrada poi verso la CPU. ⚠️ Lo slot esatto
-  dipende dalla configurazione hardware STEP7; va reso configurabile.
+- Se la CPU è collegata tramite un **CP 343-1**, si usa l'indirizzo IP del CP e il TSAP
+  remoto continua a indicare la **CPU**: rack 0, slot 2. Puntare lo slot del CP (p.es. 4)
+  indirizzerebbe il modulo CP stesso, non la CPU. **non verificato**: nessuna cattura ha
+  una CPU dietro un CP. Se la CPU non risponde si prova lo slot 3 (alcune configurazioni).
+  Il kit dell'amico lo confermerà (§15bis); rack e slot restano configurabili.
 - Le CPU PN accettano più connessioni PG/OP contemporanee; le S7-300 classiche MPI
   via CP hanno limiti di risorse più stretti (§14).
 

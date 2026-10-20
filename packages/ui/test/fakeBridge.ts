@@ -8,6 +8,7 @@ import type {
   KitProgress,
   KitStartOptions,
   KitStartResult,
+  KitSummary,
 } from '../src/bridge';
 
 type Answer = 'save' | 'discard' | 'cancel';
@@ -41,6 +42,8 @@ export class FakeBridge implements BaaBridge {
   kitCancelCalls = 0;
   kitSaveResults: (string | null)[] = [];
   kitSaveCalls = 0;
+  /** Raccolta finita e non ancora salvata, come la tiene il processo principale. */
+  kitUnsaved: KitSummary | null = null;
   private kitHold: Promise<void> | null = null;
   private kitCbs = new Set<(p: KitProgress) => void>();
   private nextWriteError: string | null = null;
@@ -192,6 +195,9 @@ export class FakeBridge implements BaaBridge {
   async saveKitResult() {
     this.kitSaveCalls++;
     return this.kitSaveResults.shift() ?? null;
+  }
+  async kitUnsavedSummary() {
+    return this.kitUnsaved;
   }
   onKitProgress(cb: (p: KitProgress) => void) {
     this.kitCbs.add(cb);

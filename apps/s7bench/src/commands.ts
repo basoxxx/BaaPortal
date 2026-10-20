@@ -384,14 +384,19 @@ export const interruption = {
 
 const raccogli: Command = {
   name: 'raccogli',
-  usage: 'raccogli -o <file.zip> [--senza-blocchi] --host <indirizzo>',
+  usage: 'raccogli -o <file.zip> [--senza-blocchi] [--sovrascrivi] --host <indirizzo>',
   summary: 'il kit di raccolta in sola lettura, in uno zip',
   network: true,
-  options: ['output', 'senza-blocchi'],
+  options: ['output', 'senza-blocchi', 'sovrascrivi'],
   async run(ctx) {
     positionalCount(ctx, raccogli, 0, 0);
     const file = optStr(ctx, 'output');
     if (!file) throw new UsageError('manca -o <file.zip>');
+    const overwrite = ctx.values['sovrascrivi'] === true;
+    // Si controlla prima di raccogliere: la raccolta dura minuti e non va buttata per un file che c'è già.
+    if (!overwrite && existsSync(file)) {
+      throw new FileError(`${file} esiste già: usa --sovrascrivi per sostituirlo`);
+    }
     const c = connOptions(ctx);
     const abort = new AbortController();
     const off = interruption.on(() => {
@@ -424,7 +429,7 @@ const raccogli: Command = {
     } finally {
       off();
     }
-    writeFileOrThrow(file, kitZip(result));
+    writeFileOrThrow(file, kitZip(result), overwrite ? 'w' : 'wx');
     if (c.log) {
       const cap = result.files['capture.jsonl'];
       if (cap) writeFileOrThrow(c.log, cap);

@@ -49,6 +49,7 @@ const bridge: RawBridge = {
     if (!r.ok) throw new Error(r.error);
     return r.path;
   },
+  kitUnsavedSummary: () => ipcRenderer.invoke('kit:hasUnsaved'),
   onKitProgress: (cb) => subscribe<[KitProgress]>('kit:progress', cb),
   testOverrides: () => ipcRenderer.invoke('app:test-overrides'),
 };

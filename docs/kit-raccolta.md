@@ -30,16 +30,18 @@ si può verificare che le richieste rifiutate siano state 0.
    un progetto aperto, la stessa funzione è nella schermata iniziale, tra le operazioni a sinistra
    (_Raccolta dati CPU (sola lettura)_).
 4. **Inserisci l'indirizzo.**
-   Scrivi l'**indirizzo IP** della CPU. Lascia **rack 0** e **slot 2**, a meno che la CPU sia
-   raggiunta tramite un **CP 343-1** (Ethernet su scheda separata): in quel caso lo **slot** è
-   quello del CP. Porta (102) e tipo di connessione (PG) di solito non vanno cambiati (sono sotto
-   _Avanzate_). Lascia attiva la casella **Carica anche i blocchi dal PLC**: serve a noi per
-   capire come è fatto il programma.
+   Scrivi l'**indirizzo IP** della CPU. Se la CPU è collegata tramite un **CP 343-1**
+   (Ethernet su scheda separata), usa l'indirizzo IP del CP e lascia rack 0 e slot 2.
+   Sotto _Avanzate_ ci sono **porta** (102), **rack** (0), **slot** (2) e **tipo di
+   connessione** (PG): di solito non vanno cambiati. Lascia attiva la casella **Carica anche i
+   blocchi dal PLC**: serve a noi per capire come è fatto il programma.
 5. **Avvia e salva.**
    Premi **Avvia** e attendi: la finestra mostra la fase e quanto manca. Puoi premere
    **Interrompi** quando vuoi. Alla fine compare la finestra di salvataggio: scegli dove salvare
    il file `raccolta-<numero di articolo>-<data>.zip`. Se annulli il salvataggio non perdi nulla:
-   finché la finestra resta aperta c'è il pulsante **Salva…**.
+   finché la finestra resta aperta c'è il pulsante **Salva…**. Se provi a chiudere senza
+   aver salvato, il programma ti chiede conferma; se la chiudi lo stesso, riaprendo la raccolta
+   la trovi ancora lì finché non ne avvii un'altra o non chiudi BaaPortal.
 6. **Inviaci lo zip.**
    Mandaci il file `.zip` (per email o con il servizio che preferisci).
 
@@ -67,13 +69,17 @@ la CPU deve rispondere alle richieste e il caricamento dei blocchi le dà un po'
 ## Quanto dura
 
 Dipende dalla grandezza del programma. Il programma aspetta almeno 50 ms tra una richiesta e
-l'altra, per non disturbare la CPU. Una S7-300 tipica con un centinaio di blocchi richiede
-qualche centinaio di richieste, quindi la raccolta dura **alcuni minuti**. Con un programma più
-grande le richieste aumentano e il tempo cresce in proporzione. Senza blocchi è molto più breve.
+l'altra, per non disturbare la CPU. Con un centinaio di blocchi le richieste sono più
+di un migliaio (ogni blocco ne richiede diverse, e ogni richiesta aspetta almeno 50 ms): la
+raccolta dura da **alcuni minuti** fino a **10-15 minuti** per i programmi grandi. Senza blocchi
+è molto più breve.
 
 ## Se qualcosa va storto
 
-- Se la CPU non risponde, controlla l'indirizzo IP, il cavo e lo slot (CP 343-1).
+- Se la CPU non risponde, controlla l'indirizzo IP e il cavo. Se la CPU è dietro un CP 343-1 e
+  non risponde, prova **slot 3** (alcune configurazioni) e manda comunque lo zip.
+- Su **macOS**, se compare una richiesta di permesso per la **rete locale**, consentila e poi
+  avvia di nuovo la raccolta.
 - Se compaiono errori o interrompi la raccolta, **mandaci comunque lo zip**: contiene il registro
   di tutto ciò che è successo e ci permette di capire il problema. Se non si è salvato da solo,
   premi **Salva…**.

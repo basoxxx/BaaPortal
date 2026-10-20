@@ -20,6 +20,13 @@ describe('parseKitOptions', () => {
       parseKitOptions({ ...good, port: 65535, rack: 7, slot: 31, includeBlocks: false }),
     ).toMatchObject({ port: 65535, rack: 7, slot: 31, includeBlocks: false });
   });
+  it('porta a forma canonica gli IPv4 con zeri iniziali', () => {
+    expect(parseKitOptions({ ...good, host: '192.168.000.010' }).host).toBe('192.168.0.10');
+    expect(parseKitOptions({ ...good, host: '010.001.000.255' }).host).toBe('10.1.0.255');
+    expect(parseKitOptions({ ...good, host: '000.000.000.000' }).host).toBe('0.0.0.0');
+    // un nome host non si tocca, nemmeno se fatto di cifre e trattini
+    expect(parseKitOptions({ ...good, host: 'plc-007.local' }).host).toBe('plc-007.local');
+  });
   it.each([
     null,
     'x',

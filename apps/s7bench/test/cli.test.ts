@@ -177,6 +177,17 @@ describe('s7bench', () => {
     expect(Buffer.compare(readFileSync(out), Buffer.from(DB5))).toBe(0);
   });
 
+  it('raccogli su un file esistente senza --sovrascrivi esce con 3 senza toccarlo, con --sovrascrivi riesce', async () => {
+    const zip = join(tmp, 'esiste.zip');
+    writeFileSync(zip, 'x');
+    const r = await net('raccogli', '-o', zip);
+    expect(r.code).toBe(3);
+    expect(readFileSync(zip, 'utf8')).toBe('x');
+    const ok = await net('raccogli', '-o', zip, '--sovrascrivi');
+    expect(ok.code).toBe(0);
+    expect(readKitZip(new Uint8Array(readFileSync(zip))).summary.refusedCount).toBe(0);
+  });
+
   it('--log scrive la cattura della connessione', async () => {
     const log = join(tmp, 'cattura.jsonl');
     const r = await net('ora', '--log', log);

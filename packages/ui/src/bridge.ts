@@ -56,8 +56,12 @@ export interface KitProgress {
 
 /** Riepilogo della raccolta come lo mostra la finestra (sottoinsieme del riepilogo del kit). */
 export interface KitSummary {
+  /** Indirizzo usato, in forma canonica. */
+  host?: string;
   identity?: { orderNumber: string; moduleName?: string };
   mode?: string;
+  /** Livelli di protezione letti dalla CPU (SZL 0x0132/0x0232 indice 4). */
+  protection?: { switchLevel?: number; paramLevel?: number; validLevel?: number };
   szlRead: number;
   blocksListed: number;
   blocksUploaded: number;
@@ -102,6 +106,8 @@ export interface BaaBridge {
   startKit(opts: KitStartOptions): Promise<KitStartResult>;
   cancelKit(): void;
   saveKitResult(): Promise<string | null>; // salva l'ultima raccolta; null se annullato
+  /** Riepilogo dell'ultima raccolta finita e non ancora salvata (dal processo principale), o null. */
+  kitUnsavedSummary(): Promise<KitSummary | null>;
   onKitProgress(cb: (p: KitProgress) => void): () => void;
   testOverrides(): Promise<{ recoveryIntervalMs?: number }>; // sempre {} nelle build pacchettizzate
 }

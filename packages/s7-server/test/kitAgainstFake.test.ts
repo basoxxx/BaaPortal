@@ -222,6 +222,24 @@ describe('kit contro il finto PLC', () => {
     expect(phases).toEqual(['connect', 'szl', 'identity', 'blocks', 'upload', 'done']);
   });
 
+  it('avanzamento: nessuna fase riporta "0 / 0"; l\'elenco dei tipi conta i tipi da elencare', async () => {
+    const events: KitProgress[] = [];
+    await run(
+      () => cpuWithBlocks(),
+      {},
+      undefined,
+      (p) => events.push(p),
+    );
+    expect(events.filter((p) => p.total === 0)).toEqual([]);
+    const listing = events.filter((p) => p.phase === 'blocks' && p.message.startsWith('Elenco'));
+    expect(listing.map((p) => [p.done, p.total])).toEqual([
+      [0, 4],
+      [1, 4],
+      [2, 4],
+      [3, 4],
+    ]); // OB, FB, FC, DB hanno blocchi
+  });
+
   it('pausa minima tra le richieste: con minIntervalMs 20 passa il tempo previsto', async () => {
     const cpu = new FakeCpu();
     const t0 = Date.now();

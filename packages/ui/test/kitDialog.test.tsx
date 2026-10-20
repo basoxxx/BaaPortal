@@ -92,6 +92,38 @@ describe('Raccolta dati CPU: finestra', () => {
     ]);
   });
 
+  it('un IPv4 con zeri iniziali parte in forma canonica e il riepilogo mostra quella', async () => {
+    const { user, bridge } = await renderApp({ view: 'project' });
+    bridge.kitResults.push({
+      ok: true,
+      savedTo: '/tmp/a.zip',
+      summary: { ...SUMMARY, host: '192.168.0.10' },
+    });
+    const dlg = await openViaMenu(user);
+    await user.type(within(dlg).getByLabelText('Indirizzo IP'), '192.168.000.010');
+    expect(within(dlg).getByRole('button', { name: 'Avvia' })).toBeEnabled();
+    await user.click(within(dlg).getByRole('button', { name: 'Avvia' }));
+    expect(bridge.kitStartCalls[0]!.host).toBe('192.168.0.10');
+    expect(await within(dlg).findByTestId('kit-summary')).toHaveTextContent('192.168.0.10');
+  });
+
+  it('un contatore 0 / 0 non si mostra', async () => {
+    const { user, bridge } = await renderApp({ view: 'project' });
+    const release = bridge.holdKit();
+    bridge.kitResults.push({ ok: true, savedTo: null, summary: SUMMARY });
+    const dlg = await openViaMenu(user);
+    await user.type(within(dlg).getByLabelText('Indirizzo IP'), '10.0.0.5');
+    await user.click(within(dlg).getByRole('button', { name: 'Avvia' }));
+    await bridge.emitKitProgress({ phase: 'blocks', done: 0, total: 0, message: 'Elenco DB' });
+    const progress = within(dlg).getByTestId('kit-progress');
+    expect(progress).toHaveTextContent('Elenco dei blocchi');
+    expect(progress).not.toHaveTextContent('0 / 0');
+    release();
+    await within(dlg).findByTestId('kit-summary');
+    dlg.focus();
+    await user.keyboard('{Escape}');
+  });
+
   it('avanzamento e Interrompi passano dal bridge', async () => {
     const { user, bridge } = await renderApp({ view: 'project' });
     const release = bridge.holdKit();
@@ -116,6 +148,7 @@ describe('Raccolta dati CPU: finestra', () => {
     release();
     await within(dlg).findByTestId('kit-summary');
     expect(bridge.listenerCount).toBe(3); // 2 di base + l'avanzamento, finché la finestra è aperta
+    bridge.confirmAnswers.push('discard'); // raccolta non salvata: la chiusura chiede conferma
     await user.click(within(dlg).getByRole('button', { name: 'Chiudi' }));
     expect(bridge.listenerCount).toBe(2);
   });
@@ -171,5 +204,163 @@ describe('Raccolta dati CPU: finestra', () => {
       'Salvataggio non riuscito: EACCES: permesso negato. Usa «Salva…» per riprovare.',
     );
     expect(within(dlg).getByRole('button', { name: 'Salva…' })).toBeInTheDocument();
+  });
+
+  describe('raccolta finita e non salvata', () => {
+    const finish = async (
+      ctx: Awaited<ReturnType<typeof renderApp>>,
+      summary: KitSummary = SUMMARY,
+    ) => {
+      ctx.bridge.kitResults.push({ ok: true, savedTo: null, summary });
+      const dlg = await openViaMenu(ctx.user);
+      await ctx.user.type(within(dlg).getByLabelText('Indirizzo IP'), '10.0.0.5');
+      await ctx.user.click(within(dlg).getByRole('button', { name: 'Avvia' }));
+      await within(dlg).findByTestId('kit-summary');
+      return dlg;
+    };
+
+    it('Esc chiede conferma; "Chiudi senza salvare" chiude', async () => {
+      const ctx = await renderApp({ view: 'project' });
+      const { user, bridge } = ctx;
+      const dlg = await finish(ctx);
+      bridge.confirmAnswers.push('discard');
+      dlg.focus();
+      await user.keyboard('{Escape}');
+      expect(bridge.confirmTexts).toHaveLength(1);
+      expect(bridge.confirmTexts[0]).toEqual({
+        title: 'Raccolta non salvata',
+        message: 'Chiudere senza salvare la raccolta? I dati raccolti andranno persi.',
+        yes: 'Salva…',
+        no: 'Chiudi senza salvare',
+        cancel: 'Annulla',
+      });
+      expect(dlg).not.toBeInTheDocument();
+      expect(bridge.kitSaveCalls).toBe(0);
+    });
+
+    it('"Chiudi" chiede conferma; "Annulla" lascia la finestra aperta', async () => {
+      const ctx = await renderApp({ view: 'project' });
+      const { user, bridge } = ctx;
+      const dlg = await finish(ctx);
+      bridge.confirmAnswers.push('cancel');
+      await user.click(within(dlg).getByRole('button', { name: 'Chiudi' }));
+      expect(bridge.confirmTexts).toHaveLength(1);
+      expect(dlg).toBeInTheDocument();
+      expect(within(dlg).getByTestId('kit-summary')).toBeInTheDocument();
+    });
+
+    it('"Salva…" nella conferma salva e, se il file è scritto, chiude', async () => {
+      const ctx = await renderApp({ view: 'project' });
+      const { user, bridge } = ctx;
+      const dlg = await finish(ctx);
+      bridge.confirmAnswers.push('save');
+      bridge.kitSaveResults.push('/tmp/k.zip');
+      dlg.focus();
+      await user.keyboard('{Escape}');
+      expect(bridge.kitSaveCalls).toBe(1);
+      expect(dlg).not.toBeInTheDocument();
+    });
+
+    it('"Salva…" nella conferma con salvataggio annullato lascia la finestra aperta', async () => {
+      const ctx = await renderApp({ view: 'project' });
+      const { user, bridge } = ctx;
+      const dlg = await finish(ctx);
+      bridge.confirmAnswers.push('save');
+      bridge.kitSaveResults.push(null);
+      dlg.focus();
+      await user.keyboard('{Escape}');
+      expect(bridge.kitSaveCalls).toBe(1);
+      expect(dlg).toBeInTheDocument();
+    });
+
+    it('dopo il salvataggio chiude senza chiedere nulla', async () => {
+      const ctx = await renderApp({ view: 'project' });
+      const { user, bridge } = ctx;
+      const dlg = await finish(ctx);
+      bridge.kitSaveResults.push('/tmp/k.zip');
+      await user.click(within(dlg).getByRole('button', { name: 'Salva…' }));
+      await within(dlg).findByText(/Salvato in/);
+      dlg.focus();
+      await user.keyboard('{Escape}');
+      expect(bridge.confirmTexts).toHaveLength(0);
+      expect(dlg).not.toBeInTheDocument();
+    });
+
+    it('riaprendo la finestra con una raccolta non salvata si vede il suo riepilogo, con Salva… e Nuova raccolta', async () => {
+      const { user, bridge } = await renderApp({ view: 'project' });
+      bridge.kitUnsaved = SUMMARY;
+      bridge.kitSaveResults.push('/tmp/k.zip');
+      const dlg = await openViaMenu(user);
+      const summary = await within(dlg).findByTestId('kit-summary');
+      expect(summary).toHaveTextContent('6ES7 315-2EH14-0AB0');
+      expect(within(dlg).queryByLabelText('Indirizzo IP')).not.toBeInTheDocument();
+      expect(within(dlg).getByTestId('kit-saved')).toHaveTextContent('non salvato');
+      await user.click(within(dlg).getByRole('button', { name: 'Salva…' }));
+      expect(bridge.kitSaveCalls).toBe(1);
+      expect(await within(dlg).findByTestId('kit-saved')).toHaveTextContent('/tmp/k.zip');
+    });
+
+    it('"Nuova raccolta" chiede conferma e riporta al modulo', async () => {
+      const { user, bridge } = await renderApp({ view: 'project' });
+      bridge.kitUnsaved = SUMMARY;
+      const dlg = await openViaMenu(user);
+      await within(dlg).findByTestId('kit-summary');
+      bridge.confirmAnswers.push('discard');
+      await user.click(within(dlg).getByRole('button', { name: 'Nuova raccolta' }));
+      expect(bridge.confirmTexts).toHaveLength(1);
+      expect(within(dlg).getByLabelText('Indirizzo IP')).toBeInTheDocument();
+      expect(within(dlg).queryByTestId('kit-summary')).not.toBeInTheDocument();
+    });
+
+    it('senza raccolta in sospeso la finestra si apre sul modulo', async () => {
+      const { user } = await renderApp({ view: 'project' });
+      const dlg = await openViaMenu(user);
+      expect(within(dlg).getByLabelText('Indirizzo IP')).toBeInTheDocument();
+      expect(within(dlg).queryByTestId('kit-summary')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('CPU protetta', () => {
+    const HINT =
+      'CPU protetta: i blocchi non si possono caricare senza password. Manda comunque lo zip: contiene il resto dei dati.';
+    const run = async (summary: KitSummary) => {
+      const { user, bridge } = await renderApp({ view: 'project' });
+      bridge.kitResults.push({ ok: true, savedTo: '/tmp/a.zip', summary });
+      const dlg = await openViaMenu(user);
+      await user.type(within(dlg).getByLabelText('Indirizzo IP'), '10.0.0.5');
+      await user.click(within(dlg).getByRole('button', { name: 'Avvia' }));
+      return within(dlg).findByTestId('kit-summary');
+    };
+    const denied = (n: number) => ({
+      step: `upload DB${n}`,
+      code: 'CPU_ERROR',
+      message: `upload DB${n}: classe 0xd2 codice 0x41 (funzione protetta)`,
+    });
+
+    it('tutti gli upload rifiutati con 0xD241: suggerimento', async () => {
+      const s = await run({
+        ...SUMMARY,
+        blocksListed: 2,
+        blocksUploaded: 0,
+        errors: [denied(1), denied(2)],
+      });
+      expect(s).toHaveTextContent(HINT);
+    });
+
+    it('livello di protezione 2 o più letto: suggerimento', async () => {
+      const s = await run({ ...SUMMARY, errors: [], protection: { validLevel: 2 } });
+      expect(s).toHaveTextContent(HINT);
+    });
+
+    it('nessun suggerimento se solo alcuni upload falliscono o la protezione è bassa', async () => {
+      const a = await run({
+        ...SUMMARY,
+        blocksListed: 3,
+        blocksUploaded: 1,
+        errors: [denied(1), denied(2)],
+        protection: { validLevel: 1 },
+      });
+      expect(a).not.toHaveTextContent('CPU protetta');
+    });
   });
 });

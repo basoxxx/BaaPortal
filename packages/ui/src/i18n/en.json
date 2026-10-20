@@ -677,6 +677,15 @@
     "autoSaveFailed": "Saving failed: {{error}}. Use “Save…” to try again.",
     "saveFailed": "Saving failed: {{error}}",
     "failed": "Collection failed: {{error}}",
-    "noConnection": "The CPU did not answer: check the address, the network cable and the slot. The zip still contains the log."
+    "noConnection": "The CPU did not answer: check the address, the network cable and the slot. The zip still contains the log.",
+    "newRun": "New collection",
+    "protectedHint": "Protected CPU: the blocks cannot be uploaded without a password. Please still send the zip: it contains the rest of the data.",
+    "confirmClose": {
+      "title": "Collection not saved",
+      "message": "Close without saving the collection? The collected data will be lost.",
+      "save": "Save…",
+      "discard": "Close without saving",
+      "cancel": "Cancel"
+    }
   }
 }

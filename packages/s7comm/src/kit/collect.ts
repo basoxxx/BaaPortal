@@ -371,9 +371,9 @@ export async function collect(
     const listed: { type: BlockType; entry: BlockListEntry }[] = [];
     if (counts.ok) {
       summary.blockCounts = counts.value;
-      for (const t of TYPES) {
-        if (!(counts.value[t] > 0)) continue;
-        progress('blocks', 0, 0, `Elenco ${t}`);
+      const toList = TYPES.filter((t) => counts.value[t] > 0);
+      for (const [i, t] of toList.entries()) {
+        progress('blocks', i, toList.length, `Elenco ${t}`);
         const r = await step(`listBlocks ${t}`, (c) => c.listBlocks(t));
         if (r.ok) for (const entry of r.value) listed.push({ type: t, entry });
       }

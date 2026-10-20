@@ -19,6 +19,32 @@ export function isValidKitHost(host: string): boolean {
   return true;
 }
 
+/** `192.168.000.010` diventa `192.168.0.10`; un nome host resta com'è. Presuppone `isValidKitHost`. */
+export function canonicalKitHost(host: string): string {
+  return /^[0-9.]+$/.test(host)
+    ? host
+        .split('.')
+        .map((p) => String(Number(p)))
+        .join('.')
+    : host;
+}
+
+const PROTECTED_LEVEL = 2;
+
+/**
+ * CPU protetta da password: livello di protezione 2 o più letto dalla CPU, oppure tutti gli upload
+ * dei blocchi elencati rifiutati con l'errore 0xD241 (funzione protetta da password).
+ */
+export function isKitCpuProtected(s: KitSummary): boolean {
+  const level = s.protection?.validLevel ?? s.protection?.paramLevel ?? s.protection?.switchLevel;
+  if (level !== undefined && level >= PROTECTED_LEVEL) return true;
+  if (s.blocksListed === 0 || s.blocksUploaded > 0) return false;
+  const denied = s.errors.filter(
+    (e) => e.step.startsWith('upload ') && /0xd2\b.*0x41\b/i.test(e.message),
+  );
+  return denied.length >= s.blocksListed;
+}
+
 const intInRange = (v: string, min: number, max: number): number | null => {
   if (!/^\d+$/.test(v.trim())) return null;
   const n = Number(v);
@@ -45,6 +71,9 @@ export function KitDialog({ onClose }: { onClose(): void }) {
   const [error, setError] = useState<string | null>(null);
   const stageRef = useRef<Stage>('form');
   stageRef.current = stage;
+  const confirmingRef = useRef(false);
+  const savedToRef = useRef<string | null>(null);
+  savedToRef.current = savedTo;
 
   useEffect(() => {
     const off = bridge.onKitProgress((p) => setProgress(p));
@@ -52,6 +81,26 @@ export function KitDialog({ onClose }: { onClose(): void }) {
       off();
       // Se la finestra sparisce durante la raccolta (p.es. l'app viene smontata) la raccolta si ferma.
       if (stageRef.current === 'running') bridge.cancelKit();
+    };
+  }, [bridge]);
+
+  // Riaprendo la finestra con una raccolta finita e non salvata (tenuta dal processo principale) si
+  // riparte dal suo riepilogo: i dati raccolti non devono perdersi per aver chiuso la finestra.
+  useEffect(() => {
+    let alive = true;
+    void bridge
+      .kitUnsavedSummary()
+      .then((r) => {
+        if (!alive || !r || stageRef.current !== 'form') return;
+        setSummary(r);
+        setSavedTo(null);
+        setSaveError(null);
+        setStage('done');
+        stageRef.current = 'done';
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
     };
   }, [bridge]);
 
@@ -66,7 +115,7 @@ export function KitDialog({ onClose }: { onClose(): void }) {
   const start = async () => {
     if (!valid || stage !== 'form' || portN === null || rackN === null || slotN === null) return;
     const opts: KitStartOptions = {
-      host: hostTrim,
+      host: canonicalKitHost(hostTrim),
       port: portN,
       rack: rackN,
       slot: slotN,
@@ -94,18 +143,58 @@ export function KitDialog({ onClose }: { onClose(): void }) {
     }
   };
 
-  const save = async () => {
+  /** Salva; true se il file è stato scritto (false se annullato o in errore). */
+  const save = async (): Promise<boolean> => {
     setError(null);
     try {
       const path = await bridge.saveKitResult();
-      if (path) {
-        setSavedTo(path);
-        setSaveError(null);
-      }
+      if (!path) return false;
+      savedToRef.current = path;
+      setSavedTo(path);
+      setSaveError(null);
+      return true;
     } catch (e) {
       setError(t('kit.saveFailed', { error: e instanceof Error ? e.message : String(e) }));
+      return false;
     }
   };
+
+  /**
+   * Con la raccolta finita e non salvata, chiudere (o ricominciare) la perderebbe: si chiede conferma.
+   * `then` è ciò che l'utente voleva fare (chiudere o tornare al modulo).
+   */
+  const leave = async (then: () => void) => {
+    if (stageRef.current !== 'done' || savedToRef.current !== null) return then();
+    if (confirmingRef.current) return;
+    confirmingRef.current = true;
+    try {
+      const answer = await bridge.confirmUnsaved({
+        title: t('kit.confirmClose.title'),
+        message: t('kit.confirmClose.message'),
+        yes: t('kit.confirmClose.save'),
+        no: t('kit.confirmClose.discard'),
+        cancel: t('kit.confirmClose.cancel'),
+      });
+      if (answer === 'cancel') return;
+      if (answer === 'save' && !(await save())) return;
+      then();
+    } finally {
+      confirmingRef.current = false;
+    }
+  };
+  const requestClose = () => {
+    if (!running) void leave(onClose);
+  };
+  const newRun = () =>
+    void leave(() => {
+      setSummary(null);
+      setSavedTo(null);
+      setSaveError(null);
+      setError(null);
+      setProgress(null);
+      setStage('form');
+      stageRef.current = 'form';
+    });
 
   const footer = (
     <>
@@ -124,12 +213,17 @@ export function KitDialog({ onClose }: { onClose(): void }) {
           {t('kit.save')}
         </button>
       ) : null}
+      {stage === 'done' ? (
+        <button type="button" onClick={newRun}>
+          {t('kit.newRun')}
+        </button>
+      ) : null}
       {stage !== 'done' ? (
         <button type="button" disabled={running} onClick={onClose}>
           {t('kit.cancel')}
         </button>
       ) : (
-        <button type="button" onClick={onClose}>
+        <button type="button" onClick={requestClose}>
           {t('kit.close')}
         </button>
       )}
@@ -165,9 +259,7 @@ export function KitDialog({ onClose }: { onClose(): void }) {
   return (
     <Dialog
       title={t('kit.title')}
-      onClose={() => {
-        if (!running) onClose();
-      }}
+      onClose={requestClose}
       onOk={() => void start()}
       okDisabled={!valid || stage !== 'form'}
       footer={footer}
@@ -175,60 +267,86 @@ export function KitDialog({ onClose }: { onClose(): void }) {
     >
       <div className="baa-dialog-form">
         <p>{t('kit.readOnly')}</p>
-        <div className="baa-dialog-field">
-          <label htmlFor={ids.host}>{t('kit.host')}</label>
-          <input
-            id={ids.host}
-            type="text"
-            value={host}
-            disabled={stage !== 'form'}
-            aria-invalid={hostTrim !== '' && !hostOk ? true : undefined}
-            onChange={(e) => setHost(e.target.value)}
-          />
-          {hostTrim !== '' && !hostOk ? (
-            <span role="alert" className="baa-field-error">
-              {t('kit.hostInvalid')}
-            </span>
-          ) : null}
-        </div>
-        <details>
-          <summary>{t('kit.advanced')}</summary>
-          <div className="baa-dialog-form">
-            {field(ids.port, t('kit.port'), port, setPort, portN !== null, t('kit.portInvalid'))}
-            {field(ids.rack, t('kit.rack'), rack, setRack, rackN !== null, t('kit.rackInvalid'))}
-            {field(ids.slot, t('kit.slot'), slot, setSlot, slotN !== null, t('kit.slotInvalid'))}
+        {stage !== 'done' ? (
+          <>
             <div className="baa-dialog-field">
-              <label htmlFor={ids.type}>{t('kit.connectionType')}</label>
-              <select
-                id={ids.type}
-                value={type}
+              <label htmlFor={ids.host}>{t('kit.host')}</label>
+              <input
+                id={ids.host}
+                type="text"
+                value={host}
                 disabled={stage !== 'form'}
-                onChange={(e) => setType(e.target.value as KitConnectionType)}
-              >
-                {TYPES.map((v) => (
-                  <option key={v} value={v}>
-                    {t(`kit.type.${v}`)}
-                  </option>
-                ))}
-              </select>
+                aria-invalid={hostTrim !== '' && !hostOk ? true : undefined}
+                onChange={(e) => setHost(e.target.value)}
+              />
+              {hostTrim !== '' && !hostOk ? (
+                <span role="alert" className="baa-field-error">
+                  {t('kit.hostInvalid')}
+                </span>
+              ) : null}
             </div>
-          </div>
-        </details>
-        <label className="baa-dialog-row">
-          <input
-            type="checkbox"
-            checked={includeBlocks}
-            disabled={stage !== 'form'}
-            onChange={(e) => setIncludeBlocks(e.target.checked)}
-          />
-          {t('kit.includeBlocks')}
-        </label>
+            <details>
+              <summary>{t('kit.advanced')}</summary>
+              <div className="baa-dialog-form">
+                {field(
+                  ids.port,
+                  t('kit.port'),
+                  port,
+                  setPort,
+                  portN !== null,
+                  t('kit.portInvalid'),
+                )}
+                {field(
+                  ids.rack,
+                  t('kit.rack'),
+                  rack,
+                  setRack,
+                  rackN !== null,
+                  t('kit.rackInvalid'),
+                )}
+                {field(
+                  ids.slot,
+                  t('kit.slot'),
+                  slot,
+                  setSlot,
+                  slotN !== null,
+                  t('kit.slotInvalid'),
+                )}
+                <div className="baa-dialog-field">
+                  <label htmlFor={ids.type}>{t('kit.connectionType')}</label>
+                  <select
+                    id={ids.type}
+                    value={type}
+                    disabled={stage !== 'form'}
+                    onChange={(e) => setType(e.target.value as KitConnectionType)}
+                  >
+                    {TYPES.map((v) => (
+                      <option key={v} value={v}>
+                        {t(`kit.type.${v}`)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </details>
+            <label className="baa-dialog-row">
+              <input
+                type="checkbox"
+                checked={includeBlocks}
+                disabled={stage !== 'form'}
+                onChange={(e) => setIncludeBlocks(e.target.checked)}
+              />
+              {t('kit.includeBlocks')}
+            </label>
+          </>
+        ) : null}
         {running ? (
           <div data-testid="kit-progress" role="status" aria-live="polite">
             {progress ? (
               <>
                 <div>
-                  {t(`kit.phase.${progress.phase}`)} {progress.done} / {progress.total}
+                  {t(`kit.phase.${progress.phase}`)}
+                  {progress.total > 0 ? ` ${progress.done} / ${progress.total}` : ''}
                 </div>
                 <div className="baa-dialog-fact">{progress.message}</div>
               </>
@@ -243,6 +361,11 @@ export function KitDialog({ onClose }: { onClose(): void }) {
         {stage === 'done' && summary ? (
           <div data-testid="kit-summary">
             <h3>{t('kit.summary')}</h3>
+            {summary.host ? (
+              <div>
+                {t('kit.host')}: {summary.host}
+              </div>
+            ) : null}
             <div>
               {t('kit.cpu')}: {summary.identity?.moduleName ?? t('kit.unknown')}
             </div>
@@ -264,6 +387,11 @@ export function KitDialog({ onClose }: { onClose(): void }) {
             {!summary.identity && summary.errors.length > 0 ? (
               <span role="alert" className="baa-field-error">
                 {t('kit.noConnection')}
+              </span>
+            ) : null}
+            {isKitCpuProtected(summary) ? (
+              <span role="note" className="baa-field-error">
+                {t('kit.protectedHint')}
               </span>
             ) : null}
             <details>

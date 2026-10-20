@@ -62,20 +62,57 @@ describe('kit: legato alla finestra che lo avvia', () => {
     expect((await run).ok).toBe(true);
   });
 
-  it('kit:save da un altro mittente dà ok:false e non scrive', async () => {
+  it('una raccolta finita si salva da qualunque finestra fidata (la proprietaria potrebbe non esserci più)', async () => {
     const a = sender();
     const b = sender();
-    showSaveDialog.mockResolvedValue({ canceled: false, filePath: '/tmp/x.zip' });
-    const run = call('kit:start', a, opts) as Promise<{ ok: boolean; savedTo: string }>;
+    showSaveDialog.mockResolvedValue({ canceled: true });
+    const run = call('kit:start', a, opts) as Promise<{ ok: boolean; savedTo: string | null }>;
     await vi.waitFor(() => expect(release).not.toBeNull());
     release!();
-    expect((await run).savedTo).toBe('/tmp/x.zip');
-    writeFileAtomic.mockClear();
-    const other = (await call('kit:save', b)) as { ok: boolean; error?: string };
-    expect(other.ok).toBe(false);
-    expect(other.error).toBeTruthy();
+    expect((await run).savedTo).toBeNull();
+    showSaveDialog.mockResolvedValue({ canceled: false, filePath: '/tmp/x.zip' });
+    expect(await call('kit:save', b)).toEqual({ ok: true, path: '/tmp/x.zip' });
+    expect(writeFileAtomic).toHaveBeenCalledTimes(1);
+  });
+
+  it('kit:save senza nessuna raccolta dà ok:false e non scrive', async () => {
+    const r = (await call('kit:save', sender())) as { ok: boolean; error?: string };
+    expect(r.ok).toBe(false);
+    expect(r.error).toBeTruthy();
     expect(writeFileAtomic).not.toHaveBeenCalled();
+  });
+
+  it('kit:hasUnsaved: dopo una raccolta non salvata dà il riepilogo; dopo un salvataggio riuscito o una nuova raccolta è null', async () => {
+    const a = sender();
+    expect(await call('kit:hasUnsaved', a)).toBeNull();
+    showSaveDialog.mockResolvedValue({ canceled: true });
+    let run = call('kit:start', a, opts) as Promise<unknown>;
+    await vi.waitFor(() => expect(release).not.toBeNull());
+    release!();
+    await run;
+    expect(await call('kit:hasUnsaved', sender())).toEqual({ identity: { orderNumber: 'X' } });
+    // un salvataggio annullato non lo cancella
+    expect(await call('kit:save', a)).toEqual({ ok: true, path: null });
+    expect(await call('kit:hasUnsaved', a)).not.toBeNull();
+    // un salvataggio riuscito sì
+    showSaveDialog.mockResolvedValue({ canceled: false, filePath: '/tmp/x.zip' });
     expect(await call('kit:save', a)).toEqual({ ok: true, path: '/tmp/x.zip' });
+    expect(await call('kit:hasUnsaved', a)).toBeNull();
+    // ...e una nuova raccolta lo azzera mentre è in corso
+    release = null;
+    showSaveDialog.mockResolvedValue({ canceled: true });
+    run = call('kit:start', a, opts) as Promise<unknown>;
+    await vi.waitFor(() => expect(release).not.toBeNull());
+    expect(await call('kit:hasUnsaved', a)).toBeNull();
+    release!();
+    await run;
+    expect(await call('kit:hasUnsaved', a)).not.toBeNull();
+    release = null;
+    run = call('kit:start', a, opts) as Promise<unknown>;
+    await vi.waitFor(() => expect(release).not.toBeNull());
+    expect(await call('kit:hasUnsaved', a)).toBeNull();
+    release!();
+    await run;
   });
 
   it('se il salvataggio automatico fallisce, startKit riporta saveError', async () => {

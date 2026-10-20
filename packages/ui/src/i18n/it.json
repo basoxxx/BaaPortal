@@ -677,6 +677,15 @@
     "autoSaveFailed": "Salvataggio non riuscito: {{error}}. Usa «Salva…» per riprovare.",
     "saveFailed": "Salvataggio non riuscito: {{error}}",
     "failed": "Raccolta non riuscita: {{error}}",
-    "noConnection": "La CPU non ha risposto: controlla indirizzo, cavo di rete e slot. Lo zip contiene comunque il registro."
+    "noConnection": "La CPU non ha risposto: controlla indirizzo, cavo di rete e slot. Lo zip contiene comunque il registro.",
+    "newRun": "Nuova raccolta",
+    "protectedHint": "CPU protetta: i blocchi non si possono caricare senza password. Manda comunque lo zip: contiene il resto dei dati.",
+    "confirmClose": {
+      "title": "Raccolta non salvata",
+      "message": "Chiudere senza salvare la raccolta? I dati raccolti andranno persi.",
+      "save": "Salva…",
+      "discard": "Chiudi senza salvare",
+      "cancel": "Annulla"
+    }
   }
 }

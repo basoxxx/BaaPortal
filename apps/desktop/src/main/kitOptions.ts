@@ -13,6 +13,16 @@ function validHost(host: unknown): host is string {
   return true;
 }
 
+/** `192.168.000.010` diventa `192.168.0.10`; un nome host resta com'è. Presuppone `validHost`. */
+export function canonicalHost(host: string): string {
+  return /^[0-9.]+$/.test(host)
+    ? host
+        .split('.')
+        .map((p) => String(Number(p)))
+        .join('.')
+    : host;
+}
+
 function intIn(v: unknown, min: number, max: number, name: string): number {
   if (typeof v !== 'number' || !Number.isInteger(v) || v < min || v > max)
     throw new RangeError(`${name} non valido: deve essere un intero tra ${min} e ${max}`);
@@ -34,7 +44,7 @@ export function parseKitOptions(v: unknown): KitStartOptions {
   if (typeof o['includeBlocks'] !== 'boolean')
     throw new RangeError('includeBlocks deve essere vero o falso');
   return {
-    host: o['host'],
+    host: canonicalHost(o['host']),
     port,
     rack,
     slot,
