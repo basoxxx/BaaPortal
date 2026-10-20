@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   collect,
+  memoryTransportPair,
+  type Transport,
+  type TransportFactory,
   kitZip,
   parseBlockFile,
   readKitZip,
@@ -8,7 +11,7 @@ import {
   type KitProgress,
 } from '@baaportal/s7comm';
 import { collectTcp } from '@baaportal/s7comm/node';
-import { FakeCpu } from '../src';
+import { FakeCpu, serve } from '../src';
 import { listen } from '../src/node';
 import {
   ALLOWED,
@@ -37,6 +40,13 @@ const run = (
     onProgress,
     signal,
   );
+
+/** Come cpuWithBlocks, con 30 DB in più: abbastanza passi per più di 20 riusciti tra due cadute. */
+const withMany = (o: ConstructorParameters<typeof FakeCpu>[0] = {}): FakeCpu => {
+  const cpu = cpuWithBlocks(o);
+  for (let i = 10; i < 40; i++) cpu.addDb(i, new Uint8Array(8));
+  return cpu;
+};
 
 describe('kit contro il finto PLC', () => {
   it('5 blocchi: zip completo, blocchi identici a quelli messi', async () => {
@@ -148,20 +158,20 @@ describe('kit contro il finto PLC', () => {
   });
 
   it('due cadute lontane (oltre 20 passi riusciti in mezzo): il budget di riapertura si ricarica e la raccolta è completa', async () => {
-    const clean = await run(() => cpuWithBlocks());
+    const clean = await run(() => withMany());
     const rx = readKitZip(kitZip(clean)).frames.filter((f) => f.dir === 'rx').length;
     const r = await run((n) =>
-      cpuWithBlocks({
+      withMany({
         faults:
           n === 0
             ? { dropAfterResponses: Math.floor(rx * 0.3) }
             : n === 1
-              ? { dropAfterResponses: Math.floor(rx * 0.35) }
+              ? { dropAfterResponses: Math.floor(rx * 0.5) }
               : {},
       }),
     );
     expect(r.summary.errors.filter((e) => e.code === 'CLOSED')).toHaveLength(2);
-    expect(r.summary.blocksUploaded).toBe(5);
+    expect(r.summary.blocksUploaded).toBe(35);
     expect(r.summary.clock).toBeDefined();
   });
 
@@ -390,5 +400,74 @@ describe('kit con pause e guasti', () => {
     const z = readKitZip(kitZip(r));
     expect(uploadIds(z.frames).started).toHaveLength(1);
     expect(uploadViolations(z.frames)).toEqual([]);
+  });
+});
+
+describe('kit: la fine della raccolta non si inghiotte e le riaperture sono sempre limitate', () => {
+  /**
+   * Trasporto in memoria che registra ogni connessione. `closeAfter(n)` dice dopo quante frame ricevute
+   * la CPU chiude la connessione n-esima (subito dopo averle consegnate: a passo finito, il client se ne
+   * accorge alla richiesta successiva, non dentro una richiesta).
+   */
+  const rig = (cpu: FakeCpu, closeAfter: (n: number) => number = () => Infinity) => {
+    const conns: { at: number; cpuEnd: Transport }[] = [];
+    const factory: TransportFactory = async () => {
+      const [a, b] = memoryTransportPair();
+      serve(cpu, b);
+      const limit = closeAfter(conns.length);
+      conns.push({ at: Date.now(), cpuEnd: b });
+      let rx = 0;
+      const onData = a.onData.bind(a);
+      a.onData = (cb) =>
+        onData((chunk) => {
+          cb(chunk);
+          if (++rx === limit) b.close();
+        });
+      return a;
+    };
+    return { conns, factory };
+  };
+  const go = (
+    factory: TransportFactory,
+    o: Partial<KitOptions>,
+    onProgress: (p: KitProgress) => void,
+    signal?: AbortSignal,
+  ) => collect({ ...FAST, includeBlocks: false, transport: factory, ...o }, onProgress, signal);
+
+  it('(a) client chiuso a budget esaurito: la raccolta finisce subito, senza nuove connessioni', async () => {
+    // la prima connessione cade a passo finito (si riapre, budget 1 -> 0), la seconda poco dopo
+    const { conns, factory } = rig(cpuWithBlocks(), () => 8);
+    const r = await go(factory, { reconnectDelayMs: 0 }, () => undefined);
+    expect(conns).toHaveLength(2);
+    // (la finta rifiuta alcune SZL con CPU_ERROR: sono rumore atteso, qui contano le chiusure)
+    expect(
+      r.summary.errors.filter((e) => e.code === 'CLOSED').map((e) => [e.step, e.code]),
+    ).toEqual([
+      ['connect', 'CLOSED'],
+      ['connect', 'CLOSED'],
+    ]);
+    expect(r.summary.errors.at(-1)).toMatchObject({ step: 'connect', code: 'CLOSED' });
+    expect(r.summary.clock).toBeUndefined();
+  });
+
+  it('(b) collegamento che cade a ogni risposta: connessioni <= 2 più una ogni 20 passi riusciti, a distanza di reconnectDelayMs', async () => {
+    const { conns, factory } = rig(cpuWithBlocks(), () => 3);
+    const r = await go(factory, { reconnectDelayMs: 40 }, () => undefined);
+    expect(conns.length).toBeLessThanOrEqual(2 + Math.floor(r.summary.szlRead / 20));
+    for (let i = 1; i < conns.length; i++) {
+      expect(conns[i]!.at - conns[i - 1]!.at).toBeGreaterThanOrEqual(35);
+    }
+  });
+
+  it('(c) annullamento durante la riapertura: ABORTED e la raccolta finisce', async () => {
+    const { conns, factory } = rig(cpuWithBlocks(), () => 8);
+    const ac = new AbortController();
+    const t0 = Date.now();
+    setTimeout(() => ac.abort(), 150);
+    const r = await go(factory, { reconnectDelayMs: 5000 }, () => undefined, ac.signal);
+    expect(Date.now() - t0).toBeLessThan(3000);
+    expect(conns).toHaveLength(1);
+    expect(r.summary.errors.at(-1)!.code).toBe('ABORTED');
+    expect(r.summary.errors.some((e) => e.code === 'PROTOCOL')).toBe(false);
   });
 });

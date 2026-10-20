@@ -72,6 +72,7 @@ export function KitDialog({ onClose }: { onClose(): void }) {
   const stageRef = useRef<Stage>('form');
   stageRef.current = stage;
   const confirmingRef = useRef(false);
+  const summaryRef = useRef<HTMLDivElement>(null);
   const savedToRef = useRef<string | null>(null);
   savedToRef.current = savedTo;
 
@@ -103,6 +104,12 @@ export function KitDialog({ onClose }: { onClose(): void }) {
       alive = false;
     };
   }, [bridge]);
+
+  // Nello stato finale il modulo sparisce e con lui il focus: lo si porta sul riepilogo, dentro la
+  // finestra, così Esc arriva ancora al suo gestore (e la conferma di chiusura compare).
+  useEffect(() => {
+    if (stage === 'done') summaryRef.current?.focus();
+  }, [stage]);
 
   const hostTrim = host.trim();
   const hostOk = isValidKitHost(hostTrim);
@@ -359,7 +366,7 @@ export function KitDialog({ onClose }: { onClose(): void }) {
           </span>
         ) : null}
         {stage === 'done' && summary ? (
-          <div data-testid="kit-summary">
+          <div data-testid="kit-summary" ref={summaryRef} tabIndex={-1}>
             <h3>{t('kit.summary')}</h3>
             {summary.host ? (
               <div>

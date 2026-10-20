@@ -280,6 +280,8 @@ export async function collect(
       try {
         c = await ensure();
       } catch (e) {
+        // La fine della raccolta non è un errore da registrare né da ritentare: sale fino al ciclo principale.
+        if (e instanceof EndRun) throw e;
         if ((await handle('connect', e)) === 'retry') continue;
         return { ok: false };
       }
@@ -289,6 +291,7 @@ export async function collect(
         if (++okStreak >= RECONNECT_RESET_STEPS) reconnects = 0;
         return { ok: true, value };
       } catch (e) {
+        if (e instanceof EndRun) throw e;
         if ((await handle(name, e)) === 'retry') continue;
         return { ok: false };
       }

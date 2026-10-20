@@ -238,6 +238,15 @@ describe('Raccolta dati CPU: finestra', () => {
       expect(bridge.kitSaveCalls).toBe(0);
     });
 
+    it('Esc con nulla di focalizzato a mano nello stato finale mostra comunque la conferma', async () => {
+      const ctx = await renderApp({ view: 'project' });
+      const { user, bridge } = ctx;
+      await finish(ctx);
+      bridge.confirmAnswers.push('cancel');
+      await user.keyboard('{Escape}'); // senza dlg.focus()
+      expect(bridge.confirmTexts).toHaveLength(1);
+    });
+
     it('"Chiudi" chiede conferma; "Annulla" lascia la finestra aperta', async () => {
       const ctx = await renderApp({ view: 'project' });
       const { user, bridge } = ctx;
