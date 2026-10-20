@@ -221,6 +221,8 @@ describe('conformità: ogni metodo di S7Client contro il finto PLC', () => {
           expect((await cl.blockInfo('DB', 1)).number).toBe(1);
           expect(await cl.readClock()).toEqual(NOW);
           if (level === 3) {
+            // ASSUNZIONE: il rifiuto 0xD241 della lettura variabili a livello 3 è una scelta del
+            // finto PLC, non visto su una CPU vera (la sola cattura protetta è di snap7: item 0x0A)
             await expect(cl.readArea('M', 0, 100, 4)).rejects.toMatchObject({
               code: 'CPU_ERROR',
               detail: { errorClass: 0xd2, errorCode: 0x41 },

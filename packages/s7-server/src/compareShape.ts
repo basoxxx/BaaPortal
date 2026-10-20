@@ -1,5 +1,7 @@
 import {
+  decodeReadRequest,
   decodeReadResponse,
+  itemByteLength,
   decodeUserdata,
   type DecodedUserdata,
   type ItemResult,
@@ -17,6 +19,27 @@ export interface CompareOptions {
    * livello di protezione) e la finta no, non è una differenza di forma: entrambe hanno risposto.
    */
   allowStateErrors?: boolean;
+  /**
+   * La richiesta di lettura variabili a cui rispondono le due PDU: serve a controllare che i
+   * dati di ogni item riuscito abbiano la lunghezza che la richiesta chiede.
+   */
+  request?: S7Pdu;
+}
+
+/**
+ * Errori che dipendono dallo stato della CPU e non dalla richiesta, gli unici che con
+ * `allowStateErrors` possono differire: header o userdata 0xD241 (protezione), 0xD209 (blocco
+ * assente), 0xD20C (upload di un blocco assente), 0xD20E (nessun blocco di quel tipo); item 0x0A
+ * (oggetto inesistente) e 0x01 (errore hardware). Gli altri (item 0x05, 0x06, 0x07, 0x03...)
+ * li decide la sola richiesta e devono essere identici.
+ */
+const STATE_PDU_ERRORS = new Set([0xd241, 0xd209, 0xd20c, 0xd20e]);
+const STATE_ITEM_ERRORS = new Set([0x0a, 0x01]);
+
+/** Codice 16 bit dell'errore di una risposta (header o parametro userdata), 0 se non c'è. */
+function pduErrorCode(p: S7Pdu): number {
+  if (p.rosctr === 7) return userdataOf(p)?.param.errorCode ?? 0;
+  return (p.errorClass << 8) | p.errorCode;
 }
 
 /**
@@ -45,9 +68,6 @@ export function errorOf(p: S7Pdu): string | undefined {
 }
 
 const h = (n: number | undefined): string => (n === undefined ? '-' : `0x${n.toString(16)}`);
-
-/** Classe del return code di un item: riuscito o in errore (il codice esatto dipende dallo stato). */
-const rcClass = (r: ItemResult): 'ok' | 'errore' => (r.ok ? 'ok' : 'errore');
 
 function items(p: S7Pdu): ItemResult[] | undefined {
   try {
@@ -89,12 +109,36 @@ export function compareShape(real: S7Pdu, fake: S7Pdu, opts: CompareOptions = {}
   const diff = (what: string, a: unknown, b: unknown): void => {
     if (a !== b) out.push(`${what}: vera ${String(a)}, finta ${String(b)}`);
   };
-  if (opts.allowStateErrors && errorOf(real) !== undefined && errorOf(fake) === undefined) {
-    return out; // la CPU vera ha un altro stato: entrambe hanno risposto
+  const realCode = pduErrorCode(real);
+  const fakeCode = pduErrorCode(fake);
+  const stateCode = !!opts.allowStateErrors && STATE_PDU_ERRORS.has(realCode);
+  // La CPU vera ha un altro stato (blocco assente, protezione) e la finta ha risposto davvero:
+  // entrambe hanno risposto. Una risposta d'errore e una riuscita hanno per forza ROSCTR e
+  // parametro diversi, quindi qui si confronta solo che sia la stessa funzione.
+  const answeredBoth = stateCode && fakeCode === 0 && errorOf(fake) === undefined;
+  if (!answeredBoth) {
+    diff('ROSCTR', real.rosctr, fake.rosctr);
+    if (real.rosctr !== fake.rosctr) return out;
+    diff('lunghezza parametro', real.param.length, fake.param.length);
+    // codice d'errore esatto, salvo i codici di stato della CPU vera
+    if ((realCode !== 0 || fakeCode !== 0) && !stateCode) {
+      diff("codice d'errore", h(realCode), h(fakeCode));
+    }
+  } else if ((real.rosctr === 7) !== (fake.rosctr === 7)) {
+    diff('ROSCTR', real.rosctr, fake.rosctr);
+    return out;
+  } else if (real.rosctr !== 7 && real.param.length > 0 && fake.param.length > 0) {
+    diff('funzione', h(real.param[0]), h(fake.param[0]));
   }
-  diff('ROSCTR', real.rosctr, fake.rosctr);
-  if (real.rosctr !== fake.rosctr) return out;
-  diff('lunghezza parametro', real.param.length, fake.param.length);
+  if (answeredBoth && real.rosctr === 7) {
+    const a = userdataOf(real);
+    const b = userdataOf(fake);
+    if (a && b) {
+      diff('gruppo', a.param.group, b.param.group);
+      diff('sottofunzione', a.param.subfunction, b.param.subfunction);
+    }
+  }
+  if (answeredBoth) return out;
 
   if (real.rosctr === 7) {
     const a = userdataOf(real);
@@ -107,7 +151,6 @@ export function compareShape(real: S7Pdu, fake: S7Pdu, opts: CompareOptions = {}
     diff('byte method', h(a.param.methodByte), h(b.param.methodByte));
     diff('gruppo', a.param.group, b.param.group);
     diff('sottofunzione', a.param.subfunction, b.param.subfunction);
-    diff('errore nel parametro', (a.param.errorCode ?? 0) !== 0, (b.param.errorCode ?? 0) !== 0);
     const szlFirst = a.param.group === 4 && !opts.continuation && a.returnCode === 0xff;
     if (!szlFirst || b.returnCode !== 0xff) {
       diff('frammentazione (last data unit)', !!a.param.lastDataUnit, !!b.param.lastDataUnit);
@@ -172,11 +215,6 @@ export function compareShape(real: S7Pdu, fake: S7Pdu, opts: CompareOptions = {}
   }
 
   // job (ack, ROSCTR 2 o 3)
-  diff(
-    "errore nell'header",
-    real.errorClass !== 0 || real.errorCode !== 0,
-    fake.errorClass !== 0 || fake.errorCode !== 0,
-  );
   diff('funzione', h(real.param[0]), h(fake.param[0]));
   const fn = real.param[0];
   if (fn === 0x1e && real.param.length > 1 && fake.param.length > 1) {
@@ -185,15 +223,44 @@ export function compareShape(real: S7Pdu, fake: S7Pdu, opts: CompareOptions = {}
   if (fn === 0x04) {
     const a = items(real);
     const b = items(fake);
+    let asked: ReturnType<typeof decodeReadRequest> | undefined;
+    try {
+      asked = opts.request ? decodeReadRequest(opts.request.param) : undefined;
+    } catch {
+      asked = undefined;
+    }
     if (a && b) {
       diff('numero di item', a.length, b.length);
       for (let i = 0; i < Math.min(a.length, b.length); i++) {
         const x = a[i]!;
         const y = b[i]!;
-        if (opts.allowStateErrors && !x.ok && y.ok) continue;
-        diff(`item ${i} classe del return code`, rcClass(x), rcClass(y));
+        const want = asked?.[i] ? itemByteLength(asked[i]!) : undefined;
+        for (const [who, r] of [
+          ['vera', x],
+          ['finta', y],
+        ] as const) {
+          if (r.ok && want !== undefined && r.data.length !== want) {
+            out.push(
+              `item ${i} lunghezza dati ${who}: ${r.data.length} byte, la richiesta ne chiede ${want}`,
+            );
+          }
+        }
         if (x.ok && y.ok) {
           diff(`item ${i} transport size`, h(x.transportSize), h(y.transportSize));
+        } else if (x.ok !== y.ok) {
+          // vera in errore e finta riuscita: ammesso solo per un errore di stato della CPU vera
+          if (!(opts.allowStateErrors && !x.ok && STATE_ITEM_ERRORS.has(x.returnCode))) {
+            diff(
+              `item ${i} return code`,
+              x.ok ? 'ok' : h(x.returnCode),
+              y.ok ? 'ok' : h(y.returnCode),
+            );
+          }
+        } else if (!x.ok && !y.ok) {
+          // entrambe in errore: codice esatto, salvo gli errori di stato della vera
+          if (!(opts.allowStateErrors && STATE_ITEM_ERRORS.has(x.returnCode))) {
+            diff(`item ${i} return code`, h(x.returnCode), h(y.returnCode));
+          }
         }
       }
     } else if (!a !== !b) {

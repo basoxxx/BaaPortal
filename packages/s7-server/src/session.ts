@@ -347,6 +347,10 @@ class Session {
   }
 
   private readVar(p: S7Pdu): S7Pdu {
+    // ASSUNZIONE, non verificata su una CPU vera: a livello 3 la lettura variabili è rifiutata
+    // con 0xD241 nell'header (come l'upload, visto su s7ident.pcap). L'unica cattura di lettura
+    // protetta è di un server snap7, che risponde con 0x0A per item: il client gestisce
+    // entrambe le forme (vedi client.test.ts, "lettura protetta").
     if (this.cpu.config.protectionLevel === 3) return headerError(p, ERR.PROTECTED);
     let items;
     try {

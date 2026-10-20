@@ -367,7 +367,19 @@ async function replay(name: string, stream: CaptureStream): Promise<Tally> {
     if (realErr) {
       bump(t.codes, `${x.kind}: reale ${realErr} / finta ${errorOf(fake) ?? 'ok'}`);
     }
-    const d = compareShape(x.resp, fake, { continuation, allowStateErrors: true });
+    if (x.kind === 'readVar') {
+      const ra = decodeReadResponse(x.resp.param, x.resp.data);
+      const fa = decodeReadResponse(fake.param, fake.data);
+      ra.forEach((r, i) => {
+        if (r.ok) return;
+        const f = fa[i];
+        bump(
+          t.codes,
+          `item: reale 0x${r.returnCode.toString(16)} / finta ${f?.ok ? 'ok' : `0x${f?.returnCode.toString(16)}`}`,
+        );
+      });
+    }
+    const d = compareShape(x.resp, fake, { continuation, allowStateErrors: true, request: req });
     t.compared++;
     bump(t.kinds, x.kind);
     if (realErr && errorOf(fake) === undefined) t.stateErrors++;

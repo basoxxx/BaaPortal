@@ -254,14 +254,13 @@ describe('robustezza: sessioni ripetute e connessioni simultanee', () => {
         }
         await r.close();
         await sleep(100);
+        await new Promise((res) => setImmediate(res)); // un macrotask: i callback di chiusura sono passati
         const after = counts();
         for (const k of ['TCPSocketWrap', 'TCPServerWrap', 'Timeout', 'Immediate']) {
-          // qualche timer del test runner può esserci; sockets e server no
-          const slack = k === 'Timeout' || k === 'Immediate' ? 3 : 0;
           expect(
             after[k] ?? 0,
             `${k} prima ${JSON.stringify(before)} dopo ${JSON.stringify(after)}`,
-          ).toBeLessThanOrEqual((before[k] ?? 0) + slack);
+          ).toBeLessThanOrEqual(before[k] ?? 0);
         }
       },
     );

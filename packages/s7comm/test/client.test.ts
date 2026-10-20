@@ -510,6 +510,40 @@ describe('variabili', () => {
     expect(e.message).toMatch(/0x85/);
   });
 
+  it('lettura protetta: header 0xD241 dà CPU_ERROR (readArea e readItems), item 0x0A dà { ok: false }', async () => {
+    const one = [{ area: 'M' as const, db: 0, start: 0, size: 'BYTE' as const, count: 1 }];
+    // forma 1: la CPU rifiuta l'intera richiesta (ipotesi del finto PLC a livello 3)
+    const header = await rig({
+      override: (p) =>
+        p.param[0] === 0x04
+          ? { rosctr: 2, param: none, data: none, errorClass: 0xd2, errorCode: 0x41 }
+          : undefined,
+    });
+    for (const call of [
+      () => header.client.readItems(one),
+      () => header.client.readArea('M', 0, 0, 1),
+    ]) {
+      const e = await call().catch((x: unknown) => x);
+      expect(e).toBeInstanceOf(S7Error);
+      expect(e).toMatchObject({ code: 'CPU_ERROR', detail: { errorClass: 0xd2, errorCode: 0x41 } });
+    }
+    // forma 2: ack con l'errore per item, come un server snap7 protetto
+    const perItem = await rig({
+      override: (p) => {
+        if (p.param[0] !== 0x04) return undefined;
+        const { param, data } = encodeReadResponse([
+          { ok: false, returnCode: 0x0a, name: 'oggetto non disponibile' },
+        ]);
+        return { rosctr: 3, param, data };
+      },
+    });
+    expect(await perItem.client.readItems(one)).toMatchObject([{ ok: false, returnCode: 0x0a }]);
+    await expect(perItem.client.readArea('M', 0, 0, 1)).rejects.toMatchObject({
+      code: 'CPU_ERROR',
+      detail: { returnCode: 0x0a },
+    });
+  });
+
   it('una risposta con meno item o byte di quelli chiesti è PROTOCOL', async () => {
     const { client } = await rig({
       override: (p) => {
