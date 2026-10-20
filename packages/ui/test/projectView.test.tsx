@@ -55,7 +55,7 @@ describe('vista progetto: struttura', () => {
       'Elimina',
       'Annulla',
       'Ripeti',
-      'Compila',
+      'Compila → Software (solo modifiche)',
       'Carica nel dispositivo',
       'Carica dal dispositivo…',
       'Simulazione',

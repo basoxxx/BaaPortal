@@ -97,3 +97,17 @@
 .baa-source-editor .cm-scroller {
   min-height: 20em;
 }
+
+.baa-readonly-banner,
+.baa-raw-hint {
+  margin: 4px 0;
+  padding: 3px 8px;
+  font-size: 0.9em;
+}
+.baa-readonly-banner {
+  background: var(--baa-selection);
+  border-left: 3px solid var(--baa-online);
+}
+.baa-raw-hint {
+  color: var(--baa-disabled);
+}

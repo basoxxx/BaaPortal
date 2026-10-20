@@ -13,6 +13,8 @@ import { CommitInput, CommitTextarea } from '../../components/CommitField';
 import { ContextMenu } from '../../components/ContextMenu';
 import { AwlEditor, type AwlEditorHandle } from '../awl/AwlEditor';
 import { displayText } from '../awl/awlExtensions';
+import { offsetOfLineCol } from '../../project/navigation/sourceActions';
+import { hasRawLines, isLockedImport, lockedBannerKey } from './readOnlyImport';
 import { useMnemonic } from '../awl/mnemonicPreference';
 import { useAppStore, useServices } from '../../state/AppContext';
 
@@ -64,7 +66,8 @@ export function NetworksView({ deviceId, blockId }: Props) {
       store.getState().edit(labelKey, (p) => {
         const dev = findDevice(p, deviceId);
         const b = dev?.blocks.find((x) => x.id === blockId);
-        if (dev && b && b.kind !== 'DB' && b.kind !== 'IDB') recipe(b, dev);
+        // Un blocco importato non ricodificabile non si modifica.
+        if (dev && b && b.kind !== 'DB' && b.kind !== 'IDB' && !isLockedImport(b)) recipe(b, dev);
       }),
     [store, deviceId, blockId],
   );
@@ -129,7 +132,18 @@ export function NetworksView({ deviceId, blockId }: Props) {
   }, [awlCtx, networks, mnemonic, scheduleCheck]);
   useEffect(() => () => clearTimeout(timer.current), []);
 
+  // Un clic su un messaggio di compilazione porta il cursore a rete e riga (come i Problemi).
+  const reveal = useAppStore((s) => s.compileReveal);
+  useEffect(() => {
+    if (!reveal || reveal.blockId !== blockId || reveal.deviceId !== deviceId || !block) return;
+    const n = reveal.network > 0 ? block.networks[reveal.network - 1] : undefined;
+    const handle = n && handles.current.get(n.id);
+    if (handle) handle.focusAt(offsetOfLineCol(handle.getText(), Math.max(reveal.line, 1), 1));
+    store.getState().clearCompileReveal(reveal.n);
+  }, [reveal, block, blockId, deviceId, store]);
+
   if (!block) return null;
+  const locked = isLockedImport(block);
   const editHeader = (field: 'title' | 'comment', value: string) =>
     edit('history.editBlockHeader', (b) => {
       b.header[field] = value;
@@ -153,11 +167,17 @@ export function NetworksView({ deviceId, blockId }: Props) {
   };
   return (
     <div className="baa-block-networks">
+      {locked ? (
+        <p className="baa-readonly-banner" role="note" data-testid="readonly-banner">
+          {t(lockedBannerKey(block))}
+        </p>
+      ) : null}
       <div className="baa-block-header">
         <label>
           <span>{t('block.title')}</span>
           <CommitInput
             value={block.header.title}
+            readOnly={locked}
             aria-label={t('block.title')}
             onCommit={(v) => editHeader('title', v)}
           />
@@ -175,6 +195,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
           <span>{t('block.comment')}</span>
           <CommitTextarea
             value={block.header.comment}
+            readOnly={locked}
             rows={2}
             aria-label={t('block.comment')}
             onCommit={(v) => editHeader('comment', v)}
@@ -193,6 +214,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
             <strong>{t('block.network', { n: i + 1 })}</strong>
             <CommitInput
               value={n.title}
+              readOnly={locked}
               aria-label={`${t('block.networkTitle')} ${i + 1}`}
               onCommit={(v) => editNetwork(n.id, 'title', v)}
             />
@@ -211,14 +233,21 @@ export function NetworksView({ deviceId, blockId }: Props) {
           </header>
           <CommitTextarea
             value={n.comment}
+            readOnly={locked}
             rows={1}
             aria-label={`${t('block.networkComment')} ${i + 1}`}
             onCommit={(v) => editNetwork(n.id, 'comment', v)}
           />
+          {isAwl && hasRawLines(n.source) ? (
+            <p className="baa-raw-hint" data-testid="raw-hint">
+              {t('block.rawHint')}
+            </p>
+          ) : null}
           {isAwl ? (
             <div className="baa-network-source">
               <AwlEditor
                 value={n.source}
+                readOnly={locked}
                 mnemonic={mnemonic}
                 aria-label={`${t('block.source')} ${i + 1}`}
                 diagnostics={byNetwork[n.id] ?? NO_DIAGNOSTICS}
@@ -239,6 +268,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
             <div className="baa-network-source" title={t('block.sourceHint')}>
               <CommitTextarea
                 value={n.source}
+                readOnly={locked}
                 rows={6}
                 aria-label={`${t('block.source')} ${i + 1}`}
                 onCommit={(v) => editNetwork(n.id, 'source', v)}
@@ -276,7 +306,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
           </ul>
         </section>
       ) : null}
-      <button type="button" className="baa-block-insert" onClick={insert}>
+      <button type="button" className="baa-block-insert" onClick={insert} disabled={locked}>
         {t('block.insertNetwork')}
       </button>
       {menu ? (
@@ -289,7 +319,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
             {
               id: 'delete',
               label: t('block.deleteNetwork'),
-              disabled: only,
+              disabled: only || locked,
               run: () => remove(menu.id),
             },
           ]}

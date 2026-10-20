@@ -20,6 +20,12 @@ import { useEditTarget } from '../../state/useEditTarget';
 import { areaOfItem, isStandardTable } from '../objectActions';
 import { useMnemonic } from '../../editors/awl/mnemonicPreference';
 import { editorOfNode } from '../../state/workArea';
+import {
+  blockNodesOf,
+  compileProgram,
+  exportCompiledBlock,
+  importBlocks,
+} from '../compile/compileActions';
 import { runAddNode } from './addActions';
 import {
   addGroupAt,
@@ -282,6 +288,48 @@ export function ProjectTree() {
             },
           ]
         : [];
+    const inNodes = selected.has(nodeId) ? selectedIds : [nodeId];
+    const compileItems: ContextMenuItem[] = [];
+    if (parsed.kind === 'plc' || (parsed.kind === 'folder' && parsed.folder === 'blocks')) {
+      compileItems.push(
+        {
+          id: 'compileChanges',
+          label: t('objects.compileChanges'),
+          separator: true,
+          run: () => compileProgram(ctx, parsed.dev, 'changes'),
+        },
+        {
+          id: 'compileFull',
+          label: t('objects.compileFull'),
+          run: () => compileProgram(ctx, parsed.dev, 'full'),
+        },
+      );
+    }
+    if (parsed.kind === 'folder' && parsed.folder === 'blocks') {
+      compileItems.push({
+        id: 'importBlocks',
+        label: t('objects.importBlocks'),
+        run: () => void settle(importBlocks(ctx, parsed.dev)),
+      });
+    }
+    if (parsed.kind === 'block') {
+      const blocks = blockNodesOf(inNodes);
+      compileItems.push(
+        {
+          id: 'compileBlock',
+          label: t('objects.compile'),
+          separator: true,
+          disabled: !blocks,
+          run: () => blocks && compileProgram(ctx, blocks.deviceId, 'full', blocks.ids),
+        },
+        {
+          id: 'exportCompiled',
+          label: t('objects.exportCompiled'),
+          disabled: inNodes.length !== 1,
+          run: () => void settle(exportCompiledBlock(ctx, parsed.dev, parsed.id)),
+        },
+      );
+    }
     return [
       {
         id: 'open',
@@ -314,6 +362,7 @@ export function ProjectTree() {
       },
       ...sourceItems,
       ...generateItems,
+      ...compileItems,
       {
         id: 'properties',
         label: t('objects.properties'),

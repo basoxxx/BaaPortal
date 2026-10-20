@@ -117,4 +117,29 @@ describe('store', () => {
       expect(get().doc!.revision).toBe(2);
     });
   });
+  it('finishCompile: un blocco fallito conserva l’ultimo file buono con la sua impronta', () => {
+    const store = createAppStore();
+    const summary = { blocks: 1, errors: 0, warnings: 0 };
+    const good = new Uint8Array([1, 2, 3]);
+    store.getState().finishCompile({
+      rows: [],
+      summary,
+      compiled: { b1: { hash: 'H1', file: good, diagnostics: [] } },
+      failed: [],
+    });
+    store.getState().finishCompile({ rows: [], summary, compiled: {}, failed: ['b1'] });
+    const c = store.getState().compile;
+    expect(c.files['b1']).toBe(good);
+    expect(c.hashes['b1']).toBe('H1');
+    // una compilazione riuscita lo sostituisce
+    const next = new Uint8Array([9]);
+    store.getState().finishCompile({
+      rows: [],
+      summary,
+      compiled: { b1: { hash: 'H2', file: next, diagnostics: [] } },
+      failed: [],
+    });
+    expect(store.getState().compile.files['b1']).toBe(next);
+    expect(store.getState().compile.hashes['b1']).toBe('H2');
+  });
 });

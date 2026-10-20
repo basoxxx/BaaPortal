@@ -20,6 +20,7 @@ import {
   useDeviceDiagnostics,
 } from '../../state/diagnostics';
 import { normalizeType } from '../tags/tagRows';
+import { isLockedImport } from './readOnlyImport';
 import {
   applyType,
   cloneMembers,
@@ -117,6 +118,11 @@ export function InterfaceTable({ deviceId, target, label, valueHeaderKey }: Prop
     [device, target.kind, target.id],
   );
   const ownerKind = owner?.kind;
+  // Un blocco importato non ricodificabile si guarda soltanto.
+  const locked =
+    !!device &&
+    target.kind === 'block' &&
+    isLockedImport(device.blocks.find((b) => b.id === target.id));
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(
     () => new Set(ownerKind ? defaultExpanded(ownerKind) : []),
   );
@@ -138,7 +144,14 @@ export function InterfaceTable({ deviceId, target, label, valueHeaderKey }: Prop
   // così la griglia ridisegna solo le righe cambiate.
   const prevRows = useRef(new Map<string, InterfaceRow>());
   const rows = useMemo(() => {
-    const fresh = owner && device ? interfaceRows(owner, device, expanded) : [];
+    const built = owner && device ? interfaceRows(owner, device, expanded) : [];
+    const fresh = locked
+      ? built.map((r) => ({
+          ...r,
+          readOnly: true,
+          editable: { name: false, type: false, initial: false, comment: false },
+        }))
+      : built;
     const next = new Map<string, InterfaceRow>();
     const out = fresh.map((r) => {
       const old = prevRows.current.get(r.key);
@@ -148,11 +161,11 @@ export function InterfaceTable({ deviceId, target, label, valueHeaderKey }: Prop
     });
     prevRows.current = next;
     return out;
-  }, [owner, device, expanded]);
+  }, [owner, device, expanded, locked]);
   const byKey = useMemo(() => new Map(rows.map((r) => [r.key, r])), [rows]);
   const slots = useMemo(
-    () => (ownerKind ? addSlots(rows, ownerKind, expanded) : []),
-    [rows, ownerKind, expanded],
+    () => (ownerKind && !locked ? addSlots(rows, ownerKind, expanded) : []),
+    [rows, ownerKind, expanded, locked],
   );
 
   const cellDiag = useMemo(() => {
@@ -182,12 +195,13 @@ export function InterfaceTable({ deviceId, target, label, valueHeaderKey }: Prop
 
   const edit = useCallback(
     (labelKey: string, recipe: (dev: PlcDevice, owner: InterfaceOwner) => void) =>
+      !locked &&
       store.getState().edit(labelKey, (p) => {
         const dev = findDevice(p, deviceId);
         const o = dev && ownerOf(dev, target);
         if (dev && o) recipe(dev, o);
       }),
-    [store, deviceId, target.kind, target.id],
+    [store, deviceId, target.kind, target.id, locked],
   );
 
   const suggestOwner = ownerKind === 'IDB' ? undefined : ownerKind;
@@ -478,7 +492,7 @@ export function InterfaceTable({ deviceId, target, label, valueHeaderKey }: Prop
   );
 
   if (!owner) return null;
-  const editable = owner.kind !== 'IDB';
+  const editable = owner.kind !== 'IDB' && !locked;
   return (
     <>
       {problems.length > 0 ? (

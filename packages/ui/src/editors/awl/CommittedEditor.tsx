@@ -38,11 +38,18 @@ export interface CommittedEditorProps {
   /** Ad ogni modifica del testo mostrato (anche quelle esterne). */
   onChange?(textShown: string): void;
   'aria-label': string;
+  /** Sola lettura: il testo si vede e si seleziona ma non si scrive. */
+  readOnly?: boolean;
   className?: string;
   ref?: React.Ref<CommittedEditorHandle>;
 }
 
 const external = Annotation.define<boolean>();
+
+const lockExtension = (readOnly: boolean): Extension => [
+  EditorState.readOnly.of(readOnly),
+  EditorView.editable.of(!readOnly),
+];
 
 interface Session {
   /** Il testo salvato a cui l'editor si riferisce. */
@@ -68,6 +75,7 @@ export function CommittedEditor(p: CommittedEditorProps): React.JSX.Element {
   const viewRef = useRef<EditorView | null>(null);
   const latest = useRef(p);
   const label = useRef(new Compartment());
+  const lock = useRef(new Compartment());
   const s = useRef<Session>({
     baseline: p.value,
     eol: lineEndingOf(p.value),
@@ -119,6 +127,7 @@ export function CommittedEditor(p: CommittedEditorProps): React.JSX.Element {
           history(),
           keymap.of([...defaultKeymap, ...historyKeymap]),
           ...(latest.current.extensions ?? []),
+          lock.current.of(lockExtension(!!latest.current.readOnly)),
           label.current.of(
             EditorView.contentAttributes.of({
               role: 'textbox',
@@ -160,6 +169,10 @@ export function CommittedEditor(p: CommittedEditorProps): React.JSX.Element {
       viewRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({ effects: lock.current.reconfigure(lockExtension(!!p.readOnly)) });
+  }, [p.readOnly]);
 
   useEffect(() => {
     viewRef.current?.dispatch({

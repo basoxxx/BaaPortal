@@ -3,6 +3,7 @@ import type { BaaBridge } from '../bridge';
 import type { IconName } from '../icons';
 import type { ProjectService } from '../services/projectService';
 import type { AppState, EditAction, PanelName } from '../state/store';
+import { compileProgram } from '../project/compile/compileActions';
 import { targetPlcId } from '../project/navigation/treeIds';
 
 export type CommandId =
@@ -26,6 +27,7 @@ export type CommandId =
   | 'edit.findReplace'
   | 'edit.selectAll'
   | 'edit.compile'
+  | 'edit.compileFull'
   | 'view.navigation'
   | 'view.details'
   | 'view.inspector'
@@ -174,7 +176,21 @@ const list: Command[] = [
   editCommand('edit.rename', 'rename', 'F2'),
   def('edit.findReplace', { icon: 'search' }),
   editCommand('edit.selectAll', 'selectAll', 'Mod+A'),
-  def('edit.compile', { icon: 'compile' }),
+  def('edit.compile', {
+    icon: 'compile',
+    isEnabled: hasPlc,
+    run: ({ store, bridge }) => {
+      const deviceId = targetPlcId(store.getState());
+      if (deviceId) compileProgram({ store, bridge }, deviceId, 'changes');
+    },
+  }),
+  def('edit.compileFull', {
+    isEnabled: hasPlc,
+    run: ({ store, bridge }) => {
+      const deviceId = targetPlcId(store.getState());
+      if (deviceId) compileProgram({ store, bridge }, deviceId, 'full');
+    },
+  }),
   panelToggle('view.navigation', 'navigation'),
   panelToggle('view.details', 'details'),
   panelToggle('view.inspector', 'inspector'),

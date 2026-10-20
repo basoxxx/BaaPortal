@@ -73,6 +73,10 @@ export function BlockProperties({ deviceId, blockId }: { deviceId: string; block
       />
     ) : null;
 
+  // un blocco importato e protetto non può perdere la protezione: la casella resta bloccata
+  const knowHowFixed =
+    block.mc7?.knowHowLocked === true || (block.mc7 !== undefined && block.knowHowProtected);
+
   return (
     <div className="baa-prop-panel">
       <PropertySection title={t('props.section.general')}>
@@ -115,7 +119,8 @@ export function BlockProperties({ deviceId, blockId }: { deviceId: string; block
         <CheckField
           label={t('props.knowHow')}
           checked={block.knowHowProtected}
-          hint={t('props.knowHowHint')}
+          hint={knowHowFixed ? t('props.knowHowLockedHint') : t('props.knowHowHint')}
+          disabled={knowHowFixed}
           onChange={(v) => setBlock((b) => void (b.knowHowProtected = v))}
         />
         {attr(t('props.unlinked'), 'unlinked')}

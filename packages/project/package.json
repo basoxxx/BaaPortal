@@ -12,8 +12,13 @@
   "dependencies": {
     "@baaportal/awl": "*",
     "@baaportal/catalog": "*",
+    "@baaportal/mc7": "*",
     "@baaportal/s7-types": "*",
     "fflate": "^0.8.3",
     "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@baaportal/s7-server": "*",
+    "@baaportal/s7comm": "*"
   }
 }

@@ -755,3 +755,34 @@
   cursor: pointer;
   text-decoration: underline;
 }
+
+/* Informazioni → Compila */
+.baa-compile-list,
+.baa-compile-messages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.baa-compile-row {
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--baa-border, transparent);
+}
+.baa-compile-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.baa-compile-tag,
+.baa-compile-counts {
+  color: var(--baa-disabled);
+}
+.baa-compile-messages {
+  margin: 2px 0 2px 24px;
+}
+.baa-compile-messages .is-error {
+  color: #c0392b;
+}
+.baa-compile-summary {
+  margin: 6px;
+  font-weight: 600;
+}

@@ -28,12 +28,20 @@ export interface AwlSymbolInfo {
   name: string;
   kind: 'tag' | 'constant';
   type: DataType | null;
+  /** Tag: indirizzo assoluto come nella tabella dei simboli (`%M10.0`, `MW 4`, `T 5`); serve al compilatore. */
+  address?: string;
+  /** Costante: valore come nella tabella (`100`, `16#FF`); serve al compilatore. */
+  value?: string;
 }
 
 export interface AwlContext {
   owner: { kind: 'OB' | 'FB' | 'FC'; iface: AwlInterface };
   /** Tag o costante globale (il confronto dei nomi e' `sameName`). */
-  symbol(name: string): { kind: 'tag' | 'constant'; type: DataType | null } | undefined;
+  symbol(
+    name: string,
+  ):
+    | { kind: 'tag' | 'constant'; type: DataType | null; address?: string; value?: string }
+    | undefined;
   block(
     ref: { name: string } | { kind: AwlBlockInfo['kind']; number: number },
   ): AwlBlockInfo | undefined;

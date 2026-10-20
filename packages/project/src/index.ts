@@ -7,3 +7,4 @@ export * from './checks';
 export * from './memberRename';
 export * from './awlContext';
 export * from './codeRename';
+export * from './mc7Bridge';

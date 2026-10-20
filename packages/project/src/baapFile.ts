@@ -137,6 +137,7 @@ const blockBase = {
   group: str,
   header: headerSchema,
   knowHowProtected: z.boolean(),
+  mc7: obj({ exact: z.boolean(), sourceHash: str, original: str }).optional(),
 };
 const blockSchema = z.discriminatedUnion('kind', [
   obj({

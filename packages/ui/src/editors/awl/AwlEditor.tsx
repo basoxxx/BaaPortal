@@ -33,6 +33,8 @@ export interface AwlEditorProps {
   /** Ad ogni modifica del testo mostrato (anche quelle esterne). */
   onChange?(textShown: string): void;
   'aria-label': string;
+  /** Sola lettura (blocco importato non ricodificabile). */
+  readOnly?: boolean;
   ref?: React.Ref<AwlEditorHandle>;
 }
 
@@ -134,6 +136,7 @@ export function AwlEditor(p: AwlEditorProps): React.JSX.Element {
       onCommit={p.onCommit}
       {...(p.onChange ? { onChange: p.onChange } : {})}
       aria-label={p['aria-label']}
+      {...(p.readOnly ? { readOnly: true } : {})}
     />
   );
 }

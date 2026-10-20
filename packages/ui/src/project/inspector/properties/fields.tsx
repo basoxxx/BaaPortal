@@ -78,6 +78,7 @@ export function CheckField(p: {
   checked: boolean;
   onChange(v: boolean): void;
   hint?: ReactNode;
+  disabled?: boolean;
 }) {
   const id = useId();
   return (
@@ -87,6 +88,7 @@ export function CheckField(p: {
         id={id}
         type="checkbox"
         checked={p.checked}
+        disabled={p.disabled}
         aria-describedby={p.hint ? `${id}-hint` : undefined}
         onChange={(e) => p.onChange(e.target.checked)}
       />

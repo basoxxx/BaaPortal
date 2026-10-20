@@ -1,7 +1,7 @@
-import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppStore, useServices } from '../../state/AppContext';
-import type { InspectorTab } from '../../state/store';
+import type { InfoSubTab, InspectorTab } from '../../state/store';
+import { CompileMessages } from '../compile/CompileMessages';
 import { InfoMessages } from './InfoMessages';
 import { parseNodeId } from '../navigation/treeIds';
 import { ProjectProperties } from './ProjectProperties';
@@ -10,9 +10,8 @@ import { PlcProperties } from './properties/PlcProperties';
 import { TagTableProperties } from './properties/TagTableProperties';
 import { UdtProperties } from './properties/UdtProperties';
 
-type SubTab = 'general' | 'crossRefs' | 'compile';
 const TABS: InspectorTab[] = ['properties', 'info', 'diagnostics'];
-const SUBTABS: SubTab[] = ['general', 'crossRefs', 'compile'];
+const SUBTABS: InfoSubTab[] = ['general', 'crossRefs', 'compile'];
 
 /** Il pannello delle proprietà dipende dal nodo selezionato. */
 function Properties() {
@@ -39,7 +38,8 @@ export function Inspector() {
   const { store } = useServices();
   const tab = useAppStore((s) => s.inspectorTab);
   const setTab = (id: InspectorTab) => store.getState().setInspectorTab(id);
-  const [sub, setSub] = useState<SubTab>('general');
+  const sub = useAppStore((s) => s.infoSubTab);
+  const setSub = (id: InfoSubTab) => store.getState().setInfoSubTab(id);
   return (
     <div className="baa-inspector">
       <div role="tablist" className="baa-tabs" aria-label={t('panel.inspector')}>
@@ -102,9 +102,7 @@ export function Inspector() {
               {sub === 'crossRefs' ? (
                 <p className="baa-placeholder">{t('inspector.crossRefsEmpty')}</p>
               ) : null}
-              {sub === 'compile' ? (
-                <p className="baa-placeholder">{t('inspector.compileEmpty')}</p>
-              ) : null}
+              {sub === 'compile' ? <CompileMessages /> : null}
             </div>
           </div>
         ) : null}

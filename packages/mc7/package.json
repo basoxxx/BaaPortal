@@ -1,0 +1,20 @@
+{
+  "name": "@baaportal/mc7",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@baaportal/awl": "*",
+    "@baaportal/s7-types": "*"
+  },
+  "devDependencies": {
+    "@baaportal/catalog": "*",
+    "@baaportal/s7comm": "*"
+  }
+}

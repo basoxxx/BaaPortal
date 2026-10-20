@@ -62,11 +62,17 @@ export function createAwlContext(
   cpu: CpuType | undefined,
 ): AwlContext {
   const symbols: AwlSymbolInfo[] = device.tagTables.flatMap((t) => [
-    ...t.tags.map((x) => ({ name: x.name, kind: 'tag' as const, type: typeOrNull(x.type) })),
+    ...t.tags.map((x) => ({
+      name: x.name,
+      kind: 'tag' as const,
+      type: typeOrNull(x.type),
+      address: x.address,
+    })),
     ...t.constants.map((x) => ({
       name: x.name,
       kind: 'constant' as const,
       type: typeOrNull(x.type),
+      value: x.value,
     })),
   ]);
   // Prima i blocchi del progetto, poi SFC e SFB del catalogo.
