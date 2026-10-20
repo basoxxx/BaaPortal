@@ -107,7 +107,7 @@ Regole:
 - COTP: CR/CC con i parametri `0xC0`, `0xC1`, `0xC2` (proto §2.2); DT con il bit EOT. Le PDU S7 che arrivano su più DT si ricompongono finché EOT = 1 (proto §2.6).
 - `remoteTsap`: tipo PG = 1, OP = 2, base = 3; rack 0–7 e slot 0–31, altrimenti `RangeError`. Formula in proto §2.3.
 
-- [ ] **Step 1: Scrivi i test che falliscono**
+- [x] **Step 1: Scrivi i test che falliscono**
 
   ```ts
   it('CR e CC reali di proto §17.1 si decodificano e si ricodificano identici', () => { /* hex → decode → encode === hex */ });
@@ -117,19 +117,19 @@ Regole:
   it('decodeCotp su 200 sequenze casuali non lancia altro che S7Error', () => { /* … */ });
   ```
 
-- [ ] **Step 2: Esegui e verifica che falliscano**
+- [x] **Step 2: Esegui e verifica che falliscano**
 
   Run: `npx vitest run --project s7comm`
   Expected: FAIL.
 
-- [ ] **Step 3: Implementa** pacchetto (struttura come `packages/awl`), framing e TSAP.
+- [x] **Step 3: Implementa** pacchetto (struttura come `packages/awl`), framing e TSAP.
 
-- [ ] **Step 4: Esegui test, typecheck e lint**
+- [x] **Step 4: Esegui test, typecheck e lint**
 
   Run: `npx vitest run --project s7comm && npm run typecheck && npm run lint`
   Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
   ```bash
   git add packages/s7comm docs/protocollo/s7comm.md package-lock.json
@@ -171,7 +171,7 @@ Regole:
 - Codici area, transport size, return code, padding tra item e lunghezze in bit o byte secondo proto §5.3–§5.10. Timer e contatori: proto §5.8.
 - `planReads`: al massimo 20 item per richiesta. Ogni richiesta deve stare nella PDU sia come richiesta sia come risposta (proto §5.11). Un item da solo più grande della PDU non è ammesso: lo divide `splitArea`, che con PDU 240 fa pezzi di al massimo 222 byte.
 
-- [ ] **Step 1: Scrivi i test che falliscono**
+- [x] **Step 1: Scrivi i test che falliscono**
 
   ```ts
   it('setup communication reale di proto §17.2: richiesta e risposta, PDU 480 → 240', () => { /* … */ });
@@ -183,13 +183,13 @@ Regole:
   it('encodeS7(decodeS7(x)) === x per ogni vettore di proto §17', () => { /* … */ });
   ```
 
-- [ ] **Step 2: Esegui e verifica che falliscano**
+- [x] **Step 2: Esegui e verifica che falliscano**
 
-- [ ] **Step 3: Implementa**
+- [x] **Step 3: Implementa**
 
-- [ ] **Step 4: Esegui test, typecheck e lint**
+- [x] **Step 4: Esegui test, typecheck e lint**
 
-- [ ] **Step 5: Commit** — `feat(s7comm): header S7, codici di errore, setup communication e lettura di variabili`
+- [x] **Step 5: Commit** — `feat(s7comm): header S7, codici di errore, setup communication e lettura di variabili`
 
 ---
 
@@ -239,7 +239,7 @@ Regole:
 - Stringhe ASCII: si tolgono spazi e zeri finali.
 - Campi di cui il documento non conosce il significato: si conservano grezzi, senza interpretarli.
 
-- [ ] **Step 1: Scrivi i test che falliscono**
+- [x] **Step 1: Scrivi i test che falliscono**
 
   ```ts
   it('SZL 0x0011 reale di proto §17.5: ordine "6ES7 315-2EH14-0AB0"', () => { /* … */ });
@@ -250,13 +250,13 @@ Regole:
   it('ora BCD di proto §17.12 in andata e ritorno; mese 13 → S7Error PROTOCOL', () => { /* … */ });
   ```
 
-- [ ] **Step 2: Esegui e verifica che falliscano**
+- [x] **Step 2: Esegui e verifica che falliscano**
 
-- [ ] **Step 3: Implementa**
+- [x] **Step 3: Implementa**
 
-- [ ] **Step 4: Esegui test, typecheck e lint**
+- [x] **Step 4: Esegui test, typecheck e lint**
 
-- [ ] **Step 5: Commit** — `feat(s7comm): userdata, liste SZL, funzioni blocco e ora`
+- [x] **Step 5: Commit** — `feat(s7comm): userdata, liste SZL, funzioni blocco e ora`
 
 ---
 
@@ -287,7 +287,7 @@ Regole:
 - `parseBlockFile` non lancia mai su blocchi veri: se il footer non torna, restituisce `footer: null` e i byte restano intatti.
 - I blocchi si conservano **opachi**: nessuna funzione modifica i byte di un blocco caricato.
 
-- [ ] **Step 1: Scrivi i test che falliscono**
+- [x] **Step 1: Scrivi i test che falliscono**
 
   ```ts
   it('sequenza reale di proto §17.8: start (id e lunghezza 216), upload (EoU 0), end', () => { /* … */ });
@@ -296,13 +296,13 @@ Regole:
   it('parseBlockFile su un blocco troncato restituisce footer null o S7Error PROTOCOL, mai altro', () => { /* … */ });
   ```
 
-- [ ] **Step 2: Esegui e verifica che falliscano**
+- [x] **Step 2: Esegui e verifica che falliscano**
 
-- [ ] **Step 3: Implementa**
+- [x] **Step 3: Implementa**
 
-- [ ] **Step 4: Esegui test, typecheck e lint**
+- [x] **Step 4: Esegui test, typecheck e lint**
 
-- [ ] **Step 5: Commit** — `feat(s7comm): carica dal dispositivo e formato del blocco`
+- [x] **Step 5: Commit** — `feat(s7comm): carica dal dispositivo e formato del blocco`
 
 ---
 
@@ -342,7 +342,7 @@ Regole:
   - massimo 16 connessioni da SZL 0x0131;
   - il blocco caricato ha magic `pp` e tipo e numero coerenti con la richiesta di caricamento.
 
-- [ ] **Step 1: Scrivi i test che falliscono**
+- [x] **Step 1: Scrivi i test che falliscono**
 
   ```ts
   it('readPcap su snap7.pcap: un flusso sulla porta 102, frame ricomposti, primo frame CR', () => { /* … */ });
@@ -351,15 +351,15 @@ Regole:
   it('readPcap su byte casuali o pcap troncati: S7Error PROTOCOL, mai altro', () => { /* … */ });
   ```
 
-- [ ] **Step 2: Esegui e verifica che falliscano**
+- [x] **Step 2: Esegui e verifica che falliscano**
 
-- [ ] **Step 3: Implementa lettore, log, script e step di CI**
+- [x] **Step 3: Implementa lettore, log, script e step di CI**
 
-- [ ] **Step 4: Esegui** `node scripts/fetch-s7-captures.mjs && npx vitest run --project s7comm && npm run typecheck && npm run lint`
+- [x] **Step 4: Esegui** `node scripts/fetch-s7-captures.mjs && npx vitest run --project s7comm && npm run typecheck && npm run lint`
 
   Expected: PASS, con tutte le catture di §16 controllate. Riporta nel rapporto quanti frame sono stati controllati per file e quali tipi di PDU.
 
-- [ ] **Step 5: Commit** — `test(s7comm): verifica dei codificatori su catture pubbliche di CPU S7-300 reali`
+- [x] **Step 5: Commit** — `test(s7comm): verifica dei codificatori su catture pubbliche di CPU S7-300 reali`
 
 ---
 
@@ -405,7 +405,7 @@ Regole:
   - con `signal` annullato, `ABORTED`.
 - Il registratore riceve ogni frame in entrata e in uscita, anche se poi viene rifiutato o si chiude la connessione.
 
-- [ ] **Step 1: Scrivi i test che falliscono**
+- [x] **Step 1: Scrivi i test che falliscono**
 
   ```ts
   it('apertura su memoryTransportPair con un server di prova: TSAP inviati, PDU 240 negoziata', () => { /* … */ });
@@ -417,13 +417,13 @@ Regole:
   it('tcpTransport verso una porta chiusa di 127.0.0.1 → CONNECT_REFUSED', async () => { /* … */ });
   ```
 
-- [ ] **Step 2: Esegui e verifica che falliscano**
+- [x] **Step 2: Esegui e verifica che falliscano**
 
-- [ ] **Step 3: Implementa**
+- [x] **Step 3: Implementa**
 
-- [ ] **Step 4: Esegui test, typecheck e lint**
+- [x] **Step 4: Esegui test, typecheck e lint**
 
-- [ ] **Step 5: Commit** — `feat(s7comm): connessione ISO-on-TCP con filtro di sola lettura`
+- [x] **Step 5: Commit** — `feat(s7comm): connessione ISO-on-TCP con filtro di sola lettura`
 
 ---
 
@@ -461,7 +461,7 @@ Regole:
 - `mode`: SZL 0x0424 indice 0 (proto §7.3). `protection`: SZL 0x0232 indice 4.
 - Il client non offre alcun metodo di scrittura.
 
-- [ ] **Step 1: Scrivi i test che falliscono**
+- [x] **Step 1: Scrivi i test che falliscono**
 
   Con un finto server minimo scritto nel test sopra `memoryTransportPair`, che risponde con i vettori di proto §17:
   ```ts
@@ -473,13 +473,13 @@ Regole:
   it('S7Client non ha metodi di scrittura (controllo sulle chiavi del prototipo)', () => { /* … */ });
   ```
 
-- [ ] **Step 2: Esegui e verifica che falliscano**
+- [x] **Step 2: Esegui e verifica che falliscano**
 
-- [ ] **Step 3: Implementa**
+- [x] **Step 3: Implementa**
 
-- [ ] **Step 4: Esegui test, typecheck e lint**
+- [x] **Step 4: Esegui test, typecheck e lint**
 
-- [ ] **Step 5: Commit** — `feat(s7comm): client di lettura S7 per S7-300`
+- [x] **Step 5: Commit** — `feat(s7comm): client di lettura S7 per S7-300`
 
 ---
 
@@ -541,7 +541,7 @@ Regole:
   - silenzio su una funzione;
   - errore forzato.
 
-- [ ] **Step 1: Scrivi i test che falliscono**
+- [x] **Step 1: Scrivi i test che falliscono**
 
   Le richieste si costruiscono con i codificatori di s7comm e si mandano con `serve` su `memoryTransportPair`:
   ```ts
@@ -554,13 +554,13 @@ Regole:
   it('17ª connessione → DR', () => { /* … */ });
   ```
 
-- [ ] **Step 2: Esegui e verifica che falliscano**
+- [x] **Step 2: Esegui e verifica che falliscano**
 
-- [ ] **Step 3: Implementa**
+- [x] **Step 3: Implementa**
 
-- [ ] **Step 4: Esegui test, typecheck e lint**
+- [x] **Step 4: Esegui test, typecheck e lint**
 
-- [ ] **Step 5: Commit** — `feat(s7-server): finto S7-300 per i test e la CI`
+- [x] **Step 5: Commit** — `feat(s7-server): finto S7-300 per i test e la CI`
 
 ---
 
@@ -599,18 +599,18 @@ Regole:
   3. Ogni differenza fa fallire il test con il nome della cattura e l'indice del frame. Si correggono il finto PLC o il codificatore, mai la cattura.
   4. Il rapporto elenca le richieste confrontate per cattura.
 
-- [ ] **Step 1: Scrivi i test**
+- [x] **Step 1: Scrivi i test**
 
-- [ ] **Step 2: Esegui e correggi quello che trovano**
+- [x] **Step 2: Esegui e correggi quello che trovano**
 
   Ogni correzione di logica ha il suo test unitario nel pacchetto in cui sta.
 
   Run: `node scripts/fetch-s7-captures.mjs && npx vitest run --project s7comm --project s7-server`
   Expected: PASS.
 
-- [ ] **Step 3: Esegui typecheck e lint**
+- [x] **Step 3: Esegui typecheck e lint**
 
-- [ ] **Step 4: Commit** — `test(s7-server): conformità del client, robustezza e confronto con catture di CPU vere`
+- [x] **Step 4: Commit** — `test(s7-server): conformità del client, robustezza e confronto con catture di CPU vere`
 
 ---
 
@@ -656,7 +656,7 @@ Regole:
 
   Senza zip il test risulta saltato.
 
-- [ ] **Step 1: Scrivi i test che falliscono**
+- [x] **Step 1: Scrivi i test che falliscono**
 
   ```ts
   it('collect contro il finto PLC con 5 blocchi: zip completo, blocchi identici a quelli messi', async () => { /* … */ });
@@ -667,13 +667,13 @@ Regole:
   it('readKitZip(kitZip(x)) restituisce riepilogo, frame e blocchi', () => { /* … */ });
   ```
 
-- [ ] **Step 2: Esegui e verifica che falliscano**
+- [x] **Step 2: Esegui e verifica che falliscano**
 
-- [ ] **Step 3: Implementa**
+- [x] **Step 3: Implementa**
 
-- [ ] **Step 4: Esegui test, typecheck e lint**
+- [x] **Step 4: Esegui test, typecheck e lint**
 
-- [ ] **Step 5: Commit** — `feat(s7comm): kit di raccolta in sola lettura e regressione sui log reali`
+- [x] **Step 5: Commit** — `feat(s7comm): kit di raccolta in sola lettura e regressione sui log reali`
 
 ---
 
@@ -703,7 +703,7 @@ Regole:
 - Codici di uscita: 0 ok, 1 errore di comunicazione, 2 argomenti sbagliati. Gli errori si scrivono su stderr, con codice e messaggio di `S7Error`.
 - Non esiste alcun comando di scrittura.
 
-- [ ] **Step 1: Scrivi i test che falliscono**
+- [x] **Step 1: Scrivi i test che falliscono**
 
   I test avviano `finto` su una porta libera e lanciano i comandi come processi figli:
   ```ts
@@ -713,13 +713,13 @@ Regole:
   it('host irraggiungibile → codice 1 e messaggio CONNECT_REFUSED; argomenti mancanti → 2', async () => { /* … */ });
   ```
 
-- [ ] **Step 2: Esegui e verifica che falliscano**
+- [x] **Step 2: Esegui e verifica che falliscano**
 
-- [ ] **Step 3: Implementa**
+- [x] **Step 3: Implementa**
 
-- [ ] **Step 4: Esegui test, typecheck e lint**
+- [x] **Step 4: Esegui test, typecheck e lint**
 
-- [ ] **Step 5: Commit** — `feat(s7bench): strumento a riga di comando di sola lettura e finto PLC`
+- [x] **Step 5: Commit** — `feat(s7bench): strumento a riga di comando di sola lettura e finto PLC`
 
 ---
 
@@ -765,7 +765,7 @@ Regole:
 
   Dice anche che cosa contiene lo zip, che contiene il suo programma, e che nulla viene scritto.
 
-- [ ] **Step 1: Scrivi i test che falliscono**
+- [x] **Step 1: Scrivi i test che falliscono**
 
   ```ts
   it('la finestra valida l\'IP e mostra il testo di sola lettura', async () => { /* … */ });
@@ -775,16 +775,16 @@ Regole:
   it('IP irraggiungibile: messaggio chiaro in pochi secondi, l\'app resta usabile', async () => { /* … */ });
   ```
 
-- [ ] **Step 2: Esegui e verifica che falliscano**
+- [x] **Step 2: Esegui e verifica che falliscano**
 
-- [ ] **Step 3: Implementa**
+- [x] **Step 3: Implementa**
 
-- [ ] **Step 4: Esegui test, e2e, typecheck e lint**
+- [x] **Step 4: Esegui test, e2e, typecheck e lint**
 
   Run: `npm test && npm run e2e && npm run typecheck && npm run lint`
   Expected: PASS.
 
-- [ ] **Step 5: Commit** — `feat(desktop): kit di raccolta dati CPU in sola lettura nel menu Strumenti`
+- [x] **Step 5: Commit** — `feat(desktop): kit di raccolta dati CPU in sola lettura nel menu Strumenti`
 
 ---
 
@@ -805,11 +805,11 @@ Regole:
   - [ ] la raccolta dall'app produce lo zip;
   - [ ] lo zip dà verde in `privateKit.test.ts`.
 
-- [ ] **Step 1: Aggiorna il piano generale e la versione**
+- [x] **Step 1: Aggiorna il piano generale e la versione**
 
-- [ ] **Step 2: Esegui il collaudo tre volte**
+- [x] **Step 2: Esegui il collaudo tre volte**
 
-- [ ] **Step 3: Commit** — `docs: piano 1D chiuso, 1D-bis per le funzioni di scrittura; versione 0.2.0`
+- [x] **Step 3: Commit** — `docs: piano 1D chiuso, 1D-bis per le funzioni di scrittura; versione 0.2.0`
 
 ---
 
