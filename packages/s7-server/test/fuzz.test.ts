@@ -31,7 +31,9 @@ function rng(seed: number): () => number {
 }
 
 function populated(): FakeCpu {
-  const cpu = new FakeCpu();
+  const cpu = new FakeCpu({
+    clock: () => ({ year: 2026, month: 10, day: 20, hour: 9, minute: 0, second: 0, ms: 0 }),
+  });
   cpu.addDb(1, seq(300));
   cpu.addDb(2, seq(20));
   cpu.addBlock(blockFile('OB', 1, seq(50)));
@@ -52,6 +54,8 @@ describe('fuzz: 2000 PDU a caso', () => {
     const bytes = (n: number): Uint8Array => Uint8Array.from({ length: n }, () => int(256));
     const pick = <T>(xs: T[]): T => xs[int(xs.length)]!;
 
+    // Orologio fisso: lo snapshot contiene l'ora dell'ultimo cambio di modo, quindi con l'orologio
+    // vero sarebbe stabile solo perché nessun comando di rete la tocca; così è esplicito.
     const cpu = populated();
     const before = cpu.snapshot();
 

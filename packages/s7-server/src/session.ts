@@ -470,6 +470,9 @@ class Session {
           return udError(p, u, UD.BLOCK_PARAM);
         }
         const list = this.cpu.blockList(type);
+        // Nostra ipotesi, documentata e non vista in nessuna cattura: come risponde una CPU vera a un
+        // tipo senza blocchi non è verificato (STEP 7 chiede solo i tipi con conteggio > 0). Il
+        // client accetta sia 0xD20E sia una lista valida e vuota.
         if (list.length === 0) return udError(p, u, UD.NO_BLOCKS);
         // pezzi di PDU - 32 byte, a record interi (208 con PDU 240, come la CPU vera)
         const max = Math.max(Math.floor((this.pdu - 32) / 4) * 4, 4);

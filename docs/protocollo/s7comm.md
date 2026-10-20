@@ -750,6 +750,8 @@ stesso seq e `0a 00 00 00`, ultimo pezzo last=00. **verificato**: lista DB in 2 
 (`…0001 4201 0002 4201…` number+flag`0x42`+lang`0x01`=AWL/…). ⚠️ il byte "flag" è
 documentato come sconosciuto; il byte language segue §8.5.
 
+⚠️ **Tipo senza blocchi: non verificato.** Nessuna cattura mostra la risposta di una CPU vera a una lista di un tipo vuoto (STEP 7 chiede solo i tipi con conteggio > 0 in §8.1). Il finto PLC risponde `0xD20E` ("nessun (ulteriore) blocco disponibile"), per ipotesi; il client BaaPortal accetta sia `0xD20E` sia una lista valida e vuota (`0xFF`, nessun dato) e restituisce `[]`. Il kit deve comunque leggere prima i conteggi e saltare i tipi a 0.
+
 ### 8.3 Get block info (subfunc `0x03`) — layout risposta completo
 Richiesta payload (8 byte): **block type (2 byte ASCII)** + **block number (5 byte
 ASCII, zero-padded)** + **filesystem letter (1 byte ASCII)**. Es. `30 41`("0A"=DB) +

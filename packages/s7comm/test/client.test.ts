@@ -537,6 +537,39 @@ describe('blocchi e orologio', () => {
     expect(log).toEqual(['ud3/2', 'ud3/2c', 'ud3/2c', 'ud3/2c']);
   });
 
+  it('listBlocks: tipo vuoto, errore 0xD20E → [] (e gli altri errori restano errori)', async () => {
+    const { client } = await rig({
+      override: (_p, u) => (u?.param.group === 3 ? errorReply(3, 2, 0xd20e) : undefined),
+    });
+    expect(await client.listBlocks('FC')).toEqual([]);
+    const other = await rig({
+      override: (_p, u) => (u?.param.group === 3 ? errorReply(3, 2, 0xd209) : undefined),
+    });
+    await expect(other.client.listBlocks('FC')).rejects.toMatchObject({ code: 'CPU_ERROR' });
+  });
+
+  it('listBlocks: tipo vuoto, lista valida e vuota (0xFF, nessun dato) → []', async () => {
+    const { client } = await rig({
+      override: (_p, u) => {
+        if (u?.param.group !== 3) return undefined;
+        const e = encodeUserdata(
+          {
+            method: 'response',
+            group: 3,
+            subfunction: 2,
+            sequence: 0,
+            dataUnitRef: 0,
+            lastDataUnit: false,
+            errorCode: 0,
+          },
+          none,
+        );
+        return { rosctr: 7, param: e.param, data: e.data };
+      },
+    });
+    expect(await client.listBlocks('FC')).toEqual([]);
+  });
+
   it('listBlocks: oltre 256 pezzi è PROTOCOL', async () => {
     const { client, ud } = await rig({
       override: (_p, u) => {

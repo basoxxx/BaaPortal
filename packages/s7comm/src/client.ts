@@ -274,16 +274,34 @@ export class S7Client {
     return decodeBlockCounts((await this.#userdata(reqBlockCounts(), 'conteggio blocchi')).payload);
   }
 
+  /**
+   * Elenco dei blocchi di un tipo. Un tipo senza blocchi dà `[]`, sia con l'errore 0xD20E
+   * ("nessun blocco disponibile") sia con una lista valida e vuota: nessuna cattura mostra
+   * come risponde una CPU vera. Il kit e gli altri chiamanti chiamino comunque prima
+   * `blockCounts()` e saltino i tipi con conteggio 0, come fa STEP 7.
+   */
   async listBlocks(type: BlockType): Promise<BlockListEntry[]> {
-    return decodeBlockListOfType(
-      await this.#fragments(
-        reqBlockListOfType(type),
-        3,
-        2,
-        MAX_LIST_FRAGMENTS,
-        `lista blocchi ${type}`,
-      ),
-    );
+    try {
+      return decodeBlockListOfType(
+        await this.#fragments(
+          reqBlockListOfType(type),
+          3,
+          2,
+          MAX_LIST_FRAGMENTS,
+          `lista blocchi ${type}`,
+        ),
+      );
+    } catch (e) {
+      if (
+        e instanceof S7Error &&
+        e.code === 'CPU_ERROR' &&
+        e.detail?.errorClass === 0xd2 &&
+        e.detail.errorCode === 0x0e
+      ) {
+        return [];
+      }
+      throw e;
+    }
   }
 
   async blockInfo(type: BlockType, number: number): Promise<BlockInfo> {
