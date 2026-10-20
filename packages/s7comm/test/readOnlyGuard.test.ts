@@ -11,6 +11,8 @@ import {
   encodeStartUpload,
   encodeTpkt,
   encodeUpload,
+  encodeUserdata,
+  guardedSender,
   memoryTransportPair,
   reqBlockCounts,
   reqBlockInfo,
@@ -136,13 +138,22 @@ describe('assertReadOnly: allowlist', () => {
   });
 });
 
+const dt = (s7: Uint8Array, eot = true): Uint8Array =>
+  encodeTpkt(encodeCotp({ type: 'DT', eot, data: s7 }));
+
+function senderRig(): {
+  sends: Uint8Array[];
+  refused: () => number;
+  send: (b: Uint8Array) => void;
+} {
+  const sends: Uint8Array[] = [];
+  let refused = 0;
+  const send = guardedSender({ send: (b) => void sends.push(b) }, undefined, () => refused++);
+  return { sends, refused: () => refused, send };
+}
+
 describe('il filtro vede ogni frame in uscita', () => {
-  async function setup(): Promise<{
-    conn: S7Connection;
-    sends: Uint8Array[];
-    cpu: FakeCpu;
-    sendFrame: (b: Uint8Array) => void;
-  }> {
+  async function setup(): Promise<{ conn: S7Connection; sends: Uint8Array[] }> {
     const [a, b] = memoryTransportPair();
     const sends: Uint8Array[] = [];
     const spy: Transport = {
@@ -154,14 +165,10 @@ describe('il filtro vede ogni frame in uscita', () => {
       onClose: (cb) => a.onClose(cb),
       close: () => a.close(),
     };
-    const cpu = new FakeCpu(b, { pdu: 480 });
+    new FakeCpu(b, { pdu: 480 });
     const conn = await S7Connection.open({ host: 'x', transport: async () => spy });
-    const raw = conn as unknown as { sendFrame(b: Uint8Array): void };
-    return { conn, sends, cpu, sendFrame: (x) => raw.sendFrame(x) };
+    return { conn, sends };
   }
-
-  const dt = (s7: Uint8Array, eot = true): Uint8Array =>
-    encodeTpkt(encodeCotp({ type: 'DT', eot, data: s7 }));
 
   it('una PDU vietata data a request() non arriva al trasporto', async () => {
     const { conn, sends } = await setup();
@@ -179,9 +186,8 @@ describe('il filtro vede ogni frame in uscita', () => {
     expect(conn.closed).toBe(false);
   });
 
-  it('ROSCTR 2 e 3, CC, ER, doppio frame e byte in coda sui byte finali: FORBIDDEN, zero invii', async () => {
-    const { conn, sends, sendFrame } = await setup();
-    const before = sends.length;
+  it('ROSCTR 2 e 3, CC, ER, doppio frame, byte in coda e simili: FORBIDDEN, zero invii', () => {
+    const { sends, send, refused } = senderRig();
     const readPdu = encodeS7(
       job(encodeReadRequest([{ area: 'M', db: 0, start: 0, size: 'BYTE', count: 1 }])),
     );
@@ -199,19 +205,291 @@ describe('il filtro vede ogni frame in uscita', () => {
       dt(hexb('ffff')),
       new Uint8Array(0),
       hexb('030000'),
-      encodeTpkt(Uint8Array.from([0x02, 0xf0, 0x80, ...readPdu]).slice(0, 2)),
-      // DT con LI 3 (byte extra nell'header) che nasconderebbe dati
       encodeTpkt(Uint8Array.from([0x03, 0xf0, 0x80, 0x00, ...readPdu])),
     ];
     for (const b of bads) {
-      expect(() => sendFrame(b), `bytes ${b.length}`).toThrowError(
+      expect(() => send(b), `bytes ${b.length}`).toThrowError(
         expect.objectContaining({ code: 'FORBIDDEN' }),
       );
     }
-    expect(sends.length).toBe(before);
-    expect(conn.refusedCount).toBe(bads.length);
-    // il frame buono passa
-    sendFrame(good);
-    expect(sends.length).toBe(before + 1);
+    expect(sends.length).toBe(0);
+    expect(refused()).toBe(bads.length);
+    send(good);
+    expect(sends.length).toBe(1);
+  });
+});
+
+describe('forma canonica', () => {
+  const rd = encodeReadRequest([{ area: 'DB', db: 1, start: 0, size: 'BYTE', count: 4 }]);
+  const withByte = (b: Uint8Array, i: number, v: number): Uint8Array => {
+    const c = b.slice();
+    c[i] = v;
+    return c;
+  };
+  const cases: [string, S7Pdu][] = [
+    ['setup con AmQ 3/3', job(encodeSetup({ amqCalling: 3, amqCalled: 3, pduLength: 480 }))],
+    ['setup con AmQ 1/3', job(encodeSetup({ amqCalling: 1, amqCalled: 3, pduLength: 480 }))],
+    [
+      'setup con byte riservato',
+      job(withByte(encodeSetup({ amqCalling: 1, amqCalled: 1, pduLength: 480 }), 1, 1)),
+    ],
+    ["read var con byte riservato nell'item", job(withByte(rd, 2 + 11 - 11 + 0, 0x13))],
+    ['read var con sintassi item diversa', job(withByte(rd, 4, 0x11))],
+    ['read var con area sconosciuta', job(withByte(rd, 2 + 8, 0x55))],
+    [
+      'start upload con tipo ignoto',
+      job(encodeStartUpload('_0800001A').map((v, i) => (i === 10 ? 0x5a : v))),
+    ],
+    [
+      'start upload con filesystem Z',
+      job(encodeStartUpload('_0800001A').map((v, i) => (i === 16 ? 0x5a : v))),
+    ],
+    ['start upload con campo ignoto non zero', job(withByte(encodeStartUpload('_0800001A'), 2, 1))],
+    ['start upload con upload id non zero', job(withByte(encodeStartUpload('_0800001A'), 7, 1))],
+    ['upload con campo riservato', job(withByte(encodeUpload(5), 2, 1))],
+    ['end upload con stato non zero', job(withByte(encodeEndUpload(5), 1, 1))],
+    [
+      'SZL con transport size errato',
+      job(reqReadSzl(0x11, 0).param, withByte(reqReadSzl(0x11, 0).data, 1, 0x04), 7),
+    ],
+    [
+      'SZL con return code errato',
+      job(reqReadSzl(0x11, 0).param, withByte(reqReadSzl(0x11, 0).data, 0, 0x0a), 7),
+    ],
+    [
+      'SZL con payload di 6 byte',
+      job(
+        ...(() => {
+          const d = reqReadSzl(0x11, 0).data;
+          const o = new Uint8Array(d.length + 2);
+          o.set(d);
+          o[3] = 6;
+          return [reqReadSzl(0x11, 0).param, o, 7] as const;
+        })(),
+      ),
+    ],
+    [
+      'lista blocchi con tipo ignoto',
+      job(reqBlockListOfType('DB').param, withByte(reqBlockListOfType('DB').data, 4, 0x5a), 7),
+    ],
+    [
+      'info blocco con numero non cifre',
+      job(reqBlockInfo('DB', 1).param, withByte(reqBlockInfo('DB', 1).data, 6, 0x41), 7),
+    ],
+    ['conteggi con payload', job(reqBlockCounts().param, reqReadSzl(0x11, 0).data, 7)],
+    ['orologio con rc 0xff', job(reqReadClock().param, withByte(reqReadClock().data, 0, 0xff), 7)],
+    [
+      'userdata con method byte 0x12 e plen 4',
+      job(withByte(reqBlockCounts().param, 4, 0x12), reqBlockCounts().data, 7),
+    ],
+    [
+      'userdata con type 0',
+      job(withByte(reqBlockCounts().param, 5, 0x03), reqBlockCounts().data, 7),
+    ],
+    [
+      'continuazione con payload diverso',
+      job(reqContinue(3, 2, 1).param, reqReadSzl(0x11, 0).data, 7),
+    ],
+    [
+      'continuazione con data unit ref 1',
+      job(withByte(reqContinue(3, 2, 1).param, 8, 1), reqContinue(3, 2, 1).data, 7),
+    ],
+    [
+      'continuazione con error code',
+      job(withByte(reqContinue(3, 2, 1).param, 11, 1), reqContinue(3, 2, 1).data, 7),
+    ],
+  ];
+  it.each(cases)('%s -> FORBIDDEN', (_n, pdu) => {
+    expect(() => assertReadOnly(pdu)).toThrowError(expect.objectContaining({ code: 'FORBIDDEN' }));
+  });
+
+  it('DT con intestazione non canonica e id di ridondanza non zero sono rifiutati', () => {
+    const { sends, send } = senderRig();
+    const s7 = encodeS7(job(rd));
+    const nonzeroRed = s7.slice();
+    nonzeroRed[2] = 1;
+    expect(() => send(dt(nonzeroRed))).toThrowError(expect.objectContaining({ code: 'FORBIDDEN' }));
+    const credit = dt(s7);
+    credit[5] = 0xf1;
+    expect(() => send(credit)).toThrowError(expect.objectContaining({ code: 'FORBIDDEN' }));
+    const tpduNr = dt(s7);
+    tpduNr[6] = 0x81;
+    expect(() => send(tpduNr)).toThrowError(expect.objectContaining({ code: 'FORBIDDEN' }));
+    expect(sends.length).toBe(0);
+  });
+});
+
+describe('scansioni esaustive', () => {
+  const empty = new Uint8Array(0);
+  const canon: Record<string, { param: Uint8Array; data: Uint8Array }> = {
+    '4/1': reqReadSzl(0x11, 0),
+    '3/1': reqBlockCounts(),
+    '3/2': reqBlockListOfType('DB'),
+    '3/3': reqBlockInfo('DB', 1),
+    '7/1': reqReadClock(),
+    '7/3': encodeUserdata(
+      { method: 'request', group: 7, subfunction: 3, sequence: 0 },
+      empty,
+      0x0a,
+    ),
+  };
+
+  it('tutti i 256 byte di funzione ROSCTR 1: passano solo 0x1E e 0x1F con parametro minimo', () => {
+    const { sends, send } = senderRig();
+    const passed: number[] = [];
+    let n = 0;
+    for (let fn = 0; fn < 256; fn++) {
+      for (const param of [Uint8Array.of(fn), Uint8Array.of(fn, 0, 0, 0, 0, 0, 0, 0)]) {
+        n++;
+        try {
+          send(dt(encodeS7(job(param))));
+          passed.push(fn);
+        } catch (e) {
+          expect((e as { code: string }).code).toBe('FORBIDDEN');
+        }
+      }
+    }
+    expect(n).toBe(512);
+    expect(passed).toEqual([0x1e, 0x1f]);
+    expect(sends.length).toBe(2);
+  });
+
+  it('ogni nibble type x gruppo (0-15) x sottofunzione (0-255) per ROSCTR 7: passano solo le 6 forme canoniche', () => {
+    const { sends, send } = senderRig();
+    let n = 0;
+    const passed: string[] = [];
+    for (let type = 0; type < 16; type++) {
+      for (let group = 0; group < 16; group++) {
+        for (let sub = 0; sub < 256; sub++) {
+          n++;
+          const key = `${group}/${sub}`;
+          const c = canon[key];
+          const param = Uint8Array.of(0, 1, 0x12, 4, 0x11, (type << 4) | group, sub, 0);
+          try {
+            send(dt(encodeS7(job(param, c?.data ?? empty, 7))));
+            passed.push(`${type}:${key}`);
+          } catch (e) {
+            expect((e as { code: string }).code).toBe('FORBIDDEN');
+          }
+        }
+      }
+    }
+    expect(n).toBe(65536);
+    expect(passed.sort()).toEqual(
+      Object.keys(canon)
+        .map((k) => `4:${k}`)
+        .sort(),
+    );
+    expect(sends.length).toBe(6);
+  });
+
+  it('method byte (256 valori) dei userdata: passa solo 0x11 nella richiesta iniziale', () => {
+    const { sends, send } = senderRig();
+    for (let m = 0; m < 256; m++) {
+      const param = reqReadSzl(0x11, 0).param.slice();
+      param[4] = m;
+      try {
+        send(dt(encodeS7(job(param, reqReadSzl(0x11, 0).data, 7))));
+      } catch {
+        // atteso
+      }
+    }
+    expect(sends.length).toBe(1);
+  });
+
+  it("tutti i 256 valori dei 3 byte COTP DT e dei 2 byte dell'id di ridondanza: passa solo il valore canonico", () => {
+    const { sends, send } = senderRig();
+    const base = dt(
+      encodeS7(job(encodeReadRequest([{ area: 'M', db: 0, start: 0, size: 'BYTE', count: 1 }]))),
+    );
+    // indici: 4,5,6 = COTP DT; 4+3+2, 4+3+3 = id di ridondanza
+    for (const at of [4, 5, 6, 9, 10]) {
+      for (let v = 0; v < 256; v++) {
+        const f = base.slice();
+        f[at] = v;
+        try {
+          send(f);
+        } catch (e) {
+          expect((e as { code: string }).code).toBe('FORBIDDEN');
+        }
+      }
+    }
+    expect(sends.length).toBe(5);
+  });
+});
+
+describe('TOCTOU: il registratore non può cambiare i byte approvati', () => {
+  const good = dt(encodeS7(job(reqReadSzl(0x11, 0).param, reqReadSzl(0x11, 0).data, 7)));
+
+  it('un registratore che riscrive il suo buffer, subito e dopo un ritardo, non tocca i byte inviati', async () => {
+    const received: Uint8Array[] = [];
+    const snapshots: Uint8Array[] = [];
+    const rec = {
+      record(_d: 'tx' | 'rx', bytes: Uint8Array) {
+        bytes.fill(0xee);
+        setTimeout(() => bytes.fill(0x66), 5);
+      },
+      frames: () => [],
+    };
+    const send = guardedSender(
+      {
+        send: (b) => {
+          received.push(b);
+          snapshots.push(b.slice());
+        },
+      },
+      rec,
+      () => undefined,
+    );
+    send(good);
+    await new Promise((r) => setTimeout(r, 30));
+    expect(received[0]).toEqual(good);
+    expect(snapshots[0]).toEqual(good);
+  });
+
+  it("il chiamante che modifica il proprio buffer dopo l'invio non cambia ciò che ha il trasporto", () => {
+    const received: Uint8Array[] = [];
+    const send = guardedSender({ send: (b) => void received.push(b) }, undefined, () => undefined);
+    const mine = good.slice();
+    send(mine);
+    mine.fill(0x05);
+    expect(received[0]).toEqual(good);
+    expect(received[0]).not.toBe(mine);
+  });
+
+  it("il registratore riceve il frame solo dopo l'invio; un invio fallito non è registrato", () => {
+    const order: string[] = [];
+    const rec = {
+      record: () => void order.push('rec'),
+      frames: () => [],
+    };
+    const ok = guardedSender({ send: () => void order.push('send') }, rec, () => undefined);
+    ok(good);
+    expect(order).toEqual(['send', 'rec']);
+    const failing = guardedSender(
+      {
+        send: () => {
+          throw new Error('rotto');
+        },
+      },
+      rec,
+      () => undefined,
+    );
+    expect(() => failing(good)).toThrow('rotto');
+    expect(order).toEqual(['send', 'rec']);
+  });
+
+  it('il registratore riceve una copia senza TPKT; gli errori del registratore sono ignorati', () => {
+    const seen: Uint8Array[] = [];
+    const rec = {
+      record: (_d: 'tx' | 'rx', b: Uint8Array) => {
+        seen.push(b);
+        throw new Error('registratore rotto');
+      },
+      frames: () => [],
+    };
+    const send = guardedSender({ send: () => undefined }, rec, () => undefined);
+    expect(() => send(good)).not.toThrow();
+    expect(seen[0]).toEqual(good.slice(4));
   });
 });

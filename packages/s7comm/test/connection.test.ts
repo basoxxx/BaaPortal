@@ -1,8 +1,9 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   S7Connection,
+  S7Error,
   createRecorder,
   decodeSetup,
   encodeReadRequest,
@@ -360,44 +361,323 @@ describe('registratore', () => {
   });
 });
 
-describe('sorgente: transport.send solo nel punto di controllo', () => {
+describe('sorgente: punto di invio e confini della piattaforma', () => {
   function walk(dir: string): string[] {
     return readdirSync(dir).flatMap((n) => {
       const p = join(dir, n);
-      return statSync(p).isDirectory() ? walk(p) : p.endsWith('.ts') ? [p] : [];
+      return statSync(p).isDirectory() ? walk(p) : [p];
     });
   }
   const src = join(__dirname, '..', 'src');
+  const rel = (f: string): string => f.slice(src.length + 1);
+  const stripComments = (t: string): string =>
+    t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
+  const files = walk(src);
 
-  it('".send(" compare solo in sendFrame e nelle implementazioni del trasporto', () => {
-    const allowedFiles = new Set(['transport.ts', join('node', 'tcpTransport.ts')]);
-    for (const f of walk(src)) {
-      const rel = f.slice(src.length + 1);
-      const text = readFileSync(f, 'utf8');
-      const count = (text.match(/\.send\(/g) ?? []).length;
-      if (allowedFiles.has(rel)) continue;
-      if (rel === 'connection.ts') {
-        expect(count, rel).toBe(1);
-        const start = text.indexOf('private sendFrame(');
-        const end = text.indexOf('\n  }\n', start);
-        const at = text.indexOf('.send(');
-        expect(start).toBeGreaterThan(-1);
-        expect(at).toBeGreaterThan(start);
-        expect(at).toBeLessThan(end);
-        expect(text).toMatch(/this\.transport\.send\(/);
-      } else {
-        expect(count, rel).toBe(0);
+  it('il parola "send" (ogni forma di accesso) compare solo nel punto di invio e nei trasporti', () => {
+    expect(files.length).toBeGreaterThan(10);
+    for (const f of files) {
+      const r = rel(f);
+      const text = stripComments(readFileSync(f, 'utf8'));
+      if (r === 'transport.ts' || r.startsWith('node/')) continue;
+      if (r === 'connection.ts') {
+        // i marcatori sono commenti: cercarli nel testo originale
+        const raw = readFileSync(f, 'utf8');
+        const s0 = raw.indexOf('// BEGIN CHOKE POINT');
+        const e0 = raw.indexOf('// END CHOKE POINT');
+        expect(s0).toBeGreaterThan(-1);
+        expect(e0).toBeGreaterThan(s0);
+        const outside = stripComments(raw.slice(0, s0) + raw.slice(e0));
+        expect(outside, r).not.toMatch(/\bsend\b/);
+        const inside = stripComments(raw.slice(s0, e0));
+        expect((inside.match(/\bsend\b/g) ?? []).length).toBeLessThanOrEqual(3);
+        expect(inside.match(/\.send\(/g)?.length).toBe(1);
+        continue;
       }
+      expect(text, r).not.toMatch(/\bsend\b/);
+    }
+    for (const f of files) {
+      expect(stripComments(readFileSync(f, 'utf8')), rel(f)).not.toMatch(/\bReflect\b|\.bind\(/);
     }
   });
 
-  it('node:net è importato solo da node/tcpTransport.ts', () => {
-    for (const f of walk(src)) {
-      const rel = f.slice(src.length + 1);
-      const text = readFileSync(f, 'utf8');
-      if (rel === join('node', 'tcpTransport.ts')) continue;
-      expect(text, rel).not.toMatch(/from ['"]node:/);
+  it('net, node:*, require( e import( solo in src/node/ (tutte le estensioni)', () => {
+    for (const f of files) {
+      if (rel(f).startsWith('node/')) continue;
+      const text = stripComments(readFileSync(f, 'utf8'));
+      expect(text, rel(f)).not.toMatch(
+        /['"`](node:[a-z_/]+|net|tls|dgram|http2?|https|fs|child_process|worker_threads)['"`]/,
+      );
+      expect(text, rel(f)).not.toMatch(/\brequire\s*\(|\bimport\s*\(/);
     }
+  });
+});
+
+describe("struttura: nessun Transport sull'istanza", () => {
+  it('né proprietà proprie né sul prototipo contengono un oggetto con send()', async () => {
+    const { client } = rig();
+    const conn = await openOn(client);
+    const holders: string[] = [];
+    let o: object | null = conn;
+    while (o && o !== Object.prototype) {
+      for (const k of [...Object.getOwnPropertyNames(o), ...Object.getOwnPropertySymbols(o)]) {
+        const d = Object.getOwnPropertyDescriptor(o, k)!;
+        const v: unknown = 'value' in d ? d.value : undefined;
+        if (v && typeof v === 'object' && typeof (v as { send?: unknown }).send === 'function') {
+          holders.push(String(k));
+        }
+      }
+      o = Object.getPrototypeOf(o);
+    }
+    expect(holders).toEqual([]);
+    expect((conn as unknown as Record<string, unknown>)['transport']).toBeUndefined();
+  });
+
+  it('pduLength e amq sono di sola lettura', async () => {
+    const { client } = rig();
+    const conn = await openOn(client);
+    for (const k of ['pduLength', 'amq'] as const) {
+      const d = Object.getOwnPropertyDescriptor(S7Connection.prototype, k)!;
+      expect(d.get).toBeTypeOf('function');
+      expect(d.set).toBeUndefined();
+    }
+    expect(() => {
+      (conn as unknown as { pduLength: number }).pduLength = 1;
+    }).toThrow();
+  });
+});
+
+describe('ogni promessa si risolve, nessun timer resta', () => {
+  const unhandled: unknown[] = [];
+  const onUnhandled = (r: unknown): void => void unhandled.push(r);
+  beforeEach(() => {
+    unhandled.length = 0;
+    process.on('unhandledRejection', onUnhandled);
+  });
+  afterEach(() => {
+    process.off('unhandledRejection', onUnhandled);
+  });
+
+  const flush = async (): Promise<void> => {
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(0);
+  };
+
+  /** Trasporto che chiude sincronamente da dentro send(). */
+  function closingTransport(end: Transport): { t: Transport; arm: () => void } {
+    let closeCb: ((e?: Error) => void) | undefined;
+    let armed = false;
+    return {
+      arm: () => (armed = true),
+      t: {
+        send: (b) => {
+          if (armed) closeCb?.();
+          end.send(b);
+        },
+        onData: (cb) => end.onData(cb),
+        onClose: (cb) => {
+          closeCb = cb;
+          end.onClose(cb);
+        },
+        close: () => end.close(),
+      },
+    };
+  }
+
+  it("onClose sincrono dentro send() durante l'apertura: open rifiuta con CLOSED", async () => {
+    vi.useFakeTimers();
+    const [a, b] = memoryTransportPair();
+    new FakeCpu(b);
+    const { t, arm } = closingTransport(a);
+    arm();
+    await expect(openOn(t)).rejects.toMatchObject({ code: 'CLOSED' });
+    await flush();
+    expect(vi.getTimerCount()).toBe(0);
+    expect(unhandled).toEqual([]);
+  });
+
+  it('onClose sincrono dentro send() di una richiesta: CLOSED per tutte', async () => {
+    vi.useFakeTimers();
+    const [a, b] = memoryTransportPair();
+    new FakeCpu(b);
+    const { t, arm } = closingTransport(a);
+    const conn = await openOn(t);
+    arm();
+    const r1 = conn.request(readParam, none, 1).then(
+      () => 'ok',
+      (e: { code: string }) => e.code,
+    );
+    const r2 = conn.request(readParam, none, 1).then(
+      () => 'ok',
+      (e: { code: string }) => e.code,
+    );
+    expect(await r1).toBe('CLOSED');
+    expect(await r2).toBe('CLOSED');
+    await flush();
+    expect(vi.getTimerCount()).toBe(0);
+    expect(unhandled).toEqual([]);
+  });
+
+  it('un registratore che annulla (abort) durante il tx della CR: open rifiuta, nessun timer', async () => {
+    vi.useFakeTimers();
+    const ac = new AbortController();
+    const { client } = rig();
+    const rec = {
+      record: (d: 'tx' | 'rx') => {
+        if (d === 'tx') ac.abort();
+      },
+      frames: () => [],
+    };
+    await expect(openOn(client, { recorder: rec, signal: ac.signal })).rejects.toMatchObject({
+      code: 'ABORTED',
+    });
+    await flush();
+    expect(vi.getTimerCount()).toBe(0);
+    expect(unhandled).toEqual([]);
+  });
+
+  it('un registratore che chiama close() durante il tx di una richiesta: CLOSED, nessun timer', async () => {
+    vi.useFakeTimers();
+    const { client } = rig({ onPdu: () => undefined });
+    const holder: { conn?: S7Connection } = {};
+    let armed = false;
+    const rec = {
+      record: (d: 'tx' | 'rx') => {
+        if (armed && d === 'tx') void holder.conn!.close();
+      },
+      frames: () => [],
+    };
+    const conn = await openOn(client, { recorder: rec });
+    holder.conn = conn;
+    armed = true;
+    const r1 = conn.request(readParam, none, 1).then(
+      () => 'ok',
+      (e: { code: string }) => e.code,
+    );
+    const r2 = conn.request(readParam, none, 1).then(
+      () => 'ok',
+      (e: { code: string }) => e.code,
+    );
+    expect(await r1).toBe('CLOSED');
+    expect(await r2).toBe('CLOSED');
+    await flush();
+    expect(conn.closed).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(unhandled).toEqual([]);
+  });
+
+  it('un registratore che abort() durante il tx di una richiesta: ABORTED, nessun timer', async () => {
+    vi.useFakeTimers();
+    const ac = new AbortController();
+    const { client } = rig({ onPdu: () => undefined });
+    let armed = false;
+    const rec = {
+      record: (d: 'tx' | 'rx') => {
+        if (armed && d === 'tx') ac.abort();
+      },
+      frames: () => [],
+    };
+    const conn = await openOn(client, { recorder: rec, signal: ac.signal });
+    armed = true;
+    const r1 = conn.request(readParam, none, 1).then(
+      () => 'ok',
+      (e: { code: string }) => e.code,
+    );
+    expect(await r1).toBe('ABORTED');
+    await flush();
+    expect(vi.getTimerCount()).toBe(0);
+    expect(unhandled).toEqual([]);
+  });
+
+  it('un registratore che lancia non disturba la connessione', async () => {
+    vi.useFakeTimers();
+    const { client } = rig({ onPdu: (p, c) => c.ack(p.pduRef, new Uint8Array([4, 0])) });
+    const rec = {
+      record: () => {
+        throw new Error('rotto');
+      },
+      frames: () => [],
+    };
+    const conn = await openOn(client, { recorder: rec });
+    await expect(conn.request(readParam, none, 1)).resolves.toMatchObject({ rosctr: 3 });
+    await conn.close();
+    await flush();
+    expect(vi.getTimerCount()).toBe(0);
+    expect(unhandled).toEqual([]);
+  });
+
+  it('un invio che lancia nella CR: open rifiuta, nessun timer, nessun rifiuto non gestito', async () => {
+    vi.useFakeTimers();
+    const [a] = memoryTransportPair();
+    const t: Transport = {
+      send: () => {
+        throw new Error('socket rotto');
+      },
+      onData: (cb) => a.onData(cb),
+      onClose: (cb) => a.onClose(cb),
+      close: () => a.close(),
+    };
+    await expect(openOn(t)).rejects.toThrow('socket rotto');
+    await flush();
+    expect(vi.getTimerCount()).toBe(0);
+    expect(unhandled).toEqual([]);
+  });
+});
+
+describe('opzioni, annullamento e TPDU', () => {
+  it('valida TSAP, PDU proposta e timeout con RangeError', async () => {
+    const mk = (): Transport => rig().client;
+    const bad: Partial<Parameters<typeof S7Connection.open>[0]>[] = [
+      { localTsap: -1 },
+      { localTsap: 0x10000 },
+      { remoteTsap: 1.5 },
+      { proposedPdu: 100 },
+      { proposedPdu: 2000 },
+      { timeoutMs: 0 },
+      { timeoutMs: -5 },
+      { timeoutMs: Number.NaN },
+    ];
+    for (const b of bad) {
+      await expect(openOn(mk(), b), JSON.stringify(b)).rejects.toBeInstanceOf(RangeError);
+    }
+  });
+
+  it('request con timeout non positivo: RangeError', async () => {
+    const { client } = rig();
+    const conn = await openOn(client);
+    await expect(conn.request(readParam, none, 1, 0)).rejects.toBeInstanceOf(RangeError);
+  });
+
+  it('il segnale è passato alla fabbrica di trasporti: abort durante la connessione è immediato', async () => {
+    const ac = new AbortController();
+    let got: AbortSignal | undefined;
+    const factory = (
+      _h: string,
+      _p: number,
+      _t: number,
+      signal?: AbortSignal,
+    ): Promise<Transport> => {
+      got = signal;
+      return new Promise((_res, rej) => {
+        signal?.addEventListener('abort', () => rej(new S7Error('ABORTED', 'annullato')));
+      });
+    };
+    const p = S7Connection.open({ host: 'h', transport: factory, signal: ac.signal });
+    ac.abort();
+    await expect(p).rejects.toMatchObject({ code: 'ABORTED' });
+    expect(got).toBe(ac.signal);
+  });
+
+  it('il TPDU-size del CC più piccolo limita la PDU (e la proposta del setup)', async () => {
+    const { client, cpu } = rig({ pdu: 480, ccTpduSize: 0x08 });
+    const conn = await openOn(client);
+    expect(decodeSetup(cpu.pdus[0]!.param).pduLength).toBe(253);
+    expect(conn.pduLength).toBe(253);
+  });
+
+  it('un TPDU-size del CC troppo piccolo dà COTP_REJECTED', async () => {
+    const { client } = rig({ ccTpduSize: 0x04 });
+    await expect(openOn(client)).rejects.toMatchObject({ code: 'COTP_REJECTED' });
   });
 });
 

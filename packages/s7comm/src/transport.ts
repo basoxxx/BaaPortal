@@ -15,6 +15,7 @@ export type TransportFactory = (
   host: string,
   port: number,
   timeoutMs: number,
+  signal?: AbortSignal,
 ) => Promise<Transport>;
 
 class MemoryEnd implements Transport {

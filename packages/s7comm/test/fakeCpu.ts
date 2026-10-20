@@ -17,6 +17,8 @@ export interface FakeCpuOptions {
   amq?: number;
   /** Come risponde alla CR. */
   connect?: 'cc' | 'dr' | 'er' | 'silent';
+  /** TPDU-size annunciata nel CC (esponente); default: quella della CR. */
+  ccTpduSize?: number;
   /** Risposta al setup: 'silent' non risponde. */
   setup?: 'ok' | 'silent';
   /** Per ogni PDU S7 diversa dal setup. */
@@ -62,7 +64,7 @@ export class FakeCpu {
           type: 'CC',
           dstRef: c.srcRef,
           srcRef: 0x0001,
-          tpduSize: c.tpduSize,
+          tpduSize: this.opts.ccTpduSize ?? c.tpduSize,
           srcTsap: c.srcTsap,
           dstTsap: c.dstTsap,
         });

@@ -1,1 +1,1 @@
-export { tcpTransport } from './tcpTransport';
+export { openTcp, tcpTransport } from './tcpTransport';
