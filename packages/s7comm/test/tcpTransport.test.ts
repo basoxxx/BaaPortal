@@ -1,7 +1,8 @@
 import net from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 import { S7Connection } from '../src';
-import { openTcp, tcpTransport } from '../src/node';
+import { openTcp } from '../src/node';
+import { tcpTransport } from '../src/node/tcpTransport';
 
 const servers: net.Server[] = [];
 const sockets: net.Socket[] = [];

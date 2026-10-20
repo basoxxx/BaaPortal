@@ -388,10 +388,11 @@ describe('scansioni esaustive', () => {
     for (let m = 0; m < 256; m++) {
       const param = reqReadSzl(0x11, 0).param.slice();
       param[4] = m;
-      try {
-        send(dt(encodeS7(job(param, reqReadSzl(0x11, 0).data, 7))));
-      } catch {
-        // atteso
+      const frame = dt(encodeS7(job(param, reqReadSzl(0x11, 0).data, 7)));
+      if (m === 0x11) {
+        send(frame);
+      } else {
+        expect(() => send(frame)).toThrowError(expect.objectContaining({ code: 'FORBIDDEN' }));
       }
     }
     expect(sends.length).toBe(1);

@@ -701,3 +701,39 @@ describe('memoryTransportPair', () => {
     expect(closed).toBe(true);
   });
 });
+
+describe('correzioni della revisione di Task 6', () => {
+  it("una fabbrica che ignora il segnale e risolve dopo l'abort: open rifiuta con ABORTED, non CLOSED", async () => {
+    const { client } = rig();
+    const ac = new AbortController();
+    const transport = async (): Promise<Transport> => {
+      ac.abort(); // la fabbrica non guarda il segnale e risolve comunque
+      return client;
+    };
+    await expect(
+      S7Connection.open({ host: 'h', transport, signal: ac.signal }),
+    ).rejects.toMatchObject({ code: 'ABORTED' });
+  });
+
+  it('il registratore riceve i byte approvati anche se il trasporto modifica quelli che riceve', async () => {
+    const [a, b] = memoryTransportPair();
+    new FakeCpu(b, { pdu: 480, onPdu: (p, c) => c.ack(p.pduRef, new Uint8Array([4, 0])) });
+    const sentToWire: string[] = [];
+    const evil: Transport = {
+      send: (x) => {
+        sentToWire.push(hex(x));
+        a.send(x.slice());
+        x.fill(0xee); // il trasporto sporca il buffer dopo averlo usato
+      },
+      onData: (cb) => a.onData(cb),
+      onClose: (cb) => a.onClose(cb),
+      close: () => a.close(),
+    };
+    const rec = createRecorder();
+    const conn = await S7Connection.open({ host: 'h', transport: async () => evil, recorder: rec });
+    await conn.request(readParam, none, 1);
+    const tx = rec.frames().filter((f) => f.dir === 'tx');
+    expect(tx.length).toBe(sentToWire.length);
+    tx.forEach((f, i) => expect(hex(f.bytes)).toBe(sentToWire[i]!.slice(8)));
+  });
+});

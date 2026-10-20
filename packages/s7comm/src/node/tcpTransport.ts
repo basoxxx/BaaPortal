@@ -1,4 +1,5 @@
 import net from 'node:net';
+import { S7Client } from '../client';
 import { S7Error } from '../errors';
 import { S7Connection, type ConnectOptions } from '../connection';
 import type { Transport, TransportFactory } from '../transport';
@@ -6,6 +7,7 @@ import type { Transport, TransportFactory } from '../transport';
 const REFUSED = new Set(['ECONNREFUSED', 'EHOSTUNREACH', 'ENETUNREACH', 'ENOTFOUND']);
 
 /** Trasporto TCP su node:net. Unico file del pacchetto che importa node:net. */
+/** Interno: non esportato dal punto di ingresso `./node` (vedi la regola ESLint). */
 export const tcpTransport: TransportFactory = (host, port, timeoutMs, signal) =>
   new Promise<Transport>((resolve, reject) => {
     if (signal?.aborted) {
@@ -107,4 +109,9 @@ export const tcpTransport: TransportFactory = (host, port, timeoutMs, signal) =>
 /** Apre una connessione S7 su TCP (node:net). */
 export function openTcp(o: Omit<ConnectOptions, 'transport'>): Promise<S7Connection> {
   return S7Connection.open({ ...o, transport: tcpTransport });
+}
+
+/** Apre il client di lettura S7 su TCP (node:net). */
+export function connectTcp(o: Omit<ConnectOptions, 'transport'>): Promise<S7Client> {
+  return S7Client.connect({ ...o, transport: tcpTransport });
 }

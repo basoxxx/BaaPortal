@@ -1,5 +1,14 @@
 import tseslint from 'typescript-eslint';
 
+// Il trasporto TCP grezzo non esce da packages/s7comm/src/node/: fuori si usano solo
+// `openTcp` e `connectTcp`, che passano dal filtro di sola lettura.
+const TCP_TRANSPORT_PATTERNS = [
+  {
+    group: ['**/tcpTransport', '**/tcpTransport.ts', '**/tcpTransport.js'],
+    message: 'tcpTransport è interno a packages/s7comm/src/node/: usa openTcp o connectTcp.',
+  },
+];
+
 export default tseslint.config(
   {
     ignores: [
@@ -21,6 +30,7 @@ export default tseslint.config(
         'error',
         {
           patterns: [
+            ...TCP_TRANSPORT_PATTERNS,
             {
               group: ['node:*', 'net', 'tls', 'dgram', 'http', 'https', 'fs', 'child_process'],
               message: 'Solo packages/s7comm/src/node/ può importare moduli di Node.',
@@ -39,6 +49,18 @@ export default tseslint.config(
           message: 'require() vietato nel nucleo di s7comm.',
         },
       ],
+    },
+  },
+  {
+    // Ovunque tranne dentro src/node/ (e il test del trasporto stesso).
+    files: ['**/*.{ts,tsx,mjs,js}'],
+    ignores: [
+      'packages/s7comm/src/node/**',
+      'packages/s7comm/test/tcpTransport.test.ts',
+      'packages/s7comm/src/**',
+    ],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: TCP_TRANSPORT_PATTERNS }],
     },
   },
 );

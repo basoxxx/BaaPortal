@@ -57,10 +57,13 @@ export function guardedSender(
       onRefused();
       throw e;
     }
+    // Copia per il registratore presa PRIMA dell'invio: un trasporto che modificasse i byte
+    // ricevuti non può alterare ciò che la cattura mostra (sempre i byte approvati).
+    const recorded = recorder ? out.slice(4) : undefined;
     transport.send(out);
-    if (recorder) {
+    if (recorder && recorded) {
       try {
-        recorder.record('tx', out.slice(4));
+        recorder.record('tx', recorded);
       } catch {
         // un registratore difettoso non tocca la connessione
       }
@@ -188,7 +191,12 @@ export class S7Connection {
     const transport = await o.transport(o.host, o.port ?? DEFAULT_PORT, timeoutMs, o.signal);
     const conn = new S7Connection(transport, o.recorder, o.signal, timeoutMs, proposed);
     try {
-      if (conn.#closed) throw new S7Error('CLOSED', "connessione chiusa durante l'apertura");
+      if (conn.#closed) {
+        // Una fabbrica che ignora il segnale e risolve dopo l'abort: ABORTED, non CLOSED.
+        throw o.signal?.aborted
+          ? new S7Error('ABORTED', 'operazione annullata')
+          : new S7Error('CLOSED', "connessione chiusa durante l'apertura");
+      }
       await conn.#handshake(o.localTsap ?? LOCAL_TSAP_PG, dstTsap, proposed, timeoutMs);
     } catch (e) {
       conn.#fail(e instanceof Error ? e : new S7Error('PROTOCOL', String(e)));

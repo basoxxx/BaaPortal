@@ -23,3 +23,5 @@ export * from './capture/tcpStreams';
 export * from './transport';
 export * from './readOnlyGuard';
 export * from './connection';
+
+export * from './client';
