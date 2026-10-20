@@ -12,10 +12,20 @@ interface DialogProps {
   okDisabled?: boolean;
   children: ReactNode;
   testId?: string;
+  /** Pulsanti al posto di OK e Annulla. */
+  footer?: ReactNode;
 }
 
 /** Finestra modale dentro l'app: focus intrappolato, Esc annulla, Invio conferma. */
-export function Dialog({ title, onClose, onOk, okDisabled, children, testId }: DialogProps) {
+export function Dialog({
+  title,
+  onClose,
+  onOk,
+  okDisabled,
+  children,
+  testId,
+  footer,
+}: DialogProps) {
   const { t } = useTranslation();
   const titleId = useId();
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -73,12 +83,16 @@ export function Dialog({ title, onClose, onOk, okDisabled, children, testId }: D
           {children}
         </div>
         <div className="baa-dialog-footer">
-          <button type="button" data-testid="dialog-ok" disabled={okDisabled} onClick={onOk}>
-            {t('dialog.ok')}
-          </button>
-          <button type="button" data-testid="dialog-cancel" onClick={onClose}>
-            {t('dialog.cancel')}
-          </button>
+          {footer ?? (
+            <>
+              <button type="button" data-testid="dialog-ok" disabled={okDisabled} onClick={onOk}>
+                {t('dialog.ok')}
+              </button>
+              <button type="button" data-testid="dialog-cancel" onClick={onClose}>
+                {t('dialog.cancel')}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

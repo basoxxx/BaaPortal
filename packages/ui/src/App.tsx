@@ -11,6 +11,7 @@ import { createProjectService } from './services/projectService';
 import { createRecoveryService, type RecoveryService } from './services/recoveryService';
 import { AddBlockDialog } from './project/dialogs/AddBlockDialog';
 import { AddDeviceDialog } from './project/dialogs/AddDeviceDialog';
+import { KitDialog } from './project/dialogs/KitDialog';
 import { DetachedWindows } from './project/workarea/DetachedWindow';
 import { PortalView } from './portal/PortalView';
 import { ProjectView } from './project/ProjectView';
@@ -47,6 +48,7 @@ function Shell() {
     <div data-testid="app-root" className="baa-app">
       {view === 'portal' ? <PortalView /> : <ProjectView />}
       {dialog?.kind === 'addDevice' ? <AddDeviceDialog onClose={close} /> : null}
+      {dialog?.kind === 'collectKit' ? <KitDialog onClose={close} /> : null}
       {dialog?.kind === 'addBlock' ? (
         <AddBlockDialog
           deviceId={dialog.deviceId}

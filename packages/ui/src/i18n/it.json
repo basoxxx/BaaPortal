@@ -97,7 +97,8 @@
     "window.splitHorizontal": "Dividi area di lavoro in orizzontale",
     "window.closeAllEditors": "Chiudi tutti gli editor",
     "help.show": "Visualizza la guida",
-    "help.about": "Informazioni su BaaPortal"
+    "help.about": "Informazioni su BaaPortal",
+    "tools.collectCpuData": "Raccolta dati CPU (sola lettura)…"
   },
   "menu": {
     "project": "Progetto",
@@ -144,7 +145,8 @@
       "openView": "Apri la vista progetto",
       "addDevice": "Aggiungi nuovo dispositivo",
       "addBlock": "Aggiungi nuovo blocco",
-      "accessibleDevices": "Dispositivi accessibili"
+      "accessibleDevices": "Dispositivi accessibili",
+      "collectCpu": "Raccolta dati CPU (sola lettura)"
     },
     "projectView": "Vista progetto",
     "openProjectInfo": "Progetto aperto: {{path}}",
@@ -628,5 +630,52 @@
       "OB_NUMBER_UNKNOWN": "Numero dell'OB {{name}} non ricavabile: scrivere ORGANIZATION_BLOCK OB <numero>",
       "UNSUPPORTED_SECTION": "Sezione non supportata: {{section}}"
     }
+  },
+  "kit": {
+    "title": "Raccolta dati CPU (sola lettura)",
+    "readOnly": "Questa funzione legge soltanto: non scrive nulla nel PLC e non cambia il suo stato. Usala a macchina ferma o non critica.",
+    "host": "Indirizzo IP",
+    "hostInvalid": "Indirizzo non valido: inserisci un IPv4 (per esempio 192.168.0.10) o un nome host.",
+    "advanced": "Avanzate",
+    "port": "Porta",
+    "rack": "Rack",
+    "slot": "Slot",
+    "connectionType": "Tipo di connessione",
+    "portInvalid": "La porta deve essere tra 1 e 65535.",
+    "rackInvalid": "Il rack deve essere tra 0 e 7.",
+    "slotInvalid": "Lo slot deve essere tra 0 e 31.",
+    "type": {
+      "pg": "PG",
+      "op": "OP",
+      "basic": "Base"
+    },
+    "includeBlocks": "Carica anche i blocchi dal PLC",
+    "start": "Avvia",
+    "stop": "Interrompi",
+    "cancel": "Annulla",
+    "close": "Chiudi",
+    "save": "Salva…",
+    "phase": {
+      "connect": "Connessione",
+      "identity": "Identificazione della CPU",
+      "szl": "Liste di sistema (SZL)",
+      "blocks": "Elenco dei blocchi",
+      "upload": "Caricamento dei blocchi",
+      "done": "Completata"
+    },
+    "summary": "Riepilogo",
+    "cpu": "CPU",
+    "order": "Numero di articolo",
+    "mode": "Modo",
+    "szlRead": "Liste SZL lette",
+    "blocksListed": "Blocchi elencati",
+    "blocksUploaded": "Blocchi caricati",
+    "unknown": "sconosciuto",
+    "errors": "Errori: {{count}}",
+    "savedTo": "Salvato in: {{path}}",
+    "notSaved": "non salvato",
+    "saveFailed": "Salvataggio non riuscito: {{error}}",
+    "failed": "Raccolta non riuscita: {{error}}",
+    "noConnection": "La CPU non ha risposto: controlla indirizzo, cavo di rete e slot. Lo zip contiene comunque il registro."
   }
 }

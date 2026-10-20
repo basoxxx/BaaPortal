@@ -31,6 +31,7 @@ describe('vista portale: struttura', () => {
       'Software installato',
       'Guida',
       "Lingua dell'interfaccia utente",
+      'Raccolta dati CPU (sola lettura)',
     ]);
     expect(screen.getByTestId('action-migrate')).toBeDisabled();
     expect(screen.getByTestId('action-help')).toBeDisabled();

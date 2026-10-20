@@ -18,7 +18,13 @@ const productionCsp = {
 };
 
 export default defineConfig({
-  main: {},
+  main: {
+    resolve: {
+      // La build per Node di fflate dichiara `require` e collide con lo shim CommonJS di electron-vite;
+      // il kit usa solo le funzioni sincrone, uguali nella build "browser" (JavaScript puro).
+      alias: [{ find: /^fflate$/, replacement: 'fflate/browser' }],
+    },
+  },
   preload: {
     build: {
       rollupOptions: {

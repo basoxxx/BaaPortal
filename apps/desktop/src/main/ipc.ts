@@ -16,6 +16,7 @@ import { toIpcResult } from '../shared/ipcResult';
 import { isTrustedFrame, type FrameLike, type TrustOptions } from './trust';
 import { deleteRecovery, listRecovery, readRecovery, writeRecovery } from './recoveryStore';
 import { parseOpenOptions, parseSaveOptions } from './fileDialogOptions';
+import { registerKit } from './kit';
 import { addRecent, removeRecent, type Platform, type StoredRecent } from './recentProjects';
 
 const platform = process.platform as Platform;
@@ -179,6 +180,8 @@ export function registerIpc(
   handle('recovery:delete', (_e, key: string) =>
     toIpcResult(() => deleteRecovery(recoveryDir(), key)),
   );
+
+  registerKit(handle);
 
   // Valori solo per i test e2e: come BAA_USER_DATA, mai onorati nelle build pacchettizzate.
   handle('app:test-overrides', () => {

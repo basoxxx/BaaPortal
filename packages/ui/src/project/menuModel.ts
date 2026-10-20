@@ -76,7 +76,10 @@ export const MENUS: MenuDef[] = [
     ],
   },
   { id: 'options', items: ['options.settings'] },
-  { id: 'tools', items: ['tools.crossReferences', 'tools.callStructure'] },
+  {
+    id: 'tools',
+    items: ['tools.crossReferences', 'tools.callStructure', 'sep', 'tools.collectCpuData'],
+  },
   {
     id: 'window',
     items: ['window.splitVertical', 'window.splitHorizontal', 'sep', 'window.closeAllEditors'],

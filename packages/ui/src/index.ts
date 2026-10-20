@@ -8,4 +8,9 @@ export type {
   QuestionTexts,
   RecoveryInfo,
   RecoveryEntry,
+  KitConnectionType,
+  KitStartOptions,
+  KitProgress,
+  KitSummary,
+  KitStartResult,
 } from './bridge';
