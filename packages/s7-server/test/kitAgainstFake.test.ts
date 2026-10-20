@@ -147,6 +147,24 @@ describe('kit contro il finto PLC', () => {
     expect(z.frames.filter((f) => dissectConnect(f.bytes)).length).toBeGreaterThanOrEqual(2);
   });
 
+  it('due cadute lontane (oltre 20 passi riusciti in mezzo): il budget di riapertura si ricarica e la raccolta è completa', async () => {
+    const clean = await run(() => cpuWithBlocks());
+    const rx = readKitZip(kitZip(clean)).frames.filter((f) => f.dir === 'rx').length;
+    const r = await run((n) =>
+      cpuWithBlocks({
+        faults:
+          n === 0
+            ? { dropAfterResponses: Math.floor(rx * 0.3) }
+            : n === 1
+              ? { dropAfterResponses: Math.floor(rx * 0.35) }
+              : {},
+      }),
+    );
+    expect(r.summary.errors.filter((e) => e.code === 'CLOSED')).toHaveLength(2);
+    expect(r.summary.blocksUploaded).toBe(5);
+    expect(r.summary.clock).toBeDefined();
+  });
+
   it('seconda caduta: la raccolta finisce con quello che ha, zip completo e leggibile', async () => {
     const clean = await run(() => cpuWithBlocks());
     const rx = readKitZip(kitZip(clean)).frames.filter((f) => f.dir === 'rx').length;

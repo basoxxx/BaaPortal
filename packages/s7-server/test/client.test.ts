@@ -100,6 +100,26 @@ describe('S7Client reale contro il finto PLC', () => {
     }
   });
 
+  it('buffer diagnostico di 700 voci a PDU 240: più di 64 pezzi, tutte restituite', async () => {
+    const cpu = new FakeCpu({ pduLength: 240 });
+    for (let i = 0; i < 700; i++) {
+      cpu.addDiagnostic({
+        eventId: 0x4000 + i,
+        info: new Uint8Array(10),
+        time: { year: 2025, month: 1, day: 2, hour: 3, minute: 4, second: 5, ms: 6 },
+      });
+    }
+    const c = await connect(cpu);
+    try {
+      const d = await c.diagnosticBuffer();
+      expect(d).toHaveLength(700);
+      expect(d[0]!.eventId).toBe(0x4000 + 699);
+      expect(d[699]!.eventId).toBe(0x4000);
+    } finally {
+      await c.close();
+    }
+  });
+
   it('protezione 3: il client riceve CPU_ERROR 0xD241 su lettura e upload, ma legge identità e blocchi', async () => {
     const cpu = new FakeCpu({ protectionLevel: 3 });
     cpu.addDb(1, seq(8));

@@ -53,8 +53,13 @@ import {
   type UserdataFrame,
 } from './s7/userdataRequests';
 
-/** Tetto ai pezzi di una SZL (proto §6.7): oltre, la CPU sta sbagliando. */
-const MAX_SZL_FRAGMENTS = 64;
+/**
+ * Tetto ai pezzi di una SZL (proto §6.7): oltre, la CPU sta sbagliando. Un buffer diagnostico
+ * pieno (qualche centinaio di voci da 20 byte) a PDU 240 richiede più di 64 pezzi.
+ */
+const MAX_SZL_FRAGMENTS = 1024;
+/** Tetto ai byte totali di una SZL ricomposta. */
+const MAX_SZL_BYTES = 4 * 1024 * 1024;
 /** Tetto ai pezzi di una lista di blocchi (una DB-list di 65536 voci sta in meno di 256 pezzi). */
 const MAX_LIST_FRAGMENTS = 256;
 /** Tetto ai byte di un blocco caricato: protegge da lunghezze assurde. */
@@ -107,6 +112,11 @@ export class S7Client {
   /** Frame rifiutati dal filtro di sola lettura (mai inviati). */
   get refusedCount(): number {
     return this.#conn.refusedCount;
+  }
+
+  /** True quando la connessione è chiusa (da noi, dalla CPU o per un guasto): non si riusa. */
+  get closed(): boolean {
+    return this.#conn.closed;
   }
 
   close(): Promise<void> {
@@ -199,13 +209,17 @@ export class S7Client {
     sub: number,
     cap: number,
     what: string,
+    maxBytes = Infinity,
   ): Promise<Uint8Array[]> {
     let u = await this.#userdata(first, what);
     const out = [u.payload];
+    let bytes = u.payload.length;
     while (u.param.lastDataUnit) {
       if (out.length >= cap) throw new S7Error('PROTOCOL', `${what}: oltre ${cap} pezzi`);
       u = await this.#userdata(reqContinue(group, sub, u.param.sequence), what);
       out.push(u.payload);
+      bytes += u.payload.length;
+      if (bytes > maxBytes) throw new S7Error('PROTOCOL', `${what}: oltre ${maxBytes} byte`);
     }
     return out;
   }
@@ -214,7 +228,7 @@ export class S7Client {
   async readSzl(id: number, index: number): Promise<SzlList> {
     const what = `SZL 0x${id.toString(16).padStart(4, '0')}`;
     const list = parseSzl(
-      await this.#fragments(reqReadSzl(id, index), 4, 1, MAX_SZL_FRAGMENTS, what),
+      await this.#fragments(reqReadSzl(id, index), 4, 1, MAX_SZL_FRAGMENTS, what, MAX_SZL_BYTES),
     );
     if (list.id !== id) {
       throw new S7Error(

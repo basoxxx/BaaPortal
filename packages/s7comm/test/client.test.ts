@@ -351,7 +351,22 @@ describe('SZL, identità, modo, protezione, comunicazione', () => {
     ]);
   });
 
-  it('una SZL che non finisce mai: PROTOCOL dopo 64 pezzi', async () => {
+  it('una SZL oltre 4 MiB in totale: PROTOCOL prima del tetto dei pezzi', async () => {
+    const { client, ud } = await rig({
+      override: (_p, u) => {
+        if (u?.param.group !== 4) return undefined;
+        const first = u.param.methodByte === 0x11;
+        return szlReply(first ? R.szl001cFirst.data.slice(4, 12) : new Uint8Array(60000), true, 3);
+      },
+    });
+    await expect(client.readSzl(0x001c, 0)).rejects.toMatchObject({
+      code: 'PROTOCOL',
+      message: expect.stringContaining('byte'),
+    });
+    expect(ud.length).toBeLessThan(100);
+  });
+
+  it('una SZL che non finisce mai: PROTOCOL dopo 1024 pezzi', async () => {
     const { client, ud } = await rig({
       override: (_p, u) => {
         if (u?.param.group !== 4) return undefined;
@@ -364,7 +379,7 @@ describe('SZL, identità, modo, protezione, comunicazione', () => {
       },
     });
     await expect(client.readSzl(0x001c, 0)).rejects.toMatchObject({ code: 'PROTOCOL' });
-    expect(ud.length).toBe(64);
+    expect(ud.length).toBe(1024);
   });
 
   it('manca la 0x001C (rifiutata): identity ha solo i campi della 0x0011', async () => {
@@ -798,6 +813,7 @@ describe('sola lettura', () => {
         'blockCounts',
         'blockInfo',
         'close',
+        'closed',
         'communication',
         'diagnosticBuffer',
         'identity',

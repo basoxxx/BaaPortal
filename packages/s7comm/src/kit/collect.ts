@@ -83,6 +83,10 @@ const CONNECTION_CODES = new Set<S7ErrorCode>([
   'CONNECT_TIMEOUT',
 ]);
 
+/** Riaperture consentite di fila; si ricarica dopo RECONNECT_RESET_STEPS passi riusciti. */
+const RECONNECT_BUDGET = 1;
+const RECONNECT_RESET_STEPS = 20;
+
 /** Ordine dei tipi, come nel conteggio delle CPU. */
 const TYPES: BlockType[] = ['OB', 'FB', 'FC', 'DB', 'SDB', 'SFC', 'SFB'];
 /** Tetto alle SZL elencate dalla 0x0000 che il kit legge una per una. */
@@ -187,6 +191,8 @@ export async function collect(
   const szlLists = new Map<string, SzlList>();
   let client: S7Client | undefined;
   let reconnects = 0;
+  /** Passi riusciti di fila dall'ultimo errore: a RECONNECT_RESET_STEPS il budget di riapertura si ricarica. */
+  let okStreak = 0;
   let refused = 0;
   let pduLength: number | undefined;
   const summary: Partial<KitSummary> = {};
@@ -214,7 +220,25 @@ export async function collect(
     }
   };
 
+  /** Riapre la connessione, se il budget lo permette: una per volta, con l'attesa prevista. */
+  const reopen = async (name: string): Promise<void> => {
+    if (reconnects >= RECONNECT_BUDGET) throw new EndRun();
+    reconnects++;
+    await sleep(o.reconnectDelayMs ?? 1000, signal);
+    if (signal?.aborted) {
+      errors.push({ step: name, code: 'ABORTED', message: 'operazione annullata' });
+      throw new EndRun();
+    }
+  };
+
   const ensure = async (): Promise<S7Client> => {
+    if (client?.closed) {
+      // Un client chiuso non si riusa mai: se ne crea uno nuovo, e questo conta come riapertura.
+      await drop();
+      errors.push({ step: 'connect', code: 'CLOSED', message: 'connessione chiusa' });
+      okStreak = 0;
+      await reopen('connect');
+    }
     if (client) return client;
     client = await S7Client.connect({
       host: o.host,
@@ -236,15 +260,10 @@ export async function collect(
     const err = asS7(e);
     errors.push({ step: name, code: err.code, message: err.message });
     if (err.code === 'ABORTED') throw new EndRun();
+    okStreak = 0;
     if (!CONNECTION_CODES.has(err.code)) return 'fail';
     await drop();
-    if (reconnects >= 1) throw new EndRun();
-    reconnects++;
-    await sleep(o.reconnectDelayMs ?? 1000, signal);
-    if (signal?.aborted) {
-      errors.push({ step: name, code: 'ABORTED', message: 'operazione annullata' });
-      throw new EndRun();
-    }
+    await reopen(name);
     return 'retry';
   };
 
@@ -265,7 +284,10 @@ export async function collect(
         return { ok: false };
       }
       try {
-        return { ok: true, value: await fn(c) };
+        const value = await fn(c);
+        // Dopo abbastanza passi riusciti di fila una caduta isolata non pesa più sul budget.
+        if (++okStreak >= RECONNECT_RESET_STEPS) reconnects = 0;
+        return { ok: true, value };
       } catch (e) {
         if ((await handle(name, e)) === 'retry') continue;
         return { ok: false };
