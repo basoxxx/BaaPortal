@@ -369,7 +369,8 @@ describe('sorgente: punto di invio e confini della piattaforma', () => {
     });
   }
   const src = join(__dirname, '..', 'src');
-  const rel = (f: string): string => f.slice(src.length + 1);
+  // Percorso relativo con '/' anche su Windows, dove join usa '\'.
+  const rel = (f: string): string => f.slice(src.length + 1).replaceAll('\\', '/');
   const stripComments = (t: string): string =>
     t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
   const files = walk(src);
