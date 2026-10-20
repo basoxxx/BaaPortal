@@ -100,7 +100,18 @@ const EXPLICIT_SZL: [number, number][] = [
   [0x00a0, 0],
 ];
 
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+/** Attesa che finisce subito se il segnale scatta. */
+const sleep = (ms: number, signal?: AbortSignal): Promise<void> =>
+  new Promise((resolve) => {
+    if (signal?.aborted) return resolve();
+    const done = (): void => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', done);
+      resolve();
+    };
+    const timer = setTimeout(done, ms);
+    signal?.addEventListener('abort', done, { once: true });
+  });
 const h4 = (n: number): string => n.toString(16).toUpperCase().padStart(4, '0');
 const p2 = (n: number, w = 2): string => String(n).padStart(w, '0');
 
@@ -229,7 +240,11 @@ export async function collect(
     await drop();
     if (reconnects >= 1) throw new EndRun();
     reconnects++;
-    await sleep(o.reconnectDelayMs ?? 1000);
+    await sleep(o.reconnectDelayMs ?? 1000, signal);
+    if (signal?.aborted) {
+      errors.push({ step: name, code: 'ABORTED', message: 'operazione annullata' });
+      throw new EndRun();
+    }
     return 'retry';
   };
 

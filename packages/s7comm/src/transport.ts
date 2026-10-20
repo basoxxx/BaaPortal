@@ -88,24 +88,42 @@ export function pacedFactory(inner: TransportFactory, minMs: number): TransportF
     const t = await inner(host, port, timeoutMs, signal);
     let lastRx: number | undefined;
     let lastAt = 0;
+    let closed = false;
+    const queue: Uint8Array[] = [];
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const sendNow = (bytes: Uint8Array): void => {
+      try {
+        t.send(bytes);
+      } catch {
+        // la chiusura la segnala onClose o il timeout della richiesta
+      }
+    };
+    const drain = (): void => {
+      if (timer !== undefined) clearTimeout(timer);
+      timer = undefined;
+      for (const f of queue.splice(0)) sendNow(f);
+    };
     const wrapped: Transport = {
       send(bytes) {
+        if (closed) throw new S7Error('CLOSED', 'trasporto chiuso');
         const now = Date.now();
         const at = Math.max(now, lastAt, lastRx === undefined ? 0 : lastRx + minMs);
-        if (at <= now) {
+        if (at <= now && queue.length === 0) {
           lastAt = now;
           t.send(bytes);
           return;
         }
         lastAt = at;
-        const copy = bytes.slice();
-        setTimeout(() => {
-          try {
-            t.send(copy);
-          } catch {
-            // la chiusura la segnala onClose o il timeout della richiesta
-          }
-        }, at - now);
+        queue.push(bytes.slice());
+        if (timer === undefined) {
+          const next = (): void => {
+            timer = undefined;
+            const f = queue.shift();
+            if (f) sendNow(f);
+            if (queue.length > 0) timer = setTimeout(next, Math.max(0, minMs));
+          };
+          timer = setTimeout(next, at - now);
+        }
       },
       onData(cb) {
         t.onData((c) => {
@@ -113,8 +131,21 @@ export function pacedFactory(inner: TransportFactory, minMs: number): TransportF
           cb(c);
         });
       },
-      onClose: (cb) => t.onClose(cb),
-      close: () => t.close(),
+      onClose: (cb) =>
+        t.onClose((e) => {
+          closed = true;
+          if (timer !== undefined) clearTimeout(timer);
+          timer = undefined;
+          queue.length = 0;
+          cb(e);
+        }),
+      close() {
+        if (closed) return;
+        closed = true;
+        // i frame già accodati (p.es. il DR) partono in ordine, senza attesa, poi si chiude
+        drain();
+        t.close();
+      },
     };
     return wrapped;
   };

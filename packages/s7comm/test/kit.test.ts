@@ -3,10 +3,12 @@ import { describe, expect, it } from 'vitest';
 import {
   S7Error,
   collect,
+  pacedFactory,
   kitZip,
   readKitZip,
   type KitResult,
   type KitSummary,
+  type Transport,
   type TransportFactory,
 } from '../src';
 
@@ -77,6 +79,29 @@ describe('kitZip / readKitZip', () => {
       [z({ ...good, 'summary.json': enc('{') }), /summary\.json/],
       [z({ ...good, 'summary.json': enc('{"kitFormat":2}') }), /kitFormat/],
       [
+        z({
+          ...good,
+          'summary.json': enc(JSON.stringify({ ...summary(), refusedCount: undefined })),
+        }),
+        /refusedCount/,
+      ],
+      [
+        z({ ...good, 'summary.json': enc(JSON.stringify({ ...summary(), refusedCount: '0' })) }),
+        /refusedCount/,
+      ],
+      [z({ ...good, 'summary.json': enc(JSON.stringify({ ...summary(), host: 5 })) }), /host/],
+      [
+        z({
+          ...good,
+          'summary.json': enc(JSON.stringify({ ...summary(), errors: [{ step: 1 }] })),
+        }),
+        /errors/,
+      ],
+      [
+        z({ ...good, 'summary.json': enc(JSON.stringify({ ...summary(), warnings: 'x' })) }),
+        /warnings/,
+      ],
+      [
         z({ 'LEGGIMI.txt': good['LEGGIMI.txt'], 'summary.json': good['summary.json'] }),
         /capture\.jsonl/,
       ],
@@ -101,6 +126,68 @@ function readKitFiles(zip: Uint8Array): Record<string, string> {
   for (const [k, v] of Object.entries(unzipSync(zip))) out[k] = strFromU8(v);
   return out;
 }
+
+describe('trasporto con pause (pacedFactory)', () => {
+  const fake = (): {
+    t: Transport;
+    sent: { at: number; b: Uint8Array }[];
+    closed: () => boolean;
+    push: (b: Uint8Array) => void;
+  } => {
+    const sent: { at: number; b: Uint8Array }[] = [];
+    let data: (c: Uint8Array) => void = () => undefined;
+    let closed = false;
+    const t: Transport = {
+      send(b) {
+        if (closed) throw new S7Error('CLOSED', 'chiuso');
+        sent.push({ at: Date.now(), b: b.slice() });
+      },
+      onData(cb) {
+        data = cb;
+      },
+      onClose: () => undefined,
+      close() {
+        closed = true;
+      },
+    };
+    return { t, sent, closed: () => closed, push: (b) => data(b) };
+  };
+  const open = async (f: ReturnType<typeof fake>): Promise<Transport> =>
+    pacedFactory(() => Promise.resolve(f.t), 30)('h', 1, 100);
+
+  it('ordine dei frame uguale a quello di invio; la copia non cambia se il buffer viene modificato; si usa il ritardo', async () => {
+    const f = fake();
+    const t = await open(f);
+    t.onData(() => undefined);
+    f.push(Uint8Array.of(9)); // risposta: da qui contano 30 ms
+    const t0 = Date.now();
+    const a = Uint8Array.of(1);
+    t.send(a);
+    a[0] = 99; // il filtro riusa il buffer
+    t.send(Uint8Array.of(2));
+    t.send(Uint8Array.of(3));
+    expect(f.sent).toHaveLength(0); // niente è partito subito: il percorso ritardato è usato
+    await new Promise((r) => setTimeout(r, 200));
+    expect(f.sent.map((s) => s.b[0])).toEqual([1, 2, 3]);
+    expect(f.sent[0]!.at - t0).toBeGreaterThanOrEqual(20);
+    expect(f.sent[1]!.at - f.sent[0]!.at).toBeGreaterThanOrEqual(20);
+  });
+
+  it("close() svuota subito i frame in coda, nell'ordine, poi chiude; dopo la chiusura non parte nulla", async () => {
+    const f = fake();
+    const t = await open(f);
+    t.onData(() => undefined);
+    f.push(Uint8Array.of(9));
+    t.send(Uint8Array.of(1));
+    t.send(Uint8Array.of(0xdd)); // il DR
+    t.close();
+    expect(f.sent.map((s) => s.b[0])).toEqual([1, 0xdd]);
+    expect(f.closed()).toBe(true);
+    expect(() => t.send(Uint8Array.of(5))).toThrowError(/chiuso/);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(f.sent).toHaveLength(2);
+  });
+});
 
 describe('collect (trasporti scritti nel test)', () => {
   const refuse: TransportFactory = () =>

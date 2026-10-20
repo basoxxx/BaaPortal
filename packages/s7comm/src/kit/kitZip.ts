@@ -27,7 +27,7 @@ Che cosa contiene
 - szl/: le liste di stato di sistema (SZL) lette, con i record in esadecimale.
 - blockinfo/: le informazioni di ogni blocco elencato dalla CPU.
 - blocchi/: i blocchi del programma (OB, FB, FC, DB, SFC, SFB, SDB) esattamente come la
-  CPU li ha consegnati. Ci sono solo se la raccolta e stata fatta con il caricamento dei
+  CPU li ha consegnati. Ci sono solo se la raccolta è stata fatta con il caricamento dei
   blocchi.
 
 ATTENZIONE: riservatezza
@@ -89,6 +89,30 @@ function parse(name: string, bytes: Uint8Array): unknown {
   }
 }
 
+function checkSummary(s: Record<string, unknown>): void {
+  for (const k of ['baaportalVersion', 'startedAt', 'finishedAt', 'host']) {
+    if (typeof s[k] !== 'string') throw bad(`summary.json: "${k}" deve essere una stringa`);
+  }
+  for (const k of ['szlRead', 'blocksListed', 'blocksUploaded', 'refusedCount']) {
+    const v = s[k];
+    if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) {
+      throw bad(`summary.json: "${k}" deve essere un numero >= 0`);
+    }
+  }
+  const w = s['warnings'];
+  if (!Array.isArray(w) || w.some((x) => typeof x !== 'string')) {
+    throw bad('summary.json: "warnings" deve essere un elenco di stringhe');
+  }
+  const e = s['errors'];
+  const okErr = (x: unknown): boolean =>
+    typeof x === 'object' &&
+    x !== null &&
+    ['step', 'code', 'message'].every((k) => typeof (x as Record<string, unknown>)[k] === 'string');
+  if (!Array.isArray(e) || !e.every(okErr)) {
+    throw bad('summary.json: "errors" deve essere un elenco di {step, code, message}');
+  }
+}
+
 /** Legge e controlla uno zip del kit. Lancia `S7Error('PROTOCOL')` se la struttura non è quella attesa. */
 export function readKitZip(bytes: Uint8Array): ReadKit {
   let total = 0;
@@ -118,6 +142,7 @@ export function readKitZip(bytes: Uint8Array): ReadKit {
       `kitFormat ${String((summary as { kitFormat?: unknown } | null)?.kitFormat)} non supportato`,
     );
   }
+  checkSummary(summary as Record<string, unknown>);
   let frames: CapturedFrame[];
   try {
     frames = jsonlToFrames(strFromU8(files['capture.jsonl']!));

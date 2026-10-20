@@ -10,7 +10,16 @@ import {
 import { collectTcp } from '@baaportal/s7comm/node';
 import { FakeCpu } from '../src';
 import { listen } from '../src/node';
-import { ALLOWED, cpuWithBlocks, memoryFactory, txKinds, uploadIds } from './kitRig';
+import {
+  ALLOWED,
+  cpuWithBlocks,
+  memoryFactory,
+  spyFactory,
+  txKinds,
+  uploadIds,
+  uploadViolations,
+} from './kitRig';
+import { seq } from './helpers';
 
 /** La finta, come le CPU vere, rifiuta alcune SZL elencate (0xD402): sono errori attesi, per passo. */
 const nonSzl = (errors: { step: string; code: string }[]) =>
@@ -241,7 +250,109 @@ describe('kit contro il finto PLC', () => {
   });
 });
 
-import { decodeCotp } from '@baaportal/s7comm';
+import { decodeCotp, dissect } from '@baaportal/s7comm';
 function dissectConnect(b: Uint8Array): boolean {
   return decodeCotp(b).type === 'CR';
 }
+
+describe('kit con pause e guasti', () => {
+  const bigCpu = (o: ConstructorParameters<typeof FakeCpu>[0] = {}): FakeCpu => {
+    const cpu = new FakeCpu(o);
+    cpu.addDb(5, seq(3000));
+    return cpu;
+  };
+  /** Numero di frame rx arrivati fino alla risposta al primo start upload, in una raccolta pulita. */
+  const rxBeforeFirstUpload = async (): Promise<number> => {
+    const z = readKitZip(kitZip(await run(() => bigCpu())));
+    let rx = 0;
+    for (const f of z.frames) {
+      if (f.dir === 'rx') rx++;
+      const d = dissect(f.bytes);
+      if (f.dir === 'rx' && d.s7?.rosctr === 3 && d.s7.param[0] === 0x1d) return rx;
+    }
+    throw new Error('nessun upload');
+  };
+
+  it('con minIntervalMs 30 il registro coincide con i byte davvero inviati, DR compreso, e il percorso ritardato è usato', async () => {
+    const spy = { wire: [] as Uint8Array[] };
+    const cpu = cpuWithBlocks();
+    const t0 = Date.now();
+    const r = await collect(
+      { ...FAST, includeBlocks: true, minIntervalMs: 30, transport: spyFactory(() => cpu, spy) },
+      () => undefined,
+    );
+    const took = Date.now() - t0;
+    const z = readKitZip(kitZip(r));
+    const logged = z.frames.filter((f) => f.dir === 'tx').map((f) => f.bytes);
+    expect(spy.wire.map((b) => b.slice(4))).toEqual(logged);
+    const last = dissect(logged.at(-1)!);
+    expect(last.cotp?.type).toBe('DR');
+    expect(took).toBeGreaterThanOrEqual((logged.length - 5) * 25);
+    // intervalli tra i frame tx registrati: quasi tutti >= 25 ms (percorso ritardato)
+    const tx = z.frames.filter((f) => f.dir === 'tx').map((f) => f.t);
+    expect(tx.filter((t, i) => i > 0 && t - tx[i - 1]! >= 25).length).toBeGreaterThan(
+      tx.length / 2,
+    );
+  });
+
+  it("attesa prima della riapertura annullabile: l'abort la interrompe subito", async () => {
+    const ac = new AbortController();
+    setTimeout(() => ac.abort(), 150);
+    const t0 = Date.now();
+    const r = await run(
+      (n) => new FakeCpu(n === 0 ? { faults: { dropAfterResponses: 3 } } : {}),
+      {
+        reconnectDelayMs: 10_000,
+      },
+      ac.signal,
+    );
+    expect(Date.now() - t0).toBeLessThan(3000);
+    expect(r.summary.errors.map((e) => e.code)).toContain('CLOSED');
+    expect(r.summary.errors.at(-1)!.code).toBe('ABORTED');
+    expect(readKitZip(kitZip(r)).summary.errors.at(-1)!.code).toBe('ABORTED');
+  });
+
+  it('(controllo) raccolta pulita: ogni start ha il suo end', async () => {
+    const z = readKitZip(kitZip(await run(() => bigCpu())));
+    expect(uploadViolations(z.frames)).toEqual([]);
+    expect(uploadIds(z.frames).started).toHaveLength(1);
+  });
+
+  it('(a) connessione che cade nel mezzo di un upload: nessuna richiesta tra lo start e la chiusura', async () => {
+    const n0 = await rxBeforeFirstUpload();
+    const r = await run((n) => bigCpu(n === 0 ? { faults: { dropAfterResponses: n0 + 2 } } : {}));
+    expect(r.summary.errors.some((e) => e.code === 'CLOSED')).toBe(true);
+    const z = readKitZip(kitZip(r));
+    expect(uploadViolations(z.frames)).toEqual([]);
+    expect(uploadIds(z.frames).started.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('(b) la CPU smette di rispondere ai pezzi (0x1E) oltre il timeout: nessuna richiesta tra lo start e la chiusura', async () => {
+    // delayMs è globale (farebbe scadere anche il setup): il silenzio sulla sola 0x1E è lo stesso effetto
+    const r = await run(() => bigCpu({ faults: { ignoreFunction: 0x1e } }), { timeoutMs: 300 });
+    expect(r.summary.errors.some((e) => e.code === 'TIMEOUT')).toBe(true);
+    const z = readKitZip(kitZip(r));
+    expect(uploadViolations(z.frames)).toEqual([]);
+  });
+
+  it('(c) annullamento nel mezzo di un upload: nessuna richiesta dopo lo start', async () => {
+    const n0 = await rxBeforeFirstUpload();
+    const ac = new AbortController();
+    const cpu = bigCpu();
+    const spy = {
+      wire: [] as Uint8Array[],
+      onRx: (n: number) => {
+        if (n === n0 + 1) ac.abort();
+      },
+    };
+    const r = await collect(
+      { ...FAST, includeBlocks: true, transport: spyFactory(() => cpu, spy) },
+      () => undefined,
+      ac.signal,
+    );
+    expect(r.summary.errors.at(-1)!.code).toBe('ABORTED');
+    const z = readKitZip(kitZip(r));
+    expect(uploadIds(z.frames).started).toHaveLength(1);
+    expect(uploadViolations(z.frames)).toEqual([]);
+  });
+});
