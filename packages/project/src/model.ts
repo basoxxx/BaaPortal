@@ -1,3 +1,5 @@
+import type { BlockMeta } from '@baaportal/mc7';
+
 export const FORMAT_VERSION = 3;
 
 export interface ProjectMeta {
@@ -104,6 +106,65 @@ export interface DbAttributes {
   nonRetain: boolean;
 }
 
+/**
+ * Metadati di andata e ritorno di un blocco importato da MC7 (piano 1E). Solo JSON: i byte sono
+ * stringhe esadecimali. Un blocco non modificato (stessa proiezione e stesse impronte dei
+ * chiamati, `fidelity`) si esporta con i byte originali.
+ */
+export interface Mc7Meta extends BlockMeta {
+  /** false: il blocco non si ricodifica da testo (sola lettura). Le istruzioni grezze non lo causano: valgono rete per rete. */
+  exact: boolean;
+  /** Impronta esatta (nomi compresi) di reti, interfaccia e intestazione all'importazione; non decide la fedeltà. */
+  sourceHash: string;
+  /** Impronta esatta (nomi compresi) di interfaccia e intestazione all'importazione; non decide la fedeltà. */
+  interfaceHash: string;
+  /**
+   * Regola F: impronte del contesto dei byte all'importazione. Assente (metadati della versione
+   * di sviluppo di 1E) vuol dire sconosciuto: il blocco conta come modificato.
+   */
+  fidelity?: Mc7Fidelity;
+  /**
+   * Il lotto d'importazione da cui viene il blocco (stesso valore per i blocchi importati insieme):
+   * la regola S si fida delle dipendenze del lotto, non degli altri blocchi del progetto.
+   */
+  batch?: string;
+  /**
+   * DB dimostrato istanza dell'SFB `sfb`: col numero `ssbNumber` nei byte 1–2 del suo SSB, usato
+   * come istanza in `CALL SFB sfb, DB m` da un blocco del lotto `batch`. La prova resta col DB
+   * (che è in sola lettura) e ne fa un esempio reale della struttura dell'SFB.
+   */
+  sfbInstance?: { sfb: number; ssbNumber: number; batch: string };
+  /**
+   * true: blocco protetto know-how importato. Il codice non si decodifica né si conserva (spec:
+   * "la protezione si rispetta"): resta l'interfaccia; il blocco è bloccato e si esporta con i byte
+   * originali.
+   */
+  knowHowLocked?: boolean;
+}
+
+/**
+ * Impronte della regola F ("la fedeltà per rete richiede un contesto dei byte invariato"). Sono
+ * proiezioni di ciò che arriva ai byte: nomi e commenti non ne fanno parte.
+ */
+export interface Mc7Fidelity {
+  /** Proiezione del blocco: layout, intestazione (autore, famiglia, nome, versione), linguaggio e reti. */
+  block: string;
+  /**
+   * Layout dell'interfaccia o dei dati: sezioni, ordine, tipi (limiti degli ARRAY, STRUCT, UDT e
+   * multi-istanze risolti), dimensioni e valori iniziali; più tipo, numero e know-how.
+   */
+  layout: string;
+  /** Proiezione di ogni rete: testo senza commenti, nomi dell'interfaccia per posizione, grezzi compresi. */
+  networks: string[];
+  /**
+   * Chiamati (CALL, UC/CC anche grezzi, multi-istanze), DB di istanza delle CALL e, per un DB di
+   * istanza, il suo FB: chiave `<tipo><numero>` (`FC20`, `DB11`), valore l'impronta del layout
+   * all'importazione, null se assente, `estraneo` (blocco del progetto che non viene
+   * dall'importazione) o `incoerente` (non torna con lo stesso lotto): questi due non coincidono mai.
+   */
+  deps: Record<string, string | null>;
+}
+
 interface BlockBase {
   id: string;
   number: number;
@@ -111,6 +172,8 @@ interface BlockBase {
   group: string;
   header: BlockHeader;
   knowHowProtected: boolean;
+  /** Presente nei blocchi importati da file MC7. */
+  mc7?: Mc7Meta;
 }
 
 export interface CodeBlock extends BlockBase {

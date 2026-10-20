@@ -44,6 +44,7 @@ export const MENUS: MenuDef[] = [
       'edit.selectAll',
       'sep',
       'edit.compile',
+      'edit.compileFull',
     ],
   },
   {

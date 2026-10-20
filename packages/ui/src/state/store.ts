@@ -1,5 +1,5 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
-import type { Project } from '@baaportal/project';
+import type { Mc7Diagnostic, Project } from '@baaportal/project';
 import * as wa from './workArea';
 import { applyHistory, HISTORY_LIMIT, pushLimited, recordEdit, type HistoryEntry } from './history';
 
@@ -53,6 +53,44 @@ export interface InfoMessage {
   params?: Record<string, string>;
   target?: InfoTarget;
 }
+export type InfoSubTab = 'general' | 'crossRefs' | 'compile';
+/** Una riga della scheda Informazioni → Compila: l'esito di un blocco. */
+export interface CompileRow {
+  deviceId: string;
+  blockId: string;
+  name: string;
+  /** Tipo e numero, p.es. FC5 (un DB di istanza è DB). */
+  tag: string;
+  status: 'ok' | 'warning' | 'error';
+  errors: number;
+  warnings: number;
+  diagnostics: Mc7Diagnostic[];
+}
+export interface CompileSummary {
+  blocks: number;
+  errors: number;
+  warnings: number;
+}
+/**
+ * Esiti della compilazione nella sessione, per il documento aperto: non si salvano nel `.baap`.
+ * `hashes` e `files` riguardano l'ultima compilazione riuscita di ogni blocco.
+ */
+export interface CompileState {
+  rows: CompileRow[];
+  summary: CompileSummary | null;
+  hashes: Record<string, string>;
+  files: Record<string, Uint8Array>;
+  /** Diagnostiche (avvisi) dell'ultima compilazione riuscita di ogni blocco. */
+  diagnostics: Record<string, Mc7Diagnostic[]>;
+}
+/** Richiesta all'editor di un blocco di portare il cursore a rete e riga (da 1); `n` la rende ripetibile. */
+export interface CompileReveal {
+  deviceId: string;
+  blockId: string;
+  network: number;
+  line: number;
+  n: number;
+}
 export interface PanelState {
   open: boolean;
   pinned: boolean;
@@ -76,6 +114,9 @@ export interface AppState {
   inspectorTab: InspectorTab;
   messages: InfoMessage[];
   reveal: SourceReveal | null;
+  infoSubTab: InfoSubTab;
+  compile: CompileState;
+  compileReveal: CompileReveal | null;
   status: { textKey: string; params?: Record<string, string> } | null;
   panels: Record<PanelName, PanelState>;
   referenceProjectsOpen: boolean;
@@ -101,6 +142,23 @@ export interface AppState {
   openSourceAt(t: Omit<InfoTarget, 'kind'>): void;
   /** L'editor ha eseguito la richiesta. */
   clearReveal(n: number): void;
+  setInfoSubTab(t: InfoSubTab): void;
+  /** Inizio di una compilazione: la scheda Compila si svuota. */
+  beginCompile(): void;
+  /**
+   * Fine: righe e riepilogo; `compiled` ricorda impronta e file dei blocchi riusciti. Un blocco
+   * fallito (`failed`) conserva l'ultimo file buono con la sua impronta: l'esportazione lo riusa
+   * solo se l'impronta coincide con quella attuale, quindi un file vecchio non esce per sbaglio.
+   */
+  finishCompile(r: {
+    rows: CompileRow[];
+    summary: CompileSummary;
+    compiled: Record<string, { hash: string; file: Uint8Array; diagnostics: Mc7Diagnostic[] }>;
+    failed: string[];
+  }): void;
+  /** Apre l'editor del blocco e chiede di portare il cursore a rete e riga. */
+  openBlockAt(t: Omit<CompileReveal, 'n'>): void;
+  clearCompileReveal(n: number): void;
   setPanel(name: PanelName, patch: Partial<PanelState>): void;
   setReferenceProjectsOpen(o: boolean): void;
   setTaskCard(t: TaskCardId): void;
@@ -122,6 +180,14 @@ export const DEFAULT_PANELS: Record<PanelName, PanelState> = {
   inspector: { open: true, pinned: true, size: 30 },
   taskCards: { open: true, pinned: true, size: 22 },
 };
+
+const emptyCompile = (): CompileState => ({
+  rows: [],
+  summary: null,
+  hashes: {},
+  files: {},
+  diagnostics: {},
+});
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const formatDate = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -145,6 +211,9 @@ export function createAppStore(now: () => Date = () => new Date()): StoreApi<App
     inspectorTab: 'properties',
     messages: [],
     reveal: null,
+    infoSubTab: 'general',
+    compile: emptyCompile(),
+    compileReveal: null,
     status: null,
     panels: structuredClone(DEFAULT_PANELS),
     referenceProjectsOpen: false,
@@ -161,6 +230,8 @@ export function createAppStore(now: () => Date = () => new Date()): StoreApi<App
         docLoadId: s.docLoadId + 1,
         workArea: wa.closeAllEditors(s.workArea),
         dialog: null,
+        compile: emptyCompile(),
+        compileReveal: null,
         history: { past: [], future: [] },
       }));
     },
@@ -248,6 +319,30 @@ export function createAppStore(now: () => Date = () => new Date()): StoreApi<App
       }));
     },
     clearReveal: (n) => set((s) => (s.reveal?.n === n ? { reveal: null } : s)),
+    setInfoSubTab: (infoSubTab) => set({ infoSubTab }),
+    beginCompile: () => set((s) => ({ compile: { ...s.compile, rows: [], summary: null } })),
+    finishCompile: ({ rows, summary, compiled }) =>
+      set((s) => {
+        const hashes = { ...s.compile.hashes };
+        const files = { ...s.compile.files };
+        const diagnostics = { ...s.compile.diagnostics };
+        for (const [id, c] of Object.entries(compiled)) {
+          hashes[id] = c.hash;
+          files[id] = c.file;
+          diagnostics[id] = c.diagnostics;
+        }
+        return { compile: { rows, summary, hashes, files, diagnostics } };
+      }),
+    openBlockAt: (t) => {
+      if (!get().doc) return;
+      const target = { kind: 'block' as const, deviceId: t.deviceId, objectId: t.blockId };
+      set((s) => ({
+        workArea: wa.openEditor(s.workArea, target),
+        selection: wa.nodeIdOfEditor(target),
+        compileReveal: { ...t, n: (s.compileReveal?.n ?? 0) + 1 },
+      }));
+    },
+    clearCompileReveal: (n) => set((s) => (s.compileReveal?.n === n ? { compileReveal: null } : s)),
     setPanel: (name, patch) =>
       set((s) => ({ panels: { ...s.panels, [name]: { ...s.panels[name], ...patch } } })),
     setReferenceProjectsOpen: (referenceProjectsOpen) => set({ referenceProjectsOpen }),

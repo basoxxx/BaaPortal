@@ -1,6 +1,13 @@
 import { act, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { findDevice, type PlcDevice } from '@baaportal/project';
+import { findCpu } from '@baaportal/catalog';
+import {
+  applyImport,
+  blockToMc7File,
+  findDevice,
+  planImport,
+  type PlcDevice,
+} from '@baaportal/project';
 import { ids } from '../src/project/navigation/treeIds';
 import { dev, fb, fc, globalDb, instanceDb, mem, past, PLC, udt } from './blockFixtures';
 import { renderApp, type RenderedApp } from './renderApp';
@@ -222,6 +229,94 @@ describe('proprietà dei blocchi', () => {
       attributes: { unlinked: true, readOnly: true, nonRetain: true },
     });
     expect(past(app)).toBe(before + 4);
+  });
+
+  it('blocco protetto know-how importato: la casella è disattivata', async () => {
+    await open((d) => {
+      const b = globalDb('Dati', [mem('a', 'Bool')]);
+      b.knowHowProtected = true;
+      b.mc7 = {
+        exact: false,
+        knowHowLocked: true,
+        sourceHash: '',
+        interfaceHash: '',
+        headerRaw: '',
+        addRaw: '',
+        checksum: 0,
+        original: '7070',
+        mc7Hash: '',
+        footerRaw: '',
+        times: { code: '', iface: '' },
+      };
+      d.blocks.push(b);
+    }, nodeOf('Dati'));
+    expect(field('Protezione know-how')).toBeDisabled();
+    expect(field('Protezione know-how')).toBeChecked();
+  });
+
+  it('DB protetto know-how importato senza blocco di libreria: la casella resta disattivata', async () => {
+    await open((d) => {
+      const b = globalDb('Dati', [mem('a', 'Bool')]);
+      b.knowHowProtected = true;
+      b.mc7 = {
+        exact: true,
+        knowHowLocked: false,
+        sourceHash: '',
+        interfaceHash: '',
+        headerRaw: '',
+        addRaw: '',
+        checksum: 0,
+        original: '7070',
+        mc7Hash: '',
+        footerRaw: '',
+        times: { code: '', iface: '' },
+      };
+      d.blocks.push(b);
+    }, nodeOf('Dati'));
+    expect(field('Protezione know-how')).toBeDisabled();
+    expect(field('Protezione know-how')).toBeChecked();
+  });
+
+  it('DB importato e ricaricato protetto know-how (stesso SSB): nomi tenuti e casella bloccata', async () => {
+    const app = await renderApp({ view: 'project', withProject: true, withPlc: true });
+    const cpu = findCpu('cpu-315-2-pn-dp')!;
+    const friend: PlcDevice = { ...structuredClone(dev(app)), blocks: [] };
+    const src = globalDb('Dati', [mem('a', 'Int'), mem('b', 'Int')]);
+    friend.blocks.push(src);
+    const at = new Date('2026-10-20T10:00:00Z');
+    const plain = blockToMc7File(src, friend, cpu, at).file!;
+    src.knowHowProtected = true;
+    const locked = blockToMc7File(src, friend, cpu, at).file!;
+    // come l'azione Importa blocchi: il piano sul progetto, poi un solo passo che lo applica
+    const load = (file: Uint8Array) =>
+      act(() => {
+        const plan = planImport(dev(app), [file]);
+        app.store.getState().edit('history.addRow', (p) => applyImport(findDevice(p, PLC)!, plan));
+      });
+    load(plain);
+    act(() => {
+      app.store.getState().edit('history.addRow', (p) => {
+        const b = findDevice(p, PLC)!.blocks.find((x) => x.name === 'DB5')!;
+        if (b.kind === 'DB') b.members[1]!.comment = 'contatore';
+      });
+    });
+    load(locked);
+    act(() => app.store.getState().select(nodeOf('DB5')(dev(app))));
+    expect(field('Protezione know-how')).toBeDisabled();
+    expect(field('Protezione know-how')).toBeChecked();
+    const b = dev(app).blocks.find((x) => x.name === 'DB5')!;
+    expect(b.kind === 'DB' && b.members[1]!.comment).toBe('contatore');
+  });
+
+  it('DB protetto know-how creato nel progetto (non importato): la casella è attiva', async () => {
+    const app = await open((d) => {
+      const b = globalDb('Dati', [mem('a', 'Bool')]);
+      b.knowHowProtected = true;
+      d.blocks.push(b);
+    }, nodeOf('Dati'));
+    expect(field('Protezione know-how')).toBeEnabled();
+    await app.user.click(field('Protezione know-how'));
+    expect(blk(app, 'Dati').knowHowProtected).toBe(false);
   });
 
   it("DB di istanza: mostra l'FB di appartenenza", async () => {

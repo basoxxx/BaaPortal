@@ -1,0 +1,116 @@
+[
+  {
+    "file": "dotnetsiemens/FC1.bin",
+    "url": "https://raw.githubusercontent.com/dotnetprojects/DotNetSiemensPLCToolBoxLibrary/bbe5beccbadcf7497408e92883e260cc5024a874/ToolBoxLibUnitTests/S7Blocks/MC7Converter/FC1.bin",
+    "sha256": "1dad29e5599092b7eb958662cbcf35ee88af95c7d47ecacd5c7e2b004df04e58",
+    "license": "LGPL-2.1 (DotNetSiemensPLCToolBoxLibrary): solo dato di prova scaricato, mai committato"
+  },
+  {
+    "file": "dotnetsiemens/FC21.bin",
+    "url": "https://raw.githubusercontent.com/dotnetprojects/DotNetSiemensPLCToolBoxLibrary/bbe5beccbadcf7497408e92883e260cc5024a874/ToolBoxLibUnitTests/S7Blocks/MC7Converter/FC21.bin",
+    "sha256": "ca263c5bc99dbd5005202cf3fddd0bf50fa70fff13b231149734a6ed8124a8b0",
+    "license": "LGPL-2.1 (DotNetSiemensPLCToolBoxLibrary): solo dato di prova scaricato, mai committato"
+  },
+  {
+    "file": "dotnetsiemens/FC100.bin",
+    "url": "https://raw.githubusercontent.com/dotnetprojects/DotNetSiemensPLCToolBoxLibrary/bbe5beccbadcf7497408e92883e260cc5024a874/ToolBoxLibUnitTests/S7Blocks/MC7Converter/FC100.bin",
+    "sha256": "61639e64418a47b0b7fe5aaeadaeadf642bab2319bf32f22e473e967264dcdd2",
+    "license": "LGPL-2.1 (DotNetSiemensPLCToolBoxLibrary): solo dato di prova scaricato, mai committato"
+  },
+  {
+    "file": "dotnetsiemens/FB101.bin",
+    "url": "https://raw.githubusercontent.com/dotnetprojects/DotNetSiemensPLCToolBoxLibrary/bbe5beccbadcf7497408e92883e260cc5024a874/ToolBoxLibUnitTests/S7Blocks/MC7Converter/FB101.bin",
+    "sha256": "2d18dedcdaa1e5de230160f46d9cee1f86d795d7a56feb74764aa9b09b5916ad",
+    "license": "LGPL-2.1 (DotNetSiemensPLCToolBoxLibrary): solo dato di prova scaricato, mai committato"
+  },
+  {
+    "file": "dotnetsiemens/FB1001.bin",
+    "url": "https://raw.githubusercontent.com/dotnetprojects/DotNetSiemensPLCToolBoxLibrary/bbe5beccbadcf7497408e92883e260cc5024a874/ToolBoxLibUnitTests/S7Blocks/MC7Converter/FB1001.bin",
+    "sha256": "cf44c4b4aed570344ad0499323ed3552dc3b6cf94935b613728c439fbdb1a676",
+    "license": "LGPL-2.1 (DotNetSiemensPLCToolBoxLibrary): solo dato di prova scaricato, mai committato"
+  },
+  {
+    "file": "dotnetsiemens/FB751.bin",
+    "url": "https://raw.githubusercontent.com/dotnetprojects/DotNetSiemensPLCToolBoxLibrary/bbe5beccbadcf7497408e92883e260cc5024a874/ToolBoxLibUnitTests/S7Blocks/MC7Converter/FB751.bin",
+    "sha256": "a1ca7cf5e2f682bc496b62c40a71148e8679ac0c9b0e11f75fba3b9bddaef21a",
+    "license": "LGPL-2.1 (DotNetSiemensPLCToolBoxLibrary): solo dato di prova scaricato, mai committato"
+  },
+  {
+    "file": "dotnetsiemens/DB4.bin",
+    "url": "https://raw.githubusercontent.com/dotnetprojects/DotNetSiemensPLCToolBoxLibrary/bbe5beccbadcf7497408e92883e260cc5024a874/ToolBoxLibUnitTests/S7Blocks/MC7Converter/DB4.bin",
+    "sha256": "7b89827d873a9bbe84817a5e89d46e7802927d0fef2611e131f8a4b48f5f6694",
+    "license": "LGPL-2.1 (DotNetSiemensPLCToolBoxLibrary): solo dato di prova scaricato, mai committato"
+  },
+  {
+    "file": "dotnetsiemens/DB13.bin",
+    "url": "https://raw.githubusercontent.com/dotnetprojects/DotNetSiemensPLCToolBoxLibrary/bbe5beccbadcf7497408e92883e260cc5024a874/ToolBoxLibUnitTests/S7Blocks/MC7Converter/DB13.bin",
+    "sha256": "841f35aa7581d283597db04eb18436979bc041df5d6b6da8e55058a822dfc570",
+    "license": "LGPL-2.1 (DotNetSiemensPLCToolBoxLibrary): solo dato di prova scaricato, mai committato"
+  },
+  {
+    "file": "dotnetsiemens/DB121.bin",
+    "url": "https://raw.githubusercontent.com/dotnetprojects/DotNetSiemensPLCToolBoxLibrary/bbe5beccbadcf7497408e92883e260cc5024a874/ToolBoxLibUnitTests/S7Blocks/MC7Converter/DB121.bin",
+    "sha256": "b6f597c86f62e3e07f2b7c505238e8ddad592b1e95a18fb580995b9f93f87b7e",
+    "license": "LGPL-2.1 (DotNetSiemensPLCToolBoxLibrary): solo dato di prova scaricato, mai committato"
+  },
+  {
+    "file": "dotnetsiemens/DB1806.bin",
+    "url": "https://raw.githubusercontent.com/dotnetprojects/DotNetSiemensPLCToolBoxLibrary/bbe5beccbadcf7497408e92883e260cc5024a874/ToolBoxLibUnitTests/S7Blocks/MC7Converter/DB1806.bin",
+    "sha256": "54a0f73033a819a975830a53ec87995379c99c8af5d46237ba9e90784ee75bfe",
+    "license": "LGPL-2.1 (DotNetSiemensPLCToolBoxLibrary): solo dato di prova scaricato, mai committato"
+  },
+  {
+    "file": "dotnetsiemens/DB3001.bin",
+    "url": "https://raw.githubusercontent.com/dotnetprojects/DotNetSiemensPLCToolBoxLibrary/bbe5beccbadcf7497408e92883e260cc5024a874/ToolBoxLibUnitTests/S7Blocks/Parameter/DB3001.bin",
+    "sha256": "3aa1af2651fbcdc279d7daeac03abd84c7e019833be791cd30ae9f9037dce12e",
+    "license": "LGPL-2.1 (DotNetSiemensPLCToolBoxLibrary): solo dato di prova scaricato, mai committato"
+  },
+  {
+    "file": "dotnetsiemens/DB3002.bin",
+    "url": "https://raw.githubusercontent.com/dotnetprojects/DotNetSiemensPLCToolBoxLibrary/bbe5beccbadcf7497408e92883e260cc5024a874/ToolBoxLibUnitTests/S7Blocks/Parameter/DB3002.bin",
+    "sha256": "5cb883777aba8d7c37607493bf8049fbabfd0d4028b7359f2cc103ec5c75e6a8",
+    "license": "LGPL-2.1 (DotNetSiemensPLCToolBoxLibrary): solo dato di prova scaricato, mai committato"
+  },
+  {
+    "file": "dotnetsiemens/DB3003.bin",
+    "url": "https://raw.githubusercontent.com/dotnetprojects/DotNetSiemensPLCToolBoxLibrary/bbe5beccbadcf7497408e92883e260cc5024a874/ToolBoxLibUnitTests/S7Blocks/Parameter/DB3003.bin",
+    "sha256": "83b74e9b9df214ee607edd2b90e57fc0fab1e42b1960f624847bf1d0a271febd",
+    "license": "LGPL-2.1 (DotNetSiemensPLCToolBoxLibrary): solo dato di prova scaricato, mai committato"
+  },
+  {
+    "file": "dotnetsiemens/DB3004.bin",
+    "url": "https://raw.githubusercontent.com/dotnetprojects/DotNetSiemensPLCToolBoxLibrary/bbe5beccbadcf7497408e92883e260cc5024a874/ToolBoxLibUnitTests/S7Blocks/Parameter/DB3004.bin",
+    "sha256": "75e3f8c86228a00b82649aecba6b8f854f774486e94826164409d4266a788004",
+    "license": "LGPL-2.1 (DotNetSiemensPLCToolBoxLibrary): solo dato di prova scaricato, mai committato"
+  },
+  {
+    "file": "dotnetsiemens/DB3005.bin",
+    "url": "https://raw.githubusercontent.com/dotnetprojects/DotNetSiemensPLCToolBoxLibrary/bbe5beccbadcf7497408e92883e260cc5024a874/ToolBoxLibUnitTests/S7Blocks/Parameter/DB3005.bin",
+    "sha256": "5f2f963f57527a6380531d74256ad9bb223463e03cc9746dda2b49643943ee29",
+    "license": "LGPL-2.1 (DotNetSiemensPLCToolBoxLibrary): solo dato di prova scaricato, mai committato"
+  },
+  {
+    "file": "dotnetsiemens/DB310.bin",
+    "url": "https://raw.githubusercontent.com/dotnetprojects/DotNetSiemensPLCToolBoxLibrary/bbe5beccbadcf7497408e92883e260cc5024a874/ToolBoxLibUnitTests/S7Blocks/Parameter/DB310.bin",
+    "sha256": "1a8ec01c3ecfc37a6dc908f18d6d486e9f7e9494ae3b0f77b2357a6a732bd99a",
+    "license": "LGPL-2.1 (DotNetSiemensPLCToolBoxLibrary): solo dato di prova scaricato, mai committato"
+  },
+  {
+    "file": "dotnetsiemens/FB3003.bin",
+    "url": "https://raw.githubusercontent.com/dotnetprojects/DotNetSiemensPLCToolBoxLibrary/bbe5beccbadcf7497408e92883e260cc5024a874/ToolBoxLibUnitTests/S7Blocks/Parameter/FB3003.bin",
+    "sha256": "a80d53b48d2914476c9aba46927d857322c2fc1c2cd8b73136e6d56ee17a01de",
+    "license": "LGPL-2.1 (DotNetSiemensPLCToolBoxLibrary): solo dato di prova scaricato, mai committato"
+  },
+  {
+    "file": "dotnetsiemens/FB3004.bin",
+    "url": "https://raw.githubusercontent.com/dotnetprojects/DotNetSiemensPLCToolBoxLibrary/bbe5beccbadcf7497408e92883e260cc5024a874/ToolBoxLibUnitTests/S7Blocks/Parameter/FB3004.bin",
+    "sha256": "3dd058ea08e7b94501a02590f77402fc76214b04ab2c57ccedd9122dfe12f84b",
+    "license": "LGPL-2.1 (DotNetSiemensPLCToolBoxLibrary): solo dato di prova scaricato, mai committato"
+  },
+  {
+    "file": "rzlibmc7/cm7.bin",
+    "url": "https://raw.githubusercontent.com/rizinorg/rz-libmc7/111b189aad531468f9fb1ea07cdbe3e18b7c2d4d/example/cm7.bin",
+    "sha256": "089f010eb69a6795690d40596eacd094c67f3f46e29b8e91f3e9532a93767c29",
+    "license": "LGPL-3.0 (rz-libmc7): solo dato di prova scaricato, mai committato"
+  }
+]
