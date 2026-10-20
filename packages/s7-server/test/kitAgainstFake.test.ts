@@ -459,6 +459,35 @@ describe('kit: la fine della raccolta non si inghiotte e le riaperture sono semp
     }
   });
 
+  it("(d) la risposta di setup è malformata (PROTOCOL): al più 2 tentativi, distanziati, e lo zip c'è", async () => {
+    const times: number[] = [];
+    const factory: TransportFactory = async () => {
+      const [a, b] = memoryTransportPair();
+      serve(cpuWithBlocks(), b);
+      times.push(Date.now());
+      let rx = 0;
+      const onData = a.onData.bind(a);
+      a.onData = (cb) =>
+        onData((chunk) => {
+          // 1ª frame: CC; 2ª: risposta di setup, qui storpiata (TPKT valido, corpo S7 spazzatura)
+          cb(
+            ++rx === 2
+              ? Uint8Array.from([3, 0, 0, 12, 2, 0xf0, 0x80, 0xff, 0xff, 0xff, 0xff, 0xff])
+              : chunk,
+          );
+        });
+      return a;
+    };
+    const r = await go(factory, { reconnectDelayMs: 40 }, () => undefined);
+    expect(times.length).toBeLessThanOrEqual(2);
+    expect(times.length).toBe(2);
+    expect(times[1]! - times[0]!).toBeGreaterThanOrEqual(35);
+    expect(r.summary.errors.length).toBeGreaterThanOrEqual(2);
+    expect(r.summary.errors.every((e) => e.step === 'connect')).toBe(true);
+    expect(r.summary.errors.some((e) => !['TIMEOUT', 'CLOSED'].includes(e.code))).toBe(true);
+    expect(readKitZip(kitZip(r)).summary.errors).toHaveLength(r.summary.errors.length);
+  });
+
   it('(c) annullamento durante la riapertura: ABORTED e la raccolta finisce', async () => {
     const { conns, factory } = rig(cpuWithBlocks(), () => 8);
     const ac = new AbortController();

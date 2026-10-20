@@ -256,12 +256,14 @@ export async function collect(
   };
 
   /** Registra l'errore; 'retry' se la connessione si può riaprire, altrimenti 'fail' o fine. */
-  const handle = async (name: string, e: unknown): Promise<'retry' | 'fail'> => {
+  const handle = async (name: string, e: unknown, opening = false): Promise<'retry' | 'fail'> => {
     const err = asS7(e);
     errors.push({ step: name, code: err.code, message: err.message });
     if (err.code === 'ABORTED') throw new EndRun();
     okStreak = 0;
-    if (!CONNECTION_CODES.has(err.code)) return 'fail';
+    // Un errore mentre si APRE la connessione (qualunque codice: CC o setup malformati, rifiuto della CPU...)
+    // è sempre un errore di connessione: passa dal budget e dall'attesa, mai un nuovo tentativo immediato.
+    if (!opening && !CONNECTION_CODES.has(err.code)) return 'fail';
     await drop();
     await reopen(name);
     return 'retry';
@@ -282,7 +284,7 @@ export async function collect(
       } catch (e) {
         // La fine della raccolta non è un errore da registrare né da ritentare: sale fino al ciclo principale.
         if (e instanceof EndRun) throw e;
-        if ((await handle('connect', e)) === 'retry') continue;
+        if ((await handle('connect', e, true)) === 'retry') continue;
         return { ok: false };
       }
       try {
