@@ -4,7 +4,7 @@ import * as node from '../src/node';
 
 describe('punti di ingresso', () => {
   it('./node esporta esattamente le funzioni di alto livello con il filtro di sola lettura', () => {
-    expect(Object.keys(node).sort()).toEqual(['connectTcp', 'openTcp']);
+    expect(Object.keys(node).sort()).toEqual(['collectTcp', 'connectTcp', 'openTcp']);
     for (const f of Object.values(node)) expect(typeof f).toBe('function');
   });
 

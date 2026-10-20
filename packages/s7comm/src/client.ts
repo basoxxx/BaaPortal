@@ -104,6 +104,11 @@ export class S7Client {
     return this.#conn.pduLength;
   }
 
+  /** Frame rifiutati dal filtro di sola lettura (mai inviati). */
+  get refusedCount(): number {
+    return this.#conn.refusedCount;
+  }
+
   close(): Promise<void> {
     return this.#conn.close();
   }

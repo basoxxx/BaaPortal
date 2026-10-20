@@ -809,6 +809,7 @@ describe('sola lettura', () => {
         'readClock',
         'readItems',
         'readSzl',
+        'refusedCount',
         'upload',
         'uploadWithInfo',
       ].sort(),

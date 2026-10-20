@@ -77,3 +77,45 @@ export function memoryTransportPair(): [Transport, Transport] {
   b.peer = a;
   return [a, b];
 }
+
+/**
+ * Fabbrica di trasporti che tiene almeno `minMs` tra l'ultima risposta e la richiesta successiva,
+ * anche dentro i pezzi di una SZL o di un upload (le richieste partono sempre in ordine).
+ */
+export function pacedFactory(inner: TransportFactory, minMs: number): TransportFactory {
+  if (minMs <= 0) return inner;
+  return async (host, port, timeoutMs, signal) => {
+    const t = await inner(host, port, timeoutMs, signal);
+    let lastRx: number | undefined;
+    let lastAt = 0;
+    const wrapped: Transport = {
+      send(bytes) {
+        const now = Date.now();
+        const at = Math.max(now, lastAt, lastRx === undefined ? 0 : lastRx + minMs);
+        if (at <= now) {
+          lastAt = now;
+          t.send(bytes);
+          return;
+        }
+        lastAt = at;
+        const copy = bytes.slice();
+        setTimeout(() => {
+          try {
+            t.send(copy);
+          } catch {
+            // la chiusura la segnala onClose o il timeout della richiesta
+          }
+        }, at - now);
+      },
+      onData(cb) {
+        t.onData((c) => {
+          lastRx = Date.now();
+          cb(c);
+        });
+      },
+      onClose: (cb) => t.onClose(cb),
+      close: () => t.close(),
+    };
+    return wrapped;
+  };
+}
