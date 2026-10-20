@@ -36,6 +36,43 @@ export interface FileFilter {
   extensions: string[]; // senza punto
 }
 
+export type KitConnectionType = 'pg' | 'op' | 'basic';
+
+export interface KitStartOptions {
+  host: string;
+  port: number;
+  rack: number;
+  slot: number;
+  connectionType: KitConnectionType;
+  includeBlocks: boolean;
+}
+
+export interface KitProgress {
+  phase: 'connect' | 'identity' | 'szl' | 'blocks' | 'upload' | 'done';
+  done: number;
+  total: number;
+  message: string;
+}
+
+/** Riepilogo della raccolta come lo mostra la finestra (sottoinsieme del riepilogo del kit). */
+export interface KitSummary {
+  /** Indirizzo usato, in forma canonica. */
+  host?: string;
+  identity?: { orderNumber: string; moduleName?: string };
+  mode?: string;
+  /** Livelli di protezione letti dalla CPU (SZL 0x0132/0x0232 indice 4). */
+  protection?: { switchLevel?: number; paramLevel?: number; validLevel?: number };
+  szlRead: number;
+  blocksListed: number;
+  blocksUploaded: number;
+  refusedCount: number;
+  errors: { step: string; code: string; message: string }[];
+}
+
+export type KitStartResult =
+  | { ok: true; savedTo: string | null; summary: KitSummary; saveError?: string }
+  | { ok: false; error: string };
+
 export interface BaaBridge {
   platform: 'win32' | 'darwin' | 'linux';
   appVersion(): Promise<string>;
@@ -65,5 +102,12 @@ export interface BaaBridge {
   recoveryList(): Promise<RecoveryEntry[]>;
   recoveryRead(key: string): Promise<Uint8Array>;
   recoveryDelete(key: string): Promise<void>;
+  // Raccolta dati CPU in sola lettura: la rete la usa solo il processo principale.
+  startKit(opts: KitStartOptions): Promise<KitStartResult>;
+  cancelKit(): void;
+  saveKitResult(): Promise<string | null>; // salva l'ultima raccolta; null se annullato
+  /** Riepilogo dell'ultima raccolta finita e non ancora salvata (dal processo principale), o null. */
+  kitUnsavedSummary(): Promise<KitSummary | null>;
+  onKitProgress(cb: (p: KitProgress) => void): () => void;
   testOverrides(): Promise<{ recoveryIntervalMs?: number }>; // sempre {} nelle build pacchettizzate
 }

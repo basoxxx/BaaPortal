@@ -5,3 +5,6 @@ coverage
 test-results
 playwright-report
 .superpowers/
+.cache/
+
+fixtures-private/

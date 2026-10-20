@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { BaaBridge } from '@baaportal/ui';
+import type { BaaBridge, KitProgress } from '@baaportal/ui';
 import type { RawBridge } from '../shared/rawBridge';
 
 function subscribe<T extends unknown[]>(channel: string, cb: (...args: T) => void): () => void {
@@ -39,6 +39,18 @@ const bridge: RawBridge = {
   recoveryList: () => ipcRenderer.invoke('recovery:list'),
   recoveryRead: (key) => ipcRenderer.invoke('recovery:read', key),
   recoveryDelete: (key) => ipcRenderer.invoke('recovery:delete', key),
+  startKit: (opts) => ipcRenderer.invoke('kit:start', opts),
+  cancelKit: () => {
+    ipcRenderer.invoke('kit:cancel').catch(() => undefined);
+  },
+  saveKitResult: async () => {
+    const r = (await ipcRenderer.invoke('kit:save')) as
+      { ok: true; path: string | null } | { ok: false; error: string };
+    if (!r.ok) throw new Error(r.error);
+    return r.path;
+  },
+  kitUnsavedSummary: () => ipcRenderer.invoke('kit:hasUnsaved'),
+  onKitProgress: (cb) => subscribe<[KitProgress]>('kit:progress', cb),
   testOverrides: () => ipcRenderer.invoke('app:test-overrides'),
 };
 

@@ -5,6 +5,10 @@ import type {
   QuestionTexts,
   RecentEntry,
   RecoveryInfo,
+  KitProgress,
+  KitStartOptions,
+  KitStartResult,
+  KitSummary,
 } from '../src/bridge';
 
 type Answer = 'save' | 'discard' | 'cancel';
@@ -32,6 +36,16 @@ export class FakeBridge implements BaaBridge {
   title = '';
   closeConfirmed = false;
   readyCalls = 0;
+  // Kit di raccolta: una risposta per chiamata a startKit (a coda vuota un errore); le chiamate si registrano.
+  kitResults: KitStartResult[] = [];
+  kitStartCalls: KitStartOptions[] = [];
+  kitCancelCalls = 0;
+  kitSaveResults: (string | null)[] = [];
+  kitSaveCalls = 0;
+  /** Raccolta finita e non ancora salvata, come la tiene il processo principale. */
+  kitUnsaved: KitSummary | null = null;
+  private kitHold: Promise<void> | null = null;
+  private kitCbs = new Set<(p: KitProgress) => void>();
   private nextWriteError: string | null = null;
   private openCbs = new Set<(p: string) => void>();
   private closeCbs = new Set<() => void>();
@@ -48,7 +62,19 @@ export class FakeBridge implements BaaBridge {
     await flush();
   }
   get listenerCount(): number {
-    return this.openCbs.size + this.closeCbs.size;
+    return this.openCbs.size + this.closeCbs.size + this.kitCbs.size;
+  }
+  /** Fa restare in corso la prossima startKit finché non si chiama la funzione restituita. */
+  holdKit(): () => void {
+    let release!: () => void;
+    this.kitHold = new Promise<void>((r) => {
+      release = r;
+    });
+    return release;
+  }
+  async emitKitProgress(p: KitProgress): Promise<void> {
+    for (const cb of [...this.kitCbs]) cb(p);
+    await flush();
   }
 
   async appVersion() {
@@ -155,6 +181,29 @@ export class FakeBridge implements BaaBridge {
   }
   async recoveryDelete(key: string) {
     this.recovery.delete(key);
+  }
+  async startKit(opts: KitStartOptions): Promise<KitStartResult> {
+    this.kitStartCalls.push(opts);
+    const hold = this.kitHold;
+    this.kitHold = null;
+    if (hold) await hold;
+    return this.kitResults.shift() ?? { ok: false, error: 'nessun risultato previsto' };
+  }
+  cancelKit() {
+    this.kitCancelCalls++;
+  }
+  async saveKitResult() {
+    this.kitSaveCalls++;
+    return this.kitSaveResults.shift() ?? null;
+  }
+  async kitUnsavedSummary() {
+    return this.kitUnsaved;
+  }
+  onKitProgress(cb: (p: KitProgress) => void) {
+    this.kitCbs.add(cb);
+    return () => {
+      this.kitCbs.delete(cb);
+    };
   }
   async testOverrides() {
     return this.testOverridesValue;

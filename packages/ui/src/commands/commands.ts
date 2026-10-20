@@ -45,6 +45,7 @@ export type CommandId =
   | 'options.settings'
   | 'tools.crossReferences'
   | 'tools.callStructure'
+  | 'tools.collectCpuData'
   | 'window.splitVertical'
   | 'window.splitHorizontal'
   | 'window.closeAllEditors'
@@ -203,6 +204,10 @@ const list: Command[] = [
   def('options.settings'),
   def('tools.crossReferences'),
   def('tools.callStructure'),
+  def('tools.collectCpuData', {
+    isEnabled: always,
+    run: ({ store }) => store.getState().openDialog({ kind: 'collectKit' }),
+  }),
   splitToggle('window.splitVertical', 'vertical'),
   splitToggle('window.splitHorizontal', 'horizontal'),
   def('window.closeAllEditors', {

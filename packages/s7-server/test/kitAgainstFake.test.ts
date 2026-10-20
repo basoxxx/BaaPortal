@@ -1,0 +1,502 @@
+import { describe, expect, it } from 'vitest';
+import {
+  collect,
+  memoryTransportPair,
+  type Transport,
+  type TransportFactory,
+  kitZip,
+  parseBlockFile,
+  readKitZip,
+  type KitOptions,
+  type KitProgress,
+} from '@baaportal/s7comm';
+import { collectTcp } from '@baaportal/s7comm/node';
+import { FakeCpu, serve } from '../src';
+import { listen } from '../src/node';
+import {
+  ALLOWED,
+  cpuWithBlocks,
+  memoryFactory,
+  spyFactory,
+  txKinds,
+  uploadIds,
+  uploadViolations,
+} from './kitRig';
+import { seq } from './helpers';
+
+/** La finta, come le CPU vere, rifiuta alcune SZL elencate (0xD402): sono errori attesi, per passo. */
+const nonSzl = (errors: { step: string; code: string }[]) =>
+  errors.filter((e) => !(e.step.startsWith('szl ') && e.code === 'CPU_ERROR'));
+
+const FAST = { host: 'fake', minIntervalMs: 0, reconnectDelayMs: 0, timeoutMs: 2000 };
+const run = (
+  cpuFor: (n: number) => FakeCpu,
+  o: Partial<KitOptions> = {},
+  signal?: AbortSignal,
+  onProgress: (p: KitProgress) => void = () => undefined,
+) =>
+  collect(
+    { ...FAST, includeBlocks: true, transport: memoryFactory(cpuFor), ...o },
+    onProgress,
+    signal,
+  );
+
+/** Come cpuWithBlocks, con 30 DB in più: abbastanza passi per più di 20 riusciti tra due cadute. */
+const withMany = (o: ConstructorParameters<typeof FakeCpu>[0] = {}): FakeCpu => {
+  const cpu = cpuWithBlocks(o);
+  for (let i = 10; i < 40; i++) cpu.addDb(i, new Uint8Array(8));
+  return cpu;
+};
+
+describe('kit contro il finto PLC', () => {
+  it('5 blocchi: zip completo, blocchi identici a quelli messi', async () => {
+    const cpu = cpuWithBlocks();
+    const r = await run(() => cpu);
+    const s = r.summary;
+    expect(nonSzl(s.errors)).toEqual([]);
+    expect(s.refusedCount).toBe(0);
+    expect(s.identity?.orderNumber).toBe('6ES7 315-2EH14-0AB0');
+    expect(s.mode).toBe('RUN');
+    expect(s.blocksListed).toBe(5);
+    expect(s.blocksUploaded).toBe(5);
+    expect(s.szlRead).toBeGreaterThan(8);
+    expect(s.pduLength).toBeGreaterThan(0);
+    expect(s.clock).toMatch(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}$/);
+
+    const z = readKitZip(kitZip(r));
+    expect(Object.keys(z.blocks).sort()).toEqual(['DB1', 'DB2', 'FB1', 'FC1', 'OB1']);
+    for (const [name, type, n] of [
+      ['OB1', 'OB', 1],
+      ['FC1', 'FC', 1],
+      ['FB1', 'FB', 1],
+      ['DB1', 'DB', 1],
+      ['DB2', 'DB', 2],
+    ] as const) {
+      expect(z.blocks[name]).toEqual(cpu.block(type, n)!.file);
+      expect(parseBlockFile(z.blocks[name]!).header.number).toBe(n);
+      expect(z.blockInfo[name]).toBeDefined();
+    }
+    expect(Object.keys(z.szl)).toContain('0011-0000');
+    expect(Object.keys(z.szl)).toContain('0000-0000');
+    expect(z.szl['0011-0000']!.records.length).toBeGreaterThan(0);
+    expect(z.szl['0011-0000']!.records[0]).toMatch(/^[0-9A-F]+$/);
+    expect(z.frames.length).toBeGreaterThan(30);
+    expect(z.summary.kitFormat).toBe(1);
+  });
+
+  it('senza includeBlocks nessun blocco e nessun upload', async () => {
+    const r = await run(() => cpuWithBlocks(), { includeBlocks: false });
+    expect(r.summary.blocksListed).toBe(5);
+    expect(r.summary.blocksUploaded).toBe(0);
+    expect(Object.keys(r.files).some((f) => f.startsWith('blocchi/'))).toBe(false);
+    const z = readKitZip(kitZip(r));
+    expect(txKinds(z.frames)).not.toContain('upload');
+  });
+
+  it("nel log della raccolta ci sono solo PDU dell'allowlist; ogni upload iniziato ha la sua fine", async () => {
+    const r = await run(() => cpuWithBlocks());
+    const z = readKitZip(kitZip(r));
+    const kinds = txKinds(z.frames);
+    for (const k of kinds) expect(ALLOWED.has(k)).toBe(true);
+    for (const k of ['connect', 'setup', 'szl', 'blockList', 'blockInfo', 'upload', 'clock']) {
+      expect(kinds).toContain(k);
+    }
+    expect(z.summary.refusedCount).toBe(0);
+    const { started, ended } = uploadIds(z.frames);
+    expect(started).toHaveLength(5);
+    expect(ended.sort()).toEqual(started.sort());
+  });
+
+  it('SZL: 0x0000 e ogni id elencato con indice 0, più le esplicite; nessuna lista solo intestazione', async () => {
+    const r = await run(() => cpuWithBlocks());
+    const keys = Object.keys(readKitZip(kitZip(r)).szl);
+    for (const k of [
+      '0000-0000',
+      '0011-0000',
+      '001C-0000',
+      '0131-0001',
+      '0424-0000',
+      '00A0-0000',
+    ]) {
+      expect(keys).toContain(k);
+    }
+    expect(keys.some((k) => k.startsWith('0F'))).toBe(false);
+    expect(keys.length).toBe(new Set(keys).size);
+  });
+
+  it('protezione 3: identità e SZL raccolte, letture e blocchi come errori nel riepilogo', async () => {
+    const r = await run(() => cpuWithBlocks({ protectionLevel: 3 }));
+    const s = r.summary;
+    expect(s.identity?.orderNumber).toBe('6ES7 315-2EH14-0AB0');
+    expect(s.szlRead).toBeGreaterThan(5);
+    expect(s.errors.length).toBeGreaterThan(0);
+    for (const e of s.errors) {
+      expect(['CPU_ERROR', 'PROTOCOL']).toContain(e.code);
+      expect(e.step).toBeTruthy();
+    }
+    expect(s.errors.some((e) => e.step.startsWith('upload'))).toBe(true);
+    expect(s.blocksUploaded).toBe(0);
+    expect(s.refusedCount).toBe(0);
+    const z = readKitZip(kitZip(r));
+    expect(z.frames.length).toBeGreaterThan(10);
+    for (const k of txKinds(z.frames)) expect(ALLOWED.has(k)).toBe(true);
+    const { started, ended } = uploadIds(z.frames);
+    expect(ended.sort()).toEqual(started.sort());
+  });
+
+  it('connessione che cade verso la fine: riapre una volta, riprende dal passo fallito e completa', async () => {
+    const clean = await run(() => cpuWithBlocks());
+    const rx = readKitZip(kitZip(clean)).frames.filter((f) => f.dir === 'rx').length;
+    const r = await run((n) =>
+      cpuWithBlocks(n === 0 ? { faults: { dropAfterResponses: Math.floor(rx * 0.7) } } : {}),
+    );
+    expect(r.summary.errors.some((e) => e.code === 'CLOSED')).toBe(true);
+    expect(r.summary.blocksUploaded).toBe(5);
+    expect(r.summary.clock).toBeDefined();
+    const z = readKitZip(kitZip(r));
+    expect(z.frames.filter((f) => dissectConnect(f.bytes)).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('due cadute lontane (oltre 20 passi riusciti in mezzo): il budget di riapertura si ricarica e la raccolta è completa', async () => {
+    const clean = await run(() => withMany());
+    const rx = readKitZip(kitZip(clean)).frames.filter((f) => f.dir === 'rx').length;
+    const r = await run((n) =>
+      withMany({
+        faults:
+          n === 0
+            ? { dropAfterResponses: Math.floor(rx * 0.3) }
+            : n === 1
+              ? { dropAfterResponses: Math.floor(rx * 0.5) }
+              : {},
+      }),
+    );
+    expect(r.summary.errors.filter((e) => e.code === 'CLOSED')).toHaveLength(2);
+    expect(r.summary.blocksUploaded).toBe(35);
+    expect(r.summary.clock).toBeDefined();
+  });
+
+  it('seconda caduta: la raccolta finisce con quello che ha, zip completo e leggibile', async () => {
+    const clean = await run(() => cpuWithBlocks());
+    const rx = readKitZip(kitZip(clean)).frames.filter((f) => f.dir === 'rx').length;
+    const r = await run((n) =>
+      cpuWithBlocks({ faults: { dropAfterResponses: n === 0 ? Math.floor(rx * 0.7) : 2 } }),
+    );
+    const closed = r.summary.errors.filter((e) => e.code === 'CLOSED');
+    expect(closed).toHaveLength(2);
+    expect(r.summary.clock).toBeUndefined();
+    expect(r.summary.blocksUploaded).toBeLessThan(5);
+    const z = readKitZip(kitZip(r));
+    expect(z.summary.errors.filter((e) => e.code === 'CLOSED')).toHaveLength(2);
+    expect(z.summary.identity?.orderNumber).toBe('6ES7 315-2EH14-0AB0');
+  });
+
+  it('annullamento con AbortSignal: zip parziale con errore ABORTED', async () => {
+    const ac = new AbortController();
+    const r = await run(
+      () => cpuWithBlocks(),
+      {},
+      ac.signal,
+      (p) => {
+        if (p.phase === 'upload') ac.abort();
+      },
+    );
+    expect(r.summary.errors.at(-1)!.code).toBe('ABORTED');
+    expect(r.summary.blocksUploaded).toBeLessThan(5);
+    const z = readKitZip(kitZip(r));
+    expect(z.summary.identity).toBeDefined();
+    const { started, ended } = uploadIds(z.frames);
+    expect(ended.sort()).toEqual(started.sort());
+  });
+
+  it('un tipo con conteggio 0 non viene elencato', async () => {
+    const cpu = new FakeCpu();
+    cpu.addDb(1, new Uint8Array(8));
+    const r = await run(() => cpu);
+    expect(nonSzl(r.summary.errors)).toEqual([]);
+    expect(r.summary.blocksListed).toBe(1);
+    const z = readKitZip(kitZip(r));
+    // una sola richiesta di lista blocchi di tipo (oltre al conteggio)
+    expect(txKinds(z.frames).filter((k) => k === 'blockList')).toHaveLength(2);
+  });
+
+  it('avanzamento: fasi in ordine, ultima "done"', async () => {
+    const phases: string[] = [];
+    await run(
+      () => cpuWithBlocks(),
+      {},
+      undefined,
+      (p) => {
+        if (phases.at(-1) !== p.phase) phases.push(p.phase);
+      },
+    );
+    expect(phases).toEqual(['connect', 'szl', 'identity', 'blocks', 'upload', 'done']);
+  });
+
+  it('avanzamento: nessuna fase riporta "0 / 0"; l\'elenco dei tipi conta i tipi da elencare', async () => {
+    const events: KitProgress[] = [];
+    await run(
+      () => cpuWithBlocks(),
+      {},
+      undefined,
+      (p) => events.push(p),
+    );
+    expect(events.filter((p) => p.total === 0)).toEqual([]);
+    const listing = events.filter((p) => p.phase === 'blocks' && p.message.startsWith('Elenco'));
+    expect(listing.map((p) => [p.done, p.total])).toEqual([
+      [0, 4],
+      [1, 4],
+      [2, 4],
+      [3, 4],
+    ]); // OB, FB, FC, DB hanno blocchi
+  });
+
+  it('pausa minima tra le richieste: con minIntervalMs 20 passa il tempo previsto', async () => {
+    const cpu = new FakeCpu();
+    const t0 = Date.now();
+    const r = await run(() => cpu, { minIntervalMs: 20, includeBlocks: false });
+    const n = readKitZip(kitZip(r)).frames.filter((f) => f.dir === 'tx').length;
+    expect(Date.now() - t0).toBeGreaterThanOrEqual((n - 3) * 20);
+  });
+
+  it('collectTcp su TCP vero: stesso risultato, porta effimera', async () => {
+    const cpu = cpuWithBlocks();
+    const srv = await listen(cpu);
+    try {
+      const r = await collectTcp(
+        {
+          host: '127.0.0.1',
+          port: srv.port,
+          includeBlocks: true,
+          minIntervalMs: 0,
+          timeoutMs: 2000,
+        },
+        () => undefined,
+        undefined,
+        '9.9.9',
+      );
+      expect(nonSzl(r.summary.errors)).toEqual([]);
+      expect(r.summary.blocksUploaded).toBe(5);
+      expect(r.summary.baaportalVersion).toBe('9.9.9');
+      expect(readKitZip(kitZip(r)).blocks['DB2']).toEqual(cpu.block('DB', 2)!.file);
+    } finally {
+      await srv.close();
+    }
+  });
+
+  it('collectTcp: porta chiusa, zip con CONNECT_REFUSED (una riapertura)', async () => {
+    const srv = await listen(new FakeCpu());
+    const port = srv.port;
+    await srv.close();
+    const r = await collectTcp(
+      { host: '127.0.0.1', port, includeBlocks: false, reconnectDelayMs: 0, timeoutMs: 1000 },
+      () => undefined,
+    );
+    expect(r.summary.errors.map((e) => e.code)).toEqual(['CONNECT_REFUSED', 'CONNECT_REFUSED']);
+    expect(readKitZip(kitZip(r)).frames).toEqual([]);
+  });
+});
+
+import { decodeCotp, dissect } from '@baaportal/s7comm';
+function dissectConnect(b: Uint8Array): boolean {
+  return decodeCotp(b).type === 'CR';
+}
+
+describe('kit con pause e guasti', () => {
+  const bigCpu = (o: ConstructorParameters<typeof FakeCpu>[0] = {}): FakeCpu => {
+    const cpu = new FakeCpu(o);
+    cpu.addDb(5, seq(3000));
+    return cpu;
+  };
+  /** Numero di frame rx arrivati fino alla risposta al primo start upload, in una raccolta pulita. */
+  const rxBeforeFirstUpload = async (): Promise<number> => {
+    const z = readKitZip(kitZip(await run(() => bigCpu())));
+    let rx = 0;
+    for (const f of z.frames) {
+      if (f.dir === 'rx') rx++;
+      const d = dissect(f.bytes);
+      if (f.dir === 'rx' && d.s7?.rosctr === 3 && d.s7.param[0] === 0x1d) return rx;
+    }
+    throw new Error('nessun upload');
+  };
+
+  it('con minIntervalMs 30 il registro coincide con i byte davvero inviati, DR compreso, e il percorso ritardato è usato', async () => {
+    const spy = { wire: [] as Uint8Array[] };
+    const cpu = cpuWithBlocks();
+    const t0 = Date.now();
+    const r = await collect(
+      { ...FAST, includeBlocks: true, minIntervalMs: 30, transport: spyFactory(() => cpu, spy) },
+      () => undefined,
+    );
+    const took = Date.now() - t0;
+    const z = readKitZip(kitZip(r));
+    const logged = z.frames.filter((f) => f.dir === 'tx').map((f) => f.bytes);
+    expect(spy.wire.map((b) => b.slice(4))).toEqual(logged);
+    const last = dissect(logged.at(-1)!);
+    expect(last.cotp?.type).toBe('DR');
+    expect(took).toBeGreaterThanOrEqual((logged.length - 5) * 25);
+    // intervalli tra i frame tx registrati: quasi tutti >= 25 ms (percorso ritardato)
+    const tx = z.frames.filter((f) => f.dir === 'tx').map((f) => f.t);
+    expect(tx.filter((t, i) => i > 0 && t - tx[i - 1]! >= 25).length).toBeGreaterThan(
+      tx.length / 2,
+    );
+  });
+
+  it("attesa prima della riapertura annullabile: l'abort la interrompe subito", async () => {
+    const ac = new AbortController();
+    setTimeout(() => ac.abort(), 150);
+    const t0 = Date.now();
+    const r = await run(
+      (n) => new FakeCpu(n === 0 ? { faults: { dropAfterResponses: 3 } } : {}),
+      {
+        reconnectDelayMs: 10_000,
+      },
+      ac.signal,
+    );
+    expect(Date.now() - t0).toBeLessThan(3000);
+    expect(r.summary.errors.map((e) => e.code)).toContain('CLOSED');
+    expect(r.summary.errors.at(-1)!.code).toBe('ABORTED');
+    expect(readKitZip(kitZip(r)).summary.errors.at(-1)!.code).toBe('ABORTED');
+  });
+
+  it('(controllo) raccolta pulita: ogni start ha il suo end', async () => {
+    const z = readKitZip(kitZip(await run(() => bigCpu())));
+    expect(uploadViolations(z.frames)).toEqual([]);
+    expect(uploadIds(z.frames).started).toHaveLength(1);
+  });
+
+  it('(a) connessione che cade nel mezzo di un upload: nessuna richiesta tra lo start e la chiusura', async () => {
+    const n0 = await rxBeforeFirstUpload();
+    const r = await run((n) => bigCpu(n === 0 ? { faults: { dropAfterResponses: n0 + 2 } } : {}));
+    expect(r.summary.errors.some((e) => e.code === 'CLOSED')).toBe(true);
+    const z = readKitZip(kitZip(r));
+    expect(uploadViolations(z.frames)).toEqual([]);
+    expect(uploadIds(z.frames).started.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('(b) la CPU smette di rispondere ai pezzi (0x1E) oltre il timeout: nessuna richiesta tra lo start e la chiusura', async () => {
+    // delayMs è globale (farebbe scadere anche il setup): il silenzio sulla sola 0x1E è lo stesso effetto
+    const r = await run(() => bigCpu({ faults: { ignoreFunction: 0x1e } }), { timeoutMs: 300 });
+    expect(r.summary.errors.some((e) => e.code === 'TIMEOUT')).toBe(true);
+    const z = readKitZip(kitZip(r));
+    expect(uploadViolations(z.frames)).toEqual([]);
+  });
+
+  it('(c) annullamento nel mezzo di un upload: nessuna richiesta dopo lo start', async () => {
+    const n0 = await rxBeforeFirstUpload();
+    const ac = new AbortController();
+    const cpu = bigCpu();
+    const spy = {
+      wire: [] as Uint8Array[],
+      onRx: (n: number) => {
+        if (n === n0 + 1) ac.abort();
+      },
+    };
+    const r = await collect(
+      { ...FAST, includeBlocks: true, transport: spyFactory(() => cpu, spy) },
+      () => undefined,
+      ac.signal,
+    );
+    expect(r.summary.errors.at(-1)!.code).toBe('ABORTED');
+    const z = readKitZip(kitZip(r));
+    expect(uploadIds(z.frames).started).toHaveLength(1);
+    expect(uploadViolations(z.frames)).toEqual([]);
+  });
+});
+
+describe('kit: la fine della raccolta non si inghiotte e le riaperture sono sempre limitate', () => {
+  /**
+   * Trasporto in memoria che registra ogni connessione. `closeAfter(n)` dice dopo quante frame ricevute
+   * la CPU chiude la connessione n-esima (subito dopo averle consegnate: a passo finito, il client se ne
+   * accorge alla richiesta successiva, non dentro una richiesta).
+   */
+  const rig = (cpu: FakeCpu, closeAfter: (n: number) => number = () => Infinity) => {
+    const conns: { at: number; cpuEnd: Transport }[] = [];
+    const factory: TransportFactory = async () => {
+      const [a, b] = memoryTransportPair();
+      serve(cpu, b);
+      const limit = closeAfter(conns.length);
+      conns.push({ at: Date.now(), cpuEnd: b });
+      let rx = 0;
+      const onData = a.onData.bind(a);
+      a.onData = (cb) =>
+        onData((chunk) => {
+          cb(chunk);
+          if (++rx === limit) b.close();
+        });
+      return a;
+    };
+    return { conns, factory };
+  };
+  const go = (
+    factory: TransportFactory,
+    o: Partial<KitOptions>,
+    onProgress: (p: KitProgress) => void,
+    signal?: AbortSignal,
+  ) => collect({ ...FAST, includeBlocks: false, transport: factory, ...o }, onProgress, signal);
+
+  it('(a) client chiuso a budget esaurito: la raccolta finisce subito, senza nuove connessioni', async () => {
+    // la prima connessione cade a passo finito (si riapre, budget 1 -> 0), la seconda poco dopo
+    const { conns, factory } = rig(cpuWithBlocks(), () => 8);
+    const r = await go(factory, { reconnectDelayMs: 0 }, () => undefined);
+    expect(conns).toHaveLength(2);
+    // (la finta rifiuta alcune SZL con CPU_ERROR: sono rumore atteso, qui contano le chiusure)
+    expect(
+      r.summary.errors.filter((e) => e.code === 'CLOSED').map((e) => [e.step, e.code]),
+    ).toEqual([
+      ['connect', 'CLOSED'],
+      ['connect', 'CLOSED'],
+    ]);
+    expect(r.summary.errors.at(-1)).toMatchObject({ step: 'connect', code: 'CLOSED' });
+    expect(r.summary.clock).toBeUndefined();
+  });
+
+  it('(b) collegamento che cade a ogni risposta: connessioni <= 2 più una ogni 20 passi riusciti, a distanza di reconnectDelayMs', async () => {
+    const { conns, factory } = rig(cpuWithBlocks(), () => 3);
+    const r = await go(factory, { reconnectDelayMs: 40 }, () => undefined);
+    expect(conns.length).toBeLessThanOrEqual(2 + Math.floor(r.summary.szlRead / 20));
+    for (let i = 1; i < conns.length; i++) {
+      expect(conns[i]!.at - conns[i - 1]!.at).toBeGreaterThanOrEqual(35);
+    }
+  });
+
+  it("(d) la risposta di setup è malformata (PROTOCOL): al più 2 tentativi, distanziati, e lo zip c'è", async () => {
+    const times: number[] = [];
+    const factory: TransportFactory = async () => {
+      const [a, b] = memoryTransportPair();
+      serve(cpuWithBlocks(), b);
+      times.push(Date.now());
+      let rx = 0;
+      const onData = a.onData.bind(a);
+      a.onData = (cb) =>
+        onData((chunk) => {
+          // 1ª frame: CC; 2ª: risposta di setup, qui storpiata (TPKT valido, corpo S7 spazzatura)
+          cb(
+            ++rx === 2
+              ? Uint8Array.from([3, 0, 0, 12, 2, 0xf0, 0x80, 0xff, 0xff, 0xff, 0xff, 0xff])
+              : chunk,
+          );
+        });
+      return a;
+    };
+    const r = await go(factory, { reconnectDelayMs: 40 }, () => undefined);
+    expect(times.length).toBeLessThanOrEqual(2);
+    expect(times.length).toBe(2);
+    expect(times[1]! - times[0]!).toBeGreaterThanOrEqual(35);
+    expect(r.summary.errors.length).toBeGreaterThanOrEqual(2);
+    expect(r.summary.errors.every((e) => e.step === 'connect')).toBe(true);
+    expect(r.summary.errors.some((e) => !['TIMEOUT', 'CLOSED'].includes(e.code))).toBe(true);
+    expect(readKitZip(kitZip(r)).summary.errors).toHaveLength(r.summary.errors.length);
+  });
+
+  it('(c) annullamento durante la riapertura: ABORTED e la raccolta finisce', async () => {
+    const { conns, factory } = rig(cpuWithBlocks(), () => 8);
+    const ac = new AbortController();
+    const t0 = Date.now();
+    setTimeout(() => ac.abort(), 150);
+    const r = await go(factory, { reconnectDelayMs: 5000 }, () => undefined, ac.signal);
+    expect(Date.now() - t0).toBeLessThan(3000);
+    expect(conns).toHaveLength(1);
+    expect(r.summary.errors.at(-1)!.code).toBe('ABORTED');
+    expect(r.summary.errors.some((e) => e.code === 'PROTOCOL')).toBe(false);
+  });
+});

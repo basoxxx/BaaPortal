@@ -25,3 +25,5 @@ mac:
   hardenedRuntime: false
   artifactName: ${productName}-${version}-${arch}.${ext}
   category: public.app-category.developer-tools
+  extendInfo:
+    NSLocalNetworkUsageDescription: BaaPortal si collega ai PLC della rete locale per leggerne i dati.

@@ -11,7 +11,8 @@ export type PortalId = 'start' | 'devices' | 'plc' | 'online';
 export type StartAction =
   'open' | 'new' | 'migrate' | 'close' | 'firstSteps' | 'installed' | 'help' | 'language';
 /** Finestra modale aperta sopra la vista corrente. */
-export type DialogState = { kind: 'addDevice' } | { kind: 'addBlock'; deviceId: string } | null;
+export type DialogState =
+  { kind: 'addDevice' } | { kind: 'addBlock'; deviceId: string } | { kind: 'collectKit' } | null;
 
 export type EditAction = 'cut' | 'copy' | 'paste' | 'delete' | 'rename' | 'selectAll';
 /** Chi riceve i comandi del menu Modifica: l'elemento (albero, griglia…) che ha il focus. */

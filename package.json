@@ -16,12 +16,14 @@
     "format": "prettier --write .",
     "format:check": "prettier --check packages apps",
     "e2e": "npm run e2e -w @baaportal/desktop",
-    "dist": "npm run dist -w @baaportal/desktop"
+    "dist": "npm run dist -w @baaportal/desktop",
+    "s7bench": "npm run start -w @baaportal/s7bench --"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
     "eslint": "^10.13.0",
     "prettier": "^3.9.10",
+    "tsx": "^4.23.15",
     "typescript": ">=6.0.0 <6.1.0",
     "typescript-eslint": "^8.71.2",
     "vitest": "^5.0.5"

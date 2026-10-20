@@ -97,7 +97,8 @@
     "window.splitHorizontal": "Split work area horizontally",
     "window.closeAllEditors": "Close all editors",
     "help.show": "Show help",
-    "help.about": "About BaaPortal"
+    "help.about": "About BaaPortal",
+    "tools.collectCpuData": "Collect CPU data (read-only)…"
   },
   "menu": {
     "project": "Project",
@@ -144,7 +145,8 @@
       "openView": "Open the project view",
       "addDevice": "Add new device",
       "addBlock": "Add new block",
-      "accessibleDevices": "Accessible devices"
+      "accessibleDevices": "Accessible devices",
+      "collectCpu": "Collect CPU data (read-only)"
     },
     "projectView": "Project view",
     "openProjectInfo": "Open project: {{path}}",
@@ -627,6 +629,63 @@
       "DUPLICATE_UNIT": "{{name}} appears more than once in the source",
       "OB_NUMBER_UNKNOWN": "The number of OB {{name}} cannot be determined: write ORGANIZATION_BLOCK OB <number>",
       "UNSUPPORTED_SECTION": "Unsupported section: {{section}}"
+    }
+  },
+  "kit": {
+    "title": "Collect CPU data (read-only)",
+    "readOnly": "This function only reads: it writes nothing to the PLC and does not change its state. Use it with the machine stopped or not critical.",
+    "host": "IP address",
+    "hostInvalid": "Invalid address: enter an IPv4 address (for example 192.168.0.10) or a host name.",
+    "advanced": "Advanced",
+    "port": "Port",
+    "rack": "Rack",
+    "slot": "Slot",
+    "connectionType": "Connection type",
+    "portInvalid": "The port must be between 1 and 65535.",
+    "rackInvalid": "The rack must be between 0 and 7.",
+    "slotInvalid": "The slot must be between 0 and 31.",
+    "type": {
+      "pg": "PG",
+      "op": "OP",
+      "basic": "Basic"
+    },
+    "includeBlocks": "Also upload the blocks from the PLC",
+    "start": "Start",
+    "stop": "Stop",
+    "cancel": "Cancel",
+    "close": "Close",
+    "save": "Save…",
+    "phase": {
+      "connect": "Connecting",
+      "identity": "Identifying the CPU",
+      "szl": "System lists (SZL)",
+      "blocks": "Block list",
+      "upload": "Uploading blocks",
+      "done": "Completed"
+    },
+    "summary": "Summary",
+    "cpu": "CPU",
+    "order": "Order number",
+    "mode": "Mode",
+    "szlRead": "SZL lists read",
+    "blocksListed": "Blocks listed",
+    "blocksUploaded": "Blocks uploaded",
+    "unknown": "unknown",
+    "errors": "Errors: {{count}}",
+    "savedTo": "Saved to: {{path}}",
+    "notSaved": "not saved",
+    "autoSaveFailed": "Saving failed: {{error}}. Use “Save…” to try again.",
+    "saveFailed": "Saving failed: {{error}}",
+    "failed": "Collection failed: {{error}}",
+    "noConnection": "The CPU did not answer: check the address, the network cable and the slot. The zip still contains the log.",
+    "newRun": "New collection",
+    "protectedHint": "Protected CPU: the blocks cannot be uploaded without a password. Please still send the zip: it contains the rest of the data.",
+    "confirmClose": {
+      "title": "Collection not saved",
+      "message": "Close without saving the collection? The collected data will be lost.",
+      "save": "Save…",
+      "discard": "Close without saving",
+      "cancel": "Cancel"
     }
   }
 }
