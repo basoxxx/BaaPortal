@@ -25,6 +25,18 @@ async function app_deleteFirst() {
   fireEvent.click(screen.getByRole('menuitem', { name: 'Elimina segmento' }));
 }
 const mnemonicSelect = () => screen.getByRole('combobox', { name: 'Mnemonica' });
+// Aspetta che le diagnostiche iniziali siano finite: il conteggio resta fermo per `quiet` ms.
+// Un'attesa fissa non basta sui runner lenti (Windows nella CI).
+async function diagnosticsSettled(quiet = 500, max = 15_000) {
+  const t0 = Date.now();
+  let last = -1;
+  while (Date.now() - t0 < max) {
+    const n = vi.mocked(setDiagnostics).mock.calls.length;
+    if (n === last) return;
+    last = n;
+    await new Promise((r) => setTimeout(r, quiet));
+  }
+}
 
 describe("segmenti AWL con l'editor CodeMirror", () => {
   it(
@@ -242,6 +254,7 @@ describe("segmenti AWL con l'editor CodeMirror", () => {
       }));
       await openEditor('block', f.id, (d) => void d.blocks.push(f));
       await new Promise((r) => setTimeout(r, 400));
+      await diagnosticsSettled();
       vi.mocked(setDiagnostics).mockClear();
       const v = viewOf(7);
       focus(v);
