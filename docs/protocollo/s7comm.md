@@ -1193,13 +1193,38 @@ Conteggio: **12 sezioni principali pienamente verificate** su cattura
 (1,2.6,3-base,4,5,6,7,8,9,10-base,11-base,12), **6 parziali** (2.4, 3.3-tabella,
 13, 14, 11-restart, 10-_DELE), **2 non verificate** (2.5 gateway, codifica password).
 
+### Fatti con una sola fonte
+
+Vale una sola cattura (o nessuna cattura reale, solo la nostra ipotesi): il layout è
+plausibile, ma un secondo riscontro manca. Ogni voce è **da confermare con il kit
+dell'amico** (`docs/kit-raccolta.md`), che registra tutto in `capture.jsonl`.
+
+- **Upload in più pezzi** (EoU ≠ 0): non è mai stato visto in una cattura; l'unico upload
+  riuscito è l'SDB0 di `cisa/snap7.pcap`, in un pezzo solo. Da confermare con il kit
+  dell'amico.
+- **Upload di blocchi utente da una CPU reale**: i soli upload riusciti delle catture sono
+  SDB0; OB0 fu rifiutato con `D20C`. Da confermare con il kit dell'amico.
+- **Lista di un tipo senza blocchi** (list-of-type vuota): nessuna cattura; il client accetta
+  sia `D20E` sia una lista vuota. Da confermare con il kit dell'amico.
+- **Forma del rifiuto di lettura a protezione livello 3**: nelle catture il rifiuto `D241`
+  si vede sull'upload (`s7ident.pcap`); come la CPU rifiuta le letture SZL e di variabili a
+  livello 3 non è confermato. Da confermare con il kit dell'amico.
+- **TSAP con un CP 343-1** (IP del CP, TSAP verso la CPU rack 0 slot 2): vedi §2.4, non
+  verificato. Da confermare con il kit dell'amico.
+- **Info e upload di SFC/SFB**: nessuna cattura. Da confermare con il kit dell'amico.
+- **La maggior parte delle SZL con indice 0**: solo alcune (0x0011, 0x001C, 0x0131, 0x0132/4,
+  0x0424, 0x00A0, 0x0000) compaiono nelle catture; le altre che il kit legge in giro sono una
+  prima volta. Da confermare con il kit dell'amico.
+- **CC con dimensione TPDU < 0x0A**: mai visto (le CPU rispondono 0x0A); il comportamento è
+  ipotizzato. Da confermare con il kit dell'amico.
+
 ---
 
 ## 16. Catture pubbliche
 
-Scaricate solo nello scratchpad (non nel repo). Un eventuale step CI può scaricarle a
-tempo di test senza ridistribuirle. Tutte verificate come S7comm su S7-300 reale,
-salvo dove indicato.
+La CI le scarica a tempo di test (`scripts/fetch-s7-captures.mjs`, in `.cache/`) e non le
+committa mai, tranne i due file BSD-3 di `cisagov` (§16.3), che stanno nel repository con la
+loro licenza. Tutte verificate come S7comm su S7-300 reale, salvo dove indicato.
 
 ### 16.1 Wireshark wiki SampleCaptures (sezione S7COMM)
 URL base: `https://wiki.wireshark.org/uploads/__moin_import__/attachments/SampleCaptures/<file>`
@@ -1242,7 +1267,7 @@ Alliance) — licenza permissiva, dichiarata. La più adatta per un uso CI citab
 | file | SHA-256 | contenuto |
 |------|---------|-----------|
 | `s7ident.pcap` | `7a2ae7f2992669a3eb36a878f0e4f124c86ecdf3fc3a284f78e2e6e1deeea680` | Client vs server (snap7-like) emulante **CPU 315-2EH14**; setup, SZL 0x0011/0x001C/0x0131/0x0424, start-upload rifiutato `0xD241` |
-| `snap7.pcap` | `2b91f6a8a203ec83e4f2dbb69d5e61602845f23da0baa31d95d029fb24cbd427` | **CPU reale 315-2PN/DP** (`6ES7 315-2EH14`, S7300/ET200M): setup, SZL 0x0011/0x001C/0x0131/0x0424, **upload OB/DB/FB (0x1D/1E/1F) completo**, read/write var multi-item (incl. timer/counter), **PLC stop 0x29**, **_MODU / _GARB / cold start**. ⚠️ Identico (stesso SHA) a `gymgit/snap7_s300_everything.pcapng` |
+| `snap7.pcap` | `2b91f6a8a203ec83e4f2dbb69d5e61602845f23da0baa31d95d029fb24cbd427` | **CPU reale 315-2PN/DP** (`6ES7 315-2EH14`, S7300/ET200M): setup, SZL 0x0011/0x001C/0x0131/0x0424, **upload di SDB0 (0x1D/1E/1F) completo**; l'upload di OB0 è rifiutato con `D20C`, read/write var multi-item (incl. timer/counter), **PLC stop 0x29**, **_MODU / _GARB / cold start**. ⚠️ Identico (stesso SHA) a `gymgit/snap7_s300_everything.pcapng` |
 
 ### 16.4 gymgit/s7-pcaps (GitHub, **non** Git-LFS) — di Gyorgy Miru
 URL base: `https://raw.githubusercontent.com/gymgit/s7-pcaps/master/<file>` (i file sono git normali:
@@ -1346,7 +1371,7 @@ RES : 32 07 0000 1200 000c 0052  00 01 12 08 12 83 03 00 0000 0000
       ; "pp" magic, lang 0x05(DB), timestamps, name "TestHMI"/"DATADB"
 ```
 
-### 17.8 Sequenza upload (OB/DB) [reale, `cisa/snap7.pcap`]
+### 17.8 Sequenza upload (SDB0) [reale, `cisa/snap7.pcap`]
 ```
 StartUpload REQ: 32 01 0000 0800 0012 0000  1d 00 000000000000 09 5f 3042 3030303030 41
                  ; _ "0B"(SDB) "00000" 'A'

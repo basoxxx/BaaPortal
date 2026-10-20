@@ -81,7 +81,7 @@ const RANGES: ReadonlyArray<readonly [number, number, string]> = [
   [0xd401, 0xd409, 'funzione informativa non disponibile / errore diagnostica'],
   [0xd801, 0xd807, 'errore funzioni cicliche (indirizzo tag, job, tempo ciclo, overload)'],
   [0xe201, 0xe206, 'errore connect&update H-system'],
-  [0xef01, 0xef02, 'errore a ID2'],
+  [0xef01, 0xef02, 'ID2 errato'],
 ];
 
 function hexN(n: number, w: number): string {
