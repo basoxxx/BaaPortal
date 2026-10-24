@@ -145,6 +145,29 @@ export class SimController {
     }
   }
 
+  /** Cancellazione totale (MRES): solo in STOP, dopo conferma. Il worker la rifiuta fuori da STOP. */
+  async memoryReset(ctx: SimCtx): Promise<void> {
+    const s = this.session;
+    if (!s || this.store.getState().sim.mode !== 'STOP') return;
+    let yes: boolean;
+    try {
+      yes = await ctx.bridge.askQuestion({
+        title: t('sim.mresTitle'),
+        message: t('sim.mresMessage'),
+        yes: t('sim.yes'),
+        no: t('sim.no'),
+      });
+    } catch {
+      return;
+    }
+    if (!yes || this.session !== s) return;
+    try {
+      await s.request({ op: 'mres' });
+    } catch (e) {
+      if (this.session === s) this.push('error', 'simMresFailed', { message: errorText(e) });
+    }
+  }
+
   /** "Carica nel dispositivo" sul simulatore. */
   async download(ctx: SimCtx): Promise<void> {
     const s = this.session;

@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppStore, useServices } from '../../state/AppContext';
 import type { TaskCardId } from '../../state/store';
+import { CallStack } from './CallStack';
+import { CpuPanel } from './CpuPanel';
 import { FindReplace } from './FindReplace';
 
 const SECTIONS: Record<TaskCardId, string[]> = {
@@ -30,6 +32,14 @@ function Section({ card, id }: { card: TaskCardId; id: string }) {
       {open && id === 'findReplace' ? (
         <div id={`tc-${card}-${id}`}>
           <FindReplace />
+        </div>
+      ) : open && id === 'cpuPanel' ? (
+        <div id={`tc-${card}-${id}`}>
+          <CpuPanel />
+        </div>
+      ) : open && id === 'callStack' ? (
+        <div id={`tc-${card}-${id}`}>
+          <CallStack />
         </div>
       ) : open ? (
         <p id={`tc-${card}-${id}`} className="baa-placeholder">

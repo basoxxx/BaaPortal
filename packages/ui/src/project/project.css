@@ -890,3 +890,36 @@
 .baa-status-progress button {
   line-height: 16px;
 }
+
+/* Pannello di comando CPU */
+.baa-cpu-leds {
+  display: flex;
+  gap: 12px;
+  padding: 4px 6px;
+}
+.baa-led::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 4px;
+  border-radius: 50%;
+  background: var(--baa-border, #999);
+}
+.baa-led-run[data-on='true']::before {
+  background: #2e9e44;
+}
+.baa-led-stop[data-on='true']::before {
+  background: #e0b000;
+}
+.baa-led-sf[data-on='true']::before {
+  background: var(--baa-error, #c42b1c);
+}
+.baa-cpu-buttons {
+  display: flex;
+  gap: 6px;
+  padding: 4px 6px;
+}
+.baa-cpu-diag li[data-error='true'] {
+  color: var(--baa-error, #c42b1c);
+}

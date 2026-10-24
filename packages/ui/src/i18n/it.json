@@ -96,7 +96,8 @@
     "tagsImportFailed": "Impossibile importare le variabili da \"{{name}}\": {{message}}",
     "tagsExported": "Tabella \"{{name}}\" esportata in \"{{path}}\".",
     "tagsExportFailed": "Impossibile esportare la tabella \"{{name}}\": {{message}}",
-    "archived": "Progetto \"{{name}}\" archiviato in \"{{path}}\"."
+    "archived": "Progetto \"{{name}}\" archiviato in \"{{path}}\".",
+    "simMresFailed": "Cancellazione totale non riuscita: {{message}}"
   },
   "commands": {
     "project.new": "Nuovo…",
@@ -199,7 +200,9 @@
     "startCpuTitle": "Carica nel dispositivo",
     "startCpuMessage": "Avviare la CPU?",
     "yes": "Sì",
-    "no": "No"
+    "no": "No",
+    "mresTitle": "Cancellazione totale",
+    "mresMessage": "Cancellare la memoria di lavoro della CPU (MRES)? I blocchi caricati restano."
   },
   "toolbar": {
     "search": "Ricerca"
@@ -944,6 +947,51 @@
       "message": "Il file \"{{path}}\" esiste già. Vuoi sovrascriverlo?",
       "yes": "Sovrascrivi",
       "no": "Annulla"
+    }
+  },
+  "cpuPanel": {
+    "needSim": "Avvia la simulazione per usare il pannello",
+    "run": "RUN",
+    "stop": "STOP",
+    "sf": "SF",
+    "runBtn": "RUN",
+    "stopBtn": "STOP",
+    "mres": "MRES",
+    "cycle": "Tempo di ciclo",
+    "last": "Ultimo",
+    "min": "Minimo",
+    "max": "Massimo",
+    "ms": "{{value}} ms",
+    "diagnostics": "Buffer di diagnostica",
+    "diagEmpty": "Nessuna voce.",
+    "warnings": "Avvisi",
+    "noWarnings": "Nessun avviso.",
+    "callStackEmpty": "Nessuno stack di chiamata registrato.",
+    "callStackNote": "Ultimo STOP per errore",
+    "inBlock": "in {{block}}",
+    "offset": "offset {{offset}}",
+    "network": "rete {{network}}",
+    "code": {
+      "AREA_LUNGHEZZA": "Accesso a un'area oltre la sua lunghezza",
+      "DB_NON_CARICATO": "Il blocco dati non è caricato",
+      "DB_NON_APERTO": "Nessun blocco dati aperto",
+      "BLOCCO_NON_CARICATO": "Il blocco richiamato non è caricato",
+      "STACK_BLOCCHI_PIENO": "Stack dei blocchi pieno",
+      "STACK_ANNIDAMENTO_PIENO": "Stack di annidamento pieno",
+      "STACK_L_PIENO": "Stack dei dati locali pieno",
+      "ISTRUZIONE_NON_S7300": "Istruzione non disponibile sulla S7-300",
+      "MC7_NON_ESEGUIBILE": "Codice MC7 non eseguibile",
+      "BCD_NON_VALIDO": "Valore BCD non valido",
+      "NUMERO_TEMPORIZZATORE": "Numero di temporizzatore non valido",
+      "NUMERO_CONTATORE": "Numero di contatore non valido",
+      "TEMPO_CICLO_SUPERATO": "Tempo di ciclo massimo superato",
+      "OB_NON_CARICATO": "OB dell'evento non caricato",
+      "STOP_RICHIESTO": "STOP richiesto",
+      "AVVIO": "Avvio della CPU",
+      "CANCELLAZIONE_TOTALE": "Cancellazione totale",
+      "OB_RICHIAMATO": "OB d'evento richiamato",
+      "SFC_NON_SIMULATA": "SFC non simulata",
+      "SFB_NON_SIMULATA": "SFB non simulato"
     }
   }
 }

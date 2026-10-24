@@ -134,6 +134,21 @@ describe('comandi online sul simulatore', () => {
     await vi.waitFor(() => expect(s.store.getState().sim.mode).toBe('RUN'));
   });
 
+  it('MRES chiede conferma e va al worker solo in STOP', async () => {
+    await initI18n('it');
+    const s = setup();
+    await on(s);
+    s.bridge.questionAnswers.push(false);
+    await s.controller.memoryReset(s.ctx);
+    expect(s.bridge.questions).toHaveLength(1);
+    expect(s.ops()).not.toContain('mres');
+    await s.controller.memoryReset(s.ctx); // risposta predefinita: sì
+    expect(s.ops()).toContain('mres');
+    s.store.getState().setSim({ mode: 'RUN' });
+    await s.controller.memoryReset(s.ctx);
+    expect(s.bridge.questions).toHaveLength(2); // in RUN non chiede nemmeno
+  });
+
   it('risposta No: i blocchi sono caricati, la CPU resta in STOP', async () => {
     await initI18n('it');
     const s = setup();
