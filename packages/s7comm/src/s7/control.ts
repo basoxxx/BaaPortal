@@ -80,7 +80,10 @@ export function decodeControlResponse(param: Uint8Array): ControlResult {
   const fn = param[0]!;
   if (fn !== 0x28 && fn !== 0x29) throw bad(`risposta con funzione 0x${fn.toString(16)}`);
   const code = param.length === 2 ? param[1]! : 0;
-  return { code, name: RESULT_NAMES[code] ?? `sconosciuto 0x${code.toString(16).padStart(2, '0')}` };
+  return {
+    code,
+    name: RESULT_NAMES[code] ?? `sconosciuto 0x${code.toString(16).padStart(2, '0')}`,
+  };
 }
 
 export function encodeControlResponse(fn: 0x28 | 0x29, code: number): Uint8Array {

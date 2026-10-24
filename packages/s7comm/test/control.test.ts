@@ -94,7 +94,8 @@ describe('PLC control (0x28) e stop (0x29)', () => {
   it('encodeControlResponse: roundtrip e coincide con le risposte reali', () => {
     expect(hex(encodeControlResponse(0x29, 0))).toBe('29');
     expect(hex(encodeControlResponse(0x28, 0))).toBe('28');
-    for (const p of controlParams(3)) expect(hex(encodeControlResponse(p[0] as 0x28, 0))).toBe(hex(p));
+    for (const p of controlParams(3))
+      expect(hex(encodeControlResponse(p[0] as 0x28, 0))).toBe(hex(p));
     expect(decodeControlResponse(encodeControlResponse(0x29, 0x07)).code).toBe(0x07);
     expect(decodeControlResponse(encodeControlResponse(0x28, 0x03)).code).toBe(0x03);
   });
