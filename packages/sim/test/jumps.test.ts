@@ -121,3 +121,31 @@ describe('salti condizionati e incondizionati', () => {
     }
   });
 });
+
+describe('LOOP e JL: effetti collaterali', () => {
+  it('LOOP conserva ACCU1-H', () => {
+    const r = runAwl(['\tL L#1048579;\nc: LOOP c;']); // 0x00100003
+    expect(r.regs.accu1).toBe(0x00100000);
+  });
+
+  it('JL non tocca la parola di stato', () => {
+    const r = runAwl(['\tL 5;\n\tJL fine;\n\tJU fine;\nfine: NOP 0;'], {
+      regs: { stw: { fc: true, rlo: false, sta: true, or: true, os: true, br: true } },
+    });
+    expect(r.regs.stw).toMatchObject({
+      fc: true,
+      rlo: false,
+      sta: true,
+      or: true,
+      os: true,
+      br: true,
+    });
+  });
+
+  it('JBI/JNBI lasciano RLO invariato (OR 0, STA 1, /FC 0)', () => {
+    const r = runAwl(['\tCLR;\n\tJBI fine;\nfine: NOP 0;'], {
+      regs: { stw: { br: true, fc: true, or: true } },
+    });
+    expect(r.regs.stw).toMatchObject({ rlo: false, or: false, sta: true, fc: false });
+  });
+});

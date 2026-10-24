@@ -113,6 +113,7 @@ export function runProgram(
     setup?: (mem: SimMemory) => void;
     mem?: SimMemory;
     sizes?: MemorySizes;
+    regs?: { stw?: Partial<Registers['stw']> };
   } = {},
 ): ProgRun {
   const mem = opts.mem ?? new SimMemory(opts.sizes ?? memorySizesFor('cpu-315-2-pn-dp'));
@@ -124,6 +125,7 @@ export function runProgram(
     });
   opts.setup?.(mem);
   const regs = newRegisters();
+  Object.assign(regs.stw, opts.regs?.stw);
   const ctx: ExecContext = {
     mem,
     regs,

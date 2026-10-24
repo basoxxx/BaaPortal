@@ -30,10 +30,13 @@ function onRlo(when: boolean, copyBr: boolean): OpHandler {
   };
 }
 
+/** JBI/JNBI: come gli altri, ma RLO resta invariato (decisione, da documentare). */
 function onBr(when: boolean): OpHandler {
   return (st, stmt) => {
     const take = st.regs.stw.br === when;
+    const rlo = st.regs.stw.rlo;
     endJump(st);
+    st.regs.stw.rlo = rlo;
     return take ? target(stmt) : undefined;
   };
 }

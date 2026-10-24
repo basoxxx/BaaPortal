@@ -1,5 +1,5 @@
 import { SimError } from '../errors';
-import type { ExecState, OpHandler } from '../executor';
+import { endBlock, type ExecState, type OpHandler } from '../executor';
 import { readBits, resolveOperand } from '../operands';
 import { callBlock } from '../calls';
 
@@ -17,27 +17,36 @@ function callee(st: ExecState, stmt: Parameters<OpHandler>[1]): { kind: 'FC' | '
   throw new SimError('NON_SIMULATA_2B', `${stmt.id} ${op.blockKind}${op.number}`);
 }
 
-/** Manuale AWL, «UC» e «CC»: /FC = 0; UC chiama sempre, CC solo con RLO = 1. */
+/**
+ * Manuale AWL, «UC» e «CC»: OS = 0, OR = 0, STA = 1, /FC = 0; CC mette anche RLO = 1 (anche se
+ * non chiama, con RLO = 0). UC chiama sempre, CC solo con RLO = 1.
+ */
 function call(conditional: boolean): OpHandler {
   return (st, stmt) => {
     const s = st.regs.stw;
     const target = callee(st, stmt);
     const go = !conditional || s.rlo;
+    s.os = false;
+    s.or = false;
+    s.sta = true;
     s.fc = false;
+    if (conditional) s.rlo = true;
     if (go) callBlock(st, target.kind, target.n, stmt.pointers);
   };
 }
 
-/** Fine blocco condizionata: BR = RLO; OR = 0, STA = 1, RLO = 1, /FC = 0 (manuale AWL, «BEC»). */
+/** Fine blocco condizionata (manuale AWL, «BEC»): con RLO = 1 termina; con RLO = 0 OR 0, STA 1, RLO 1, /FC 0. */
 const BEC: OpHandler = (st) => {
   const s = st.regs.stw;
-  const end = s.rlo;
-  s.br = s.rlo;
+  if (s.rlo) {
+    endBlock(st);
+    return 'return';
+  }
   s.or = false;
   s.sta = true;
   s.rlo = true;
   s.fc = false;
-  return end ? 'return' : undefined;
+  return undefined;
 };
 
 /** Temporizzatori e contatori sono del piano 2B. */
@@ -49,8 +58,14 @@ export const CONTROL_OPS: Record<string, OpHandler> = {
   // Manuale AWL, «Operazioni di controllo»: BLD e NOP non fanno niente, BE e BEU terminano il blocco.
   BLD: () => undefined,
   NOP: () => undefined,
-  BE: () => 'return',
-  BEU: () => 'return',
+  BE: (st) => {
+    endBlock(st);
+    return 'return';
+  },
+  BEU: (st) => {
+    endBlock(st);
+    return 'return';
+  },
   BEC,
   UC: call(false),
   CC: call(true),

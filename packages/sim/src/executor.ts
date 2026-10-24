@@ -101,6 +101,17 @@ export function newExecState(
   };
 }
 
+/** Stato lasciato al chiamante a fine blocco: OS = OR = 0, STA = 1, /FC = 0; RLO e BR restano. */
+export function endBlock(st: ExecState): void {
+  // L'OB di primo livello non ha chiamante: il suo stato finale resta ispezionabile.
+  if (st.depth === 0) return;
+  const s = st.regs.stw;
+  s.os = false;
+  s.or = false;
+  s.sta = true;
+  s.fc = false;
+}
+
 /** Inizi delle istruzioni del blocco (scansione lineare), per validare le destinazioni dei salti. */
 const STARTS = new WeakMap<LoadedBlock, Set<number>>();
 
@@ -169,6 +180,8 @@ export function execBlock(st: ExecState): void {
         at = r.jump;
       } else at += d.length;
     }
+    // Fine del codice senza BE: come BE.
+    if (at >= code.length) endBlock(st);
   } catch (e) {
     if (e instanceof SimError && e.offset === undefined) {
       e.block = { kind: block.kind, number: block.number };

@@ -223,3 +223,90 @@ describe('stack di annidamento, MCR e stack L per blocco', () => {
     expect(errorOf(() => runProgram(p, { mem })).code).toBe('STACK_L_PIENO');
   });
 });
+
+describe('parola di stato nei richiami e a fine blocco', () => {
+  const stw = (r: { regs: { stw: object } }) => r.regs.stw;
+
+  it('dopo il ritorno la parola di stato è quella di fine blocco (/FC = 0)', () => {
+    // Il richiamato termina con /FC = 1 (A M 0.0): il chiamante riparte da una catena nuova.
+    const FC7: BlockSpec = { kind: 'FC', number: 7, networks: ['\tA M 0.0;'] };
+    const p = buildProgram([ob('\tSET;\n\tUC FC 7;\n\tA M 2.0;\n\t= M 2.1;'), FC7]);
+    for (const x of [0, 1]) {
+      const r = runProgram(p, { setup: (mem) => (mem.M[2] = x) });
+      expect(r.mem.M[2]! >> 1).toBe(x);
+    }
+    const r = runProgram(p);
+    expect(stw(r)).toMatchObject({ os: false });
+  });
+
+  it('BE, BEU e BEC (che termina) lasciano OS = OR = 0, STA = 1, /FC = 0 e RLO/BR invariati', () => {
+    for (const end of ['BE', 'BEU', 'BEC']) {
+      const FC8: BlockSpec = { kind: 'FC', number: 8, networks: [`\tCLR;\n\tSET;\n\t${end};`] };
+      const p = buildProgram([ob('\tUC FC 8;'), FC8]);
+      const r = runProgram(p, { regs: { stw: { os: true, br: true } } });
+      expect(stw(r)).toMatchObject({ os: false, or: false, sta: true, fc: false, rlo: true });
+    }
+  });
+
+  it('CC con RLO 0: non chiama e imposta OR 0, STA 1, RLO 1, /FC 0', () => {
+    const FC9: BlockSpec = { kind: 'FC', number: 9, networks: ['\tSET;\n\t= M 3.0;'] };
+    const p = buildProgram([ob('\tCLR;\n\tCC FC 9;'), FC9]);
+    const r = runProgram(p);
+    expect(r.mem.M[3]).toBe(0);
+    expect(stw(r)).toMatchObject({ or: false, sta: true, rlo: true, fc: false, os: false });
+  });
+
+  it('CC con RLO 1: chiama', () => {
+    const FC9: BlockSpec = { kind: 'FC', number: 9, networks: ['\tSET;\n\t= M 3.0;'] };
+    const p = buildProgram([ob('\tSET;\n\tCC FC 9;'), FC9]);
+    expect(runProgram(p).mem.M[3]).toBe(1);
+  });
+
+  it('BEC con RLO 0 continua con OR 0, STA 1, RLO 1, /FC 0 e BR invariato', () => {
+    const FC4: BlockSpec = {
+      kind: 'FC',
+      number: 4,
+      networks: ['\tCLR;\n\tBEC;\n\t= M 4.0;'],
+    };
+    const p = buildProgram([ob('\tUC FC 4;'), FC4]);
+    const r = runProgram(p, { regs: { stw: { br: true } } });
+    expect(r.mem.M[4]).toBe(1); // RLO = 1 dopo BEC non eseguita
+    expect(r.regs.stw.br).toBe(true);
+  });
+});
+
+describe('profondità dei blocchi e richiamo indiretto', () => {
+  const chain = (n: number): ReturnType<typeof buildProgram> => {
+    const specs: BlockSpec[] = [ob('\tUC FC 1;')];
+    for (let i = 1; i <= n; i++)
+      specs.push({
+        kind: 'FC',
+        number: i,
+        networks: [i < n ? `\tUC FC ${i + 1};` : '\tSET;\n\t= M 0.0;'],
+      });
+    return buildProgram(specs);
+  };
+
+  it('16 FC annidate (OB = profondità 0) riescono, 17 danno STACK_BLOCCHI_PIENO', () => {
+    expect(runProgram(chain(16)).mem.M[0]).toBe(1);
+    expect(errorOf(() => runProgram(chain(17))).code).toBe('STACK_BLOCCHI_PIENO');
+  });
+
+  it('UC FC [MW n]: il numero viene dalla memoria', () => {
+    const FC3: BlockSpec = { kind: 'FC', number: 3, networks: ['\tSET;\n\t= M 9.0;'] };
+    const p = buildProgram([ob('\tNOP 0;'), FC3]);
+    // fb 30 aaaa 70 0b 00 02 = UC FC [MW 2]; 65 00 = BE.
+    p.put({
+      kind: 'OB',
+      number: 1,
+      code: Uint8Array.from([0xfb, 0x30, 0x00, 0x02, 0x70, 0x0b, 0x00, 0x02, 0x65, 0x00]),
+      localBytes: 0,
+      networkStarts: [0],
+    });
+    const r = runProgram(p, { setup: (mem) => setWord(mem, 2, 3) });
+    expect(r.mem.M[9]).toBe(1);
+    expect(errorOf(() => runProgram(p, { setup: (mem) => setWord(mem, 2, 4) })).code).toBe(
+      'BLOCCO_NON_CARICATO',
+    );
+  });
+});
