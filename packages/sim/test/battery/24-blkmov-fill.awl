@@ -1,0 +1,26 @@
+// BLKMOV (SFC 20) e FILL (SFC 21) con ANY costanti nella CALL (manuale «Funzioni di sistema»).
+// MW10..15 = 0102 0304 0506 → BLKMOV in DB1 (6 byte) → BLKMOV 4 byte da DB1 a MB30.
+// FILL: il campo BLK di 6 byte (MB40..45) si riempie con la copia ripetuta di BVAL (MW12 = 0304).
+// RET_VAL 0 = nessun errore, BR = 1.
+// atteso: DB1.DBW0=16#0102, DB1.DBW2=16#0304, DB1.DBW4=16#0506, MD30=16#01020304
+// atteso: MD40=16#03040304, MW44=16#0304, MW100=0, MW102=0, MW104=0, M120.0=1, M120.1=1, M120.2=1
+//@ db 1 a:Word b:Word c:Word
+//@ block OB 1
+	L W#16#0102;
+	T MW 10;
+	L W#16#0304;
+	T MW 12;
+	L W#16#0506;
+	T MW 14;
+//@ network
+	CALL SFC 20 (SRCBLK := P#M 10.0 BYTE 6, DSTBLK := P#DB1.DBX 0.0 BYTE 6, RET_VAL := MW 100);
+	A BR;
+	= M 120.0;
+//@ network
+	CALL SFC 20 (SRCBLK := P#DB1.DBX 0.0 BYTE 4, DSTBLK := P#M 30.0 BYTE 4, RET_VAL := MW 102);
+	A BR;
+	= M 120.1;
+//@ network
+	CALL SFC 21 (BVAL := P#M 12.0 BYTE 2, BLK := P#M 40.0 BYTE 6, RET_VAL := MW 104);
+	A BR;
+	= M 120.2;

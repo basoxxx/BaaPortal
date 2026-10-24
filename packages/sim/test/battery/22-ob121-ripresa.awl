@@ -1,0 +1,32 @@
+// OB121 (errore di programmazione) con ripresa: l'OB1 sbaglia, l'OB121 gira, l'OB1 continua dopo l'istruzione
+// che ha fallito (manuale CPU/AWL, errori sincroni) con i propri registri e scrive un marcatore.
+// Lettura da MW 4000 (fuori area): SW_FLT 16#22 (area in lettura); scrittura in MW 4000: SW_FLT 16#23.
+// Le variabili temporanee dell'OB121: byte 0 OB121_EV_CLASS = 16#25, byte 1 OB121_SW_FLT.
+// ACCU1/ACCU2 prima dell'errore: 7 e 3 → dopo la ripresa 3+7 = 10. L'OB121 sporca gli accumulatori.
+// atteso: MW10=10, MB12=1, MB13=2, MW14=2, MB16=16#23, MB17=16#25, MB18=1
+//@ block OB 1
+	L 3;
+	L 7;
+	L MW 4000;
+	+I;
+	T MW 10;
+	L 1;
+	T MB 12;
+//@ network
+	L 9;
+	T MW 4000;
+	L 2;
+	T MB 13;
+//@ block OB 121
+	L MW 14;
+	L 1;
+	+I;
+	T MW 14;
+	L LB 1;
+	T MB 16;
+	L LB 0;
+	T MB 17;
+	L 99;
+	L 98;
+	SET;
+	= M 18.0;

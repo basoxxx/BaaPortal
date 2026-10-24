@@ -1,7 +1,8 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { findSystemBlock } from '@baaportal/catalog';
 import { compileBlock } from '@baaportal/mc7';
-import type { AwlContext } from '@baaportal/awl';
+import type { AwlBlockInfo, AwlContext } from '@baaportal/awl';
 import {
   OPS,
   SimCpu,
@@ -22,10 +23,15 @@ import { EMPTY, buildFiles, el, instanceDbFile, m, named, type BlockSpec } from 
  *   // atteso: MW10=300, MD20=16#FF, STW=16#0006      (una o più righe)
  *   // imposta: MB0=5, M10.1=1                        (valori prima del ciclo)
  *   // errore: CODICE                                 (il ciclo deve fallire con questo codice)
+ *   // cicli: N, passo: M ms                          (N cicli; il ciclo k, da 0, gira all'istante k*M ms
+ *                                                      di un orologio iniettato; atteso: dopo l'ultimo ciclo)
+ *   // imposta-al-ciclo: k: MB0=1, M1.0=0             (valori scritti prima del ciclo k, da 0)
+ *   // atteso-al-ciclo: k: MW10=3                     (valori controllati subito dopo il ciclo k, da 0)
  *   //@ block OB 1 | FC n | FB n                      (inizio di un blocco)
  *   //@ in|out|inout|stat|temp NOME TIPO              (interfaccia del blocco)
  *   //@ db N nome:Tipo nome:Tipo                      (DB globale)
  *   //@ idb N FBm                                     (DB di istanza di FBm)
+ *   //@ idb N SFBm                                    (DB di istanza di un SFB di sistema, a zeri)
  *   //@ network                                       (inizio di una nuova rete)
  */
 
@@ -77,15 +83,33 @@ interface Parsed {
   expected: string[];
   setup: string[];
   error?: string;
+  cycles: number;
+  stepMs: number;
+  setupAt: Map<number, string[]>;
+  expectedAt: Map<number, string[]>;
   blocks: BlockSpec[];
   dbs: DbSpec[];
   idbs: { db: number; fb: number }[];
+  sysIdbs: { db: number; sfb: number }[];
 }
 
 const memberType = (t: string) => (/^FB\d+$/i.test(t) ? named(t.toUpperCase()) : el(t));
 
 export function parseProgram(text: string): Parsed {
-  const out: Parsed = { expected: [], setup: [], blocks: [], dbs: [], idbs: [] };
+  const out: Parsed = {
+    expected: [],
+    setup: [],
+    cycles: 1,
+    stepMs: 0,
+    setupAt: new Map(),
+    expectedAt: new Map(),
+    blocks: [],
+    dbs: [],
+    idbs: [],
+    sysIdbs: [],
+  };
+  const at = (map: Map<number, string[]>, k: string, list: string) =>
+    map.set(Number(k), [...(map.get(Number(k)) ?? []), ...items(list)]);
   let cur: { spec: BlockSpec; nets: string[][] } | null = null;
   const finish = () => {
     if (cur) cur.spec.networks = cur.nets.map((n) => n.join('\n')).filter((n) => n.trim() !== '');
@@ -94,7 +118,14 @@ export function parseProgram(text: string): Parsed {
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.trimEnd();
     let mt: RegExpMatchArray | null;
-    if ((mt = line.match(/^\/\/\s*atteso:\s*(.*)$/))) out.expected.push(...items(mt[1]!));
+    if ((mt = line.match(/^\/\/\s*cicli:\s*(\d+)\s*,\s*passo:\s*(\d+)\s*ms\s*$/))) {
+      out.cycles = Number(mt[1]);
+      out.stepMs = Number(mt[2]);
+    } else if ((mt = line.match(/^\/\/\s*imposta-al-ciclo:\s*(\d+):\s*(.*)$/)))
+      at(out.setupAt, mt[1]!, mt[2]!);
+    else if ((mt = line.match(/^\/\/\s*atteso-al-ciclo:\s*(\d+):\s*(.*)$/)))
+      at(out.expectedAt, mt[1]!, mt[2]!);
+    else if ((mt = line.match(/^\/\/\s*atteso:\s*(.*)$/))) out.expected.push(...items(mt[1]!));
     else if ((mt = line.match(/^\/\/\s*imposta:\s*(.*)$/))) out.setup.push(...items(mt[1]!));
     else if ((mt = line.match(/^\/\/\s*errore:\s*(\S+)/))) out.error = mt[1]!;
     else if ((mt = line.match(/^\/\/@\s*block\s+(OB|FB|FC)\s+(\d+)\s*$/))) {
@@ -124,6 +155,8 @@ export function parseProgram(text: string): Parsed {
       });
     } else if ((mt = line.match(/^\/\/@\s*idb\s+(\d+)\s+FB(\d+)\s*$/)))
       out.idbs.push({ db: Number(mt[1]), fb: Number(mt[2]) });
+    else if ((mt = line.match(/^\/\/@\s*idb\s+(\d+)\s+SFB(\d+)\s*$/)))
+      out.sysIdbs.push({ db: Number(mt[1]), sfb: Number(mt[2]) });
     else if (/^\/\/@\s*network\s*$/.test(line)) cur?.nets.push([]);
     else if (line.startsWith('//@')) throw new Error(`direttiva sconosciuta: ${line}`);
     else if (cur) cur.nets[cur.nets.length - 1]!.push(line);
@@ -314,56 +347,120 @@ export interface BatteryRun {
   executed: Set<string>;
 }
 
+/** Informazioni AWL di un SFB o SFC di sistema, come le vuole il compilatore. */
+function systemInfo(kind: 'SFB' | 'SFC', number: number): AwlBlockInfo {
+  const b = findSystemBlock({ kind, number });
+  if (!b) throw new Error(`${kind}${number} assente dal catalogo`);
+  return {
+    name: b.name,
+    kind,
+    number,
+    iface: {
+      input: b.input,
+      output: b.output,
+      inOut: kind === 'SFC' ? b.inOut : [],
+      static: [],
+      temp: [],
+      returnType: b.returnType ? { kind: 'elementary', name: b.returnType } : { kind: 'void' },
+    },
+  } as unknown as AwlBlockInfo;
+}
+
+/** Controlla `list` e aggiunge le differenze a `failures` (con il prefisso `when`). */
+function check(
+  cpu: SimCpu,
+  regs: Registers | null,
+  list: string[],
+  when: string,
+  failures: string[],
+): void {
+  for (const e of list) {
+    const [name, value] = e.split('=').map((x) => x.trim()) as [string, string];
+    const pl = place(name);
+    const want = mask(parseNumber(value, pl.real), pl.bits);
+    const got = mask(pl.read(cpu, regs), pl.bits);
+    if (want !== got) {
+      const show = (n: number) =>
+        pl.bits === 1
+          ? String(n)
+          : `16#${n
+              .toString(16)
+              .toUpperCase()
+              .padStart(pl.bits / 4, '0')}`;
+      failures.push(`${when}${name}: atteso ${value} (${show(want)}), ottenuto ${show(got)}`);
+    }
+  }
+}
+
+function apply(cpu: SimCpu, list: string[]): void {
+  for (const s of list) {
+    const [name, value] = s.split('=').map((x) => x.trim()) as [string, string];
+    const pl = place(name);
+    if (!pl.write) throw new Error(`non scrivibile: ${name}`);
+    pl.write(cpu, parseNumber(value, pl.real));
+  }
+}
+
 export async function runBatteryFile(file: string): Promise<BatteryRun> {
   instrument();
-  const p = parseProgram(readFileSync(join(BATTERY_DIR, file), 'utf8'));
+  const text = readFileSync(join(BATTERY_DIR, file), 'utf8');
+  const p = parseProgram(text);
   const idbMap: Record<number, number> = {};
   for (const i of p.idbs) idbMap[i.db] = i.fb;
+  // Blocchi di sistema chiamati: ogni `SFC n` o `SFB n` del testo, più gli SFB dei DB di istanza.
+  const sysInfos: AwlBlockInfo[] = [];
+  const used = new Set<string>(p.sysIdbs.map((i) => `SFB ${i.sfb}`));
+  for (const mt of text.matchAll(/\b(SFC|SFB)\s+(\d+)/g)) used.add(`${mt[1]} ${mt[2]}`);
+  for (const u of used) {
+    const [kind, n] = u.split(' ') as ['SFB' | 'SFC', string];
+    sysInfos.push(systemInfo(kind, Number(n)));
+  }
+  for (const i of p.sysIdbs)
+    sysInfos.push({
+      name: `IDB${i.db}`,
+      kind: 'IDB',
+      number: i.db,
+      instanceOf: findSystemBlock({ kind: 'SFB', number: i.sfb })!.name,
+    } as unknown as AwlBlockInfo);
   const files = [
-    ...buildFiles(p.blocks, idbMap),
+    ...buildFiles(p.blocks, idbMap, sysInfos),
     ...p.dbs.map(globalDbFile),
     ...p.idbs.map((i) => instanceDbFile(p.blocks, i.db, i.fb)),
   ];
 
-  const cpu = new SimCpu({ cpuTypeId: 'cpu-315-2-pn-dp', props: PROPS });
+  const clock = { t: 0 };
+  const cpu = new SimCpu({ cpuTypeId: 'cpu-315-2-pn-dp', props: PROPS, now: () => clock.t });
   const c = await connectToSim(cpu);
   const failures: string[] = [];
   probe = { executed: new Set(), regs: null };
   try {
     for (const f of files) await c.downloadBlock(f);
     await c.start();
-    for (const s of p.setup) {
-      const [name, value] = s.split('=').map((x) => x.trim()) as [string, string];
-      const pl = place(name);
-      if (!pl.write) throw new Error(`non scrivibile: ${name}`);
-      pl.write(cpu, parseNumber(value, pl.real));
-    }
-    const result = cpu.cycle();
-    if (p.error) {
-      if (result.ok) failures.push(`atteso errore ${p.error}, il ciclo è riuscito`);
-      else if (result.error?.code !== p.error)
-        failures.push(`atteso errore ${p.error}, ottenuto ${result.error?.code}`);
-    } else if (!result.ok) {
-      failures.push(`ciclo fallito: ${result.error?.code} ${result.error?.detail ?? ''}`);
-    }
-    if (!p.error && result.ok) {
-      for (const e of p.expected) {
-        const [name, value] = e.split('=').map((x) => x.trim()) as [string, string];
-        const pl = place(name);
-        const want = mask(parseNumber(value, pl.real), pl.bits);
-        const got = mask(pl.read(cpu, probe.regs), pl.bits);
-        if (want !== got) {
-          const show = (n: number) =>
-            pl.bits === 1
-              ? String(n)
-              : `16#${n
-                  .toString(16)
-                  .toUpperCase()
-                  .padStart(pl.bits / 4, '0')}`;
-          failures.push(`${name}: atteso ${value} (${show(want)}), ottenuto ${show(got)}`);
-        }
+    // DB di istanza degli SFB di sistema: a zeri, come il DB che il PLC riceve vuoto.
+    for (const i of p.sysIdbs)
+      cpu.memory.dbs.set(i.db, {
+        data: new Uint8Array(16),
+        initial: new Uint8Array(16),
+        retentive: false,
+      });
+    apply(cpu, p.setup);
+    for (let k = 0; k < p.cycles; k++) {
+      clock.t = k * p.stepMs;
+      apply(cpu, p.setupAt.get(k) ?? []);
+      const result = cpu.cycle();
+      if (p.error) {
+        if (result.ok) failures.push(`atteso errore ${p.error}, il ciclo è riuscito`);
+        else if (result.error?.code !== p.error)
+          failures.push(`atteso errore ${p.error}, ottenuto ${result.error?.code}`);
+        break;
       }
+      if (!result.ok) {
+        failures.push(`ciclo ${k} fallito: ${result.error?.code} ${result.error?.detail ?? ''}`);
+        break;
+      }
+      check(cpu, probe.regs, p.expectedAt.get(k) ?? [], `ciclo ${k}: `, failures);
     }
+    if (!p.error && failures.length === 0) check(cpu, probe.regs, p.expected, '', failures);
   } finally {
     await c.close();
   }

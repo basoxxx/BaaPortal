@@ -1,0 +1,32 @@
+// SFB 4 (TON) e SFB 0 (CTU) con DB di istanza su più cicli (norma IEC 61131-3, diagrammi del manuale SFB).
+// TON PT=T#2S, IN=M0.0: Q=1 quando IN è 1 da PT; ET cresce fino a PT e poi si ferma; IN=0 azzera Q ed ET.
+// CTU PV=3: CV conta i fronti di salita di CU (M0.1) fino a 32767; Q=1 con CV>=PV; R (M0.2) azzera.
+// Un ciclo ogni 700 ms (il ciclo k a 700*k ms). TON: IN=1 dai cicli 0 a 4 (0..2800 ms), poi 0.
+// ciclo 0: ET=0 Q=0     ciclo 1 (700): ET=700 Q=0    ciclo 2 (1400): ET=1400, Q=0
+// ciclo 3 (2100): ET=2000, Q=1    ciclo 4 (2800): ET=2000, Q=1    ciclo 5: IN=0 → ET=0, Q=0
+// CTU: fronti di CU ai cicli 1, 3, 5, 7 (CU=1 nei cicli dispari, 0 nei pari); R al ciclo 8.
+// cicli: 9, passo: 700 ms
+// imposta: M0.0=1
+// imposta-al-ciclo: 1: M0.1=1
+// imposta-al-ciclo: 2: M0.1=0
+// imposta-al-ciclo: 3: M0.1=1
+// imposta-al-ciclo: 4: M0.1=0
+// imposta-al-ciclo: 5: M0.0=0, M0.1=1
+// imposta-al-ciclo: 6: M0.1=0
+// imposta-al-ciclo: 7: M0.1=1
+// imposta-al-ciclo: 8: M0.1=0, M0.2=1
+// atteso-al-ciclo: 0: M1.0=0, MD4=0, M1.1=0, MW8=0
+// atteso-al-ciclo: 1: M1.0=0, MD4=700, M1.1=0, MW8=1
+// atteso-al-ciclo: 2: M1.0=0, MD4=1400, MW8=1
+// atteso-al-ciclo: 3: M1.0=1, MD4=2000, M1.1=0, MW8=2
+// atteso-al-ciclo: 4: M1.0=1, MD4=2000, MW8=2
+// atteso-al-ciclo: 5: M1.0=0, MD4=0, M1.1=1, MW8=3
+// atteso-al-ciclo: 6: M1.1=1, MW8=3
+// atteso-al-ciclo: 7: M1.1=1, MW8=4
+// atteso: M1.1=0, MW8=0
+//@ idb 5 SFB4
+//@ idb 6 SFB0
+//@ block OB 1
+	CALL SFB 4, DB 5 (IN := M 0.0, PT := T#2S, Q := M 1.0, ET := MD 4);
+//@ network
+	CALL SFB 0, DB 6 (CU := M 0.1, R := M 0.2, PV := 3, Q := M 1.1, CV := MW 8);

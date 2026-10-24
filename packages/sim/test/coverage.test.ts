@@ -4,12 +4,11 @@ import { OPS } from '../src';
 import { batteryFiles, runBatteryFile } from './batteryRunner';
 
 /**
- * Istruzioni che la batteria non esegue perché il piano 2B le aggiunge:
- *  - CALL, che nell'MC7 non esiste come istruzione (la chiamata compilata è UC o CC);
- *  - le chiamate di SFC e SFB (UC/CC con operando SFC o SFB), che sono operandi e non id a sé.
+ * Unico id non eseguito dalla batteria: CALL, che nell'MC7 non è un'istruzione (la chiamata compilata
+ * è UC o CC, con la lista dei puntatori che segue). Le chiamate di SFC e SFB sono UC/CC con operando.
  * Ogni altro id di INSTRUCTIONS deve essere eseguito da almeno un programma della batteria.
  */
-export const DEFERRED_2B: readonly string[] = ['CALL'];
+export const NOT_IN_MC7: readonly string[] = ['CALL'];
 
 describe('copertura delle istruzioni da parte della batteria', () => {
   const executedByBattery = async (): Promise<Set<string>> => {
@@ -19,26 +18,18 @@ describe('copertura delle istruzioni da parte della batteria', () => {
     return all;
   };
 
-  it('ogni id di INSTRUCTIONS è eseguito dalla batteria o è in DEFERRED_2B', async () => {
+  it('ogni id di INSTRUCTIONS, tranne CALL, è eseguito dalla batteria', async () => {
     const executed = await executedByBattery();
     const missing = INSTRUCTIONS.map((i) => i.id).filter(
-      (id) => !executed.has(id) && !DEFERRED_2B.includes(id),
+      (id) => !executed.has(id) && !NOT_IN_MC7.includes(id),
     );
     expect([...new Set(missing)]).toEqual([]);
   });
 
-  it('DEFERRED_2B contiene solo id esistenti, e nient’altro che CALL', () => {
+  it('l’elenco delle esclusioni è esistente e contiene solo CALL, che non ha gestore', () => {
     const ids = new Set(INSTRUCTIONS.map((i) => i.id));
-    for (const id of DEFERRED_2B) expect(ids.has(id), id).toBe(true);
-    expect(DEFERRED_2B).toEqual(['CALL']);
-  });
-
-  it('gli id rimandati danno MC7_NON_ESEGUIBILE; CALL non ha gestore perché non esiste in MC7', () => {
-    // Quando il piano 2B aggiunge un gestore, l'id va tolto da DEFERRED_2B e coperto dalla batteria.
+    for (const id of NOT_IN_MC7) expect(ids.has(id), id).toBe(true);
+    expect(NOT_IN_MC7).toEqual(['CALL']);
     expect(OPS['CALL']).toBeUndefined();
-    for (const id of DEFERRED_2B.filter((x) => x !== 'CALL'))
-      expect(() => OPS[id]!({} as never, { text: id } as never), id).toThrowError(
-        expect.objectContaining({ code: 'MC7_NON_ESEGUIBILE' }) as never,
-      );
   });
 });

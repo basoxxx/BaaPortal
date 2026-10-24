@@ -169,4 +169,4 @@ Altre voci del buffer: `AVVIO`, `STOP_RICHIESTO`, `CANCELLAZIONE_TOTALE`.
 
 ## 9. Verifica
 
-La batteria `packages/sim/test/battery/` contiene 17 programmi AWL scritti a mano, con i valori attesi ricavati dagli esempi del manuale pubblico; il test di copertura richiede che ogni istruzione non rimandata al 2B sia eseguita da almeno un programma.
+La batteria `packages/sim/test/battery/` contiene 25 programmi AWL scritti a mano, con i valori attesi ricavati dagli esempi del manuale pubblico; il test di copertura richiede che ogni istruzione (tranne `CALL`, che nell'MC7 non esiste) sia eseguita da almeno un programma.
