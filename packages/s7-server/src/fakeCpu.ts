@@ -1,22 +1,22 @@
 import {
-  blockTypeCode,
   buildBlockFile,
   encodeBcdDateTimeShort,
-  encodeBlockInfo,
   itemByteLength,
   parseBlockFile,
   remoteTsap,
-  type BlockInfo,
   type BlockListEntry,
   type BlockType,
   type CpuMode,
   type DiagEntry,
-  type ParsedBlock,
   type ReadItem,
   type S7DateTime,
   type WriteItem,
 } from '@baaportal/s7comm';
+import type { CpuBackend, CpuConfig, ItemRead, StoredBlock } from './backend';
+import { encodeStoredBlockInfo } from './blockInfo';
 import { checkFaults, type FaultPlan } from './faults';
+
+export type { CpuConfig, ItemRead, StoredBlock };
 
 export interface FakeCpuOptions {
   /** Numero d'ordine (MlFB), 20 caratteri al massimo. */
@@ -43,40 +43,6 @@ export interface FakeCpuOptions {
   clock?: () => S7DateTime;
   faults?: FaultPlan;
 }
-
-export interface CpuConfig {
-  orderNumber: string;
-  firmware: string;
-  firmwareParts: [number, number, number];
-  asName: string;
-  moduleName: string;
-  serialNumber: string;
-  copyright: string;
-  pduLength: number;
-  maxConnections: number;
-  rack: number;
-  slot: number;
-  protectionLevel: 1 | 2 | 3;
-  sizes: {
-    inputBytes: number;
-    outputBytes: number;
-    mBytes: number;
-    timers: number;
-    counters: number;
-  };
-  faults: FaultPlan;
-  /** I tre TSAP remoti accettati (tipo 1, 2, 3 con rack e slot configurati). */
-  tsaps: number[];
-}
-
-export interface StoredBlock {
-  type: BlockType;
-  number: number;
-  file: Uint8Array;
-  parsed: ParsedBlock;
-}
-
-export type ItemRead = { data: Uint8Array } | { rc: number };
 
 const hexOf = (b: Uint8Array): string =>
   Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
@@ -107,7 +73,7 @@ function int(name: string, v: number, min: number, max: number): number {
  * cambia soltanto per le funzioni di scrittura ammesse (write var, stop, warm restart, download di
  * un blocco con _INSE: i metodi `apply*`), mai per le altre: la sessione risponde con un errore a tutto il resto. Gli stessi dati vengono da `serve`/`listen`.
  */
-export class FakeCpu {
+export class FakeCpu implements CpuBackend {
   readonly config: CpuConfig;
   private readonly clockFn: () => S7DateTime;
   private readonly areas: Record<'I' | 'Q' | 'M', Uint8Array>;
@@ -330,40 +296,7 @@ export class FakeCpu {
 
   /** @internal Payload (78 byte) della risposta di block info. */
   blockInfo(b: StoredBlock): Uint8Array {
-    const h = b.parsed.header;
-    const f = b.parsed.footer;
-    // il sottotipo è già nel tipo; la versione del footer è decimale, quella di block info esadecimale
-    const ver = /^(\d+)\.(\d+)$/.exec(f?.version ?? '0.0');
-    const info: BlockInfo = {
-      typeCode: blockTypeCode(b.type),
-      type: b.type,
-      number: h.number,
-      language: h.language,
-      flags: h.flags,
-      loadLength: h.loadLength,
-      security: h.security,
-      codeTime: h.codeTime,
-      interfaceTime: h.interfaceTime,
-      ssbLength: h.ssbLength,
-      addLength: h.addLength,
-      localDataLength: h.localDataLength,
-      mc7Length: h.mc7Length,
-      author: f?.author ?? '',
-      family: f?.family ?? '',
-      name: f?.name ?? '',
-      version: ver ? `${Number(ver[1]).toString(16)}.${Number(ver[2]).toString(16)}` : '0.0',
-      checksum: f?.checksum ?? 0,
-      raw: {
-        // come nelle risposte reali di una 315: `01 00 00 4a 22 00 70 70 01 ...`
-        word0: 0x0100,
-        codeTime: h.codeTimeRaw,
-        interfaceTime: h.interfaceTimeRaw,
-        author: f?.raw?.author,
-        family: f?.raw?.family,
-        name: f?.raw?.name,
-      },
-    };
-    return encodeBlockInfo(info);
+    return encodeStoredBlockInfo(b);
   }
 
   /** @internal Blocco ricomposto da un download di rete: dentro solo dopo l'_INSE. Solo dalla sessione. */

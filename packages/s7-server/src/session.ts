@@ -45,7 +45,7 @@ import {
   type S7Pdu,
   type Transport,
 } from '@baaportal/s7comm';
-import type { FakeCpu } from './fakeCpu';
+import type { CpuBackend } from './backend';
 import { chunked, functionOf } from './faults';
 import { buildSzl } from './szlData';
 
@@ -142,7 +142,7 @@ class Session {
   private readonly timers = new Set<ReturnType<typeof setTimeout>>();
 
   constructor(
-    private readonly cpu: FakeCpu,
+    private readonly cpu: CpuBackend,
     private readonly t: Transport,
   ) {
     this.pdu = cpu.config.pduLength;
@@ -776,7 +776,7 @@ function udError(p: S7Pdu, u: DecodedUserdata, code: number): S7Pdu {
  * Serve una connessione ISO-on-TCP su `t` come farebbe una CPU 315-2 PN/DP. `close()` chiude la
  * sessione e il trasporto; una chiusura dall'altra parte la libera da sola.
  */
-export function serve(cpu: FakeCpu, t: Transport): { close(): void } {
+export function serve(cpu: CpuBackend, t: Transport): { close(): void } {
   const s = new Session(cpu, t);
   return { close: () => s.close() };
 }

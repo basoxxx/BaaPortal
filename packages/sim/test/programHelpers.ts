@@ -41,6 +41,17 @@ export function buildProgram(
   idbs: Record<number, number> = {},
   extra: AwlBlockInfo[] = [],
 ): Program {
+  const program = new Program();
+  for (const file of buildFiles(specs, idbs, extra)) program.load(file);
+  return program;
+}
+
+/** Come `buildProgram`, ma restituisce i file di blocco compilati (per il download). */
+export function buildFiles(
+  specs: BlockSpec[],
+  idbs: Record<number, number> = {},
+  extra: AwlBlockInfo[] = [],
+): Uint8Array[] {
   const infos: AwlBlockInfo[] = specs.map(
     (b) =>
       ({
@@ -58,7 +69,7 @@ export function buildProgram(
       number: Number(db),
       instanceOf: `FB${fb}`,
     } as AwlBlockInfo);
-  const program = new Program();
+  const files: Uint8Array[] = [];
   for (const b of specs) {
     const s = b.sections ?? EMPTY;
     const ctx = {
@@ -95,9 +106,9 @@ export function buildProgram(
     const errs = r.diagnostics.filter((d) => d.severity === 'error');
     if (errs.length || !r.file)
       throw new Error(`${b.kind}${b.number}: ${errs.map((d) => d.message).join('; ')}`);
-    program.load(r.file);
+    files.push(r.file);
   }
-  return program;
+  return files;
 }
 
 export interface ProgRun {

@@ -13,6 +13,8 @@
     "@baaportal/awl": "*",
     "@baaportal/catalog": "*",
     "@baaportal/mc7": "*",
-    "@baaportal/s7-types": "*"
+    "@baaportal/s7-server": "*",
+    "@baaportal/s7-types": "*",
+    "@baaportal/s7comm": "*"
   }
 }
