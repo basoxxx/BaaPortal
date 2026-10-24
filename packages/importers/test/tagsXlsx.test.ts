@@ -58,7 +58,9 @@ describe('tabelle variabili xlsx', () => {
       },
     ]);
     const p = parseTagsXlsx(bytes);
-    expect(p.errors).toEqual([{ line: 3, code: 'INDIRIZZO_NON_VALIDO', detail: '%Zeta' }]);
+    expect(p.errors).toEqual([
+      { line: 3, sheet: 'tags', code: 'INDIRIZZO_NON_VALIDO', detail: '%Zeta' },
+    ]);
     expect(p.tags.map((t) => t.name)).toEqual(['A', 'C']);
   });
 
@@ -87,13 +89,36 @@ describe('tabelle variabili xlsx', () => {
     expect(p.tags.map((t) => t.name)).toEqual(['A']);
     expect(p.constants.map((c) => c.name)).toEqual(['M']);
     expect(p.errors).toEqual([
-      { line: 3, code: 'TIPO_NON_VALIDO', detail: 'PIPPO' },
-      { line: 4, code: 'VALORE_VUOTO', detail: 'L' },
+      { line: 3, sheet: 'constants', code: 'TIPO_NON_VALIDO', detail: 'PIPPO' },
+      { line: 4, sheet: 'constants', code: 'VALORE_VUOTO', detail: 'L' },
     ]);
   });
 
   it('byte non xlsx → lancia XlsxFormatError; workbook senza fogli → nessuna riga', () => {
     expect(() => parseTagsXlsx(strToU8('no'))).toThrow(XlsxFormatError);
     expect(parseTagsXlsx(writeXlsx([]))).toEqual({ tags: [], constants: [], errors: [] });
+  });
+
+  it('errori con stessa riga su fogli diversi distinti dal campo sheet', () => {
+    const bytes = writeXlsx([
+      {
+        name: 'PLC Tags',
+        rows: [
+          ['Name', 'Data Type', 'Logical Address'],
+          ['A', 'PIPPO', '%M0.0'],
+        ],
+      },
+      {
+        name: 'User Constants',
+        rows: [
+          ['Name', 'Data Type', 'Value'],
+          ['K', 'Int', ''],
+        ],
+      },
+    ]);
+    expect(parseTagsXlsx(bytes).errors).toEqual([
+      { line: 2, sheet: 'tags', code: 'TIPO_NON_VALIDO', detail: 'PIPPO' },
+      { line: 2, sheet: 'constants', code: 'VALORE_VUOTO', detail: 'K' },
+    ]);
   });
 });

@@ -26,6 +26,8 @@ export interface ConstantRow {
 /** Codici: COLONNA_MANCANTE, TIPO_NON_VALIDO, INDIRIZZO_NON_VALIDO, NOME_VUOTO, NOME_DOPPIO, RIGA_ILLEGGIBILE. */
 export interface RowError {
   line: number;
+  /** Solo per xlsx: foglio da cui viene l'errore. */
+  sheet?: 'tags' | 'constants';
   code: string;
   detail?: string;
 }
@@ -77,26 +79,27 @@ const isBlankRecord = (r: RawRecord): boolean => r.cells.every((c) => c.trim() =
 
 const REQUIRED = ['Name', 'Data Type', 'Logical Address'] as const;
 
+type RowResult<T> = { row: T } | { code: string; detail?: string };
+
 /**
- * Valida le righe di una tabella variabili. Un errore di riga non blocca le altre;
- * se manca una colonna obbligatoria non si importa nulla.
+ * Ciclo comune a variabili e costanti: colonne obbligatorie, righe illeggibili,
+ * righe vuote, nome vuoto e nome doppio. `build` valida il resto della riga.
  */
-export function buildTagRows(header: readonly string[], records: readonly RawRecord[]): ParsedTags {
+function buildRows<T extends { name: string }>(
+  header: readonly string[],
+  records: readonly RawRecord[],
+  required: readonly string[],
+  build: (at: (name: string) => string, name: string) => RowResult<T>,
+): { rows: T[]; errors: RowError[] } {
   const cols = columnIndex(header);
-  const missing = REQUIRED.filter((c) => !cols.has(c.toLowerCase()));
+  const missing = required.filter((c) => !cols.has(c.toLowerCase()));
   if (missing.length > 0) {
     return {
-      tags: [],
-      constants: [],
+      rows: [],
       errors: missing.map((c) => ({ line: 1, code: 'COLONNA_MANCANTE', detail: c })),
     };
   }
-  const at = (r: RawRecord, name: string): string | undefined => {
-    const i = cols.get(name.toLowerCase());
-    return i === undefined ? undefined : r.cells[i];
-  };
-
-  const tags: TagRow[] = [];
+  const rows: T[] = [];
   const errors: RowError[] = [];
   const seen = new Set<string>();
   for (const r of records) {
@@ -106,7 +109,11 @@ export function buildTagRows(header: readonly string[], records: readonly RawRec
       continue;
     }
     if (isBlankRecord(r)) continue;
-    const name = (at(r, 'Name') ?? '').trim();
+    const at = (name: string): string => {
+      const i = cols.get(name.toLowerCase());
+      return (i === undefined ? undefined : r.cells[i]) ?? '';
+    };
+    const name = at('Name').trim();
     if (name === '') {
       errors.push({ line, code: 'NOME_VUOTO' });
       continue;
@@ -115,30 +122,42 @@ export function buildTagRows(header: readonly string[], records: readonly RawRec
       errors.push({ line, code: 'NOME_DOPPIO', detail: name });
       continue;
     }
-    const typeText = (at(r, 'Data Type') ?? '').trim();
+    const res = build(at, name);
+    if ('row' in res) {
+      seen.add(name.toLowerCase());
+      rows.push({ ...res.row, line } as T);
+    } else errors.push({ line, ...res });
+  }
+  return { rows, errors };
+}
+
+/**
+ * Valida le righe di una tabella variabili. Un errore di riga non blocca le altre;
+ * se manca una colonna obbligatoria non si importa nulla.
+ */
+export function buildTagRows(header: readonly string[], records: readonly RawRecord[]): ParsedTags {
+  const { rows, errors } = buildRows<TagRow>(header, records, REQUIRED, (at, name) => {
+    const typeText = at('Data Type').trim();
     const type = parseType(typeText);
-    if (!type.ok) {
-      errors.push({ line, code: 'TIPO_NON_VALIDO', detail: typeText });
-      continue;
-    }
-    const addressText = (at(r, 'Logical Address') ?? '').trim();
+    if (!type.ok) return { code: 'TIPO_NON_VALIDO', detail: typeText };
+    const addressText = at('Logical Address').trim();
     const address = parseAddress(addressText);
     if (!address.ok || !addressFitsType(address.address, type.type)) {
-      errors.push({ line, code: 'INDIRIZZO_NON_VALIDO', detail: addressText });
-      continue;
+      return { code: 'INDIRIZZO_NON_VALIDO', detail: addressText };
     }
-    seen.add(name.toLowerCase());
-    tags.push({
-      line,
-      name,
-      path: (at(r, 'Path') ?? '').trim(),
-      type: formatType(type.type),
-      address: formatAddress(address.address),
-      comment: at(r, 'Comment') ?? '',
-      hmi: parseFlag(at(r, 'Hmi Accessible')),
-    });
-  }
-  return { tags, constants: [], errors };
+    return {
+      row: {
+        line: 0,
+        name,
+        path: at('Path').trim(),
+        type: formatType(type.type),
+        address: formatAddress(address.address),
+        comment: at('Comment'),
+        hmi: parseFlag(at('Hmi Accessible')),
+      },
+    };
+  });
+  return { tags: rows, constants: [], errors };
 }
 
 const REQUIRED_CONSTANTS = ['Name', 'Data Type', 'Value'] as const;
@@ -148,58 +167,27 @@ export function buildConstantRows(
   header: readonly string[],
   records: readonly RawRecord[],
 ): ParsedTags {
-  const cols = columnIndex(header);
-  const missing = REQUIRED_CONSTANTS.filter((c) => !cols.has(c.toLowerCase()));
-  if (missing.length > 0) {
-    return {
-      tags: [],
-      constants: [],
-      errors: missing.map((c) => ({ line: 1, code: 'COLONNA_MANCANTE', detail: c })),
-    };
-  }
-  const at = (r: RawRecord, name: string): string | undefined => {
-    const i = cols.get(name.toLowerCase());
-    return i === undefined ? undefined : r.cells[i];
-  };
-  const constants: ConstantRow[] = [];
-  const errors: RowError[] = [];
-  const seen = new Set<string>();
-  for (const r of records) {
-    const line = r.line;
-    if (r.unreadable) {
-      errors.push({ line, code: 'RIGA_ILLEGGIBILE' });
-      continue;
-    }
-    if (isBlankRecord(r)) continue;
-    const name = (at(r, 'Name') ?? '').trim();
-    if (name === '') {
-      errors.push({ line, code: 'NOME_VUOTO' });
-      continue;
-    }
-    if (seen.has(name.toLowerCase())) {
-      errors.push({ line, code: 'NOME_DOPPIO', detail: name });
-      continue;
-    }
-    const typeText = (at(r, 'Data Type') ?? '').trim();
-    const type = parseType(typeText);
-    if (!type.ok) {
-      errors.push({ line, code: 'TIPO_NON_VALIDO', detail: typeText });
-      continue;
-    }
-    const value = (at(r, 'Value') ?? '').trim();
-    if (value === '') {
-      errors.push({ line, code: 'VALORE_VUOTO', detail: name });
-      continue;
-    }
-    seen.add(name.toLowerCase());
-    constants.push({
-      line,
-      name,
-      path: (at(r, 'Path') ?? '').trim(),
-      type: formatType(type.type),
-      value,
-      comment: at(r, 'Comment') ?? '',
-    });
-  }
-  return { tags: [], constants, errors };
+  const { rows, errors } = buildRows<ConstantRow>(
+    header,
+    records,
+    REQUIRED_CONSTANTS,
+    (at, name) => {
+      const typeText = at('Data Type').trim();
+      const type = parseType(typeText);
+      if (!type.ok) return { code: 'TIPO_NON_VALIDO', detail: typeText };
+      const value = at('Value').trim();
+      if (value === '') return { code: 'VALORE_VUOTO', detail: name };
+      return {
+        row: {
+          line: 0,
+          name,
+          path: at('Path').trim(),
+          type: formatType(type.type),
+          value,
+          comment: at('Comment'),
+        },
+      };
+    },
+  );
+  return { tags: [], constants: rows, errors };
 }

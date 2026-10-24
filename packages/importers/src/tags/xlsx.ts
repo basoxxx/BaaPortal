@@ -56,12 +56,12 @@ export function parseTagsXlsx(bytes: Uint8Array): ParsedTags {
   if (tagSheet && tagSheet.rows[0]) {
     const p = buildTagRows(tagSheet.rows[0], toRecords(tagSheet.rows));
     result.tags = p.tags;
-    result.errors.push(...p.errors);
+    result.errors.push(...p.errors.map((e) => ({ ...e, sheet: 'tags' as const })));
   }
   if (constSheet && constSheet.rows[0]) {
     const p = buildConstantRows(constSheet.rows[0], toRecords(constSheet.rows));
     result.constants = p.constants;
-    result.errors.push(...p.errors);
+    result.errors.push(...p.errors.map((e) => ({ ...e, sheet: 'constants' as const })));
   }
   return result;
 }

@@ -79,4 +79,43 @@ describe('ooxml minimo', () => {
     );
     expect(() => readXlsx(bytes)).toThrow(expect.objectContaining({ code: 'FOGLIO_ILLEGGIBILE' }));
   });
+
+  const sheetZip = (sheetXml: string): Uint8Array =>
+    zip({
+      ...workbook(
+        '<sheet name="S" r:id="rId1"/>',
+        '<Relationship Id="rId1" Target="worksheets/s.xml"/>',
+      ),
+      'xl/worksheets/s.xml': sheetXml,
+    });
+
+  it('tag con prefisso x:, CDATA, <c/> autochiusa, colonna AA e xml:space', () => {
+    const bytes = sheetZip(
+      '<x:worksheet xmlns:x="urn:x"><x:sheetData><x:row r="1">' +
+        '<x:c r="A1" t="inlineStr"><x:is><x:t xml:space="preserve">  due spazi </x:t></x:is></x:c>' +
+        '<x:c r="B1"/>' +
+        '<x:c r="C1" t="inlineStr"><x:is><x:t><![CDATA[a<b&c]]></x:t></x:is></x:c>' +
+        '<x:c r="AA1" t="inlineStr"><x:is><x:t>aa</x:t></x:is></x:c>' +
+        '</x:row></x:sheetData></x:worksheet>',
+    );
+    const row = readXlsx(bytes)[0]!.rows[0]!;
+    expect(row).toHaveLength(27);
+    expect(row[0]).toBe('  due spazi ');
+    expect(row[1]).toBe('');
+    expect(row[2]).toBe('a<b&c');
+    expect(row[26]).toBe('aa');
+  });
+
+  it('riferimento di colonna enorme o riga fuori limite → FOGLIO_ILLEGGIBILE', () => {
+    const big = sheetZip(
+      '<worksheet><sheetData><row r="1"><c r="ZZZZZZZZ1" t="inlineStr"><is><t>x</t></is></c></row></sheetData></worksheet>',
+    );
+    expect(() => readXlsx(big)).toThrow(expect.objectContaining({ code: 'FOGLIO_ILLEGGIBILE' }));
+    const rows = sheetZip('<worksheet><sheetData><row r="2000000"/></sheetData></worksheet>');
+    expect(() => readXlsx(rows)).toThrow(expect.objectContaining({ code: 'FOGLIO_ILLEGGIBILE' }));
+  });
+
+  it('zip oltre 50 MB rifiutato prima di decomprimere', () => {
+    expect(() => readXlsx(new Uint8Array(50 * 1024 * 1024 + 1))).toThrow(XlsxFormatError);
+  });
 });

@@ -120,12 +120,14 @@ function readSheetRows(sheet: XmlNode, shared: string[]): string[][] {
   for (const row of elements(data, 'row')) {
     const rAttr = Number(row.attrs['r']);
     const rowIndex = Number.isInteger(rAttr) && rAttr > 0 ? rAttr - 1 : nextRow;
+    if (rowIndex >= MAX_ROWS) throw new XlsxFormatError('FOGLIO_ILLEGGIBILE', 'riga fuori limite');
     nextRow = rowIndex + 1;
     const cells: string[] = [];
     let nextCol = 0;
     for (const c of elements(row, 'c')) {
       const ref = /^([A-Za-z]+)\d*$/.exec(c.attrs['r'] ?? '');
       const col = ref ? columnToIndex(ref[1]!) : nextCol;
+      if (col >= MAX_COLS) throw new XlsxFormatError('FOGLIO_ILLEGGIBILE', 'colonna fuori limite');
       nextCol = col + 1;
       const type = c.attrs['t'] ?? 'n';
       const v = elements(c, 'v')[0];
@@ -156,7 +158,12 @@ const normalizePath = (p: string): string => {
   return out.join('/');
 };
 
+const MAX_ZIP_BYTES = 50 * 1024 * 1024;
+const MAX_COLS = 16384;
+const MAX_ROWS = 1048576;
+
 export function readXlsx(bytes: Uint8Array): Sheet[] {
+  if (bytes.length > MAX_ZIP_BYTES) throw new XlsxFormatError('NON_XLSX', 'file troppo grande');
   let files: Record<string, Uint8Array>;
   try {
     files = unzipSync(bytes);
@@ -212,7 +219,7 @@ export function readXlsx(bytes: Uint8Array): Sheet[] {
 // ---------------------------------------------------------------------------
 
 // Caratteri di controllo non ammessi in XML 1.0 (restano \t \n \r).
-const INVALID_XML = /[\u0000-\u0008\u000b\u000c\u000e-\u001f￾￿]/g;
+const INVALID_XML = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff]/g;
 
 const esc = (s: string): string =>
   s
