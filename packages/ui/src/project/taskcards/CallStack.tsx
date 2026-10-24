@@ -10,9 +10,10 @@ export function CallStack() {
   const project = useAppStore((s) => s.doc?.project ?? null);
   if (sim.phase !== 'on') return <p className="baa-placeholder">{t('cpuPanel.needSim')}</p>;
 
-  // L'ultima voce di STOP per errore che porta uno stack (le voci più recenti sono in fondo).
-  const entry = [...sim.diagnostics].reverse().find((d) => isDiagError(d) && d.stack?.length);
-  if (!entry?.stack) return <p className="baa-placeholder">{t('cpuPanel.callStackEmpty')}</p>;
+  // L'ultima voce di errore (le più recenti sono in fondo): se non ha stack, niente stack vecchi.
+  const entry = [...sim.diagnostics].reverse().find(isDiagError);
+  if (!entry?.stack?.length)
+    return <p className="baa-placeholder">{t('cpuPanel.callStackEmpty')}</p>;
 
   const dev = project && sim.deviceId ? findDevice(project, sim.deviceId) : undefined;
   return (

@@ -76,6 +76,15 @@ describe('pannello di comando CPU', () => {
     expect(screen.getByTestId('cpu-warnings')).toHaveTextContent('SFC non simulata: OB1');
   });
 
+  it.each(['OB_RICHIAMATO', 'SFC_NON_SIMULATA'] as const)(
+    'SF spenta con %s in coda',
+    async (code) => {
+      await setup({ diagnostics: [entry({ code: 'BCD_NON_VALIDO' }), entry({ code })] });
+      expect(screen.getByTestId('led-sf')).toHaveAttribute('data-on', 'false');
+      expect(screen.getByTestId('led-sf')).toHaveAttribute('aria-label', 'SF: spento');
+    },
+  );
+
   it('SF spenta se l ultima voce non è un errore', async () => {
     await setup({
       diagnostics: [entry({ code: 'TEMPO_CICLO_SUPERATO' }), entry({ code: 'AVVIO' })],
@@ -112,6 +121,17 @@ describe('stack di chiamata', () => {
     await app.user.click(list.getByRole('button', { name: new RegExp(`OB${ob.number}`) }));
     const eds = app.store.getState().workArea.editors;
     expect(eds.some((e) => JSON.stringify(e).includes(ob.id))).toBe(true);
+  });
+
+  it('l ultimo errore senza stack: non ricade su uno stack più vecchio', async () => {
+    await setup({
+      diagnostics: [
+        entry({ code: 'BCD_NON_VALIDO', stack: [{ kind: 'OB', number: 1, offset: 0 }] }),
+        entry({ code: 'TEMPO_CICLO_SUPERATO' }),
+      ],
+    });
+    expect(screen.getByText('Nessuno stack di chiamata registrato.')).toBeInTheDocument();
+    expect(screen.queryByTestId('call-stack')).toBeNull();
   });
 
   it('senza stack registrato lo dice', async () => {

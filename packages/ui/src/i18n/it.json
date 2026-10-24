@@ -992,6 +992,8 @@
       "OB_RICHIAMATO": "OB d'evento richiamato",
       "SFC_NON_SIMULATA": "SFC non simulata",
       "SFB_NON_SIMULATA": "SFB non simulato"
-    }
+    },
+    "ledOn": "acceso",
+    "ledOff": "spento"
   }
 }

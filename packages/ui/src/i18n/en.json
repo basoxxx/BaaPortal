@@ -992,6 +992,8 @@
       "OB_RICHIAMATO": "Event OB called",
       "SFC_NON_SIMULATA": "SFC not simulated",
       "SFB_NON_SIMULATA": "SFB not simulated"
-    }
+    },
+    "ledOn": "on",
+    "ledOff": "off"
   }
 }
