@@ -83,7 +83,7 @@ function cpuError(errorClass: number, errorCode: number, what: string): S7Error 
 }
 
 /** Un errore nell'header di una risposta (ROSCTR 2 o 3) diventa CPU_ERROR. */
-function checkHeader(pdu: S7Pdu, what: string): void {
+export function checkHeader(pdu: S7Pdu, what: string): void {
   if (pdu.errorClass !== 0 || pdu.errorCode !== 0) {
     throw cpuError(pdu.errorClass, pdu.errorCode, what);
   }
@@ -97,7 +97,7 @@ function checkHeader(pdu: S7Pdu, what: string): void {
 export class S7Client {
   readonly #conn: S7Connection;
 
-  private constructor(conn: S7Connection) {
+  protected constructor(conn: S7Connection) {
     this.#conn = conn;
   }
 

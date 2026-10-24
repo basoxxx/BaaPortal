@@ -28,6 +28,7 @@ export * from './readOnlyGuard';
 export * from './connection';
 
 export * from './client';
+export * from './writeClient';
 
 export * from './kit/collect';
 export * from './kit/kitZip';
