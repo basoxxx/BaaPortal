@@ -1,5 +1,6 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { Mc7Diagnostic, Project } from '@baaportal/project';
+import type { ImportSummary } from '../project/navigation/tagTableIo';
 import * as wa from './workArea';
 import { applyHistory, HISTORY_LIMIT, pushLimited, recordEdit, type HistoryEntry } from './history';
 
@@ -12,7 +13,11 @@ export type StartAction =
   'open' | 'new' | 'migrate' | 'close' | 'firstSteps' | 'installed' | 'help' | 'language';
 /** Finestra modale aperta sopra la vista corrente. */
 export type DialogState =
-  { kind: 'addDevice' } | { kind: 'addBlock'; deviceId: string } | { kind: 'collectKit' } | null;
+  | { kind: 'addDevice' }
+  | { kind: 'addBlock'; deviceId: string }
+  | { kind: 'collectKit' }
+  | { kind: 'importTagsReport'; fileName: string; tableName: string; summary: ImportSummary }
+  | null;
 
 export type EditAction = 'cut' | 'copy' | 'paste' | 'delete' | 'rename' | 'selectAll';
 /** Chi riceve i comandi del menu Modifica: l'elemento (albero, griglia…) che ha il focus. */

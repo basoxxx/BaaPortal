@@ -50,6 +50,7 @@ import {
   generateSourceFromNodes,
   objectsToGenerate,
 } from './sourceActions';
+import { exportTagTable, importTagTable } from './tagTableIo';
 import { RenameInput } from './RenameInput';
 import { buildTree, type TreeNode } from './treeModel';
 import { parseNodeId } from './treeIds';
@@ -267,6 +268,30 @@ export function ProjectTree() {
             },
           ]
         : [];
+    const tagIoItems: ContextMenuItem[] = [];
+    if (parsed.kind === 'tagTable') {
+      tagIoItems.push(
+        {
+          id: 'importTags',
+          label: t('tagIo.import'),
+          separator: true,
+          run: () => void settle(importTagTable({ deviceId: parsed.dev, tableId: parsed.id }, ctx)),
+        },
+        {
+          id: 'exportTags',
+          label: t('tagIo.export'),
+          run: () =>
+            void settle(exportTagTable({ deviceId: parsed.dev, id: parsed.id }, 'xlsx', ctx)),
+        },
+      );
+    } else if (parsed.kind === 'folder' && parsed.folder === 'tags') {
+      tagIoItems.push({
+        id: 'importTags',
+        label: t('tagIo.import'),
+        separator: true,
+        run: () => void settle(importTagTable({ deviceId: parsed.dev }, ctx)),
+      });
+    }
     // Dei blocchi e dei tipi selezionati; sulle cartelle, di tutti quelli che contengono.
     const generateItems: ContextMenuItem[] =
       parsed.kind === 'block' ||
@@ -362,6 +387,7 @@ export function ProjectTree() {
       },
       ...sourceItems,
       ...generateItems,
+      ...tagIoItems,
       ...compileItems,
       {
         id: 'properties',

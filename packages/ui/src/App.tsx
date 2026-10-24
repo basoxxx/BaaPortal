@@ -11,6 +11,7 @@ import { createProjectService } from './services/projectService';
 import { createRecoveryService, type RecoveryService } from './services/recoveryService';
 import { AddBlockDialog } from './project/dialogs/AddBlockDialog';
 import { AddDeviceDialog } from './project/dialogs/AddDeviceDialog';
+import { ImportTagsReport } from './project/dialogs/ImportTagsReport';
 import { KitDialog } from './project/dialogs/KitDialog';
 import { DetachedWindows } from './project/workarea/DetachedWindow';
 import { PortalView } from './portal/PortalView';
@@ -60,6 +61,14 @@ function Shell() {
                 .openEditor({ kind: 'block', deviceId: ref.deviceId, objectId: ref.id });
             }
           }}
+        />
+      ) : null}
+      {dialog?.kind === 'importTagsReport' ? (
+        <ImportTagsReport
+          fileName={dialog.fileName}
+          tableName={dialog.tableName}
+          summary={dialog.summary}
+          onClose={close}
         />
       ) : null}
       <DetachedWindows />

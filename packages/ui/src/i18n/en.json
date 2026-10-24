@@ -62,7 +62,11 @@
     "importZipInvalid": "Cannot read the archive \"{{name}}\": {{message}}",
     "importZipEmpty": "The archive \"{{name}}\" contains no blocks (blocchi/ folder).",
     "importFailed": "Block import failed: {{message}}",
-    "importReplaceChanged": "The project changed while the question was open: the import was cancelled."
+    "importReplaceChanged": "The project changed while the question was open: the import was cancelled.",
+    "tagsImported": "Tag import from \"{{name}}\": created {{created}}, updated {{updated}}, skipped {{skipped}}.",
+    "tagsImportFailed": "Cannot import tags from \"{{name}}\": {{message}}",
+    "tagsExported": "Table \"{{name}}\" exported to \"{{path}}\".",
+    "tagsExportFailed": "Cannot export table \"{{name}}\": {{message}}"
   },
   "commands": {
     "project.new": "New…",
@@ -268,7 +272,8 @@
     "applySource": "Generate blocks from source",
     "generateSource": "Generate source from blocks",
     "editSource": "Edit source",
-    "importBlocks": "Import blocks"
+    "importBlocks": "Import blocks",
+    "importTags": "Import tags"
   },
   "inspector": {
     "tab": {
@@ -813,6 +818,37 @@
       "UNSUPPORTED": "Not supported by the compiler: {{detail}}",
       "VALORI_ATTUALI_PERSI": "The recompiled DB uses the initial values: the actual values of the original are not kept.",
       "VALORI_INIZIALI_DA_CAMPIONE": "Initial values of the SFB internal static data taken from the real block {{sample}}."
+    }
+  },
+  "tagIo": {
+    "import": "Import tags…",
+    "export": "Export tags…",
+    "filterXlsx": "Excel (*.xlsx)",
+    "filterCsv": "CSV (*.csv)",
+    "reportTitle": "Tag import",
+    "reportFile": "File \"{{file}}\" into table \"{{table}}\".",
+    "created": "Created: {{count}}",
+    "updated": "Updated: {{count}}",
+    "skipped": "Skipped: {{count}}",
+    "skippedList": "Skipped rows",
+    "skippedRow": "Row {{line}} {{sheet}}: {{reason}}",
+    "sheet": {
+      "tags": "(tags sheet)",
+      "constants": "(constants sheet)"
+    },
+    "formatErr": {
+      "NON_ZIP": "The file is not a valid xlsx archive.",
+      "NON_XLSX": "The file is not an Excel workbook (xlsx).",
+      "FOGLIO_ILLEGGIBILE": "A sheet in the file cannot be read."
+    },
+    "err": {
+      "COLONNA_MANCANTE": "column {{detail}} is missing",
+      "TIPO_NON_VALIDO": "invalid data type: {{detail}}",
+      "INDIRIZZO_NON_VALIDO": "invalid address: {{detail}}",
+      "NOME_VUOTO": "empty name",
+      "NOME_DOPPIO": "name repeated in the file: {{detail}}",
+      "RIGA_ILLEGGIBILE": "unreadable row",
+      "VALORE_VUOTO": "empty value for {{detail}}"
     }
   }
 }

@@ -62,7 +62,11 @@
     "importZipInvalid": "Impossibile leggere l'archivio \"{{name}}\": {{message}}",
     "importZipEmpty": "L'archivio \"{{name}}\" non contiene blocchi (cartella blocchi/).",
     "importFailed": "Importazione dei blocchi non riuscita: {{message}}",
-    "importReplaceChanged": "Il progetto è cambiato durante la domanda: l'importazione è stata annullata."
+    "importReplaceChanged": "Il progetto è cambiato durante la domanda: l'importazione è stata annullata.",
+    "tagsImported": "Importazione variabili da \"{{name}}\": creati {{created}}, aggiornati {{updated}}, scartati {{skipped}}.",
+    "tagsImportFailed": "Impossibile importare le variabili da \"{{name}}\": {{message}}",
+    "tagsExported": "Tabella \"{{name}}\" esportata in \"{{path}}\".",
+    "tagsExportFailed": "Impossibile esportare la tabella \"{{name}}\": {{message}}"
   },
   "commands": {
     "project.new": "Nuovo…",
@@ -268,7 +272,8 @@
     "applySource": "Genera blocchi dalla sorgente",
     "generateSource": "Genera sorgente dai blocchi",
     "editSource": "Modifica sorgente",
-    "importBlocks": "Importa blocchi"
+    "importBlocks": "Importa blocchi",
+    "importTags": "Importa variabili"
   },
   "inspector": {
     "tab": {
@@ -813,6 +818,37 @@
       "UNSUPPORTED": "Non supportato dal compilatore: {{detail}}",
       "VALORI_ATTUALI_PERSI": "Il DB ricompilato usa i valori iniziali: i valori attuali dell'originale non si conservano.",
       "VALORI_INIZIALI_DA_CAMPIONE": "Valori iniziali dei dati statici interni degli SFB presi dal blocco reale {{sample}}."
+    }
+  },
+  "tagIo": {
+    "import": "Importa variabili…",
+    "export": "Esporta variabili…",
+    "filterXlsx": "Excel (*.xlsx)",
+    "filterCsv": "CSV (*.csv)",
+    "reportTitle": "Importazione variabili",
+    "reportFile": "File \"{{file}}\" nella tabella \"{{table}}\".",
+    "created": "Creati: {{count}}",
+    "updated": "Aggiornati: {{count}}",
+    "skipped": "Scartati: {{count}}",
+    "skippedList": "Righe scartate",
+    "skippedRow": "Riga {{line}} {{sheet}}: {{reason}}",
+    "sheet": {
+      "tags": "(foglio variabili)",
+      "constants": "(foglio costanti)"
+    },
+    "formatErr": {
+      "NON_ZIP": "Il file non è un archivio xlsx valido.",
+      "NON_XLSX": "Il file non è una cartella di lavoro Excel (xlsx).",
+      "FOGLIO_ILLEGGIBILE": "Un foglio del file non si può leggere."
+    },
+    "err": {
+      "COLONNA_MANCANTE": "manca la colonna {{detail}}",
+      "TIPO_NON_VALIDO": "tipo di dati non valido: {{detail}}",
+      "INDIRIZZO_NON_VALIDO": "indirizzo non valido: {{detail}}",
+      "NOME_VUOTO": "nome vuoto",
+      "NOME_DOPPIO": "nome ripetuto nel file: {{detail}}",
+      "RIGA_ILLEGGIBILE": "riga illeggibile",
+      "VALORE_VUOTO": "valore vuoto per {{detail}}"
     }
   }
 }
