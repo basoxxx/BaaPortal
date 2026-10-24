@@ -100,7 +100,7 @@ Regole:
 - **Puntatori:** si usa il formato a 32 bit del manuale (area nei bit 24–26, byte·8+bit nei bit 3–18 e 0–2), lo stesso di `docs/protocollo/mc7.md` §2.2.4. L'indiretto in memoria a 16 bit vale per T, C e i numeri di blocco; quello a 32 bit vale per i bit e i byte.
 - **Area DB/DI:** usa il registro DB o DI aperto. Con il registro a 0 l'errore è `DB_NON_APERTO`.
 
-- [ ] **Step 1: Scrivi i test che falliscono.**
+- [x] **Step 1: Scrivi i test che falliscono.**
   - `memory.test.ts`:
     - `it('memorySizesFor 315-2 PN/DP → I/Q 2048, M 2048')`
     - `it('M oltre la fine → SimError AREA_LUNGHEZZA')`
@@ -113,10 +113,10 @@ Regole:
     - `it('M [AR1,P#2.0] con AR1 = P#10.0 → M12.0')`
     - `it('[AR1,P#0.0] trasversale con AR1 = P#DBX 4.0 → DB aperto, byte 4')`
     - `it('PIW legge physIn, PQW scrive physOut, non I/Q')`
-- [ ] **Step 2: Esegui e verifica che falliscano:** `npx vitest run --project sim`.
-- [ ] **Step 3: Implementa** il pacchetto (con `vitest.config.ts` di nome `sim`, ambiente `node`) e aggiungilo a `npm install`.
-- [ ] **Step 4: Test, typecheck, lint, formato:** `npx vitest run --project sim && npm run typecheck && npm run lint && npm run format:check`.
-- [ ] **Step 5: Commit** — `feat(sim): pacchetto della CPU simulata — memoria, registri, operandi`
+- [x] **Step 2: Esegui e verifica che falliscano:** `npx vitest run --project sim`.
+- [x] **Step 3: Implementa** il pacchetto (con `vitest.config.ts` di nome `sim`, ambiente `node`) e aggiungilo a `npm install`.
+- [x] **Step 4: Test, typecheck, lint, formato:** `npx vitest run --project sim && npm run typecheck && npm run lint && npm run format:check`.
+- [x] **Step 5: Commit** — `feat(sim): pacchetto della CPU simulata — memoria, registri, operandi`
 
 ---
 
@@ -149,7 +149,7 @@ Regole (manuale AWL, «Operazioni di combinazione logica a bit» e «Parola di s
 - **Byte grezzi** non decodificati: errore `MC7_NON_ESEGUIBILE`.
 - **Esecuzione:** un passo per istruzione, con la cache delle `DecodedStatement` per blocco e offset. `BLD` e `NOP` non fanno niente. `BE` termina il blocco.
 
-- [ ] **Step 1: Scrivi i test che falliscono** (`bitLogic.test.ts`, programmi AWL compilati con `encodeCode` ed eseguiti con `runAwl`; ogni test cita il paragrafo del manuale in un commento)
+- [x] **Step 1: Scrivi i test che falliscono** (`bitLogic.test.ts`, programmi AWL compilati con `encodeCode` ed eseguiti con `runAwl`; ogni test cita il paragrafo del manuale in un commento)
   - `it('A I0.0 / A I0.1 / = Q4.0: tabella di verità completa')`
   - `it('/FC e STA dopo ogni riga di A M0.0 / ON M0.1 / = M1.0')`
   - `it('A( O … O … ) A …: annidamento come esempio del manuale')`
@@ -160,10 +160,10 @@ Regole (manuale AWL, «Operazioni di combinazione logica a bit» e «Parola di s
   - `it('FP: un solo ciclo a 1 sul fronte di salita')`
   - `it('MCR( con RLO 0: = scrive 0')`
   - `it('byte grezzi → MC7_NON_ESEGUIBILE con offset')`
-- [ ] **Step 2: Esegui e verifica che falliscano**
-- [ ] **Step 3: Implementa** esecutore, cache e operazioni a bit
-- [ ] **Step 4: Test, typecheck, lint, formato**
-- [ ] **Step 5: Commit** — `feat(sim): esecutore MC7 e logica combinatoria a bit`
+- [x] **Step 2: Esegui e verifica che falliscano**
+- [x] **Step 3: Implementa** esecutore, cache e operazioni a bit
+- [x] **Step 4: Test, typecheck, lint, formato**
+- [x] **Step 5: Commit** — `feat(sim): esecutore MC7 e logica combinatoria a bit`
 
 ---
 
@@ -196,7 +196,7 @@ Regole:
 - **`OPN`:** `OPN DB n` apre il registro DB e `OPN DI n` il registro DI. Un DB non caricato dà `DB_NON_CARICATO`. `CDB` scambia i due registri.
 - **`ENT` e `LEAVE`:** danno `ISTRUZIONE_NON_S7300`.
 
-- [ ] **Step 1: Scrivi i test che falliscono:**
+- [x] **Step 1: Scrivi i test che falliscono:**
   - `it('L MW10 / L MW12: ACCU2 = vecchio ACCU1')`
   - `it('L B#16#FF estende con zeri')`
   - `it('T MB su ACCU1 = 0x12345678 scrive 0x78')`
@@ -214,10 +214,10 @@ Regole:
   - `it('SSI: segno conservato')`
   - `it('RLDA attraverso CC1')`
   - `it('OPN DB non caricato → DB_NON_CARICATO')`
-- [ ] **Step 2: Esegui e verifica che falliscano**
-- [ ] **Step 3: Implementa**
-- [ ] **Step 4: Test, typecheck, lint, formato**
-- [ ] **Step 5: Commit** — `feat(sim): caricamento, trasferimento, accumulatori, logica a parola e scorrimenti`
+- [x] **Step 2: Esegui e verifica che falliscano**
+- [x] **Step 3: Implementa**
+- [x] **Step 4: Test, typecheck, lint, formato**
+- [x] **Step 5: Commit** — `feat(sim): caricamento, trasferimento, accumulatori, logica a parola e scorrimenti`
 
 ---
 
@@ -250,7 +250,7 @@ Regole (manuale AWL: «Operazioni con numeri interi», «… in virgola mobile»
   - `TRUNC` tronca;
   - fuori dal campo DINT: OV = OS = 1, ACCU1 invariato.
 
-- [ ] **Step 1: Scrivi i test che falliscono** (con una tabella di casi per istruzione; ogni caso controlla il risultato, CC0, CC1, OV e OS)
+- [x] **Step 1: Scrivi i test che falliscono** (con una tabella di casi per istruzione; ogni caso controlla il risultato, CC0, CC1, OV e OS)
   - `it('+I 32767+1 → overflow')`
   - `it('/I 7/2 → quoziente 3, resto in ACCU1-H 1')`
   - `it('/I per 0')`
@@ -263,10 +263,10 @@ Regole (manuale AWL: «Operazioni con numeri interi», «… in virgola mobile»
   - `it('BTI con BCD non valido → BCD_NON_VALIDO')`
   - `it('NEGI -32768 → overflow')`
   - `it('OS resta 1 fino a JOS')` (`JOS` arriva nel Task 5; il test controlla solo che OS resti a 1 su due istruzioni)
-- [ ] **Step 2: Esegui e verifica che falliscano**
-- [ ] **Step 3: Implementa**
-- [ ] **Step 4: Test, typecheck, lint, formato**
-- [ ] **Step 5: Commit** — `feat(sim): aritmetica intera e reale, confronti e conversioni`
+- [x] **Step 2: Esegui e verifica che falliscano**
+- [x] **Step 3: Implementa**
+- [x] **Step 4: Test, typecheck, lint, formato**
+- [x] **Step 5: Commit** — `feat(sim): aritmetica intera e reale, confronti e conversioni`
 
 ---
 
@@ -308,7 +308,7 @@ Regole:
 - **Chiamate di SFC e SFB:** danno `NON_SIMULATA_2B`. Le istruzioni dei temporizzatori e dei contatori (categorie `timer` e `counter`, e `S`/`R`/`L`/`T` su T e C) danno anch'esse `NON_SIMULATA_2B`.
 - **Limiti:** un blocco non caricato dà `BLOCCO_NON_CARICATO`; uno stack dei blocchi oltre `MAX_BLOCK_STACK` dà `STACK_BLOCCHI_PIENO`; uno stack L esaurito dà `STACK_L_PIENO`.
 
-- [ ] **Step 1: Scrivi i test che falliscono**
+- [x] **Step 1: Scrivi i test che falliscono**
   - `jumps.test.ts`:
     - `it('JC/JCN: bit di stato dopo il salto')`
     - `it('JL con 3 voci e valore fuori campo')`
@@ -325,10 +325,10 @@ Regole:
     - `it('richiamo di FC non caricata → BLOCCO_NON_CARICATO')`
     - `it('ricorsione oltre MAX_BLOCK_STACK → STACK_BLOCCHI_PIENO')`
     - `it('UC SFC 20 → NON_SIMULATA_2B')`
-- [ ] **Step 2: Esegui e verifica che falliscano**
-- [ ] **Step 3: Implementa**
-- [ ] **Step 4: Test, typecheck, lint, formato**
-- [ ] **Step 5: Commit** — `feat(sim): salti, controllo del programma e richiami di FC/FB con parametri`
+- [x] **Step 2: Esegui e verifica che falliscano**
+- [x] **Step 3: Implementa**
+- [x] **Step 4: Test, typecheck, lint, formato**
+- [x] **Step 5: Commit** — `feat(sim): salti, controllo del programma e richiami di FC/FB con parametri`
 
 ---
 
@@ -377,7 +377,7 @@ Regole (manuale CPU 31x: «Modi di funzionamento», «Avvio», «Cancellazione t
 - **Senza OB1:** se manca OB1, `run()` va comunque in RUN e i cicli non eseguono niente, come una CPU vera senza programma.
 - **Tempo di ciclo superato:** dà `TEMPO_CICLO_SUPERATO` e STOP (OB80 arriva nel piano 2B). Il controllo segue la regola delle Global Constraints: ogni 1024 istruzioni.
 
-- [ ] **Step 1: Scrivi i test che falliscono** (`cpu.test.ts`, orologio finto)
+- [x] **Step 1: Scrivi i test che falliscono** (`cpu.test.ts`, orologio finto)
   - `it('OB1: I0.0 → Q4.0 attraverso le immagini di processo')`
   - `it('PIW legge physIn senza aspettare il ciclo')`
   - `it('OB100 eseguito una volta all\'avvio')`
@@ -389,10 +389,10 @@ Regole (manuale CPU 31x: «Modi di funzionamento», «Avvio», «Cancellazione t
   - `it('merker di clock bit 5 = 1 Hz')`
   - `it('nessun OB1 → RUN senza fare niente')`
   - `it('stats: min/max/ultimo')`
-- [ ] **Step 2: Esegui e verifica che falliscano**
-- [ ] **Step 3: Implementa**
-- [ ] **Step 4: Test, typecheck, lint, formato**
-- [ ] **Step 5: Commit** — `feat(sim): CPU simulata — STOP/RUN, avvio, ciclo, cancellazione totale, diagnostica`
+- [x] **Step 2: Esegui e verifica che falliscano**
+- [x] **Step 3: Implementa**
+- [x] **Step 4: Test, typecheck, lint, formato**
+- [x] **Step 5: Commit** — `feat(sim): CPU simulata — STOP/RUN, avvio, ciclo, cancellazione totale, diagnostica`
 
 ---
 
@@ -426,16 +426,16 @@ Regole:
   - le informazioni e l'elenco dei blocchi riflettono `cpu.program`.
 - **Download in RUN:** si accetta, come una CPU vera; il blocco vale dal ciclo successivo.
 
-- [ ] **Step 1: Scrivi i test che falliscono** (`download.test.ts`)
+- [x] **Step 1: Scrivi i test che falliscono** (`download.test.ts`)
   - `it('compila OB1+FC1 da AWL, downloadBlock via S7WriteClient, start, ciclo → Q come atteso')`
   - `it('stop() via client → cpu.mode STOP')`
   - `it('readArea DB1 dopo un ciclo legge il valore scritto dal programma')`
   - `it('writeArea M → visibile al ciclo dopo')`
   - `it('blockList dopo il download elenca OB1 e FC1')`
-- [ ] **Step 2: Esegui e verifica che falliscano**
-- [ ] **Step 3: Implementa** l'interfaccia, l'adattatore e `connectToSim`.
-- [ ] **Step 4: Test completi:** `npx vitest run --project sim --project s7-server --project s7comm && npm run typecheck && npm run lint && npm run format:check`.
-- [ ] **Step 5: Commit** — `feat(sim,s7-server): carica nella CPU simulata con lo stesso percorso del PLC`
+- [x] **Step 2: Esegui e verifica che falliscano**
+- [x] **Step 3: Implementa** l'interfaccia, l'adattatore e `connectToSim`.
+- [x] **Step 4: Test completi:** `npx vitest run --project sim --project s7-server --project s7comm && npm run typecheck && npm run lint && npm run format:check`.
+- [x] **Step 5: Commit** — `feat(sim,s7-server): carica nella CPU simulata con lo stesso percorso del PLC`
 
 ---
 
@@ -455,11 +455,11 @@ Regole:
 - **`battery.test.ts`:** legge ogni file, compila con `compileBlock`, carica in `SimCpu` con `connectToSim` e `downloadBlock`, esegue un ciclo e confronta i valori attesi.
 - **`coverage.test.ts`:** ogni id di `INSTRUCTIONS` è eseguito da almeno un test della batteria oppure compare in un elenco esplicito `DEFERRED_2B`, che contiene le categorie `timer` e `counter`, le chiamate di SFC e SFB e `CALL`, che nell'MC7 non esiste come istruzione. Un id nuovo senza copertura fa fallire il test.
 
-- [ ] **Step 1: Scrivi programmi e test** (il test di copertura deve fallire finché manca un id)
-- [ ] **Step 2: Esegui:** `npx vitest run --project sim`. Ogni differenza fra atteso e ottenuto è un bug di `sim` da correggere con il suo test, oppure un errore del programma di prova, da annotare.
-- [ ] **Step 3: Correggi** fino al verde
-- [ ] **Step 4: Test, typecheck, lint, formato**
-- [ ] **Step 5: Commit** — `test(sim): batteria di programmi di prova e copertura delle istruzioni`
+- [x] **Step 1: Scrivi programmi e test** (il test di copertura deve fallire finché manca un id)
+- [x] **Step 2: Esegui:** `npx vitest run --project sim`. Ogni differenza fra atteso e ottenuto è un bug di `sim` da correggere con il suo test, oppure un errore del programma di prova, da annotare.
+- [x] **Step 3: Correggi** fino al verde
+- [x] **Step 4: Test, typecheck, lint, formato**
+- [x] **Step 5: Commit** — `test(sim): batteria di programmi di prova e copertura delle istruzioni`
 
 ---
 
@@ -485,9 +485,9 @@ Regole:
   ```
   Deve essere verde. Gli e2e si eseguono una volta: il piano non tocca l'interfaccia.
 
-- [ ] **Step 1: Aggiorna documenti, versione e caselle**
-- [ ] **Step 2: Esegui il collaudo**
-- [ ] **Step 3: Commit** — `docs: piano 2A — semantica del simulatore, limiti noti, versione 0.6.0`
+- [x] **Step 1: Aggiorna documenti, versione e caselle**
+- [x] **Step 2: Esegui il collaudo**
+- [x] **Step 3: Commit** — `docs: piano 2A — semantica del simulatore, limiti noti, versione 0.6.0`
 
 ---
 
