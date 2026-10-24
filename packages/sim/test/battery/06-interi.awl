@@ -1,0 +1,62 @@
+// Interi: +I, -I, *I, /I, +D, -D, *D, /D, MOD, + <costante>; overflow e divisione per zero.
+// ACCU2 è il primo operando: «-I» calcola ACCU2 - ACCU1. «*I» dà 32 bit, «/I» il resto in ACCU1-H.
+// atteso: MW0=13, MW2=7, MD4=30000, MD8=16#0002000E
+// atteso: MD12=100005, MD16=99995, MD20=300000, MD24=3, MD28=100
+// atteso: MW32=8, MD36=99999, MW40=16#FFFE, MD44=0
+// atteso: ACCU1=16#00008000, ACCU2=16#00007FFF, STW=16#0070
+//@ block OB 1
+	L 10;
+	L 3;
+	+I;
+	T MW 0;
+	L 10;
+	L 3;
+	-I;
+	T MW 2;
+	L 100;
+	L 300;
+	*I;
+	T MD 4;
+	L 100;
+	L 7;
+	/I;
+	T MD 8;
+//@ network
+	L L#100000;
+	L L#5;
+	+D;
+	T MD 12;
+	L L#100000;
+	L L#5;
+	-D;
+	T MD 16;
+	L L#1000;
+	L L#300;
+	*D;
+	T MD 20;
+	L L#1000;
+	L L#300;
+	/D;
+	T MD 24;
+	L L#1000;
+	L L#300;
+	MOD;
+	T MD 28;
+	L 5;
+	+ 3;
+	T MW 32;
+	L L#100000;
+	+ L#-1;
+	T MD 36;
+	L 5;
+	L 7;
+	-I;
+	T MW 40;
+	L 5;
+	L 0;
+	/I;
+	T MD 44;
+//@ network
+	L 32767;
+	L 1;
+	+I;

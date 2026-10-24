@@ -6,3 +6,5 @@ export { serve } from './session';
 export { szlIdList } from './szlData';
 export { compareShape, errorOf } from './compareShape';
 export type { CompareOptions } from './compareShape';
+export type { CpuBackend, CpuConfig, ItemRead, StoredBlock } from './backend';
+export { encodeStoredBlockInfo } from './blockInfo';

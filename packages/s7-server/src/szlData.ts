@@ -1,5 +1,5 @@
 import { encodeBcdDateTimeShort, type CpuMode, type SzlList } from '@baaportal/s7comm';
-import type { FakeCpu } from './fakeCpu';
+import type { CpuBackend } from './backend';
 
 /**
  * Catalogo delle SZL del finto PLC (proto §7.3), con le forme viste sulle CPU vere:
@@ -46,7 +46,7 @@ const d = (v: number): number[] => [
 
 const IDENT_INDEXES = [0x0001, 0x0006, 0x0007, 0x0081];
 
-function ident(cpu: FakeCpu, index: number): Uint8Array {
+function ident(cpu: CpuBackend, index: number): Uint8Array {
   const c = cpu.config;
   const [major, minor, patch] = c.firmwareParts;
   switch (index) {
@@ -73,7 +73,7 @@ function ident(cpu: FakeCpu, index: number): Uint8Array {
 
 const COMPONENT_INDEXES = [1, 2, 3, 4, 5, 7, 8, 9, 10, 11];
 
-function component(cpu: FakeCpu, index: number): Uint8Array {
+function component(cpu: CpuBackend, index: number): Uint8Array {
   const c = cpu.config;
   const str = (s: string, max: number): Uint8Array =>
     record(34, w(index), text(s.slice(0, max), 32, 0x00));
@@ -100,7 +100,7 @@ function component(cpu: FakeCpu, index: number): Uint8Array {
 
 // ---- 0x0131: comunicazione (record da 40 byte) --------------------------------------------------
 
-function comm(cpu: FakeCpu, index: number): Uint8Array {
+function comm(cpu: CpuBackend, index: number): Uint8Array {
   if (index === 1) {
     return record(
       40,
@@ -122,7 +122,7 @@ function comm(cpu: FakeCpu, index: number): Uint8Array {
 
 // ---- 0x0132 / 0x0232 indice 4: protezione (record da 40 byte) ----------------------------------
 
-function protection(cpu: FakeCpu): Uint8Array {
+function protection(cpu: CpuBackend): Uint8Array {
   const level = cpu.config.protectionLevel;
   // posizione del selettore: RUN-P in esercizio, STOP se la CPU è ferma, altrimenti indefinita
   const sel = cpu.mode === 'RUN' ? 2 : cpu.mode === 'STOP' ? 3 : 0;
@@ -140,7 +140,7 @@ const MODE_NIBBLE: Record<CpuMode, number> = {
   UNKNOWN: 0x0,
 };
 
-function modeRecord(cpu: FakeCpu): Uint8Array {
+function modeRecord(cpu: CpuBackend): Uint8Array {
   // ereig(2), ae(1), bzu-id(1: il nibble basso è il modo), 8 byte a zero, ora breve (8)
   return record(
     20,
@@ -156,7 +156,7 @@ function modeRecord(cpu: FakeCpu): Uint8Array {
 interface ListSpec {
   recordLength: number;
   /** Tutti i record della lista piena, con l'indice che li seleziona. */
-  records(cpu: FakeCpu): { index: number; bytes: Uint8Array }[];
+  records(cpu: CpuBackend): { index: number; bytes: Uint8Array }[];
 }
 
 const EXTRACTS: Record<number, ListSpec> = {
@@ -196,7 +196,7 @@ const IDS = new Set(szlIdList());
  * La lista SZL `id`/`index` del finto PLC, o `undefined` se la CPU la rifiuterebbe (0xD402).
  * `index` è quello richiesto: torna nell'intestazione, salvo la 0x0424 che risponde sempre 0.
  */
-export function buildSzl(cpu: FakeCpu, id: number, index: number): SzlList | undefined {
+export function buildSzl(cpu: CpuBackend, id: number, index: number): SzlList | undefined {
   if (!IDS.has(id)) return undefined;
   const base = id & 0xff;
   const ex = EXTRACTS[base]!;

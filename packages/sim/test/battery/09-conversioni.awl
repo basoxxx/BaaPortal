@@ -1,0 +1,72 @@
+// Conversioni: BTI, ITB, BTD, ITD, DTB, DTR, INVI, INVD, NEGI, NEGD, NEGR, CAW, CAD, RND, TRUNC, RND+, RND-.
+// RND arrotonda al numero pari più vicino quando la parte frazionaria è 0,5.
+// atteso: MW0=123, MW2=16#FF85, MW4=16#0123, MW6=16#F123, MD8=1234567
+// atteso: MD12=16#F1234567, MD16=16#FFFFFFFB, MR20=100.0, MW24=16#FF00, MD26=16#FFFF0000
+// atteso: MW30=16#FFFB, MD32=16#FFFFFFFB, MR36=-2.5, MW40=16#3412, MD42=16#44332211
+// atteso: MD46=2, MD50=4, MD54=2, MD58=3, MD62=16#FFFFFFFD, MD66=2
+//@ block OB 1
+	L W#16#0123;
+	BTI;
+	T MW 0;
+	L W#16#8123;
+	BTI;
+	T MW 2;
+	L 123;
+	ITB;
+	T MW 4;
+	L -123;
+	ITB;
+	T MW 6;
+	L DW#16#01234567;
+	BTD;
+	T MD 8;
+	L L#-1234567;
+	DTB;
+	T MD 12;
+	L -5;
+	ITD;
+	T MD 16;
+	L L#100;
+	DTR;
+	T MD 20;
+//@ network
+	L W#16#00FF;
+	INVI;
+	T MW 24;
+	L DW#16#0000FFFF;
+	INVD;
+	T MD 26;
+	L 5;
+	NEGI;
+	T MW 30;
+	L L#5;
+	NEGD;
+	T MD 32;
+	L 2.5;
+	NEGR;
+	T MD 36;
+	L W#16#1234;
+	CAW;
+	T MW 40;
+	L DW#16#11223344;
+	CAD;
+	T MD 42;
+//@ network
+	L 2.5;
+	RND;
+	T MD 46;
+	L 3.5;
+	RND;
+	T MD 50;
+	L 2.5;
+	TRUNC;
+	T MD 54;
+	L 2.4;
+	RND+;
+	T MD 58;
+	L -2.4;
+	RND-;
+	T MD 62;
+	L 2.6;
+	TRUNC;
+	T MD 66;

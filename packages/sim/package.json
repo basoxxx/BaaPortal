@@ -1,0 +1,19 @@
+{
+  "name": "@baaportal/sim",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@baaportal/awl": "*",
+    "@baaportal/catalog": "*",
+    "@baaportal/mc7": "*",
+    "@baaportal/s7-server": "*",
+    "@baaportal/s7comm": "*"
+  }
+}

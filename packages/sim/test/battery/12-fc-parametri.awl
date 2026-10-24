@@ -1,0 +1,44 @@
+// FC con parametri: IN, OUT, IN_OUT, variabile temporanea, tipi Bool e Real; CALL con costanti e memoria.
+// imposta: MW0=10, MW2=3, MW6=100, M20.0=1, MR30=2.5
+// atteso: MW4=13, MW6=115, MW8=8, MW10=20, MB20=3, MR34=5.0
+//@ block FC 1
+//@ in a Int
+//@ in b Int
+//@ out s Int
+//@ inout acc Int
+	L #a;
+	L #b;
+	+I;
+	T #s;
+	L #acc;
+	L #a;
+	+I;
+	T #acc;
+//@ block FC 2
+//@ in en Bool
+//@ out q Bool
+	A #en;
+	= #q;
+//@ block FC 3
+//@ in a Int
+//@ out s Int
+//@ temp t Int
+	L #a;
+	L 2;
+	*I;
+	T #t;
+	L #t;
+	T #s;
+//@ block FC 4
+//@ in x Real
+//@ out y Real
+	L #x;
+	L 2.0;
+	*R;
+	T #y;
+//@ block OB 1
+	CALL FC 1 (a := MW 0, b := MW 2, s => MW 4, acc := MW 6);
+	CALL FC 1 (a := 5, b := MW 2, s => MW 8, acc := MW 6);
+	CALL FC 2 (en := M 20.0, q => M 20.1);
+	CALL FC 3 (a := MW 0, s => MW 10);
+	CALL FC 4 (x := MD 30, y => MD 34);

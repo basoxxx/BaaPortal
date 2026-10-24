@@ -11,6 +11,45 @@ Per ogni voce si indica che cosa succede oggi. "Errore chiaro" vuol dire che Baa
 - **Provenienza 1D-bis.** Scrittura di variabili, carica nel dispositivo e STOP/avvio esistono e sono verificati contro il finto PLC e contro i byte delle catture pubbliche (`cisa/snap7.pcap` per scrittura, stop e avvio a freddo; la cattura del download di un blocco). Il giro completo «la CPU accetta ed esegue un blocco compilato da BaaPortal» non è mai stato provato su una CPU reale (spec §10). Il riavvio a caldo è verificato solo in parte. Restano per la tappa 3 (R1, R3): `_DELE`, `_GARB`, `_MODU` (copia RAM→ROM), MRES, forzatura, impostazione dell'orologio, riavvio a freddo e a caldo, e l'interfaccia online dell'app.
 - **Scorciatoie della tappa 3 non collegate.** Ctrl+L (carica nel dispositivo), Ctrl+K (collegamento online) e Ctrl+M (interrompi collegamento online) non fanno ancora nulla: le funzioni online dell'interfaccia sono della tappa 3.
 
+## Simulatore (piano 2A)
+
+Le scelte sono descritte in `docs/protocollo/sim.md` (§4.1 per la semantica). Tutte restano **non confermate** da una CPU reale.
+
+### Mancanze
+
+- **Nessuna CPU reale per confermare la semantica** (spec §10). Il simulatore controlla la coerenza interna con i manuali pubblici, ma nessun risultato è stato confrontato con una S7-300 vera.
+- **Temporizzatori, contatori, SFC/SFB e OB di errore rimandati al piano 2B.** Le istruzioni relative danno l'errore chiaro `NON_SIMULATA_2B`; fino ad allora un errore di programmazione porta sempre in STOP (OB80/OB85/OB121/OB122 non sono richiamati).
+- **Nessuna interfaccia fino al piano 2C.** Il simulatore è un pacchetto senza pannelli; si usa da codice e dai test.
+- **Il tempo di ciclo non è quello di una CPU vera.** Dipende dal computer e dall'orologio iniettato.
+- **ENT e LEAVE rifiutati** (`ISTRUZIONE_NON_S7300`): sono delle CPU a 4 accumulatori.
+
+### Scelte non coperte dal manuale (⚠️)
+
+- **Parola di stato dopo `S`/`R`, `FP`/`FN`, `MCR(`/`)MCR`:** STA = RLO dopo `S`/`R`; `MCR(` e `)MCR` danno OR 0, STA 1, RLO 1, /FC 0. Le tabelle del manuale lasciano STA indeterminato.
+- **UC, CC, BE, BEU, BEC:** effetti sulla parola di stato da tabelle ricordate, non verificati. Nell'OB di primo livello la parola di stato finale non viene ripulita da `BE`.
+- **JBI/JNBI** lasciano RLO invariato; gli altri salti condizionati danno OR 0, STA 1, RLO 1, /FC 0.
+- **Divisione per 0:** ACCU1 = 0 (il manuale non lo dice).
+- **REAL:** NaN memorizzato come 0x7FC00000; denormali conservati; CC per ±infinito e precisione delle funzioni trascendenti (float32) non verificati al ulp.
+- **`+AR1`/`+AR2` senza operando** e `L STW`/`T STW` (solo bit 0–8) seguono la lettura del manuale, non provata.
+- **Stack dei blocchi a 16** per ogni CPU e per ogni classe di priorità (nel manuale varia con la CPU); stack L unico, finestra per blocco, **non azzerato** all'ingresso del blocco.
+- **Tempo:** orologio iniettato; controllo del tempo di ciclo ogni 1024 istruzioni e a fine ciclo (più il limite fisso di istruzioni); byte del merker di clock aggiornato all'inizio del ciclo e ogni 1024 istruzioni, non a ogni lettura.
+- **Chiamate:** lo stack MCR del chiamato parte vuoto; i puntatori `0x84`/`0x85` legano DB/DI al momento della chiamata; `0x86` è trattato come V; DB = DB di istanza dopo `CALL FB`.
+- **Salto alla fine esatta del codice** rifiutato (`MC7_NON_ESEGUIBILE`).
+- **Buffer di diagnostica** limitato a 100 voci; gli id degli eventi nelle SZL sono sintetici (da 0x9000).
+- **Errore non previsto del simulatore** (non `SimError`): voce `MC7_NON_ESEGUIBILE` con dettaglio «errore interno», STOP e l'eccezione viene rilanciata.
+- **Cancellazione totale** azzera anche le statistiche del ciclo e `physOut`; i DB tornano ai valori della sezione MC7 del file caricato (i valori iniziali separati non sono letti); i blocchi restano.
+- **Blocchi non caricati dal backend** (messi direttamente nel programma) non hanno upload né informazioni di blocco.
+- **Sezioni ADD corrotte** non fanno rifiutare il download.
+- **`*I`:** il prodotto a 32 bit va in ACCU1 intero; OV fuori dai 16 bit.
+- **Confronti:** forzano OR = 0. Conseguenza: in `A a; A b; O; L; L; ==I; A c` l'`O` pendente è perso dal confronto e `A c` si combina in AND con il risultato.
+- **`T STW`** non segue MCR (scrive anche con MCR spento).
+- **`BTI`/`BTD`:** si controlla solo il bit di segno e le cifre > 9 (`BCD_NON_VALIDO`).
+- **Immagine di processo** = tutto l'intervallo di I/O del catalogo della CPU (nessuna configurazione dell'area dell'immagine).
+- **Watchdog di OB100:** il simulatore applica `maxCycleMs` (e il limite di 10 000 000 istruzioni) anche a OB100; su una CPU vera OB100 non ha il limite del tempo di ciclo.
+- **Limite di istruzioni:** 10 000 000 per ciclo, indipendente dall'orologio; scelta del simulatore.
+- **PQ → Q:** una scrittura diretta nella periferia (PQ o `P` da puntatore) scrive anche in Q se l'indirizzo vi cade; non verificato su una CPU.
+- **Download di SDB rifiutato:** le configurazioni di sistema non sono simulate.
+
 ## Funzioni 1F (piano 1F)
 
 ### Importa/esporta variabili (csv e xlsx)

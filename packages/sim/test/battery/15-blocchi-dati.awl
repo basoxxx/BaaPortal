@@ -1,0 +1,36 @@
+// Blocchi dati: OPN DB, CDB, L DBNO, L DBLG, L DINO, L DILG, accesso DBX/DBW/DBD e DIW.
+// atteso: DB1.DBW0=11, DB1.DBW2=22, DB1.DBD4=100000, DB1.DBD8=16#3FC00000, DB2.DBW0=33
+// atteso: MW10=2, MD12=2, MW16=2, MW18=0, MD20=12, MW24=11, MD28=12
+//@ db 1 a:Int b:Int c:DWord d:Real
+//@ db 2 x:Word
+//@ block OB 1
+	OPN DB 1;
+	L 11;
+	T DBW 0;
+	L 22;
+	T DBW 2;
+	L L#100000;
+	T DBD 4;
+	L 1.5;
+	T DBD 8;
+	OPN DB 2;
+	L 33;
+	T DBW 0;
+	L DBNO;
+	T MW 10;
+	L DBLG;
+	T MD 12;
+	CDB;
+	L DINO;
+	T MW 16;
+	L DBNO;
+	T MW 18;
+//@ network
+	OPN DI 1;
+	L DILG;
+	T MD 20;
+	L DIW 0;
+	T MW 24;
+	OPN DB 1;
+	L DBLG;
+	T MD 28;
