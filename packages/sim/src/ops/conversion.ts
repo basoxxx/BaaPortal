@@ -105,16 +105,9 @@ export const CONVERSION_OPS: Record<string, OpHandler> = {
     setSignCc(st, w);
     setOverflow(st, v === -2147483648);
   },
-  // «NEGR»: inverte il bit di segno; CC dal risultato, nessun OV per valori finiti.
+  // «NEGR»: inverte il bit di segno; la parola di stato non cambia.
   NEGR: (st) => {
-    const a = (st.regs.accu1 ^ 0x80000000) >>> 0;
-    st.regs.accu1 = a;
-    const r = toReal(a);
-    const s = st.regs.stw;
-    s.cc0 = r < 0 || Number.isNaN(r);
-    s.cc1 = r > 0 || Number.isNaN(r);
-    s.ov = !Number.isFinite(r);
-    if (s.ov) s.os = true;
+    st.regs.accu1 = (st.regs.accu1 ^ 0x80000000) >>> 0;
   },
   // «CAW», «CAD»: inversione dei byte, la parola di stato non cambia.
   CAW: (st) => {

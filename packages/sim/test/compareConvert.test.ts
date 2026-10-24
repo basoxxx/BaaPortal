@@ -113,9 +113,6 @@ const CONV: Conv[] = [
   ['NEGI', 0x8000, 0x8000, '01', true],
   ['NEGD', 5, 0xfffffffb, '01', false],
   ['NEGD', 0x80000000, 0x80000000, '01', true],
-  ['NEGR', f32(2.5), f32(-2.5), '01', false],
-  ['NEGR', f32(-2.5), f32(2.5), '10', false],
-  ['NEGR', f32(0), f32(-0), '00', false],
   ['CAW', 0xaaaa1234, 0xaaaa3412, null, false],
   ['CAD', 0x11223344, 0x44332211, null, false],
   ['RND', f32(2.5), 2, null, false],
@@ -150,6 +147,32 @@ describe('conversioni', () => {
       else expect(cc(r)).toBe('01'); // CC invariato
     });
   }
+
+  it('NEGR inverte il segno senza toccare la parola di stato', () => {
+    const stw = { cc0: true, cc1: true, ov: true, os: false };
+    for (const [a, e] of [
+      [2.5, -2.5],
+      [-2.5, 2.5],
+      [0, -0],
+    ] as const) {
+      const r = run('NEGR', 0, f32(a), stw);
+      expect(r.regs.accu1).toBe(f32(e));
+      expect(r.regs.stw).toMatchObject(stw);
+    }
+  });
+
+  it('confronto con OR = 1: OR-bit OR risultato', () => {
+    // A M0.0 / A M0.1 / O / L / L / ==I: l'OR-bit pendente entra nel risultato (regola di A).
+    const set = { setup: (m: { M: Uint8Array }) => (m.M[0] = 3) };
+    const r = runAwl(prog('A M 0.0', 'A M 0.1', 'O', 'L 1', 'L 2', '==I'), set);
+    expect(r.regs.stw.rlo).toBe(true); // OR-bit 1 OR (falso)
+    const f = runAwl(prog('A M 0.0', 'A M 0.1', 'O', 'L 1', 'L 2', '==I'));
+    expect(f.regs.stw.rlo).toBe(false);
+    const t = runAwl(prog('A M 0.0', 'A M 0.1', 'O', 'L 1', 'L 1', '==I'));
+    expect(t.regs.stw.rlo).toBe(true);
+    const p = runAwl(prog('AN M 0.0', 'AN M 0.1', 'O', 'L 1', 'L 2', '==I'));
+    expect(p.regs.stw.or).toBe(false);
+  });
 
   it('RND 2.5 → 2, 3.5 → 4', () => {
     expect(run('RND', 0, f32(2.5)).regs.accu1).toBe(2);

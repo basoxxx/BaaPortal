@@ -35,21 +35,23 @@ const INT_TABLE: IntCase[] = [
   ['+I', 0xabcd8000, 0x12348000, 0x12340000, '00', true], // -65536 → 0 con OV
   ['-I', 5, 7, 0xfffe, '01', false],
   ['-I', 0x8000, 1, 0x7fff, '10', true],
-  ['*I', 300, 300, 0x5f90, '10', true], // 90000 → 24464
-  ['*I', 0xfffe, 3, 0xfffa, '01', false],
+  ['*I', 300, 300, 0x00015f90, '10', true], // 90000: 32 bit, OV
+  ['*I', 0xfffe, 3, 0xfffffffa, '01', false],
+  ['*I', 0x8000, 2, 0xffff0000, '01', true], // -65536: CC dal segno vero
   ['/I', 8, 2, 0x00000004, '10', false],
-  ['/I', 0x8000, 0xffff, 0x00008000, '01', true], // -32768 / -1
+  ['/I', 0x8000, 0xffff, 0x00008000, '10', true], // -32768 / -1
   ['+D', 1, 2, 3, '10', false],
   ['+D', 0x7fffffff, 1, 0x80000000, '01', true],
   ['+D', 0x80000000, 0xffffffff, 0x7fffffff, '10', true],
   ['-D', 0x80000000, 1, 0x7fffffff, '10', true], // sotto il minimo
   ['-D', 10, 10, 0, '00', false],
-  ['*D', 0x10000, 0x10000, 0, '00', true], // 2^32 → 0
+  ['*D', 0x10000, 0x10000, 0, '10', true], // 2^32 → 0, CC dal segno vero
+  ['*D', 0x10000, 0xffff0000, 0, '01', true], // sotto il minimo
   ['*D', 100000, 100000, 0x540be400, '10', true],
   ['*D', 0xfffffffe, 3, 0xfffffffa, '01', false],
   ['/D', 7, 2, 3, '10', false],
   ['/D', 0xfffffff9, 2, 0xfffffffd, '01', false], // -7/2 → -3
-  ['/D', 0x80000000, 0xffffffff, 0x80000000, '01', true],
+  ['/D', 0x80000000, 0xffffffff, 0x80000000, '10', true],
   ['MOD', 7, 2, 1, '10', false],
   ['MOD', 0xfffffff9, 2, 0xffffffff, '01', false], // -7 mod 2 → -1
   ['MOD', 8, 2, 0, '00', false],
@@ -59,7 +61,7 @@ describe('aritmetica intera', () => {
   for (const [ins, a2, a1, exp, ccExp, ov] of INT_TABLE) {
     it(`${ins} ${a2.toString(16)}, ${a1.toString(16)}`, () => {
       const r = runInt(ins, a2, a1);
-      const keepsHigh = ins === '+I' || ins === '-I' || ins === '*I';
+      const keepsHigh = ins === '+I' || ins === '-I';
       const want = keepsHigh ? ((a1 & 0xffff0000) | (exp & 0xffff)) >>> 0 : exp >>> 0;
       expect(r.regs.accu1).toBe(want);
       expect(r.regs.accu2).toBe(a2);
@@ -123,6 +125,9 @@ describe('aritmetica intera', () => {
     const d = runAwl(prog('+ L#-1'), { regs: { accu1: 0, stw } });
     expect(d.regs.accu1).toBe(0xffffffff);
     expect(d.regs.stw).toMatchObject(stw);
+    const n = runAwl(prog('+ -5'), { regs: { accu1: 0xaaaa0003, stw } });
+    expect(n.regs.accu1).toBe(0xaaaafffe);
+    expect(n.regs.stw).toMatchObject(stw);
   });
 });
 

@@ -38,15 +38,24 @@ function op16(fn: Fn): OpHandler {
   };
 }
 
-function op32(fn: Fn): OpHandler {
+function op32(fn: Fn, ccTrue = false): OpHandler {
   return (st) => {
     const r = fn(i32(st.regs.accu2), i32(st.regs.accu1));
     const w = BigInt.asIntN(32, r);
     st.regs.accu1 = Number(BigInt.asUintN(32, w));
-    setSignCc(st, w);
+    // Manuale AWL, «*D»: con overflow CC segue il segno del risultato vero.
+    setSignCc(st, ccTrue ? r : w);
     setOverflow(st, w !== r);
   };
 }
+
+/** Manuale AWL, «*I»: prodotto a 32 bit in ACCU1; OV fuori da -32768..32767, CC dal segno vero. */
+const mulI: OpHandler = (st) => {
+  const r = i16(st.regs.accu2) * i16(st.regs.accu1);
+  st.regs.accu1 = Number(BigInt.asUintN(32, r));
+  setSignCc(st, r);
+  setOverflow(st, r !== BigInt.asIntN(16, r));
+};
 
 /** Manuale AWL, «/I»: quoziente in ACCU1-L, resto in ACCU1-H. Per 0: ACCU1 = 0 (piano 2A). */
 const divI: OpHandler = (st) => {
@@ -61,7 +70,8 @@ const divI: OpHandler = (st) => {
   const w = BigInt.asIntN(16, q);
   const rem = a % b;
   st.regs.accu1 = ((Number(BigInt.asUintN(16, rem)) << 16) | Number(BigInt.asUintN(16, w))) >>> 0;
-  setSignCc(st, w);
+  // Manuale AWL, «/I»: con overflow del quoziente (-32768 / -1) CC segue il quoziente vero.
+  setSignCc(st, q);
   setOverflow(st, w !== q);
 };
 
@@ -77,7 +87,7 @@ function div32(remainder: boolean): OpHandler {
     const q = a / b;
     const w = BigInt.asIntN(32, remainder ? a % b : q);
     st.regs.accu1 = Number(BigInt.asUintN(32, w));
-    setSignCc(st, w);
+    setSignCc(st, remainder ? w : q);
     setOverflow(st, !remainder && w !== q);
   };
 }
@@ -99,11 +109,11 @@ const addConst: OpHandler = (st, stmt) => {
 export const INTEGER_OPS: Record<string, OpHandler> = {
   '+I': op16((a, b) => a + b),
   '-I': op16((a, b) => a - b),
-  '*I': op16((a, b) => a * b),
+  '*I': mulI,
   '/I': divI,
   '+D': op32((a, b) => a + b),
   '-D': op32((a, b) => a - b),
-  '*D': op32((a, b) => a * b),
+  '*D': op32((a, b) => a * b, true),
   '/D': div32(false),
   MOD: div32(true),
   '+': addConst,
