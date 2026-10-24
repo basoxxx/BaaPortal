@@ -4,17 +4,24 @@ import {
   decodeBlockListOfTypeRequest,
   decodeCotp,
   decodeEndUpload,
+  decodePlcControlRequest,
+  decodeDownloadBlockAck,
   decodeReadRequest,
+  decodeRequestDownload,
   decodeS7,
   decodeSetup,
   decodeStartUpload,
   decodeSzlRequest,
   decodeUploadRequest,
   decodeUserdata,
+  decodeWriteRequest,
   encodeBcdDateTime,
   encodeBlockCounts,
   encodeBlockListOfType,
+  encodeControlResponse,
   encodeCotp,
+  encodeDownloadBlockJob,
+  encodeDownloadEnded,
   encodeEndUploadResponse,
   encodeReadResponse,
   encodeS7,
@@ -24,10 +31,14 @@ import {
   encodeTpkt,
   encodeUploadResponse,
   encodeUserdata,
+  encodeWriteResponse,
   itemByteLength,
   itemReturnName,
+  parseBlockFile,
   parseBlockFileName,
   responseTransportFor,
+  type BlockFilesystem,
+  type BlockType,
   type CotpPdu,
   type DecodedUserdata,
   type ItemResult,
@@ -92,6 +103,27 @@ interface Pending {
   next: number;
 }
 
+/**
+ * Download in corso (proto §10): il finto PLC manda i job 0x1B/0x1C e il PG risponde con ack-data.
+ * `phase`: 'start' = ack 0x1A appena risposto, 'block' = in attesa dell'ack-data di un 0x1B,
+ * 'ended' = in attesa dell'ack del 0x1C, 'insert' = trasferimento finito, attende l'_INSE.
+ * I byte stanno qui e nel blockMap solo dopo l'_INSE.
+ */
+interface Download {
+  type: BlockType;
+  number: number;
+  fs: BlockFilesystem;
+  loadLength: number;
+  mc7Length: number;
+  phase: 'start' | 'block' | 'ended' | 'insert';
+  /** pduRef dell'ultimo job mandato: l'ack-data deve riportarlo. */
+  ref: number;
+  pieces: Uint8Array[];
+  received: number;
+  /** Byte oltre la lunghezza dichiarata o lunghezza finale diversa: l'_INSE sarà rifiutato. */
+  bad: boolean;
+}
+
 class Session {
   private readonly reader = new FrameReader();
   private state: 'idle' | 'open' | 'closed' = 'idle';
@@ -102,6 +134,8 @@ class Session {
   private fragBytes = 0;
   private upload: { bytes: Uint8Array; offset: number; done: boolean } | undefined;
   private cont: Pending | undefined;
+  private dl: Download | undefined;
+  private jobRef = 0;
   private responses = 0;
   private seqCounter = 0;
   private durCounter = 0;
@@ -135,6 +169,7 @@ class Session {
     this.timers.clear();
     this.upload = undefined;
     this.cont = undefined;
+    this.dl = undefined; // un download interrotto prima dell'_INSE non lascia nulla
     this.cpu.detach(this);
     try {
       this.t.close();
@@ -274,7 +309,9 @@ class Session {
     if (faults.dropAfterResponses !== undefined && this.responses >= faults.dropAfterResponses) {
       return this.shutdown();
     }
-    if (pdu.rosctr !== 1 && pdu.rosctr !== 7) return; // gli ack del cliente non esistono: la CPU non manda job
+    // ack-data (o errore) del cliente: esistono solo come risposte ai job 0x1B/0x1C del download
+    if (pdu.rosctr === 2 || pdu.rosctr === 3) return this.onAck(pdu);
+    if (pdu.rosctr !== 1 && pdu.rosctr !== 7) return;
     const fn = functionOf(pdu);
     if (fn !== undefined && faults.ignoreFunction === fn) return;
     let reply: S7Pdu | undefined;
@@ -288,6 +325,11 @@ class Session {
       reply = headerError(pdu, ERR.WRONG_FRAMES);
     }
     if (reply) this.sendPdu(reply);
+    // l'ack 0x1A è partito: ora il finto PLC chiede la prima fetta
+    if (this.dl?.phase === 'start') {
+      this.dl.phase = 'block';
+      this.sendJob(this.dl, encodeDownloadBlockJob(this.dl.type, this.dl.number, this.dl.fs));
+    }
   }
 
   private forcedError(pdu: S7Pdu, errorClass: number, errorCode: number): S7Pdu {
@@ -315,13 +357,15 @@ class Session {
         return this.uploadChunk(p);
       case 0x1f:
         return this.endUpload(p);
-      case 0x05: // write var
-      case 0x1a: // request download
-      case 0x1b: // download block
-      case 0x1c: // download ended
-      case 0x28: // PLC control
-      case 0x29: // PLC stop
-        // Il finto PLC non cambia mai stato da rete: come una CPU con la scrittura protetta.
+      case 0x05:
+        return this.writeVar(p);
+      case 0x28:
+      case 0x29:
+        return this.plcControl(p);
+      case 0x1a:
+        return this.requestDownload(p);
+      case 0x1b: // download block e download ended arrivano come job solo dalla CPU: dal PG, mai
+      case 0x1c:
         return headerError(p, ERR.PROTECTED);
       default:
         return headerError(p, ERR.NOT_IMPLEMENTED);
@@ -378,6 +422,137 @@ class Session {
     });
     const { param, data } = encodeReadResponse(results);
     return ack(p, param, data);
+  }
+
+  // ---- scrittura e controllo (allowlist) -----------------------------------------------------
+
+  /** Con protezione 2 o 3 le funzioni che cambiano stato sono rifiutate (proto §14); la lettura no. */
+  private writeProtected(): boolean {
+    return this.cpu.config.protectionLevel >= 2;
+  }
+
+  private writeVar(p: S7Pdu): S7Pdu {
+    if (this.writeProtected()) return headerError(p, ERR.PROTECTED);
+    let items;
+    try {
+      items = decodeWriteRequest(p.param, p.data);
+    } catch {
+      return headerError(p, ERR.WRONG_FRAMES);
+    }
+    if (items.length === 0) return headerError(p, ERR.WRONG_FRAMES);
+    const { param, data } = encodeWriteResponse(this.cpu.applyWrite(items));
+    return ack(p, param, data);
+  }
+
+  private plcControl(p: S7Pdu): S7Pdu {
+    let req;
+    try {
+      req = decodePlcControlRequest(p.param);
+    } catch {
+      return headerError(p, ERR.WRONG_FRAMES);
+    }
+    // _INSE attiva il blocco solo a trasferimento finito (proto §10.4); altrove non è ammesso
+    if (req.service === '_INSE' && this.dl?.phase === 'insert')
+      return this.insertBlock(p, req.block);
+    // fuori allowlist (cold restart, _MODU, _GARB, _DELE, _INSE fuori download)
+    if (req.service !== 'P_PROGRAM') return headerError(p, ERR.PROTECTED);
+    if (this.writeProtected()) return headerError(p, ERR.PROTECTED);
+    const code = req.function === 0x29 ? this.cpu.applyStop() : this.cpu.applyWarmRestart();
+    return ack(p, encodeControlResponse(req.function, code));
+  }
+
+  // ---- download (ruoli invertiti, proto §10.2) ------------------------------------------------
+
+  private requestDownload(p: S7Pdu): S7Pdu {
+    if (this.writeProtected()) return headerError(p, ERR.PROTECTED);
+    let req;
+    try {
+      req = decodeRequestDownload(p.param);
+    } catch {
+      return headerError(p, ERR.WRONG_FRAMES);
+    }
+    // un download già in trasferimento blocca il secondo; uno finito che aspetta solo l'_INSE si sostituisce
+    if (this.dl && this.dl.phase !== 'insert') return headerError(p, ERR.NO_PARALLEL_UPLOAD);
+    this.dl = { ...req, phase: 'start', ref: 0, pieces: [], received: 0, bad: false };
+    return ack(p, Uint8Array.of(0x1a));
+  }
+
+  /** Un job (ROSCTR 1) dal finto PLC verso il PG; l'ack-data attesa riporta questo pduRef. */
+  private sendJob(d: Download, param: Uint8Array): void {
+    this.jobRef = (this.jobRef % 0xffff) + 1;
+    d.ref = this.jobRef;
+    this.sendPdu({
+      rosctr: 1,
+      pduRef: d.ref,
+      errorClass: 0,
+      errorCode: 0,
+      param,
+      data: NOTHING,
+    });
+  }
+
+  /** Ack-data del PG a un job 0x1B/0x1C. Fuori sequenza o illeggibile: il download è abbandonato. */
+  private onAck(pdu: S7Pdu): void {
+    const d = this.dl;
+    if (!d || (d.phase !== 'block' && d.phase !== 'ended')) return; // nessun job in attesa
+    if (pdu.rosctr !== 3 || pdu.pduRef !== d.ref) {
+      this.dl = undefined;
+      return;
+    }
+    if (d.phase === 'ended') {
+      if (pdu.param.length !== 1 || pdu.param[0] !== 0x1c) {
+        this.dl = undefined;
+        return;
+      }
+      d.phase = 'insert';
+      return;
+    }
+    let slice;
+    try {
+      slice = decodeDownloadBlockAck(pdu.param, pdu.data);
+    } catch {
+      this.dl = undefined;
+      return;
+    }
+    if (d.received + slice.chunk.length > d.loadLength) {
+      d.bad = true; // oltre il dichiarato: non si accumula, l'_INSE sarà rifiutato
+    } else {
+      d.pieces.push(slice.chunk);
+      d.received += slice.chunk.length;
+    }
+    if (slice.eos) {
+      this.sendJob(d, encodeDownloadBlockJob(d.type, d.number, d.fs));
+      return;
+    }
+    if (d.received !== d.loadLength) d.bad = true;
+    d.phase = 'ended';
+    this.sendJob(d, encodeDownloadEnded(d.type, d.number, d.fs));
+  }
+
+  /** `_INSE` a trasferimento finito: solo qui il blocco entra nel blockMap. */
+  private insertBlock(p: S7Pdu, block: { type: BlockType; number: number } | undefined): S7Pdu {
+    const d = this.dl!;
+    this.dl = undefined; // riuscito o no, questo download è chiuso
+    if (!block || block.type !== d.type || block.number !== d.number) {
+      return headerError(p, ERR.BLOCK_NAME);
+    }
+    if (d.bad) return headerError(p, ERR.WRONG_FRAMES);
+    const file = new Uint8Array(d.received);
+    let at = 0;
+    for (const piece of d.pieces) {
+      file.set(piece, at);
+      at += piece.length;
+    }
+    try {
+      const h = parseBlockFile(file).header;
+      if (h.type !== d.type || h.number !== d.number || h.mc7Length !== d.mc7Length) {
+        return headerError(p, ERR.WRONG_FRAMES);
+      }
+      this.cpu.applyDownloadedBlock(d.type, d.number, file);
+    } catch {
+      return headerError(p, ERR.WRONG_FRAMES);
+    }
+    return ack(p, encodeControlResponse(0x28, 0));
   }
 
   // ---- upload ------------------------------------------------------------------------------

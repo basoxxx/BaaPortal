@@ -2,3 +2,4 @@
 // (`tcpTransport`) è interno a questa cartella e non esce da nessun punto di ingresso.
 export { connectTcp, openTcp } from './tcpTransport';
 export { collectTcp } from './collectTcp';
+export { connectWriteTcp } from './connectWrite';

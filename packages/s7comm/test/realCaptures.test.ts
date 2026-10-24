@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -9,6 +9,13 @@ import {
   decodeBlockInfo,
   decodeBlockInfoRequest,
   decodeBlockListOfTypeRequest,
+  decodeDownloadBlockAck,
+  decodeDownloadBlockJob,
+  decodeDownloadEnded,
+  decodePlcControlRequest,
+  decodeRequestDownload,
+  decodeWriteRequest,
+  decodeWriteResponse,
   decodeCotp,
   decodeEndUpload,
   decodeEndUploadResponse,
@@ -28,6 +35,16 @@ import {
   encodeBlockInfo,
   encodeBlockInfoRequest,
   encodeBlockListOfTypeRequest,
+  encodeControlResponse,
+  encodeDownloadBlockAck,
+  encodeDownloadBlockJob,
+  encodeDownloadEnded,
+  encodeInsertBlock,
+  encodePlcStop,
+  encodeRequestDownload,
+  encodeWarmRestart,
+  encodeWriteRequest,
+  encodeWriteResponse,
   encodeCotp,
   encodeEndUpload,
   encodeEndUploadResponse,
@@ -49,7 +66,7 @@ import {
   readPcap,
   type SzlList,
 } from '../src';
-import { CISAGOV_DIR, allCaptures, missingCaptures } from './captures';
+import { CACHE_DIR, CISAGOV_DIR, allCaptures, missingCaptures } from './captures';
 
 const missing = missingCaptures();
 if (missing.length > 0) {
@@ -479,3 +496,207 @@ describe('snap7.pcap (CPU reale 315-2PN/DP, sempre eseguito)', () => {
     }
   });
 });
+
+// ---- scrittura, controllo e download su byte veri -------------------------------------------
+
+/** Le PDU S7 intere (anche su più DT) di tutte le connessioni, con il verso. */
+function s7Pdus(path: string): { dir: 'tx' | 'rx'; whole: Uint8Array }[] {
+  const out: { dir: 'tx' | 'rx'; whole: Uint8Array }[] = [];
+  for (const st of readPcap(readFileSync(path))) {
+    const pending: Record<'tx' | 'rx', Uint8Array[]> = { tx: [], rx: [] };
+    for (const fr of st.frames) {
+      let c;
+      try {
+        c = decodeCotp(fr.bytes);
+      } catch {
+        continue;
+      }
+      if (c.type !== 'DT') continue;
+      pending[fr.dir].push(c.data);
+      if (c.eot) out.push({ dir: fr.dir, whole: cat(pending[fr.dir].splice(0)) });
+    }
+  }
+  return out;
+}
+
+const ascii = (b: Uint8Array): string => String.fromCharCode(...b);
+
+describe('snap7.pcap (sempre eseguito): write var, stop e riavvii', () => {
+  const pdus = s7Pdus(join(CISAGOV_DIR, 'snap7.pcap'))
+    .map((x) => {
+      try {
+        return { dir: x.dir, whole: x.whole, pdu: decodeS7(x.whole) };
+      } catch {
+        return undefined;
+      }
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== undefined);
+
+  it('ogni write var (richiesta e risposta): encodeS7(decodeS7) e i codec ricostruiscono i byte', () => {
+    let reqs = 0;
+    let ress = 0;
+    for (const { dir, whole, pdu } of pdus) {
+      if (pdu.param[0] !== 0x05) continue;
+      expect(hex(encodeS7(pdu))).toBe(hex(whole));
+      if (pdu.rosctr === 1 && dir === 'tx') {
+        const items = decodeWriteRequest(pdu.param, pdu.data);
+        const e = encodeWriteRequest(items);
+        expect(hex(e.param)).toBe(hex(pdu.param));
+        expect(hex(e.data)).toBe(hex(pdu.data));
+        reqs++;
+      } else if (pdu.rosctr === 3) {
+        const rs = decodeWriteResponse(pdu.param, pdu.data);
+        const e = encodeWriteResponse(rs.map((r) => r.returnCode));
+        expect(hex(e.param)).toBe(hex(pdu.param));
+        expect(hex(e.data)).toBe(hex(pdu.data));
+        ress++;
+      }
+    }
+    expect(reqs).toBeGreaterThanOrEqual(2);
+    expect(ress).toBe(reqs);
+  });
+
+  it('PLC stop, cold restart, _MODU e _GARB: giro identico; i codec ricostruiscono stop e rifiutano il resto', () => {
+    let stop = 0;
+    let cold = 0;
+    let other = 0;
+    let acks = 0;
+    for (const { dir, whole, pdu } of pdus) {
+      const fn = pdu.param[0];
+      if (fn !== 0x28 && fn !== 0x29) continue;
+      expect(hex(encodeS7(pdu))).toBe(hex(whole));
+      if (dir === 'rx') {
+        expect(hex(encodeControlResponse(fn, 0))).toBe(hex(pdu.param));
+        acks++;
+        continue;
+      }
+      const req = decodePlcControlRequest(pdu.param);
+      if (fn === 0x29) {
+        expect(req.service).toBe('P_PROGRAM');
+        expect(hex(encodePlcStop())).toBe(hex(pdu.param));
+        stop++;
+      } else if (ascii(pdu.param.subarray(-9)) === 'P_PROGRAM') {
+        // cold restart: argomento "C " (0x4320); fuori dall'allowlist, e il warm restart no
+        expect(pdu.param.subarray(8, 12)).toEqual(Uint8Array.of(0, 2, 0x43, 0x20));
+        expect(req.service).toBeUndefined();
+        expect(hex(encodeWarmRestart())).not.toBe(hex(pdu.param));
+        cold++;
+      } else {
+        expect(req.service).toBeUndefined(); // _MODU, _GARB: non ammessi
+        other++;
+      }
+    }
+    expect(stop).toBe(1);
+    expect(cold).toBe(1);
+    expect(other).toBe(2);
+    expect(acks).toBe(4);
+  });
+});
+
+const DOWNLOAD = 's7comm_downloading_block_db1.pcap';
+describe.skipIf(!existsSync(join(CACHE_DIR, DOWNLOAD)))(
+  `${DOWNLOAD} (cattura scaricata: 0x1A/0x1B/0x1C/_INSE)`,
+  () => {
+    it('la sequenza si decodifica e si ricodifica identica; i numeri veri sono 500/400', () => {
+      const pdus = s7Pdus(join(CACHE_DIR, DOWNLOAD)).map((x) => ({
+        dir: x.dir,
+        whole: x.whole,
+        pdu: decodeS7(x.whole),
+      }));
+      const seq = pdus.filter((x) => [0x1a, 0x1b, 0x1c, 0x28].includes(x.pdu.param[0]!));
+      // 1A req+ack, 3 x (1B job + ack), 1C job + ack, _INSE req + ack
+      expect(seq.map((x) => `${x.pdu.rosctr}:${x.pdu.param[0]!.toString(16)}`)).toEqual([
+        '1:1a',
+        '3:1a',
+        '1:1b',
+        '3:1b',
+        '1:1b',
+        '3:1b',
+        '1:1b',
+        '3:1b',
+        '1:1c',
+        '3:1c',
+        '1:28',
+        '3:28',
+      ]);
+      const chunks: Uint8Array[] = [];
+      const eos: boolean[] = [];
+      for (const { dir, whole, pdu } of seq) {
+        expect(hex(encodeS7(pdu))).toBe(hex(whole));
+        const fn = pdu.param[0];
+        if (fn === 0x1a && pdu.rosctr === 1) {
+          const r = decodeRequestDownload(pdu.param);
+          expect(r).toEqual({ type: 'DB', number: 1, fs: 'P', loadLength: 500, mc7Length: 400 });
+          expect(
+            hex(encodeRequestDownload(r.type, r.number, r.fs, r.loadLength, r.mc7Length)),
+          ).toBe(hex(pdu.param));
+        } else if (fn === 0x1a) {
+          expect(hex(pdu.param)).toBe('1a');
+        } else if (fn === 0x1b && pdu.rosctr === 1) {
+          expect(dir).toBe('rx'); // la CPU manda il job
+          const r = decodeDownloadBlockJob(pdu.param);
+          expect(hex(encodeDownloadBlockJob(r.type, r.number, r.fs))).toBe(hex(pdu.param));
+        } else if (fn === 0x1b) {
+          expect(dir).toBe('tx');
+          const a = decodeDownloadBlockAck(pdu.param, pdu.data);
+          const e = encodeDownloadBlockAck(a.eos, a.chunk);
+          expect(hex(e.param)).toBe(hex(pdu.param));
+          expect(hex(e.data)).toBe(hex(pdu.data));
+          chunks.push(a.chunk);
+          eos.push(a.eos);
+        } else if (fn === 0x1c && pdu.rosctr === 1) {
+          const r = decodeDownloadEnded(pdu.param);
+          expect(hex(encodeDownloadEnded(r.type, r.number, r.fs))).toBe(hex(pdu.param));
+        } else if (fn === 0x1c) {
+          expect(hex(pdu.param)).toBe('1c');
+        } else if (pdu.rosctr === 1) {
+          const r = decodePlcControlRequest(pdu.param);
+          expect(r).toEqual({ function: 0x28, service: '_INSE', block: { type: 'DB', number: 1 } });
+          expect(hex(encodeInsertBlock('DB', 1, 'P'))).toBe(hex(pdu.param));
+        } else {
+          expect(hex(encodeControlResponse(0x28, 0))).toBe(hex(pdu.param));
+        }
+      }
+      // fette 222 + 222 + 56 = 500 byte = load memory dichiarata; EoS 1,1,0
+      expect(chunks.map((c) => c.length)).toEqual([222, 222, 56]);
+      expect(eos).toEqual([true, true, false]);
+      const file = cat(chunks);
+      expect(file).toHaveLength(500);
+      const h = parseBlockFile(file).header;
+      expect(h).toMatchObject({ type: 'DB', number: 1, mc7Length: 400 });
+    });
+  },
+);
+
+const LIBNODAVE = 's7comm_varservice_libnodavedemo.pcap';
+describe.skipIf(!existsSync(join(CACHE_DIR, LIBNODAVE)))(
+  `${LIBNODAVE} (cattura scaricata: write var di libnodave)`,
+  () => {
+    it('ogni write var: giro identico e codec che ricostruiscono i byte', () => {
+      let n = 0;
+      for (const x of s7Pdus(join(CACHE_DIR, LIBNODAVE))) {
+        let pdu;
+        try {
+          pdu = decodeS7(x.whole);
+        } catch {
+          continue;
+        }
+        if (pdu.param[0] !== 0x05) continue;
+        expect(hex(encodeS7(pdu))).toBe(hex(x.whole));
+        if (pdu.rosctr === 1) {
+          const e = encodeWriteRequest(decodeWriteRequest(pdu.param, pdu.data));
+          expect(hex(e.param)).toBe(hex(pdu.param));
+          expect(hex(e.data)).toBe(hex(pdu.data));
+          n++;
+        } else {
+          const e = encodeWriteResponse(
+            decodeWriteResponse(pdu.param, pdu.data).map((r) => r.returnCode),
+          );
+          expect(hex(e.param)).toBe(hex(pdu.param));
+          expect(hex(e.data)).toBe(hex(pdu.data));
+        }
+      }
+      expect(n).toBeGreaterThanOrEqual(4);
+    });
+  },
+);

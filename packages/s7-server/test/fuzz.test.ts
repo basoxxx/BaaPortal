@@ -85,7 +85,7 @@ describe('fuzz: 2000 PDU a caso', () => {
         encodeStartUpload('_0A00001A'),
         encodeUpload(7),
         Uint8Array.of(0x05, 0x01, 0x12, 0x0a, 0x10, 0x02, 0, 1, 0, 0, 0x83, 0, 0, 0),
-        Uint8Array.of(0x29, 0, 0, 0, 0, 0, 9, 0x50, 0x5f, 0x50, 0x52, 0x4f, 0x47, 0x52, 0x41, 0x4d),
+        // (niente stop 0x29 valido: da allowlist cambia il modo, quindi non è una richiesta "che non cambia stato")
       ].map((param) =>
         encodeS7({ rosctr: 1, pduRef: 6, errorClass: 0, errorCode: 0, param, data: NOTHING }),
       ),

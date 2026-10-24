@@ -7,6 +7,7 @@ import {
   framesToJsonl,
   jsonlToFrames,
   kitZip,
+  parseBlockFile,
   readKitZip,
   readPcap,
   type Area,
@@ -16,8 +17,9 @@ import {
   type ConnectionType,
   type KitProgress,
   type S7Client,
+  type S7WriteClient,
 } from '@baaportal/s7comm';
-import { collectTcp, connectTcp } from '@baaportal/s7comm/node';
+import { collectTcp, connectTcp, connectWriteTcp } from '@baaportal/s7comm/node';
 import { FakeCpu } from '@baaportal/s7-server';
 import { listen } from '@baaportal/s7-server/node';
 import {
@@ -49,6 +51,8 @@ export interface Command {
   summary: string;
   /** Parla con una CPU: vuole --host e accetta le opzioni di connessione. */
   network: boolean;
+  /** Scrive sulla CPU: passa dalla conferma obbligatoria (`confirmed`). */
+  writes?: boolean;
   /** Opzioni specifiche del comando, oltre a quelle comuni. */
   options: string[];
   run(ctx: Ctx): Promise<void>;
@@ -181,8 +185,13 @@ function saveLog(ctx: Ctx, c: Conn, rec: CaptureRecorder | undefined, failed: bo
   }
 }
 
-async function withClient<T>(ctx: Ctx, fn: (c: S7Client) => Promise<T>): Promise<T> {
+async function withClient<T>(
+  ctx: Ctx,
+  fn: (c: S7Client) => Promise<T>,
+  opts: { log?: boolean } = {},
+): Promise<T> {
   const c = connOptions(ctx);
+  if (opts.log === false) delete c.log;
   const recorder = c.log ? createRecorder() : undefined;
   let failed = false;
   try {
@@ -206,6 +215,66 @@ async function withClient<T>(ctx: Ctx, fn: (c: S7Client) => Promise<T>): Promise
   } finally {
     saveLog(ctx, c, recorder, failed);
   }
+}
+
+/** Come `withClient`, ma con il client di scrittura: solo dopo la conferma. */
+async function withWriteClient<T>(ctx: Ctx, fn: (c: S7WriteClient) => Promise<T>): Promise<T> {
+  const c = connOptions(ctx);
+  const recorder = c.log ? createRecorder() : undefined;
+  let failed = false;
+  try {
+    const client = await connectWriteTcp({
+      host: c.host,
+      port: c.port,
+      rack: c.rack,
+      slot: c.slot,
+      connectionType: c.connectionType,
+      timeoutMs: c.timeoutMs,
+      ...(recorder ? { recorder } : {}),
+    });
+    try {
+      return await fn(client);
+    } finally {
+      await client.close().catch(() => undefined);
+    }
+  } catch (e) {
+    failed = true;
+    throw e;
+  } finally {
+    saveLog(ctx, c, recorder, failed);
+  }
+}
+
+/**
+ * Conferma obbligatoria (spec §4). Apre una connessione di SOLA LETTURA, legge ordine e modo,
+ * stampa il riepilogo di ciò che farebbe e restituisce soltanto se ci sono sia --conferma sia
+ * --non-in-produzione. Altrimenti lancia UsageError (codice 2): `action` non viene mai chiamata.
+ */
+async function confirmed<T>(
+  ctx: Ctx,
+  what: string,
+  action: (c: S7WriteClient) => Promise<T>,
+): Promise<T> {
+  const c = connOptions(ctx);
+  await withClient(
+    ctx,
+    async (cl) => {
+      const id = await optional(() => cl.identity());
+      const mode = await optional(() => cl.mode());
+      ctx.out(`operazione : ${what}`);
+      ctx.out(`indirizzo  : ${c.host}:${c.port} (rack ${c.rack}, slot ${c.slot})`);
+      ctx.out(`CPU        : ${dash(id?.orderNumber)}`);
+      ctx.out(`modo       : ${dash(mode)}`);
+    },
+    { log: false },
+  );
+  if (ctx.values['conferma'] !== true || ctx.values['non-in-produzione'] !== true) {
+    ctx.out('NESSUNA SCRITTURA ESEGUITA (solo il riepilogo di cosa avrebbe fatto).');
+    throw new UsageError(
+      'scrittura non confermata: servono sia --conferma sia --non-in-produzione (solo su CPU proprie, mai su impianti in produzione)',
+    );
+  }
+  return withWriteClient(ctx, action);
 }
 
 /** Un campo che la CPU può non fornire: l'errore della CPU diventa "assente", il resto no. */
@@ -551,7 +620,108 @@ const decodifica: Command = {
   },
 };
 
-/** Tabella dei comandi: nessuno scrive sulla CPU. */
+const WRITE_OPTIONS = ['conferma', 'non-in-produzione'];
+
+function hexBytesArg(raw: string): Uint8Array {
+  const h = raw.replace(/\s+/g, '').replace(/^0x/i, '');
+  if (h.length === 0 || h.length % 2 !== 0 || !/^[0-9a-f]+$/i.test(h)) {
+    throw new UsageError(
+      `esadecimale: "${raw}" non è una sequenza di byte (coppie di cifre 0-9 a-f)`,
+    );
+  }
+  return Uint8Array.from(h.match(/../g)!, (x) => parseInt(x, 16));
+}
+
+const scrivi: Command = {
+  name: 'scrivi',
+  usage:
+    'scrivi <area> <db> <inizio> <esadecimale> --conferma --non-in-produzione --host <indirizzo>',
+  summary: 'SCRIVE byte nella CPU (write var); richiede la conferma',
+  network: true,
+  writes: true,
+  options: WRITE_OPTIONS,
+  async run(ctx) {
+    positionalCount(ctx, scrivi, 4, 4);
+    const area = areaArg(ctx.positionals[0]!);
+    const db = numberArg('db', ctx.positionals[1]!, 0, 0xffff);
+    const start = numberArg('inizio', ctx.positionals[2]!, 0, 0x1fffff);
+    const data = hexBytesArg(ctx.positionals[3]!);
+    const label = area === 'DB' ? `DB${db}` : area;
+    await confirmed(
+      ctx,
+      `scrivere ${data.length} byte in ${label} dal byte ${start}: ${hex2(data)}`,
+      async (cl) => {
+        await cl.writeArea(area, db, start, data);
+        ctx.out(`${data.length} byte scritti in ${label} dal byte ${start}`);
+      },
+    );
+  },
+};
+
+const caricaNelDispositivo: Command = {
+  name: 'carica-nel-dispositivo',
+  usage: 'carica-nel-dispositivo <file.blk> --conferma --non-in-produzione --host <indirizzo>',
+  summary: 'SCRIVE un blocco (.blk di @baaportal/mc7) nella CPU e lo attiva; richiede la conferma',
+  network: true,
+  writes: true,
+  options: WRITE_OPTIONS,
+  async run(ctx) {
+    positionalCount(ctx, caricaNelDispositivo, 1, 1);
+    const file = ctx.positionals[0]!;
+    const bytes = readFileOrThrow(file);
+    let name: string;
+    try {
+      const { header } = parseBlockFile(bytes);
+      name = `${header.type ?? `tipo 0x${header.typeCode.toString(16)}`}${header.number}`;
+    } catch (e) {
+      throw new FileError(
+        `${file} non è un blocco valido: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+    await confirmed(
+      ctx,
+      `caricare nel dispositivo il blocco ${name} (${bytes.length} byte da ${file}) e attivarlo (_INSE); sostituisce un blocco omonimo`,
+      async (cl) => {
+        await cl.downloadBlock(bytes);
+        ctx.out(`blocco ${name} caricato nel dispositivo e attivato`);
+      },
+    );
+  },
+};
+
+const stop: Command = {
+  name: 'stop',
+  usage: 'stop --conferma --non-in-produzione --host <indirizzo>',
+  summary: 'porta la CPU in STOP; richiede la conferma',
+  network: true,
+  writes: true,
+  options: WRITE_OPTIONS,
+  async run(ctx) {
+    positionalCount(ctx, stop, 0, 0);
+    await confirmed(ctx, 'portare la CPU in STOP (ferma il programma)', async (cl) => {
+      const r = await cl.stop();
+      ctx.out(`stop: ${r.name}`);
+    });
+  },
+};
+
+const avvia: Command = {
+  name: 'avvia',
+  usage: 'avvia --conferma --non-in-produzione --host <indirizzo>',
+  summary: 'riavvio a caldo della CPU (RUN); richiede la conferma',
+  network: true,
+  writes: true,
+  options: WRITE_OPTIONS,
+  async run(ctx) {
+    positionalCount(ctx, avvia, 0, 0);
+    await confirmed(ctx, 'avviare la CPU con un riavvio a caldo (RUN)', async (cl) => {
+      const r = await cl.start();
+      ctx.out(`avvia: ${r.name}`);
+    });
+  },
+};
+
+/** Tabella dei comandi: quelli con `writes` scrivono sulla CPU, e solo dopo la conferma. */
 export const COMMANDS: readonly Command[] = [
   info,
   szl,
@@ -563,6 +733,10 @@ export const COMMANDS: readonly Command[] = [
   raccogli,
   finto,
   decodifica,
+  scrivi,
+  caricaNelDispositivo,
+  stop,
+  avvia,
 ];
 
 export const COMMAND_NAMES: readonly string[] = COMMANDS.map((c) => c.name);

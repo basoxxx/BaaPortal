@@ -1386,13 +1386,14 @@ EndUpload RES  : 32 03 0000 0a00 0001 0000  1f
 
 ### 17.9 Sequenza download DB1 [reale, `s7comm_downloading_block_db1.pcap`]
 ```
-ReqDownload (PG→CPU) : 32 01 .. 1a 00 01 0000 00000000 09 5f 3041 3030303031 50
-                        0d 31 "100050" "000004"     ; load mem 100050, MC7 4
+ReqDownload (PG→CPU) : 32 01 .. 1a 00 01 00 00 00 00 00  09 5f 3041 3030303031 50
+                        0d 31 "000500" "000400"     ; '1' + load mem 500 + MC7 400 (ASCII a 6 cifre)
 ReqDownload ack      : 32 03 .. 1a
-DownloadBlock (CPU→PG job): 32 01 .. 1b 00 00000000 00 09 5f 3041 3030303031 50
+DownloadBlock (CPU→PG job): 32 01 .. 1b 00 00 00 00 00 00 00  09 5f 3041 3030303031 50
 DownloadBlock ack (PG→CPU): 32 03 .. 1b 01  00de 00fb  <222 byte di codice>   ; EoS=0x01
-  ... ripetuto, ultimo pezzo EoS=0x00 ...
-DownloadEnded (CPU→PG): 32 01 .. 1c 00 00000000 00 09 5f 3041 3030303031 50
+  ... ripetuto: 3 pezzi da 222 + 222 + 56 = 500 byte (EoS 1, 1, 0; PDU 240); il file
+      ricomposto è DB1 con mc7Length 400 ...
+DownloadEnded (CPU→PG): 32 01 .. 1c 00 00 00 00 00 00 00  09 5f 3041 3030303031 50
 DownloadEnded ack     : 32 03 .. 1c
 _INSE (PG→CPU)        : 32 01 .. 28 00 000000 0000 fd 000a 01 00 30 3041 3030303031 50
                         05 5f494e5345   ; "_INSE"

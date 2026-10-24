@@ -63,7 +63,7 @@ Regole:
 - `planWrites`: al massimo 20 item per richiesta; ogni richiesta deve stare nella PDU come richiesta *e* come risposta (proto §5.11). `splitWrite` divide un item più grande della PDU in fette ordinate che coprono tutti i byte senza buchi.
 - Riuso: nessuna copia della logica di `readVar.ts`; i codici area/size e `itemByteLength` si importano.
 
-- [ ] **Step 1: Scrivi i test che falliscono** (`packages/s7comm/test/writeVar.test.ts`)
+- [x] **Step 1: Scrivi i test che falliscono** (`packages/s7comm/test/writeVar.test.ts`)
 
   ```ts
   it('write var di M reale di cisa/snap7.pcap: param e data coincidono byte per byte', () => { /* estrae la write var dalla cattura in repo */ });
@@ -74,10 +74,10 @@ Regole:
   it('splitWrite(DB,1,0, 1000 byte, 240) → fette ≤ 222 byte che coprono 0..999 senza buchi', () => { /* … */ });
   ```
 
-- [ ] **Step 2: Esegui e verifica che falliscano** — `npx vitest run --project s7comm`, atteso FAIL.
-- [ ] **Step 3: Implementa** `writeVar.ts` riusando `readVar.ts`/`plan.ts`; riesporta da `index.ts`.
-- [ ] **Step 4: Esegui test, typecheck e lint** — `npx vitest run --project s7comm && npm run typecheck && npm run lint`, atteso PASS.
-- [ ] **Step 5: Commit** — `feat(s7comm): codec write var (0x05)`
+- [x] **Step 2: Esegui e verifica che falliscano** — `npx vitest run --project s7comm`, atteso FAIL.
+- [x] **Step 3: Implementa** `writeVar.ts` riusando `readVar.ts`/`plan.ts`; riesporta da `index.ts`.
+- [x] **Step 4: Esegui test, typecheck e lint** — `npx vitest run --project s7comm && npm run typecheck && npm run lint`, atteso PASS.
+- [x] **Step 5: Commit** — `feat(s7comm): codec write var (0x05)`
 
 ---
 
@@ -108,7 +108,7 @@ Regole:
 - `decodePlcControlRequest` riconosce **solo** i servizi dell'allowlist (R3): un `_DELE`/`_GARB`/`_MODU`/cold-restart si decodifica come servizio non ammesso e il chiamante (finto PLC, Task 5) risponde con errore, senza implementarlo.
 - Nessuna password (proto §14): se arriva `0xD241`, è l'header error, gestito dal client (Task 7), non qui.
 
-- [ ] **Step 1: Scrivi i test che falliscono** (`control.test.ts`)
+- [x] **Step 1: Scrivi i test che falliscono** (`control.test.ts`)
 
   ```ts
   it('PLC stop di proto §17.10 (snap7_s300_stop): param 0x29 + "P_PROGRAM"', () => { /* … */ });
@@ -118,10 +118,10 @@ Regole:
   it('decodePlcControlRequest rifiuta _MODU/_GARB/cold come "non ammesso"', () => { /* … */ });
   ```
 
-- [ ] **Step 2: Esegui e verifica che falliscano**
-- [ ] **Step 3: Implementa** `control.ts`; riesporta da `index.ts`.
-- [ ] **Step 4: Esegui test, typecheck e lint**
-- [ ] **Step 5: Commit** — `feat(s7comm): codec PLC control (0x28 warm/_INSE) e stop (0x29)`
+- [x] **Step 2: Esegui e verifica che falliscano**
+- [x] **Step 3: Implementa** `control.ts`; riesporta da `index.ts`.
+- [x] **Step 4: Esegui test, typecheck e lint**
+- [x] **Step 5: Commit** — `feat(s7comm): codec PLC control (0x28 warm/_INSE) e stop (0x29)`
 
 ---
 
@@ -151,7 +151,7 @@ Regole:
 - `sliceBlockForDownload`: fette che stanno nella PDU, l'ultima con EoS `0x00`.
 - Un filename di download usa il filesystem `'P'` (passivo) come in proto §10.1.
 
-- [ ] **Step 1: Scrivi i test che falliscono** (`download.test.ts`)
+- [x] **Step 1: Scrivi i test che falliscono** (`download.test.ts`)
 
   ```ts
   it('request download DB1 di proto §17.9: byte identici (load mem 100086, MC7 2)', () => { /* … */ });
@@ -161,10 +161,10 @@ Regole:
   it('download ended 0x1C roundtrip', () => { /* … */ });
   ```
 
-- [ ] **Step 2: Esegui e verifica che falliscano**
-- [ ] **Step 3: Implementa** `download.ts`; riesporta da `index.ts`.
-- [ ] **Step 4: Esegui test, typecheck e lint**
-- [ ] **Step 5: Commit** — `feat(s7comm): codec download (0x1A/0x1B/0x1C)`
+- [x] **Step 2: Esegui e verifica che falliscano**
+- [x] **Step 3: Implementa** `download.ts`; riesporta da `index.ts`.
+- [x] **Step 4: Esegui test, typecheck e lint**
+- [x] **Step 5: Commit** — `feat(s7comm): codec download (0x1A/0x1B/0x1C)`
 
 ---
 
@@ -198,7 +198,7 @@ Regole:
   4. un job di funzione diversa da `0x1B`/`0x1C`, o un timeout, chiude con `PROTOCOL`/`TIMEOUT` e `runDownload` rilancia; niente promesse appese.
 - `request` accetta ROSCTR 3 **solo** in modo `online-write` (serve per le ack-data); in `read-only` resta `1 | 7`.
 
-- [ ] **Step 1: Scrivi i test che falliscono** (`writeGuard.test.ts`)
+- [x] **Step 1: Scrivi i test che falliscono** (`writeGuard.test.ts`)
 
   ```ts
   it('assertOnlineWrite: 0x05, 0x1A, 0x1C, 0x29, warm restart e _INSE passano; _DELE/_MODU/cold/MRES/force → FORBIDDEN', () => { /* … */ });
@@ -209,10 +209,10 @@ Regole:
   it('fuori da runDownload un job ROSCTR 1 chiude ancora la connessione con PROTOCOL', async () => { /* comportamento 1D invariato */ });
   ```
 
-- [ ] **Step 2: Esegui e verifica che falliscano**
-- [ ] **Step 3: Implementa** il modo nel guard e in `S7Connection`, e `runDownload`.
-- [ ] **Step 4: Esegui test, typecheck e lint** — includere l'intera suite `s7comm` per provare che il 1D resta verde.
-- [ ] **Step 5: Commit** — `feat(s7comm): filtro per modo (read-only/online-write) e transazione di download`
+- [x] **Step 2: Esegui e verifica che falliscano**
+- [x] **Step 3: Implementa** il modo nel guard e in `S7Connection`, e `runDownload`.
+- [x] **Step 4: Esegui test, typecheck e lint** — includere l'intera suite `s7comm` per provare che il 1D resta verde.
+- [x] **Step 5: Commit** — `feat(s7comm): filtro per modo (read-only/online-write) e transazione di download`
 
 ---
 
@@ -238,7 +238,7 @@ Regole:
 - Lo stato del finto PLC cambia **solo** attraverso questi metodi e **solo** per le funzioni dell'allowlist; ogni altra funzione da rete resta un errore (R5 del 1D, ristretta). La nota di `fakeCpu.ts` ("Lo stato cambia solo con i metodi di questa classe, mai per un comando di rete") va aggiornata: ora cambia anche per le funzioni di scrittura ammesse, ma mai per le altre.
 - Un write var fuori dalla dimensione di un'area dà return code `0x05`; su un DB inesistente `0x0A` (coerente con la read).
 
-- [ ] **Step 1: Scrivi i test che falliscano** (`session.test.ts`)
+- [x] **Step 1: Scrivi i test che falliscano** (`session.test.ts`)
 
   ```ts
   it('write var su MW10 poi read var rilegge il valore scritto', () => { /* via rig memory */ });
@@ -249,10 +249,10 @@ Regole:
   it('0x28 con servizio _MODU resta ERR.PROTECTED (fuori allowlist)', () => { /* … */ });
   ```
 
-- [ ] **Step 2: Esegui e verifica che falliscano** — `npx vitest run --project s7-server`
-- [ ] **Step 3: Implementa** i gestori e i metodi `FakeCpu`.
-- [ ] **Step 4: Esegui test, typecheck e lint**
-- [ ] **Step 5: Commit** — `feat(s7-server): il finto PLC accetta write var e stop/avvio`
+- [x] **Step 2: Esegui e verifica che falliscano** — `npx vitest run --project s7-server`
+- [x] **Step 3: Implementa** i gestori e i metodi `FakeCpu`.
+- [x] **Step 4: Esegui test, typecheck e lint**
+- [x] **Step 5: Commit** — `feat(s7-server): il finto PLC accetta write var e stop/avvio`
 
 ---
 
@@ -275,7 +275,7 @@ Regole:
 - Un secondo download in parallelo sulla stessa sessione dà l'errore "nessun download possibile" (riuso del meccanismo dell'upload, proto §3.3).
 - Protezione ≥ 2 → `0xD241` sul `0x1A`.
 
-- [ ] **Step 1: Scrivi i test che falliscano** (`session.test.ts`)
+- [x] **Step 1: Scrivi i test che falliscano** (`session.test.ts`)
 
   ```ts
   it('download di un blocco costruito con buildBlockFile: dopo _INSE compare in list-blocks e si rilegge in upload identico', async () => { /* client runDownload ↔ server */ });
@@ -284,10 +284,10 @@ Regole:
   it('secondo download in parallelo → errore "nessun download possibile"', async () => { /* … */ });
   ```
 
-- [ ] **Step 2: Esegui e verifica che falliscano**
-- [ ] **Step 3: Implementa** l'orchestrazione del download lato server e `applyDownloadedBlock`.
-- [ ] **Step 4: Esegui test, typecheck e lint**
-- [ ] **Step 5: Commit** — `feat(s7-server): il finto PLC accetta il download di un blocco`
+- [x] **Step 2: Esegui e verifica che falliscano**
+- [x] **Step 3: Implementa** l'orchestrazione del download lato server e `applyDownloadedBlock`.
+- [x] **Step 4: Esegui test, typecheck e lint**
+- [x] **Step 5: Commit** — `feat(s7-server): il finto PLC accetta il download di un blocco`
 
 ---
 
@@ -327,7 +327,7 @@ Regole:
 - `stop`/`start` ritornano il `ControlResult` (anche "già STOP"/"già RUN" sono risultati, non eccezioni); un `0xD241` è invece `S7Error('CPU_ERROR')` riportato così com'è.
 - La lettura riusa la logica del client di lettura (estrarre le parti comuni in un modulo condiviso se serve, senza duplicare).
 
-- [ ] **Step 1: Scrivi i test che falliscano** (`writeClient.test.ts`, contro `FakeCpu`)
+- [x] **Step 1: Scrivi i test che falliscano** (`writeClient.test.ts`, contro `FakeCpu`)
 
   ```ts
   it('writeArea di 1000 byte su un DB poi readArea rilegge identico', async () => { /* split su più PDU */ });
@@ -337,10 +337,10 @@ Regole:
   it('S7Client (lettura) non ha metodi di scrittura (chiavi del prototipo)', () => { /* invariato dal 1D */ });
   ```
 
-- [ ] **Step 2: Esegui e verifica che falliscano**
-- [ ] **Step 3: Implementa** `writeClient.ts` e `connectWrite.ts`.
-- [ ] **Step 4: Esegui test, typecheck e lint**
-- [ ] **Step 5: Commit** — `feat(s7comm): client di scrittura S7WriteClient`
+- [x] **Step 2: Esegui e verifica che falliscano**
+- [x] **Step 3: Implementa** `writeClient.ts` e `connectWrite.ts`.
+- [x] **Step 4: Esegui test, typecheck e lint**
+- [x] **Step 5: Commit** — `feat(s7comm): client di scrittura S7WriteClient`
 
 ---
 
@@ -364,7 +364,7 @@ Regole:
 - Il comando `finto` ora avvia un finto PLC che **accetta** scrittura/download/stop-avvio (Task 5–6), così i comandi si provano da capo a fondo in locale.
 - Codici di uscita: 0 ok, 1 errore di comunicazione, 2 argomenti/conferma mancante, 3 come nel 1D. Gli errori su stderr con codice e messaggio di `S7Error`. Il banner di aiuto non dice più "sola lettura": elenca i comandi di lettura e, a parte, quelli di scrittura con l'avviso sulla conferma.
 
-- [ ] **Step 1: Scrivi i test che falliscano** (`cli.test.ts`, avviando `finto` su porta libera)
+- [x] **Step 1: Scrivi i test che falliscano** (`cli.test.ts`, avviando `finto` su porta libera)
 
   ```ts
   it('scrivi senza --conferma → codice 2 e stampa il riepilogo (IP, ordine, modo), nessuna scrittura', async () => { /* … */ });
@@ -374,10 +374,10 @@ Regole:
   it('host irraggiungibile → codice 1 CONNECT_REFUSED', async () => { /* … */ });
   ```
 
-- [ ] **Step 2: Esegui e verifica che falliscano**
-- [ ] **Step 3: Implementa** i comandi e la conferma.
-- [ ] **Step 4: Esegui test, typecheck e lint**
-- [ ] **Step 5: Commit** — `feat(s7bench): comandi di scrittura con conferma e sicura anti-produzione`
+- [x] **Step 2: Esegui e verifica che falliscano**
+- [x] **Step 3: Implementa** i comandi e la conferma.
+- [x] **Step 4: Esegui test, typecheck e lint**
+- [x] **Step 5: Commit** — `feat(s7bench): comandi di scrittura con conferma e sicura anti-produzione`
 
 ---
 
@@ -396,11 +396,11 @@ Regole:
 - **Giro completo compilatore → PLC → ritorno** (è lo scopo del 1D-bis): si compila un blocco con `@baaportal/mc7` (`blockToMc7File`/`compileBlock`), lo si carica sul finto PLC con `S7WriteClient.downloadBlock`, lo si rilegge con `upload` e dev'essere **identico byte per byte**. Questo prova il giro senza CPU; la verifica *indipendente* su CPU reale resta in sospeso (vedi Task 10 e R6).
 - **Robustezza:** download interrotto a metà → `CLOSED`, nessuna promessa appesa, blocco non inserito; write var oltre la PDU divisa correttamente; fuzz di 2000 PDU di scrittura/controllo verso il finto PLC senza crash e con sole `S7Error` lato client.
 
-- [ ] **Step 1: Scrivi i test che falliscano**
-- [ ] **Step 2: Esegui e verifica che falliscano**
-- [ ] **Step 3: Implementa** (per lo più test; correzioni dove i test trovano difetti).
-- [ ] **Step 4: Esegui l'intera suite, typecheck, lint** — `npm test && npm run typecheck && npm run lint`
-- [ ] **Step 5: Commit** — `test(s7comm,s7-server): conformità scrittura/download e giro completo compilatore→PLC`
+- [x] **Step 1: Scrivi i test che falliscano**
+- [x] **Step 2: Esegui e verifica che falliscano**
+- [x] **Step 3: Implementa** (per lo più test; correzioni dove i test trovano difetti).
+- [x] **Step 4: Esegui l'intera suite, typecheck, lint** — `npm test && npm run typecheck && npm run lint`
+- [x] **Step 5: Commit** — `test(s7comm,s7-server): conformità scrittura/download e giro completo compilatore→PLC`
 
 ---
 
@@ -419,9 +419,9 @@ Regole:
 - **Collaudo:** `npm test && for i in 1 2 3; do npm run e2e || break; done && npm run typecheck && npm run lint && npm run format:check` verde 3 volte su 3 (l'e2e qui non cambia: nessuna interfaccia nuova).
 - **Lista di controllo manuale** (solo per chi ha una CPU **non in produzione**, da fare con la massima cautela): è in sospeso finché non c'è una CPU; va eseguita dall'amico a prodotto finito (download di un blocco di prova, RUN, rilettura, STOP).
 
-- [ ] **Step 1: Aggiorna limiti noti, piano generale e versione**
-- [ ] **Step 2: Esegui il collaudo tre volte**
-- [ ] **Step 3: Commit** — `docs: 1D-bis chiuso (scrittura/download/stop-avvio); conformità su CPU reale ancora in sospeso; versione 0.4.0`
+- [x] **Step 1: Aggiorna limiti noti, piano generale e versione**
+- [x] **Step 2: Esegui il collaudo tre volte**
+- [x] **Step 3: Commit** — `docs: 1D-bis chiuso (scrittura/download/stop-avvio); conformità su CPU reale ancora in sospeso; versione 0.4.0`
 
 ---
 

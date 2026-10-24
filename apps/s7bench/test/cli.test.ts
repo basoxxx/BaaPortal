@@ -5,7 +5,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildBlockFile, jsonlToFrames, readKitZip } from '@baaportal/s7comm';
-import { COMMAND_NAMES } from '../src/commands';
+import { COMMANDS, COMMAND_NAMES } from '../src/commands';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appDir = resolve(here, '..');
@@ -101,7 +101,7 @@ afterAll(() => {
 });
 
 describe('s7bench', () => {
-  it('la tabella dei comandi contiene esattamente quelli del banco di prova, nessuno di scrittura', () => {
+  it('la tabella dei comandi contiene esattamente quelli del banco di prova', () => {
     expect([...COMMAND_NAMES].sort()).toEqual(
       [
         'info',
@@ -114,6 +114,10 @@ describe('s7bench', () => {
         'raccogli',
         'finto',
         'decodifica',
+        'scrivi',
+        'carica-nel-dispositivo',
+        'stop',
+        'avvia',
       ].sort(),
     );
   });
@@ -237,6 +241,7 @@ describe('s7bench', () => {
     expect((await run(['info', '--host', 'x', '--port', '70000'])).code).toBe(2);
     expect((await run(['info', '--host', 'x', '--slot', '32'])).code).toBe(2);
     expect((await run(['scrivi', '--host', 'x'])).code).toBe(2);
+    expect((await run(['stop', '--host', 'x', 'extra'])).code).toBe(2);
     expect((await run([])).code).toBe(2);
   });
 
@@ -244,6 +249,9 @@ describe('s7bench', () => {
     const r = await run(['--aiuto']);
     expect(r.code).toBe(0);
     expect(r.stdout).toContain('raccogli');
+    expect(r.stdout).not.toMatch(/sola lettura, nessun comando di scrittura/);
+    expect(r.stdout).toContain('--conferma');
+    expect(r.stdout).toContain('--non-in-produzione');
     expect(existsSync(join(tmp, 'nulla'))).toBe(false);
   });
 
@@ -261,5 +269,157 @@ describe('s7bench', () => {
     else p.kill('SIGTERM');
     const code = await closed;
     if (process.platform !== 'win32') expect(code).toBe(0);
+  });
+});
+
+const FC7 = buildBlockFile(
+  {
+    type: 'FC',
+    number: 7,
+    language: 1,
+    flags: 0x01,
+    security: 0,
+    codeTime: T0,
+    interfaceTime: T0,
+    ssbLength: 0,
+    addLength: 0,
+    localDataLength: 0,
+    mc7Length: MC7.length,
+  },
+  MC7,
+  { author: 'BAA', family: 'TEST', name: 'FC7', version: '1.1', checksum: 0x1234 },
+);
+
+describe('s7bench: comandi di scrittura', () => {
+  let wf: ChildProcess;
+  let wport: number;
+  const wnet = (cmd: string, ...rest: string[]): Promise<Run> =>
+    run([cmd, '--host', '127.0.0.1', '--port', String(wport), ...rest]);
+  const OK = ['--conferma', '--non-in-produzione'];
+
+  beforeAll(async () => {
+    wf = spawnCli(['finto']);
+    wport = await new Promise<number>((ok, ko) => {
+      let buf = '';
+      const timer = setTimeout(() => ko(new Error(`finto: ${buf}`)), 20_000);
+      wf.stdout!.on('data', (b: Buffer) => {
+        buf += b.toString('utf8');
+        const m = /^porta (\d+)\r?\n/.exec(buf);
+        if (m) {
+          clearTimeout(timer);
+          ok(Number(m[1]));
+        }
+      });
+      wf.once('exit', () => ko(new Error(`finto uscito: ${buf}`)));
+    });
+  });
+
+  afterAll(() => {
+    if (wf) killTree(wf);
+  });
+
+  it('scrivi senza --conferma → codice 2 e stampa il riepilogo (IP, ordine, modo), nessuna scrittura', async () => {
+    const before = await wnet('leggi', 'M', '0', '10', '2');
+    const r = await wnet('scrivi', 'M', '0', '10', 'abcd');
+    expect(r.code).toBe(2);
+    expect(r.stdout).toContain('127.0.0.1');
+    expect(r.stdout).toContain('6ES7 315-2EH14-0AB0');
+    expect(r.stdout).toContain('RUN');
+    expect(r.stdout).toMatch(/ab ?cd/i);
+    expect((await wnet('leggi', 'M', '0', '10', '2')).stdout).toBe(before.stdout);
+    // una sola delle due conferme non basta
+    for (const flag of ['--conferma', '--non-in-produzione']) {
+      const one = await wnet('scrivi', 'M', '0', '10', 'abcd', flag);
+      expect(one.code).toBe(2);
+    }
+    expect((await wnet('leggi', 'M', '0', '10', '2')).stdout).toBe(before.stdout);
+    // vale anche per stop, avvia e carica-nel-dispositivo
+    expect((await wnet('stop')).code).toBe(2);
+    expect((await wnet('stop', '--conferma')).code).toBe(2);
+    expect((await wnet('avvia')).code).toBe(2);
+    expect((await wnet('info')).stdout).toMatch(/RUN/);
+  });
+
+  it('scrivi con --conferma --non-in-produzione cambia MW10; una successiva leggi lo conferma', async () => {
+    const r = await wnet('scrivi', 'M', '0', '10', 'abcd', ...OK);
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain('127.0.0.1');
+    const back = await wnet('leggi', 'M', '0', '10', '2');
+    expect(back.code).toBe(0);
+    expect(back.stdout).toMatch(/ab cd/i);
+  });
+
+  it('scrivi con esadecimale o area non validi → codice 2', async () => {
+    expect((await wnet('scrivi', 'M', '0', '10', 'abc', ...OK)).code).toBe(2);
+    expect((await wnet('scrivi', 'X', '0', '10', 'ab', ...OK)).code).toBe(2);
+  });
+
+  it('stop con conferma porta il finto PLC in STOP (info lo mostra), avvia lo riporta in RUN', async () => {
+    const s = await wnet('stop', ...OK);
+    expect(s.code).toBe(0);
+    expect((await wnet('info')).stdout).toMatch(/Modo\s+: STOP/);
+    const a = await wnet('avvia', ...OK);
+    expect(a.code).toBe(0);
+    expect((await wnet('info')).stdout).toMatch(/Modo\s+: RUN/);
+  });
+
+  it('carica-nel-dispositivo di un .blk compilato → il blocco compare in blocchi', async () => {
+    const file = join(tmp, 'FC7.blk');
+    writeFileSync(file, FC7);
+    const noConfirm = await wnet('carica-nel-dispositivo', file);
+    expect(noConfirm.code).toBe(2);
+    expect((await wnet('blocchi', 'FC')).stdout).not.toMatch(/\b7\b/);
+    const r = await wnet('carica-nel-dispositivo', file, ...OK);
+    expect(r.code).toBe(0);
+    expect((await wnet('blocchi', 'FC')).stdout).toMatch(/\b7\b/);
+    const bad = join(tmp, 'cattivo.blk');
+    writeFileSync(bad, 'non un blocco');
+    expect((await wnet('carica-nel-dispositivo', bad, ...OK)).code).toBe(3);
+  });
+
+  it('OGNI comando con writes:true esce con 2 senza --conferma/--non-in-produzione e non scrive', async () => {
+    const blk = join(tmp, 'gate-FC7.blk');
+    writeFileSync(blk, FC7);
+    // argomenti validi per ciascun comando; un comando writes nuovo senza voce qui fa fallire il test
+    const validArgs: Record<string, string[]> = {
+      scrivi: ['M', '0', '20', 'abcd'],
+      'carica-nel-dispositivo': [blk],
+      stop: [],
+      avvia: [],
+    };
+    const writers = COMMANDS.filter((c) => c.writes);
+    expect(writers.length).toBeGreaterThan(0);
+    for (const c of writers) {
+      expect(validArgs[c.name], `argomenti di prova mancanti per ${c.name}`).toBeDefined();
+    }
+    const before = await wnet('leggi', 'M', '0', '20', '2');
+    const blocksBefore = await wnet('blocchi', 'FC');
+    for (const c of writers) {
+      const args = validArgs[c.name]!;
+      expect((await wnet(c.name, ...args)).code, c.name).toBe(2);
+      for (const flag of ['--conferma', '--non-in-produzione']) {
+        expect((await wnet(c.name, ...args, flag)).code, `${c.name} ${flag}`).toBe(2);
+      }
+    }
+    expect((await wnet('leggi', 'M', '0', '20', '2')).stdout).toBe(before.stdout);
+    expect((await wnet('blocchi', 'FC')).stdout).toBe(blocksBefore.stdout);
+    expect((await wnet('info')).stdout).toMatch(/RUN/);
+  });
+
+  it('host irraggiungibile → codice 1 CONNECT_REFUSED', async () => {
+    const r = await run([
+      'scrivi',
+      'M',
+      '0',
+      '0',
+      '01',
+      '--host',
+      '127.0.0.1',
+      '--port',
+      '1',
+      ...OK,
+    ]);
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain('errore CONNECT_REFUSED');
   });
 });

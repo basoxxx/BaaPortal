@@ -8,6 +8,21 @@ import { decodeReadRequest, encodeReadRequest } from './s7/readVar';
 import { decodeSetup, encodeSetup } from './s7/setup';
 import { decodeSzlRequest } from './s7/szl';
 import {
+  decodePlcControlRequest,
+  encodeInsertBlock,
+  encodePlcStop,
+  encodeWarmRestart,
+} from './s7/control';
+import {
+  decodeDownloadBlockAck,
+  decodeDownloadEnded,
+  decodeRequestDownload,
+  encodeDownloadBlockAck,
+  encodeDownloadEnded,
+  encodeRequestDownload,
+} from './s7/download';
+import { decodeWriteRequest, encodeWriteRequest } from './s7/writeVar';
+import {
   decodeEndUpload,
   decodeStartUpload,
   decodeUploadRequest,
@@ -26,6 +41,9 @@ import {
   reqReadSzl,
   type UserdataFrame,
 } from './s7/userdataRequests';
+
+/** Modo della connessione, fissato all'apertura (mai modificabile su una connessione viva). */
+export type ConnectionMode = 'read-only' | 'online-write';
 
 /** Richieste userdata ammesse (proto §15.1): SZL, conteggi/lista/info blocchi, lettura orologio. */
 const USERDATA_ALLOWED = new Set(['4/1', '3/1', '3/2', '3/3', '7/1', '7/3']);
@@ -147,12 +165,106 @@ function assertUserdata(pdu: S7Pdu): void {
   }
 }
 
+function refuseWrite(msg: string): never {
+  throw new S7Error('FORBIDDEN', `${msg}: non ammesso nemmeno in modo online-write`);
+}
+
+/**
+ * Filtro del modo `online-write` (proto §15): allowlist di lettura (delegata a `assertReadOnly`,
+ * invariato) PIU': write var 0x05, request download 0x1A, download ended 0x1C, 0x28 solo warm
+ * restart (`P_PROGRAM`) e `_INSE`, 0x29 stop `P_PROGRAM`, ack-data 0x1B (ROSCTR 3). Come in sola
+ * lettura, ogni PDU deve combaciare byte per byte con la ricodifica del suo significato.
+ * Tutto il resto (`_DELE`, `_GARB`, `_MODU`, cold/hot restart, MRES, force...) e' FORBIDDEN.
+ */
+export function assertOnlineWrite(pdu: S7Pdu): void {
+  if (pdu.rosctr === 3) return assertDownloadAck(pdu);
+  if (pdu.rosctr !== 1 || pdu.param.length === 0) return assertReadOnly(pdu);
+  const fn = pdu.param[0]!;
+  if (fn !== 0x05 && fn !== 0x1a && fn !== 0x1c && fn !== 0x28 && fn !== 0x29) {
+    return assertReadOnly(pdu);
+  }
+  const p = pdu.param;
+  const label = `funzione ${h2(fn)}`;
+  try {
+    switch (fn) {
+      case 0x05: {
+        const items = decodeWriteRequest(p, pdu.data);
+        must(items.length >= 1, 'write var senza item');
+        must(items.length <= MAX_ITEMS_PER_REQUEST, `write var con ${items.length} item`);
+        const want = encodeWriteRequest(items);
+        must(sameBytes(p, want.param) && sameBytes(pdu.data, want.data), 'write var non canonico');
+        return;
+      }
+      case 0x1a: {
+        const r = decodeRequestDownload(p);
+        must(
+          sameBytes(p, encodeRequestDownload(r.type, r.number, r.fs, r.loadLength, r.mc7Length)),
+          'request download non canonico',
+        );
+        break;
+      }
+      case 0x1c: {
+        const r = decodeDownloadEnded(p);
+        must(
+          sameBytes(p, encodeDownloadEnded(r.type, r.number, r.fs)),
+          'download ended non canonico',
+        );
+        break;
+      }
+      case 0x29: {
+        const r = decodePlcControlRequest(p);
+        must(r.service === 'P_PROGRAM', 'stop con servizio diverso da P_PROGRAM');
+        must(sameBytes(p, encodePlcStop()), 'stop non canonico');
+        break;
+      }
+      case 0x28: {
+        const r = decodePlcControlRequest(p);
+        if (r.service === 'P_PROGRAM') {
+          must(sameBytes(p, encodeWarmRestart()), 'warm restart non canonico');
+        } else if (r.service === '_INSE' && r.block) {
+          // il filesystem e' la lettera finale del nome (ultimo byte del nome, prima di len2 + "_INSE")
+          const fs = String.fromCharCode(p[19]!);
+          must(fs === 'A' || fs === 'P' || fs === 'B', 'filesystem diverso da A, P, B');
+          must(
+            sameBytes(p, encodeInsertBlock(r.block.type, r.block.number, fs as 'A' | 'P' | 'B')),
+            '_INSE non canonico',
+          );
+        } else {
+          refuseWrite(`${label} (servizio diverso da warm restart e _INSE)`);
+        }
+        break;
+      }
+    }
+    must(pdu.data.length === 0, 'parte dati presente');
+  } catch (e) {
+    if (e instanceof S7Error && e.code === 'FORBIDDEN') throw e;
+    refuseWrite(`${label} non canonica (${e instanceof Error ? e.message : String(e)})`);
+  }
+}
+
+/** Ack-data del download (proto §10.2): solo la risposta 0x1B/0x1C del PG ai job della CPU. */
+function assertDownloadAck(pdu: S7Pdu): void {
+  try {
+    must(pdu.errorClass === 0 && pdu.errorCode === 0, "errore nell'header");
+    if (pdu.param.length === 1 && pdu.param[0] === 0x1c) {
+      must(pdu.data.length === 0, 'ack 0x1C con dati');
+      return;
+    }
+    const a = decodeDownloadBlockAck(pdu.param, pdu.data);
+    const want = encodeDownloadBlockAck(a.eos, a.chunk);
+    must(sameBytes(pdu.param, want.param) && sameBytes(pdu.data, want.data), 'ack non canonica');
+  } catch (e) {
+    refuseWrite(`ack-data non ammessa (${e instanceof Error ? e.message : String(e)})`);
+  }
+}
+
 /**
  * Controllo sui byte che stanno per uscire (TPKT, COTP, S7). Ammette solo: COTP CR, COTP DR
- * e COTP DT con EOT che porta una PDU S7 accettata da `assertReadOnly`. Un frame che non si
+ * e COTP DT con EOT che porta una PDU S7 accettata da `assertReadOnly` (default) o, solo in
+ * modo `online-write`, da `assertOnlineWrite`. Un frame che non si
  * decodifica, con byte in più, con più frame o di un altro tipo (CC, ER...) dà FORBIDDEN.
  */
-export function assertOutgoingFrame(bytes: Uint8Array): void {
+export function assertOutgoingFrame(bytes: Uint8Array, mode: ConnectionMode = 'read-only'): void {
   try {
     if (
       bytes.length < 7 ||
@@ -177,7 +289,9 @@ export function assertOutgoingFrame(bytes: Uint8Array): void {
         const raw = payload.subarray(3);
         const pdu = decodeS7(raw);
         if (!sameBytes(raw, encodeS7(pdu))) refuse('intestazione S7 non canonica');
-        assertReadOnly(pdu);
+        if (mode === 'online-write') assertOnlineWrite(pdu);
+        else if (mode === 'read-only') assertReadOnly(pdu);
+        else refuse(`modo "${String(mode)}" sconosciuto`);
         return;
       }
       default:

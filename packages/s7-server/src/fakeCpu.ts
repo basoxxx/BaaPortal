@@ -14,6 +14,7 @@ import {
   type ParsedBlock,
   type ReadItem,
   type S7DateTime,
+  type WriteItem,
 } from '@baaportal/s7comm';
 import { checkFaults, type FaultPlan } from './faults';
 
@@ -102,9 +103,9 @@ function int(name: string, v: number, min: number, max: number): number {
 }
 
 /**
- * Finto S7-300 (CPU 315-2 PN/DP). Lo stato cambia solo con i metodi di questa classe, mai per
- * un comando di rete: la rete può solo leggere (la sessione risponde con un errore a tutto il
- * resto). Gli stessi dati vengono da `serve`/`listen`.
+ * Finto S7-300 (CPU 315-2 PN/DP). Lo stato cambia solo con i metodi di questa classe. Da rete
+ * cambia soltanto per le funzioni di scrittura ammesse (write var, stop, warm restart, download di
+ * un blocco con _INSE: i metodi `apply*`), mai per le altre: la sessione risponde con un errore a tutto il resto. Gli stessi dati vengono da `serve`/`listen`.
  */
 export class FakeCpu {
   readonly config: CpuConfig;
@@ -363,6 +364,66 @@ export class FakeCpu {
       },
     };
     return encodeBlockInfo(info);
+  }
+
+  /** @internal Blocco ricomposto da un download di rete: dentro solo dopo l'_INSE. Solo dalla sessione. */
+  applyDownloadedBlock(type: BlockType, number: number, file: Uint8Array): void {
+    const copy = file.slice();
+    const parsed = parseBlockFile(copy);
+    if (parsed.header.type !== type || parsed.header.number !== number) {
+      throw new RangeError(`il file non è ${type}${number}`);
+    }
+    this.blockMap.set(`${type}:${number}`, { type, number, file: copy, parsed });
+  }
+
+  /** @internal Write var: un return code per item (0xFF ok, 0x0A DB mancante, 0x05 fuori campo). Solo dal gestore 0x05. */
+  applyWrite(items: WriteItem[]): number[] {
+    return items.map((it) => {
+      const len = itemByteLength(it);
+      // stessa verifica di confini e DB della lettura: se non si legge, non si scrive
+      const probe = this.readItem(it);
+      if ('rc' in probe) return probe.rc;
+      let buf: Uint8Array;
+      switch (it.area) {
+        case 'I':
+        case 'Q':
+        case 'M':
+          buf = this.areas[it.area];
+          break;
+        case 'DB':
+        case 'DI':
+          buf = this.blockMap.get(`DB:${it.db}`)!.parsed.mc7;
+          break;
+        default:
+          // timer e counter non sono scrivibili nel finto PLC
+          return 0x05;
+      }
+      if (it.size === 'BIT') {
+        const first = it.start * 8 + (it.bit ?? 0);
+        for (let i = 0; i < it.count; i++) {
+          const at = first + i;
+          const on = ((it.data[i >> 3]! >> (i & 7)) & 1) !== 0;
+          buf[at >> 3] = on ? buf[at >> 3]! | (1 << (at & 7)) : buf[at >> 3]! & ~(1 << (at & 7));
+        }
+      } else {
+        buf.set(it.data.subarray(0, len), it.start);
+      }
+      return 0xff;
+    });
+  }
+
+  /** @internal Stop: 0x00 ok, 0x07 se già in STOP. Solo dal gestore 0x29. */
+  applyStop(): number {
+    if (this.cpuMode === 'STOP') return 0x07;
+    this.setMode('STOP');
+    return 0x00;
+  }
+
+  /** @internal Warm restart: 0x00 ok, 0x03 se già in RUN. Solo dal gestore 0x28 P_PROGRAM. */
+  applyWarmRestart(): number {
+    if (this.cpuMode === 'RUN') return 0x03;
+    this.setMode('RUN');
+    return 0x00;
   }
 
   /** @internal Lettura di un item di read var; mai oltre i confini configurati. */

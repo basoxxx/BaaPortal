@@ -196,7 +196,7 @@ export function decodeReadRequest(param: Uint8Array): ReadItem[] {
 }
 
 /** Lunghezza in byte di un item dati dal transport size (proto §5.7). */
-function dataBytes(ts: number, len: number): number {
+export function dataBytes(ts: number, len: number): number {
   switch (ts) {
     case 0x00:
       return 0;

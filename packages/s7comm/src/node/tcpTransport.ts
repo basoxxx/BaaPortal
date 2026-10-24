@@ -113,5 +113,5 @@ export function openTcp(o: Omit<ConnectOptions, 'transport'>): Promise<S7Connect
 
 /** Apre il client di lettura S7 su TCP (node:net). */
 export function connectTcp(o: Omit<ConnectOptions, 'transport'>): Promise<S7Client> {
-  return S7Client.connect({ ...o, transport: tcpTransport });
+  return S7Client.connect({ ...o, mode: 'read-only', transport: tcpTransport });
 }

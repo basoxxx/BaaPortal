@@ -12,5 +12,8 @@
   },
   "dependencies": {
     "fflate": "^0.8.3"
+  },
+  "devDependencies": {
+    "@baaportal/s7-server": "*"
   }
 }
