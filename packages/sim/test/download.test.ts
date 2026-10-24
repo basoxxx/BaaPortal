@@ -1,4 +1,5 @@
 import { compileBlock } from '@baaportal/mc7';
+import { blockTypeCode } from '@baaportal/s7comm';
 import type { AwlContext } from '@baaportal/awl';
 import { describe, expect, it } from 'vitest';
 import { SimCpu, connectToSim, type SimCpuOptions } from '../src';
@@ -130,6 +131,76 @@ describe('download nella CPU simulata attraverso il server S7', () => {
     expect((await c.listBlocks('DB')).map((b) => b.number)).toEqual([1]);
     expect((await c.blockCounts()).OB).toBe(1);
     expect((await c.blockInfo('FC', 1)).number).toBe(1);
+    await c.close();
+  });
+
+  it('lettura e scrittura di M oltre l’area: codice item 0x05', async () => {
+    const { cpu, c } = await loaded();
+    const size = cpu.memory.M.length;
+    await expect(c.readArea('M', 0, size - 1, 2)).rejects.toMatchObject({
+      code: 'CPU_ERROR',
+      detail: { returnCode: 0x05 },
+    });
+    await expect(c.writeArea('M', 0, size - 1, Uint8Array.of(1, 2))).rejects.toMatchObject({
+      code: 'CPU_ERROR',
+      detail: { returnCode: 0x05 },
+    });
+    expect(cpu.memory.M[size - 1]).toBe(0);
+    await c.close();
+  });
+
+  it('DB assente: codice item 0x0a in lettura e in scrittura', async () => {
+    const { c } = await loaded();
+    await expect(c.readArea('DB', 99, 0, 2)).rejects.toMatchObject({
+      detail: { returnCode: 0x0a },
+    });
+    await expect(c.writeArea('DB', 99, 0, Uint8Array.of(1, 2))).rejects.toMatchObject({
+      detail: { returnCode: 0x0a },
+    });
+    await c.close();
+  });
+
+  it('T e C: zero in lettura, rifiuto in scrittura', async () => {
+    const { c } = await loaded();
+    for (const area of ['T', 'C'] as const) {
+      const size = area === 'T' ? 'TIMER' : 'COUNTER';
+      const [r] = await c.readItems([{ area, db: 0, start: 0, size, count: 1 }]);
+      expect(r).toMatchObject({ ok: true });
+      expect(Array.from(r?.ok ? r.data : [1])).toEqual([0, 0]);
+      const [w] = await c.writeItems([
+        { area, db: 0, start: 0, size, count: 1, data: Uint8Array.of(1, 2) },
+      ]);
+      expect(w!.returnCode).toBe(0x05);
+    }
+    await c.close();
+  });
+
+  it('un download che la CPU non sa caricare è rifiutato e la CPU resta com’era', async () => {
+    const { cpu, c } = await loaded();
+    await c.start();
+    const [ob2] = buildFiles([{ kind: 'OB', number: 2, networks: ['\tL 9;\n\tT MB 41;'] }]);
+    // il file è ben formato per il protocollo, ma il tipo (SFC) la CPU simulata non lo carica
+    const bad = ob2!.slice();
+    bad[5] = blockTypeCode('SFC');
+    const before = cpu.program.list().length;
+    await expect(c.downloadBlock(bad)).rejects.toThrow();
+    expect(cpu.program.list()).toHaveLength(before);
+    expect(cpu.program.get('OB', 2)).toBeUndefined();
+    expect(cpu.mode).toBe('RUN');
+    expect(cpu.cycle().ok).toBe(true);
+    // la connessione serve ancora
+    expect(await c.mode()).toBe('RUN');
+    await c.close();
+  });
+
+  it('il modo letto dal client segue cpu.stop() chiamato sulla CPU', async () => {
+    const { cpu, c } = await loaded();
+    await c.start();
+    expect(await c.mode()).toBe('RUN');
+    cpu.stop();
+    expect(await c.mode()).toBe('STOP');
+    cpu.run();
+    expect(await c.mode()).toBe('RUN');
     await c.close();
   });
 });
