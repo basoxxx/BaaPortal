@@ -17,6 +17,9 @@ export function constantValue(op: Operand | undefined): number {
 const SIZE_MASK = { B: 0xff, W: 0xffff, D: 0xffffffff } as const;
 
 function memSize(op: Operand): 'B' | 'W' | 'D' {
+  // Parametro formale: l'esecutore ha messo la dimensione ricavata dal tipo dell'istruzione.
+  if (op.kind === 'local' && 'size' in op && ['B', 'W', 'D'].includes(op.size as string))
+    return op.size as 'B' | 'W' | 'D';
   if ((op.kind === 'address' || op.kind === 'indirect') && op.size && op.size !== 'X')
     return op.size;
   throw new SimError('MC7_NON_ESEGUIBILE', 'operando a byte, parola o doppia parola atteso');

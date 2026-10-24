@@ -5,3 +5,4 @@ export * from './operands';
 export * from './program';
 export * from './executor';
 export * from './ops';
+export * from './calls';

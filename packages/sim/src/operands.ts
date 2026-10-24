@@ -8,6 +8,11 @@ import type { Registers } from './registers';
 export interface FrameView {
   lBase: number;
   prevLBase: number;
+  /** Byte della finestra L del blocco e di quella del chiamante (V); senza, vale solo il limite dell'area. */
+  lSize?: number;
+  prevLSize?: number;
+  /** Parametri attuali di una FC: posizioni assolute risolte dalla lista dei puntatori (null = non in memoria). */
+  params?: readonly (Location | null)[];
 }
 
 /** Posizione risolta: `bit` è l'indirizzo in bit (byte·8 + bit) nell'area; per L/V è assoluto nello stack L. */
@@ -16,6 +21,8 @@ export interface Location {
   area: AreaId | 'V' | 'P';
   db: number | null;
   bit: number;
+  /** Fine (byte, esclusa) della finestra dello stack L entro cui l'accesso deve stare. */
+  limit?: number;
 }
 
 type Size = 'X' | 'B' | 'W' | 'D';
@@ -29,6 +36,10 @@ function openDb(area: 'DB' | 'DI', explicit: number | undefined, regs: Registers
   return n;
 }
 
+function window(area: 'L' | 'V', bit: number, base: number, size: number | undefined): Location {
+  return size === undefined ? { area, db: null, bit } : { area, db: null, bit, limit: base + size };
+}
+
 /** Aggiunge la base dello stack L: `L` al blocco corrente, `V` al chiamante. */
 function place(
   area: AreaId | 'V' | 'P',
@@ -36,8 +47,9 @@ function place(
   db: number | null,
   frame: FrameView,
 ): Location {
-  if (area === 'L') return { area, db: null, bit: bit + frame.lBase * 8 };
-  if (area === 'V') return { area, db: null, bit: bit + frame.prevLBase * 8 };
+  if (area === 'L') return window(area, bit + frame.lBase * 8, frame.lBase, frame.lSize);
+  if (area === 'V')
+    return window(area, bit + frame.prevLBase * 8, frame.prevLBase, frame.prevLSize);
   return { area, db, bit };
 }
 
@@ -74,6 +86,16 @@ function areaOfPointer(ptr: number): AreaId | 'V' | 'P' {
   return c === 7 ? 'V' : c === 0 ? 'P' : AREA_OF_CODE[c]!;
 }
 
+/** Indice del parametro dal nome generato `PAR<n>` (`PARW<offset>` = offset in byte, pari). */
+function formalIndex(name: string | undefined): number {
+  const m = /^PAR(W?)(\d+)$/.exec(name ?? '');
+  if (!m) throw new SimError('MC7_NON_ESEGUIBILE', `operando locale #${name ?? '?'}`);
+  const n = Number(m[2]);
+  if (!m[1]) return n;
+  if (n < 2 || n % 2) throw new SimError('MC7_NON_ESEGUIBILE', `parametro formale ${name}`);
+  return n / 2 - 1;
+}
+
 export function resolveOperand(
   op: Operand,
   regs: Registers,
@@ -102,6 +124,13 @@ export function resolveOperand(
       const area = op.area ?? areaOfPointer(ptr);
       return withDb(area, ptr & ADDR_MASK, undefined, regs, frame);
     }
+    case 'local': {
+      // Parametro formale di FC (`#PAR<n>`, mc7 §2.2.6): la posizione viene dalla lista dei puntatori.
+      const idx = formalIndex(op.path[0]?.name);
+      const p = frame.params?.[idx];
+      if (!p) throw new SimError('NON_SIMULATA_2B', `parametro formale #${op.path[0]?.name}`);
+      return p;
+    }
     default:
       throw new SimError('MC7_NON_ESEGUIBILE', `operando ${op.kind} senza posizione`);
   }
@@ -124,7 +153,13 @@ export function resolveIndirectNumber(
 
 const BYTES: Record<Size, number> = { X: 1, B: 1, W: 2, D: 4 };
 
+function checkWindow(loc: Location, size: Size): void {
+  if (loc.limit !== undefined && (loc.bit >> 3) + BYTES[size] > loc.limit)
+    throw new SimError('AREA_LUNGHEZZA', `${loc.area} byte ${loc.bit >> 3} fuori dalla finestra`);
+}
+
 export function readBits(mem: SimMemory, loc: Location, size: Size): number {
+  checkWindow(loc, size);
   const b = mem.bytes(loc.area === 'P' ? 'PI' : loc.area, loc.db, loc.bit >> 3, BYTES[size]);
   if (size === 'X') return (b[0]! >> (loc.bit & 7)) & 1;
   let v = 0;
@@ -133,6 +168,7 @@ export function readBits(mem: SimMemory, loc: Location, size: Size): number {
 }
 
 export function writeBits(mem: SimMemory, loc: Location, size: Size, value: number): void {
+  checkWindow(loc, size);
   const b = mem.bytes(loc.area === 'P' ? 'PQ' : loc.area, loc.db, loc.bit >> 3, BYTES[size]);
   if (size === 'X') {
     const m = 1 << (loc.bit & 7);

@@ -64,6 +64,7 @@ function bitValue(st: ExecState, op: Operand | undefined): boolean {
       throw new SimError('NON_SIMULATA_2B', `${op.area}${op.number}`);
     case 'address':
     case 'indirect':
+    case 'local':
       return readBits(st.mem, resolveOperand(op, st.regs, st.mem, st.frame), 'X') === 1;
     default:
       throw new SimError('MC7_NON_ESEGUIBILE', `operando ${op.kind}`);

@@ -54,6 +54,8 @@ export interface ExecState {
   offset: number;
   nest: NestEntry[];
   mcr: McrState;
+  /** Blocchi annidati sopra questo (l'OB è 0). */
+  depth: number;
 }
 
 export type OpHandler = (
@@ -80,7 +82,12 @@ function networkOf(block: LoadedBlock, offset: number): number {
   return n;
 }
 
-export function newExecState(ctx: ExecContext, block: LoadedBlock, frame?: FrameView): ExecState {
+export function newExecState(
+  ctx: ExecContext,
+  block: LoadedBlock,
+  frame?: FrameView,
+  depth = 0,
+): ExecState {
   return {
     ctx,
     regs: ctx.regs,
@@ -90,7 +97,44 @@ export function newExecState(ctx: ExecContext, block: LoadedBlock, frame?: Frame
     offset: 0,
     nest: [],
     mcr: { active: false, stack: [] },
+    depth,
   };
+}
+
+/** Inizi delle istruzioni del blocco (scansione lineare), per validare le destinazioni dei salti. */
+const STARTS = new WeakMap<LoadedBlock, Set<number>>();
+
+function instructionStarts(block: LoadedBlock): Set<number> {
+  let set = STARTS.get(block);
+  if (set) return set;
+  STARTS.set(block, (set = new Set()));
+  try {
+    for (let at = 0; at < block.code.length;) {
+      set.add(at);
+      const d = decodeAt(block, at);
+      at += Math.max(1, d.length);
+    }
+  } catch {
+    // Byte non decodificabili: le istruzioni oltre non sono raggiungibili con un salto.
+  }
+  return set;
+}
+
+const FORMAL_SIZE: Partial<Record<string, 'X' | 'B' | 'W' | 'D'>> = {
+  Bool: 'X',
+  Byte: 'B',
+  Word: 'W',
+  DWord: 'D',
+};
+
+/** Parametro formale: la dimensione dell'accesso viene dal tipo della forma dell'istruzione. */
+function withFormal(stmt: DecodedStatement): DecodedStatement {
+  const f = stmt.formal;
+  if (!f) return stmt;
+  const size = FORMAL_SIZE[f.type];
+  if (!size || stmt.operand?.kind !== 'local')
+    throw new SimError('NON_SIMULATA_2B', `parametro formale ${f.name} di tipo ${f.type}`);
+  return { ...stmt, operand: { ...stmt.operand, size } as typeof stmt.operand };
 }
 
 /** Esegue il codice del blocco dall'inizio fino a `BE` o alla fine; gli errori portano blocco e offset. */
@@ -106,7 +150,7 @@ export function execBlock(st: ExecState): void {
       const handler = OPS[d.stmt.id];
       if (!handler)
         throw new SimError('MC7_NON_ESEGUIBILE', `operazione non implementata: ${d.stmt.id}`);
-      const r = handler(st, d.stmt);
+      const r = handler(st, withFormal(d.stmt));
       ctx.trace?.({
         block: { kind: block.kind, number: block.number },
         offset: at,
@@ -116,7 +160,14 @@ export function execBlock(st: ExecState): void {
         accu2: st.regs.accu2,
       });
       if (r === 'return') break;
-      at = r && typeof r === 'object' ? r.jump : at + d.length;
+      if (r && typeof r === 'object') {
+        if (!instructionStarts(block).has(r.jump))
+          throw new SimError(
+            'MC7_NON_ESEGUIBILE',
+            `salto a ${r.jump}: non è un inizio di istruzione`,
+          );
+        at = r.jump;
+      } else at += d.length;
     }
   } catch (e) {
     if (e instanceof SimError && e.offset === undefined) {
@@ -132,5 +183,15 @@ export function execBlock(st: ExecState): void {
 export function runBlock(ctx: ExecContext, kind: 'OB' | 'FB' | 'FC', number: number): void {
   const block = ctx.program.get(kind, number);
   if (!block) throw new SimError('BLOCCO_NON_CARICATO', `${kind}${number}`);
-  execBlock(newExecState(ctx, block));
+  // L'OB occupa la base dello stack L; senza chiamante, V non ha dati.
+  if (block.localBytes > ctx.mem.L.length)
+    throw new SimError('STACK_L_PIENO', `${kind}${number}: ${block.localBytes} byte`);
+  execBlock(
+    newExecState(ctx, block, {
+      lBase: 0,
+      prevLBase: 0,
+      lSize: block.localBytes,
+      prevLSize: 0,
+    }),
+  );
 }

@@ -3,9 +3,11 @@ import { ACCUMULATOR_OPS } from './accumulator';
 import { BIT_OPS } from './bitLogic';
 import { COMPARISON_OPS } from './comparison';
 import { CONVERSION_OPS } from './conversion';
+import { CONTROL_OPS } from './control';
 import { DB_OPS } from './db';
 import { FLOAT_OPS } from './float';
 import { INTEGER_OPS } from './integer';
+import { JUMP_OPS } from './jump';
 import { LOAD_TRANSFER_OPS } from './loadTransfer';
 import { SHIFT_OPS } from './shift';
 import { WORD_LOGIC_OPS } from './wordLogic';
@@ -22,8 +24,6 @@ export const OPS: Record<string, OpHandler> = {
   ...FLOAT_OPS,
   ...COMPARISON_OPS,
   ...CONVERSION_OPS,
-  // Manuale AWL, «Operazioni di controllo»: BLD e NOP non fanno niente, BE termina il blocco.
-  BLD: () => undefined,
-  NOP: () => undefined,
-  BE: () => 'return',
+  ...JUMP_OPS,
+  ...CONTROL_OPS,
 };
