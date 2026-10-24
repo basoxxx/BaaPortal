@@ -3,6 +3,7 @@ import { SimError } from '../errors';
 import type { ExecState, OpHandler } from '../executor';
 import { formalTcNumber, resolveIndirectNumber } from '../operands';
 import type { TimerKind } from '../timers';
+import { counterNumber, endCounterOp, isCounter } from './counter';
 
 /** Numero di temporizzatore da `T n` o `T [MW n]`. */
 export function timerNumber(st: ExecState, op: Operand | undefined): number {
@@ -30,11 +31,6 @@ function start(kind: TimerKind): OpHandler {
   };
 }
 
-/** Vero se l'operando è un contatore (di competenza del Task 2). */
-export function isCounter(op: Operand | undefined): boolean {
-  return (op?.kind === 'timerCounter' || op?.kind === 'indirect') && op.area === 'C';
-}
-
 export const TIMER_OPS: Record<string, OpHandler> = {
   SP: start('SP'),
   SE: start('SE'),
@@ -43,13 +39,18 @@ export const TIMER_OPS: Record<string, OpHandler> = {
   SF: start('SF'),
   // Manuale AWL S7-300/400, «LC»: residuo in BCD con la base nei bit 12–13 (ACCU1 passa in ACCU2).
   LC: (st, stmt) => {
-    if (isCounter(stmt.operand)) throw new SimError('NON_SIMULATA_2B', stmt.text);
-    const v = st.ctx.timers.bcd(timerNumber(st, stmt.operand));
+    const v = isCounter(stmt.operand, stmt.formal)
+      ? st.ctx.counters.bcd(counterNumber(st, stmt.operand))
+      : st.ctx.timers.bcd(timerNumber(st, stmt.operand));
     st.regs.accu2 = st.regs.accu1;
     st.regs.accu1 = v;
   },
   FR: (st, stmt) => {
-    if (isCounter(stmt.operand)) throw new SimError('NON_SIMULATA_2B', stmt.text);
+    if (isCounter(stmt.operand, stmt.formal)) {
+      st.ctx.counters.enable(counterNumber(st, stmt.operand), st.regs.stw.rlo);
+      endCounterOp(st);
+      return;
+    }
     st.ctx.timers.enable(timerNumber(st, stmt.operand), st.regs.stw.rlo);
     endTimerOp(st);
   },

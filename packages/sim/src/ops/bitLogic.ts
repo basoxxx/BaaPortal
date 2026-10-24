@@ -2,6 +2,7 @@ import type { Operand } from '@baaportal/awl';
 import { SimError } from '../errors';
 import type { ExecState, OpHandler } from '../executor';
 import { readBits, resolveOperand, writeBits } from '../operands';
+import { counterNumber, endCounterOp, isCounter } from './counter';
 import { timerNumber } from './timer';
 
 /** Profondità dello stack di annidamento delle parentesi (S7-300: 7 livelli). */
@@ -64,11 +65,12 @@ function bitValue(st: ExecState, op: Operand | undefined, formal?: { type: strin
     case 'timerCounter':
     case 'indirect':
       if (op.area === 'T') return st.ctx.timers.q(timerNumber(st, op));
-      if (op.area === 'C') throw new SimError('NON_SIMULATA_2B', 'contatore');
+      if (op.area === 'C') return st.ctx.counters.q(counterNumber(st, op));
       return readBits(st.mem, resolveOperand(op, st.regs, st.mem, st.frame), 'X') === 1;
     case 'address':
     case 'local':
       if (formal?.type === 'Timer') return st.ctx.timers.q(timerNumber(st, op));
+      if (formal?.type === 'Counter') return st.ctx.counters.q(counterNumber(st, op));
       return readBits(st.mem, resolveOperand(op, st.regs, st.mem, st.frame), 'X') === 1;
     default:
       throw new SimError('MC7_NON_ESEGUIBILE', `operando ${op.kind}`);
@@ -159,6 +161,14 @@ function isTimerOperand(op: Operand | undefined, formal?: { type: string }): boo
 function setReset(value: 0 | 1): OpHandler {
   return (st, stmt) => {
     const s = st.regs.stw;
+    if (isCounter(stmt.operand, stmt.formal)) {
+      // Manuale AWL S7-300/400, «S»/«R» su contatore: S carica ACCU1-L sul fronte, R azzera con RLO = 1.
+      const n = counterNumber(st, stmt.operand);
+      if (value === 1) st.ctx.counters.setOp(n, s.rlo, st.regs.accu1 & 0xffff);
+      else st.ctx.counters.resetOp(n, s.rlo);
+      endCounterOp(st);
+      return;
+    }
     if (value === 0 && isTimerOperand(stmt.operand, stmt.formal)) {
       // Manuale AWL S7-300/400, «R» su temporizzatore: con RLO = 1 azzera tempo e Q.
       st.ctx.timers.resetOp(timerNumber(st, stmt.operand), s.rlo);

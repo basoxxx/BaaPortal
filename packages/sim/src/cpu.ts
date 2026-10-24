@@ -7,6 +7,7 @@ import { Program } from './program';
 import { SimMemory, memorySizesFor } from './memory';
 import { ob100StartInfo, ob1StartInfo } from './obStartInfo';
 import { newRegisters } from './registers';
+import { CounterBank } from './counters';
 import { TimerBank } from './timers';
 
 export type SimMode = 'STOP' | 'STARTUP' | 'RUN';
@@ -42,8 +43,8 @@ export interface CycleResult {
 
 /** Numero di temporizzatori se la CPU non è nel catalogo (CPU 315-2 PN/DP). */
 const DEFAULT_TIMER_COUNT = 256;
-/** Area C riservata (le istruzioni arrivano nel Task 2): un valore a 16 bit per elemento. */
-const COUNTER_COUNT = 2048;
+/** Numero di contatori se la CPU non è nel catalogo (CPU 315-2 PN/DP). */
+const DEFAULT_COUNTER_COUNT = 256;
 
 /** Voci di diagnostica conservate (le più vecchie si perdono). */
 const MAX_DIAGNOSTICS = 100;
@@ -54,9 +55,9 @@ const CLOCK_PERIODS_MS = [100, 200, 400, 500, 800, 1000, 1600, 2000];
 export class SimCpu {
   readonly memory: SimMemory;
   readonly program = new Program();
-  /** Temporizzatori S5 (numero dal catalogo) e contatori (ancora solo riservati). */
+  /** Temporizzatori e contatori S5 (numero dal catalogo). */
   readonly timers: TimerBank;
-  readonly counters = new Uint16Array(COUNTER_COUNT);
+  readonly counters: CounterBank;
 
   private readonly props: SimCpuProps;
   private now: () => number;
@@ -70,6 +71,7 @@ export class SimCpu {
     this.props = o.props;
     this.now = o.now ?? (() => Date.now());
     this.memory = new SimMemory(memorySizesFor(o.cpuTypeId));
+    this.counters = new CounterBank(findCpu(o.cpuTypeId)?.limits.counters ?? DEFAULT_COUNTER_COUNT);
     this.timers = new TimerBank(findCpu(o.cpuTypeId)?.limits.timers ?? DEFAULT_TIMER_COUNT, () =>
       this.now(),
     );
@@ -152,7 +154,7 @@ export class SimCpu {
     m.M.fill(0);
     m.physOut.fill(0);
     this.timers.reset(0);
-    this.counters.fill(0);
+    this.counters.reset(0);
     for (const db of m.dbs.values()) db.data.set(db.initial);
     this.st = { last: 0, min: 0, max: 0, cycles: 0 };
     this.record({ time: this.now(), code: 'CANCELLAZIONE_TOTALE' });
@@ -220,6 +222,7 @@ export class SimCpu {
       program: this.program,
       now: this.now,
       timers: this.timers,
+      counters: this.counters,
       maxCycleMs: this.props.maxCycleMs,
       cycleStart,
       onTick: () => {
@@ -240,7 +243,7 @@ export class SimCpu {
     m.Q.fill(0);
     m.M.fill(0, Math.max(0, mBytes));
     this.timers.reset(timers);
-    this.counters.fill(0, Math.max(0, counters));
+    this.counters.reset(counters);
   }
 
   /** Il byte del merker di clock riflette l'orologio: bit n alto nella seconda metà del periodo. */

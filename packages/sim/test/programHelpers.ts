@@ -1,6 +1,7 @@
 import { compileBlock, type CompileInput } from '@baaportal/mc7';
 import type { AwlBlockInfo, AwlContext } from '@baaportal/awl';
 import {
+  CounterBank,
   Program,
   SimMemory,
   TimerBank,
@@ -165,6 +166,7 @@ export function runProgram(
     /** Orologio e temporizzatori da riusare fra più esecuzioni. */
     now?: () => number;
     timers?: TimerBank;
+    counters?: CounterBank;
   } = {},
 ): ProgRun {
   const mem = opts.mem ?? new SimMemory(opts.sizes ?? memorySizesFor('cpu-315-2-pn-dp'));
@@ -183,6 +185,7 @@ export function runProgram(
     program,
     now: opts.now ?? (() => 0),
     timers: opts.timers ?? new TimerBank(256, opts.now ?? (() => 0)),
+    counters: opts.counters ?? new CounterBank(256),
     maxCycleMs: 150,
     cycleStart: 0,
   };

@@ -183,6 +183,14 @@ describe('download nella CPU simulata attraverso il server S7', () => {
     await c.close();
   });
 
+  it('C: parola BCD come LC C, big-endian', async () => {
+    const { cpu, c } = await loaded();
+    cpu.counters.setValue(1, 123);
+    const [r] = await c.readItems([{ area: 'C', db: 0, start: 0, size: 'COUNTER', count: 2 }]);
+    expect(Array.from(r?.ok ? r.data : [])).toEqual([0, 0, 0x01, 0x23]);
+    await c.close();
+  });
+
   it('un download che la CPU non sa caricare è rifiutato e la CPU resta com’era', async () => {
     const { cpu, c } = await loaded();
     await c.start();

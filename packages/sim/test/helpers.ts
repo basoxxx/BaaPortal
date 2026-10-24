@@ -1,5 +1,6 @@
 import { encodeCode } from '@baaportal/mc7';
 import {
+  CounterBank,
   Program,
   SimMemory,
   TimerBank,
@@ -21,6 +22,7 @@ export interface RunInit {
   /** Orologio e temporizzatori da riusare fra più esecuzioni. */
   now?: () => number;
   timers?: TimerBank;
+  counters?: CounterBank;
   regs?: Partial<Omit<Registers, 'stw'>> & { stw?: Partial<StatusWord> };
 }
 
@@ -48,6 +50,7 @@ export function runCode(code: Uint8Array, networkStarts: number[], init: RunInit
     program,
     now: init.now ?? (() => 0),
     timers: init.timers ?? new TimerBank(256, init.now ?? (() => 0)),
+    counters: init.counters ?? new CounterBank(256),
     maxCycleMs: 150,
     cycleStart: 0,
     trace: (t) => trace.push(t),

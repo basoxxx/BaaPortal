@@ -118,7 +118,7 @@ export function simBackend(cpu: SimCpu, o: { orderNumber?: string } = {}): CpuBa
       outputBytes: m.Q.length,
       mBytes: m.M.length,
       timers: cpu.timers.count,
-      counters: cpu.counters.length,
+      counters: cpu.counters.count,
     },
     faults: {},
     tsaps: [remoteTsap('pg', 0, 2), remoteTsap('op', 0, 2), remoteTsap('basic', 0, 2)],
@@ -180,6 +180,13 @@ export function simBackend(cpu: SimCpu, o: { orderNumber?: string } = {}): CpuBa
             data[2 * i] = w >> 8;
             data[2 * i + 1] = w & 255;
           }
+        // ⚠️ Per C, la parola BCD (come `LC C`), big-endian.
+        else
+          for (let i = 0; i < n && 2 * i + 1 < len; i++) {
+            const w = cpu.counters.bcd(it.start + i);
+            data[2 * i] = w >> 8;
+            data[2 * i + 1] = w & 255;
+          }
         return { data };
       }
       default:
@@ -191,7 +198,7 @@ export function simBackend(cpu: SimCpu, o: { orderNumber?: string } = {}): CpuBa
   function applyWrite(items: WriteItem[]): number[] {
     return items.map((it) => {
       const len = itemByteLength(it);
-      if (it.area === 'T' || it.area === 'C') return 0x05; // fino al piano 2B
+      if (it.area === 'T' || it.area === 'C') return 0x05; // scrittura di T e C non supportata
       const buf = bufferOf(it, true);
       if (!buf) return it.area === 'DB' || it.area === 'DI' ? 0x0a : 0x03;
       // stessa verifica di confini della lettura: se non si legge, non si scrive

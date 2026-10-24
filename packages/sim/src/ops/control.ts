@@ -2,6 +2,7 @@ import { SimError } from '../errors';
 import { endBlock, type ExecState, type OpHandler } from '../executor';
 import { readBits, resolveOperand } from '../operands';
 import { callBlock } from '../calls';
+import { COUNTER_OPS } from './counter';
 import { TIMER_OPS } from './timer';
 
 /** Chi e che cosa richiamare: operando a blocco, o numero letto da memoria (`UC FC [MW 4]`). */
@@ -50,11 +51,6 @@ const BEC: OpHandler = (st) => {
   return undefined;
 };
 
-/** I contatori sono del Task 2 del piano 2B. */
-const later: OpHandler = (_st, stmt) => {
-  throw new SimError('NON_SIMULATA_2B', stmt.text);
-};
-
 export const CONTROL_OPS: Record<string, OpHandler> = {
   // Manuale AWL S7-300/400, controllo del programma: BLD e NOP non fanno niente, BE e BEU terminano il blocco.
   BLD: () => undefined,
@@ -71,6 +67,5 @@ export const CONTROL_OPS: Record<string, OpHandler> = {
   UC: call(false),
   CC: call(true),
   ...TIMER_OPS,
-  CU: later,
-  CD: later,
+  ...COUNTER_OPS,
 };

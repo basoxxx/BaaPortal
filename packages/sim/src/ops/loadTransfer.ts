@@ -5,6 +5,7 @@ import type { ExecState, OpHandler } from '../executor';
 import { readBits, resolveOperand, writeBits } from '../operands';
 import { stwToWord, wordToStw } from '../registers';
 import { mcrOff } from './bitLogic';
+import { counterNumber, isCounter } from './counter';
 import { timerNumber } from './timer';
 
 /** Valore a 32 bit (big-endian) della costante AWL di un operando `constant`. */
@@ -35,6 +36,8 @@ export function readMem(st: ExecState, op: Operand | undefined, formal?: { type:
     (op.kind === 'local' && formal?.type === 'Timer')
   )
     return st.ctx.timers.value(timerNumber(st, op)).units;
+  // Manuale AWL S7-300/400, «L C»: valore binario 0–999.
+  if (isCounter(op, formal)) return st.ctx.counters.value(counterNumber(st, op));
   if (op.kind === 'timerCounter') throw new SimError('NON_SIMULATA_2B', `${op.area}${op.number}`);
   const loc = resolveOperand(op, st.regs, st.mem, st.frame);
   return readBits(st.mem, loc, memSize(op)) >>> 0;
