@@ -76,6 +76,10 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§10–§13). Come per il 
 - **Stato degli SFB 0–5 fuori dal DB di istanza** (memorie dei fronti, istanti di avvio): la CPU non lo azzera con il download di un DB ma solo con STOP→RUN e MRES; le uscite cambiano solo alla chiamata.
 - **SFB 3 TP:** un fronte di IN esattamente alla fine dell'impulso si perde (dipende da quando si chiama l'SFB).
 - **SFB di temporizzazione:** se PT cambia durante il conteggio vale il nuovo PT; PT < 0 vale 0; in CTUD R prevale su LOAD e due fronti insieme si annullano.
+- **OB121 e memoria:** l'OB121 ripristina i registri, ma gli effetti sulla memoria di una chiamata SFC/SFB fallita (se ne restano, per esempio le uscite già scritte quando è RET_VAL a non poter essere scritta, o un DB già creato o cancellato) restano.
+- **CREAT_DB, codici 16#80A1/16#80B1/16#80B2 non verificati:** un'altra lettura del manuale dà 16#80A2 per la lunghezza errata e 16#80B1 per nessun numero libero.
+- **Senza OB1:** OB35 gira comunque all'inizio del ciclo, ma non c'è un controllo di fine ciclo (watchdog, evento di ciclo).
+- **OB121, profondità dei blocchi:** la profondità dei blocchi dentro l'OB121 riparte da 0 invece di sommarsi a quella del blocco interrotto.
 - **SFC e SFB non simulati:** sono un avviso («non simulata», BR = 0, uscite intatte, una volta per numero e per RUN), non un errore. Sono non simulate **tutte** le SFC e gli SFB tranne SFC 0, 1, 20, 21, 22, 23, 24, 46, 47, 51, 64 e SFB 0–5.
 
 ## Funzioni 1F (piano 1F)
