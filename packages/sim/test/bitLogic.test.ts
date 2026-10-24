@@ -89,13 +89,13 @@ describe('logica combinatoria a bit', () => {
     // Un id senza gestore dà MC7_NON_ESEGUIBILE con blocco, offset e rete.
     let err: unknown;
     try {
-      runAwl(['\tA %I0.0;\n\tL MB0;']);
+      runAwl(['\tA %I0.0;\n\t+I;']);
     } catch (e) {
       err = e;
     }
     expect(err).toBeInstanceOf(SimError);
     expect((err as SimError).code).toBe('MC7_NON_ESEGUIBILE');
-    expect((err as SimError).detail).toBe('operazione non implementata: L');
+    expect((err as SimError).detail).toBe('operazione non implementata: +I');
     expect((err as SimError).offset).toBe(2);
     expect((err as SimError).network).toBe(1);
   });
