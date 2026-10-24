@@ -6,7 +6,7 @@ import {
   Transaction,
   type Extension,
 } from '@codemirror/state';
-import { EditorView, keymap, type ViewUpdate } from '@codemirror/view';
+import { EditorView, keymap, lineNumbers, type ViewUpdate } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { getSettings, useSettings } from '../../settings/settings';
 import { lineEndingOf } from './awlExtensions';
@@ -80,8 +80,10 @@ export function CommittedEditor(p: CommittedEditorProps): React.JSX.Element {
   const label = useRef(new Compartment());
   const lock = useRef(new Compartment());
   const tabs = useRef(new Compartment());
+  const gutter = useRef(new Compartment());
   const [settings] = useSettings();
   const tabSize = settings.editor.tabSize;
+  const showLineNumbers = settings.editor.lineNumbers;
   const s = useRef<Session>({
     baseline: p.value,
     eol: lineEndingOf(p.value),
@@ -134,6 +136,7 @@ export function CommittedEditor(p: CommittedEditorProps): React.JSX.Element {
           keymap.of([...defaultKeymap, ...historyKeymap]),
           ...(latest.current.extensions ?? []),
           lock.current.of(lockExtension(!!latest.current.readOnly)),
+          gutter.current.of(getSettings().editor.lineNumbers ? lineNumbers() : []),
           tabs.current.of(EditorState.tabSize.of(getSettings().editor.tabSize)),
           label.current.of(
             EditorView.contentAttributes.of({
@@ -186,6 +189,12 @@ export function CommittedEditor(p: CommittedEditorProps): React.JSX.Element {
       effects: tabs.current.reconfigure(EditorState.tabSize.of(tabSize)),
     });
   }, [tabSize]);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({
+      effects: gutter.current.reconfigure(showLineNumbers ? lineNumbers() : []),
+    });
+  }, [showLineNumbers]);
 
   useEffect(() => {
     viewRef.current?.dispatch({

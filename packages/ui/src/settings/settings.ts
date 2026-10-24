@@ -167,3 +167,10 @@ export function useSettings(): [Settings, (patch: DeepPartial<Settings>) => void
   const s = useSyncExternalStore(subscribeSettings, getSettings, () => DEFAULT_SETTINGS);
   return [s, useCallback((patch: DeepPartial<Settings>) => updateSettings(patch), [])];
 }
+
+/** Scala e carattere degli editor come variabili CSS su :root di un documento (anche una finestra staccata). */
+export function applyDisplaySettings(doc: Document, s: Settings): void {
+  const root = doc.documentElement;
+  root.style.setProperty('--baa-ui-scale', String(s.appearance.uiScale / 100));
+  root.style.setProperty('--baa-editor-font-size', `${s.editor.fontSize}px`);
+}

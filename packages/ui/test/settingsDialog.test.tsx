@@ -6,6 +6,7 @@ import { t } from '../src/i18n';
 import { createProjectService } from '../src/services/projectService';
 import { createRecoveryService } from '../src/services/recoveryService';
 import { loadSettings, updateSettings } from '../src/settings/settings';
+import { editorKey } from '../src/state/workArea';
 import { createAppStore } from '../src/state/store';
 import { fb, openEditor } from './blockFixtures';
 import { FakeBridge } from './fakeBridge';
@@ -171,6 +172,67 @@ describe('Impostazioni - recupero', () => {
       expect(bridge.recovery.size).toBe(1);
       rec.dispose();
       service.dispose();
+    },
+    T,
+  );
+});
+
+describe('Impostazioni - numeri di riga, finestre staccate, autore', () => {
+  it(
+    'numeri di riga: il margine compare e scompare con le impostazioni',
+    async () => {
+      const f = fb('Nastro');
+      await openEditor('block', f.id, (d) => void d.blocks.push(f));
+      await waitFor(() => expect(document.querySelector('.cm-lineNumbers')).not.toBeNull());
+      act(() => updateSettings({ editor: { lineNumbers: false } }));
+      await waitFor(() => expect(document.querySelector('.cm-lineNumbers')).toBeNull());
+      act(() => updateSettings({ editor: { lineNumbers: true } }));
+      await waitFor(() => expect(document.querySelector('.cm-lineNumbers')).not.toBeNull());
+    },
+    T,
+  );
+
+  it(
+    'finestra staccata: scala e carattere seguono le impostazioni',
+    async () => {
+      const app = await renderApp({ view: 'project', withProject: true, withPlc: true });
+      const frame = document.createElement('iframe');
+      document.body.appendChild(frame);
+      const win = frame.contentWindow!;
+      vi.spyOn(win, 'close').mockImplementation(() => undefined);
+      vi.spyOn(window, 'open').mockReturnValue(win);
+      act(() => {
+        app.store.getState().openEditor({ kind: 'tagTable', deviceId: 'id1', objectId: 'id2' });
+        app.store.getState().detachEditor(editorKey('tagTable', 'id1', 'id2'));
+      });
+      await waitFor(() =>
+        expect(win.document.querySelector('[data-testid^="editor-body-"]')).not.toBeNull(),
+      );
+      act(() => updateSettings({ appearance: { uiScale: 125 }, editor: { fontSize: 16 } }));
+      const st = win.document.documentElement.style;
+      await waitFor(() => expect(st.getPropertyValue('--baa-ui-scale')).toBe('1.25'));
+      expect(st.getPropertyValue('--baa-editor-font-size')).toBe('16px');
+      act(() => updateSettings({ appearance: { uiScale: 90 } }));
+      await waitFor(() => expect(st.getPropertyValue('--baa-ui-scale')).toBe('0.9'));
+      frame.remove();
+    },
+    T,
+  );
+
+  it(
+    "nuovo progetto: l'autore predefinito resta quello delle impostazioni",
+    async () => {
+      const { user, store } = await renderApp();
+      act(() => updateSettings({ general: { author: 'Anna' } }));
+      await user.click(screen.getByTestId('action-new'));
+      const author = await screen.findByLabelText('Autore');
+      await waitFor(() => expect(author).toHaveValue('Anna'));
+      await user.clear(author);
+      await user.type(author, 'Bruno');
+      await user.click(screen.getByRole('button', { name: 'Crea' }));
+      await waitFor(() => expect(store.getState().startAction).toBe('firstSteps'));
+      expect(localStorage.getItem('baa.lastAuthor')).toBe('Bruno');
+      expect(loadSettings().general.author).toBe('Anna');
     },
     T,
   );

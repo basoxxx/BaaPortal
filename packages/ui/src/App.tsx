@@ -10,7 +10,7 @@ import { flushPendingEdits } from './flushPendingEdits';
 import { createProjectService } from './services/projectService';
 import { createRecoveryService, type RecoveryService } from './services/recoveryService';
 import { SettingsDialog } from './dialogs/SettingsDialog';
-import { useSettings } from './settings/settings';
+import { applyDisplaySettings, useSettings } from './settings/settings';
 import { AddBlockDialog } from './project/dialogs/AddBlockDialog';
 import { AddDeviceDialog } from './project/dialogs/AddDeviceDialog';
 import { ImportTagsReport } from './project/dialogs/ImportTagsReport';
@@ -48,14 +48,8 @@ function Shell() {
   const dialog = useAppStore((s) => s.dialog);
   const close = () => store.getState().closeDialog();
   const [settings] = useSettings();
-  const { uiScale } = settings.appearance;
-  const { fontSize } = settings.editor;
   // Scala e carattere degli editor: variabili CSS su :root, senza riavvio.
-  useEffect(() => {
-    const root = document.documentElement;
-    root.style.setProperty('--baa-ui-scale', String(uiScale / 100));
-    root.style.setProperty('--baa-editor-font-size', `${fontSize}px`);
-  }, [uiScale, fontSize]);
+  useEffect(() => applyDisplaySettings(document, settings), [settings]);
   return (
     <div data-testid="app-root" className="baa-app">
       {view === 'portal' ? <PortalView /> : <ProjectView />}

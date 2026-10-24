@@ -45,3 +45,23 @@ describe('settings', () => {
     expect(s.general.language).toBe('en');
   });
 });
+
+describe('settings - storage non disponibile', () => {
+  it('localStorage che lancia → default, senza errori', async () => {
+    const { vi } = await import('vitest');
+    vi.resetModules();
+    const fresh = await import('../src/settings/settings');
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('bloccato');
+    });
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('bloccato');
+    });
+    try {
+      expect(fresh.loadSettings()).toEqual(DEFAULT_SETTINGS);
+      expect(() => fresh.saveSettings(DEFAULT_SETTINGS)).not.toThrow();
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+});

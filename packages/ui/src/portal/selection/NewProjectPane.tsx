@@ -2,16 +2,23 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { validateProjectName } from '@baaportal/project';
 import { isAbsolutePath, joinPath } from '../../services/projectService';
-import { getSettings, updateSettings } from '../../settings/settings';
+import { getSettings } from '../../settings/settings';
 import { useServices } from '../../state/AppContext';
 
 const AUTHOR_KEY = 'baa.lastAuthor';
 
-/** L'autore predefinito dei nuovi progetti (Impostazioni → Generale). */
-const readLastAuthor = (): string => getSettings().general.author;
+function readLastAuthor(): string {
+  try {
+    return localStorage.getItem(AUTHOR_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+/** L'autore predefinito dei nuovi progetti (Impostazioni → Generale), altrimenti l'ultimo usato. */
+const defaultAuthor = (): string => getSettings().general.author || readLastAuthor();
 
 function saveLastAuthor(author: string): void {
-  updateSettings({ general: { author } });
   try {
     localStorage.setItem(AUTHOR_KEY, author);
   } catch {
@@ -24,7 +31,7 @@ export function NewProjectPane() {
   const { bridge, service } = useServices();
   const [name, setName] = useState('');
   const [dir, setDir] = useState('');
-  const [author, setAuthor] = useState(readLastAuthor);
+  const [author, setAuthor] = useState(defaultAuthor);
   const [comment, setComment] = useState('');
   const [exists, setExists] = useState(false);
   const touched = useRef({ name: false, dir: false });

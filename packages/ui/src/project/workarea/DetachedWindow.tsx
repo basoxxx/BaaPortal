@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { handleShortcutKeydown } from '../../commands/useShortcuts';
 import { useEditorInfo } from '../../editors/registry';
 import { flushDocument, registerEditDocument } from '../../flushPendingEdits';
+import { applyDisplaySettings, useSettings } from '../../settings/settings';
 import { useAppStore, useServices } from '../../state/AppContext';
 import type { EditorRef } from '../../state/workArea';
 import { EditorFrame } from './EditorFrame';
@@ -33,6 +34,7 @@ export function DetachedWindow({ editor }: { editor: EditorRef }) {
   const { store } = ctx;
   const info = useEditorInfo(editor);
   const focusRequest = useAppStore((s) => s.workArea.focusRequest);
+  const [settings] = useSettings();
   const [child, setChild] = useState<{ win: Window; root: HTMLElement } | null>(null);
 
   useEffect(() => {
@@ -68,6 +70,11 @@ export function DetachedWindow({ editor }: { editor: EditorRef }) {
     };
     // La finestra vive quanto l'editor staccato.
   }, [editor.key]);
+
+  // Scala e carattere seguono le impostazioni anche mentre la finestra è aperta.
+  useEffect(() => {
+    if (child) applyDisplaySettings(child.win.document, settings);
+  }, [child, settings]);
 
   useEffect(() => {
     if (child && info) child.win.document.title = info.title;

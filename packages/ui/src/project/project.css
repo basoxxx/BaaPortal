@@ -606,7 +606,8 @@
   border-color: var(--baa-border);
 }
 .baa-detached-root {
-  height: 100vh;
+  zoom: var(--baa-ui-scale, 1);
+  height: calc(100vh / var(--baa-ui-scale, 1));
   display: flex;
   flex-direction: column;
   background: var(--baa-surface);
