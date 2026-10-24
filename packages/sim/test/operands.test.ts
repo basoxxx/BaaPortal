@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { address, indirectMem, indirectReg } from '@baaportal/mc7';
-import { parsePointer } from '@baaportal/mc7';
+import { address, indirectMem, indirectReg, parsePointer } from '@baaportal/mc7';
 import {
   SimError,
   SimMemory,
   readBits,
+  resolveIndirectNumber,
   resolveOperand,
+  wordToStw,
   writeBits,
   type FrameView,
   type Registers,
 } from '../src';
-import { wordToStw } from '../src';
 
 // Semantica: manuale AWL S7-300/400, «Indirizzamento indiretto da memoria / da registro»
 // e «Formato dei puntatori» (puntatore a 32 bit: area nei bit 24–26, byte nei bit 3–18, bit 0–2).
@@ -134,5 +134,77 @@ describe('risoluzione degli operandi', () => {
     regs.ar1 = ptr('P#100.0');
     const loc = resolveOperand(indirectReg('M', 'B', 1, 'P#0.0'), regs, mem, frame);
     expect(code(() => readBits(mem, loc, 'B'))).toBe('AREA_LUNGHEZZA');
+  });
+
+  it('T B [AR1,P#0.0] con AR1 = P#P 4.0 scrive physOut[4], la lettura va a physIn', () => {
+    const mem = mkMem();
+    const regs = mkRegs();
+    regs.ar1 = ptr('P#P 4.0');
+    const loc = resolveOperand(indirectReg(null, 'B', 1, 'P#0.0'), regs, mem, frame);
+    writeBits(mem, loc, 'B', 0x5a);
+    expect(mem.physOut[4]).toBe(0x5a);
+    expect(mem.physIn[4]).toBe(0);
+    mem.physIn[4] = 0x33;
+    expect(readBits(mem, loc, 'B')).toBe(0x33);
+  });
+
+  it('trasversale con bit 31 = 0 → AREA_LUNGHEZZA "puntatore senza area"', () => {
+    const regs = mkRegs();
+    regs.ar1 = ptr('P#4.0');
+    try {
+      resolveOperand(indirectReg(null, 'B', 1, 'P#0.0'), regs, mkMem(), frame);
+      expect.unreachable();
+    } catch (e) {
+      expect((e as SimError).code).toBe('AREA_LUNGHEZZA');
+      expect((e as SimError).detail).toBe('puntatore senza area');
+    }
+  });
+
+  it('resolveIndirectNumber: puntatore a 16 bit per T/C', () => {
+    const mem = mkMem();
+    const regs = mkRegs();
+    writeBits(mem, resolveOperand(address('M', 'W', 2), regs, mem, frame), 'W', 5);
+    expect(
+      resolveIndirectNumber(indirectMem('T', null, address('M', 'W', 2)), regs, mem, frame),
+    ).toBe(5);
+  });
+
+  it('registro DB aperto su un DB non caricato → DB_NON_CARICATO', () => {
+    const mem = mkMem();
+    const regs = mkRegs();
+    regs.db = 3;
+    const loc = resolveOperand(address('DB', 'B', 0), regs, mem, frame);
+    expect(code(() => readBits(mem, loc, 'B'))).toBe('DB_NON_CARICATO');
+  });
+
+  it('riporto di bit: P#0.7 + P#0.1 → byte 1 bit 0', () => {
+    const regs = mkRegs();
+    regs.ar1 = ptr('P#0.7');
+    const loc = resolveOperand(indirectReg('M', 'X', 1, 'P#0.1'), regs, mkMem(), frame);
+    expect(loc.bit).toBe(8);
+  });
+
+  it('AR2 indiretto da registro', () => {
+    const regs = mkRegs();
+    regs.ar2 = ptr('P#3.0');
+    const loc = resolveOperand(indirectReg('M', 'X', 2, 'P#1.0'), regs, mkMem(), frame);
+    expect(loc.bit).toBe(32);
+  });
+
+  it('AREA_LUNGHEZZA su un DB', () => {
+    const mem = mkMem();
+    mem.dbs.set(5, { data: new Uint8Array(8), initial: new Uint8Array(8), retentive: false });
+    const regs = mkRegs();
+    regs.db = 5;
+    const loc = resolveOperand(address('DB', 'W', 7), regs, mem, frame);
+    expect(code(() => readBits(mem, loc, 'W'))).toBe('AREA_LUNGHEZZA');
+  });
+
+  it('AR + offset oltre 19 bit → AREA_LUNGHEZZA, senza giro', () => {
+    const regs = mkRegs();
+    regs.ar1 = ptr('P#65535.7');
+    expect(
+      code(() => resolveOperand(indirectReg('M', 'X', 1, 'P#0.1'), regs, mkMem(), frame)),
+    ).toBe('AREA_LUNGHEZZA');
   });
 });

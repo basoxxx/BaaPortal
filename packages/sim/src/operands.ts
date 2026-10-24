@@ -12,7 +12,8 @@ export interface FrameView {
 
 /** Posizione risolta: `bit` è l'indirizzo in bit (byte·8 + bit) nell'area; per L/V è assoluto nello stack L. */
 export interface Location {
-  area: AreaId | 'V';
+  /** 'P' = periferia da puntatore trasversale: la lettura va a physIn, la scrittura a physOut. */
+  area: AreaId | 'V' | 'P';
   db: number | null;
   bit: number;
 }
@@ -29,14 +30,19 @@ function openDb(area: 'DB' | 'DI', explicit: number | undefined, regs: Registers
 }
 
 /** Aggiunge la base dello stack L: `L` al blocco corrente, `V` al chiamante. */
-function place(area: AreaId | 'V', bit: number, db: number | null, frame: FrameView): Location {
+function place(
+  area: AreaId | 'V' | 'P',
+  bit: number,
+  db: number | null,
+  frame: FrameView,
+): Location {
   if (area === 'L') return { area, db: null, bit: bit + frame.lBase * 8 };
   if (area === 'V') return { area, db: null, bit: bit + frame.prevLBase * 8 };
   return { area, db, bit };
 }
 
 function withDb(
-  area: AreaId | 'V',
+  area: AreaId | 'V' | 'P',
   bit: number,
   explicitDb: number | undefined,
   regs: Registers,
@@ -61,9 +67,11 @@ function readPointer(
 }
 
 /** Area dal puntatore per l'accesso trasversale: bit 24–26 (0 = periferia, 7 = V). */
-function areaOfPointer(ptr: number): AreaId | 'V' {
+function areaOfPointer(ptr: number): AreaId | 'V' | 'P' {
+  // Il bit 31 distingue il puntatore trasversale da quello interno all'area.
+  if (ptr >>> 31 === 0) throw new SimError('AREA_LUNGHEZZA', 'puntatore senza area');
   const c = (ptr >>> 24) & 7;
-  return c === 7 ? 'V' : AREA_OF_CODE[c]!;
+  return c === 7 ? 'V' : c === 0 ? 'P' : AREA_OF_CODE[c]!;
 }
 
 export function resolveOperand(
@@ -85,7 +93,9 @@ export function resolveOperand(
         const ar = op.via.ar === 1 ? regs.ar1 : regs.ar2;
         // Interno all'area: l'area è nell'operando. Trasversale: l'area sta nei bit 24–26 di AR.
         const area = op.area ?? areaOfPointer(ar);
-        return withDb(area, ((ar & ADDR_MASK) + off) & ADDR_MASK, undefined, regs, frame);
+        const bit = (ar & ADDR_MASK) + off;
+        if (bit > ADDR_MASK) throw new SimError('AREA_LUNGHEZZA', 'indirizzo oltre il puntatore');
+        return withDb(area, bit, undefined, regs, frame);
       }
       // Da memoria: a 32 bit per bit e byte/parola/doppia; l'area è nell'operando (o nel puntatore).
       const ptr = readPointer(op.via.location, 'D', regs, mem, frame);
@@ -115,7 +125,7 @@ export function resolveIndirectNumber(
 const BYTES: Record<Size, number> = { X: 1, B: 1, W: 2, D: 4 };
 
 export function readBits(mem: SimMemory, loc: Location, size: Size): number {
-  const b = mem.bytes(loc.area, loc.db, loc.bit >> 3, BYTES[size]);
+  const b = mem.bytes(loc.area === 'P' ? 'PI' : loc.area, loc.db, loc.bit >> 3, BYTES[size]);
   if (size === 'X') return (b[0]! >> (loc.bit & 7)) & 1;
   let v = 0;
   for (const x of b) v = v * 256 + x;
@@ -123,7 +133,7 @@ export function readBits(mem: SimMemory, loc: Location, size: Size): number {
 }
 
 export function writeBits(mem: SimMemory, loc: Location, size: Size, value: number): void {
-  const b = mem.bytes(loc.area, loc.db, loc.bit >> 3, BYTES[size]);
+  const b = mem.bytes(loc.area === 'P' ? 'PQ' : loc.area, loc.db, loc.bit >> 3, BYTES[size]);
   if (size === 'X') {
     const m = 1 << (loc.bit & 7);
     b[0] = value ? b[0]! | m : b[0]! & ~m;
