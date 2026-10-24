@@ -33,3 +33,8 @@ export interface Registers {
   db: number;
   di: number;
 }
+
+/** Registri a zero: parola di stato azzerata, nessun DB aperto. */
+export function newRegisters(): Registers {
+  return { stw: wordToStw(0), accu1: 0, accu2: 0, ar1: 0, ar2: 0, db: 0, di: 0 };
+}

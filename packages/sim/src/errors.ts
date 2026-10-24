@@ -14,6 +14,11 @@ export type SimErrorCode =
   | 'NON_SIMULATA_2B';
 
 export class SimError extends Error {
+  /** Posizione dell'errore, riempita dall'esecutore: blocco, offset MC7 (byte) e rete (da 1). */
+  block?: { kind: string; number: number };
+  offset?: number;
+  network?: number;
+
   constructor(
     public code: SimErrorCode,
     public detail?: string,
