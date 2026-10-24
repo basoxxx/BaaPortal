@@ -2,7 +2,9 @@ import { decodeCotp, encodeCotp, type CotpPdu } from './cotp';
 import { S7Error } from './errors';
 import { FrameReader, encodeTpkt } from './tpkt';
 import { LOCAL_TSAP_PG, remoteTsap, type ConnectionType } from './tsap';
-import { assertOutgoingFrame } from './readOnlyGuard';
+import { assertOutgoingFrame, type ConnectionMode } from './readOnlyGuard';
+import type { BlockType } from './s7/blocks';
+import { decodeDownloadBlockJob, decodeDownloadEnded, encodeDownloadBlockAck } from './s7/download';
 import { decodeS7, encodeS7, type S7Pdu } from './s7/header';
 import { decodeSetup, encodeSetup } from './s7/setup';
 import type { CaptureRecorder } from './capture/captureLog';
@@ -22,6 +24,8 @@ export interface ConnectOptions {
   transport: TransportFactory;
   recorder?: CaptureRecorder;
   signal?: AbortSignal;
+  /** Fissato all'apertura, mai modificabile. Default `'read-only'`. */
+  mode?: ConnectionMode;
 }
 
 const DEFAULT_PORT = 102;
@@ -48,11 +52,12 @@ export function guardedSender(
   transport: Pick<Transport, 'send'>,
   recorder: CaptureRecorder | undefined,
   onRefused: () => void,
+  mode: ConnectionMode = 'read-only',
 ): (frame: Uint8Array) => void {
   return (frame) => {
     const out = frame.slice();
     try {
-      assertOutgoingFrame(out);
+      assertOutgoingFrame(out, mode);
     } catch (e) {
       onRefused();
       throw e;
@@ -75,11 +80,20 @@ export function guardedSender(
 interface Pending {
   param: Uint8Array;
   data: Uint8Array;
-  rosctr: 1 | 7;
+  rosctr: 1 | 3 | 7;
   timeoutMs: number;
   resolve(p: S7Pdu): void;
   reject(e: Error): void;
   ref?: number;
+  timer?: ReturnType<typeof setTimeout>;
+}
+
+interface DownloadState {
+  provideChunk(job: { type: BlockType; number: number }): { eos: boolean; chunk: Uint8Array };
+  onEnded(job: { type: BlockType; number: number }): void;
+  timeoutMs: number;
+  resolve(): void;
+  reject(e: Error): void;
   timer?: ReturnType<typeof setTimeout>;
 }
 
@@ -121,6 +135,8 @@ export class S7Connection {
   readonly #closeTransport: () => void;
   readonly #signal: AbortSignal | undefined;
   readonly #defaultTimeoutMs: number;
+  #download: DownloadState | undefined;
+  readonly #mode: ConnectionMode;
   #tpduCap = Infinity;
   readonly #rec: CaptureRecorder | undefined;
 
@@ -130,14 +146,21 @@ export class S7Connection {
     signal: AbortSignal | undefined,
     defaultTimeoutMs: number,
     proposedPdu: number,
+    mode: ConnectionMode,
   ) {
+    this.#mode = mode;
     this.#rec = recorder;
     this.#pduLength = proposedPdu;
     this.#defaultTimeoutMs = defaultTimeoutMs;
     this.#signal = signal;
-    this.#sendFrame = guardedSender(transport, recorder, () => {
-      this.refusedCount++;
-    });
+    this.#sendFrame = guardedSender(
+      transport,
+      recorder,
+      () => {
+        this.refusedCount++;
+      },
+      mode,
+    );
     this.#closeTransport = () => transport.close();
     transport.onData((chunk) => this.#onData(chunk));
     transport.onClose((err) =>
@@ -170,6 +193,10 @@ export class S7Connection {
   }
 
   static async open(o: ConnectOptions): Promise<S7Connection> {
+    const mode = o.mode ?? 'read-only';
+    if (mode !== 'read-only' && mode !== 'online-write') {
+      throw new RangeError(`modo "${String(mode)}" sconosciuto`);
+    }
     const timeoutMs = o.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     const proposed = o.proposedPdu ?? DEFAULT_PDU;
     if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
@@ -189,7 +216,7 @@ export class S7Connection {
     const dstTsap = o.remoteTsap ?? remoteTsap(o.connectionType ?? 'pg', o.rack ?? 0, o.slot ?? 2);
     if (o.signal?.aborted) throw new S7Error('ABORTED', 'operazione annullata');
     const transport = await o.transport(o.host, o.port ?? DEFAULT_PORT, timeoutMs, o.signal);
-    const conn = new S7Connection(transport, o.recorder, o.signal, timeoutMs, proposed);
+    const conn = new S7Connection(transport, o.recorder, o.signal, timeoutMs, proposed, mode);
     try {
       if (conn.#closed) {
         // Una fabbrica che ignora il segnale e risolve dopo l'abort: ABORTED, non CLOSED.
@@ -206,7 +233,15 @@ export class S7Connection {
   }
 
   /** Una richiesta alla volta; l'errore della CPU nell'header non è sollevato qui. */
-  request(param: Uint8Array, data: Uint8Array, rosctr: 1 | 7, timeoutMs?: number): Promise<S7Pdu> {
+  request(
+    param: Uint8Array,
+    data: Uint8Array,
+    rosctr: 1 | 3 | 7,
+    timeoutMs?: number,
+  ): Promise<S7Pdu> {
+    if (rosctr === 3 && this.#mode !== 'online-write') {
+      return Promise.reject(new RangeError('ROSCTR 3 ammesso solo in modo online-write'));
+    }
     if (this.#closed) return Promise.reject(new S7Error('CLOSED', 'connessione chiusa'));
     const t = timeoutMs ?? this.#defaultTimeoutMs;
     if (!Number.isFinite(t) || t <= 0) {
@@ -216,6 +251,113 @@ export class S7Connection {
       this.#queue.push({ param, data, rosctr, timeoutMs: t, resolve, reject });
       this.#pump();
     });
+  }
+
+  /**
+   * Transazione di download (proto §10.2), solo `online-write`: invia il request 0x1A, attende
+   * l'ack, poi risponde ai job 0x1B della CPU con ack-data (ruoli invertiti) fino al job 0x1C.
+   * Un job di altra funzione o un timeout chiudono la connessione (PROTOCOL/TIMEOUT) e la
+   * promessa viene rifiutata: nessuna promessa resta appesa.
+   */
+  async runDownload(
+    request: Uint8Array,
+    provideChunk: DownloadState['provideChunk'],
+    onEnded: DownloadState['onEnded'],
+    timeoutMs?: number,
+  ): Promise<void> {
+    if (this.#mode !== 'online-write') {
+      throw new S7Error('FORBIDDEN', 'download non ammesso in modo read-only');
+    }
+    if (this.#closed) throw new S7Error('CLOSED', 'connessione chiusa');
+    if (this.#download) throw new RangeError('download già in corso');
+    const t = timeoutMs ?? this.#defaultTimeoutMs;
+    if (!Number.isFinite(t) || t <= 0) throw new RangeError(`timeoutMs ${t} deve essere > 0`);
+    // Lo stato esiste prima dell'invio: un job 0x1B arrivato nello stesso segmento dell'ack 0x1A
+    // viene gestito subito, prima che questa funzione riprenda.
+    const done = new Promise<void>((resolve, reject) => {
+      this.#download = { provideChunk, onEnded, timeoutMs: t, resolve, reject };
+    });
+    done.catch(() => undefined);
+    const st = this.#download!;
+    try {
+      const res = await this.request(request, new Uint8Array(0), 1, t);
+      if (res.rosctr !== 3 && res.rosctr !== 2) {
+        throw new S7Error('PROTOCOL', `risposta al request download con ROSCTR ${res.rosctr}`);
+      }
+      if (res.errorClass !== 0 || res.errorCode !== 0) {
+        throw new S7Error(
+          'CPU_ERROR',
+          `request download rifiutato dalla CPU: classe ${h(res.errorClass)} codice ${h(res.errorCode)}`,
+          { errorClass: res.errorClass, errorCode: res.errorCode },
+        );
+      }
+      if (res.param[0] !== 0x1a) {
+        throw new S7Error('PROTOCOL', 'ack del request download con funzione inattesa');
+      }
+    } catch (e) {
+      this.#endDownload(st);
+      throw e;
+    }
+    if (this.#isActiveDownload(st) && !st.timer) this.#armDownload(st);
+    return done;
+  }
+
+  #armDownload(st: DownloadState): void {
+    if (st.timer) clearTimeout(st.timer);
+    st.timer = setTimeout(
+      () =>
+        this.#fail(
+          new S7Error('TIMEOUT', `nessun job dalla CPU nel download entro ${st.timeoutMs} ms`),
+        ),
+      st.timeoutMs,
+    );
+  }
+
+  #isActiveDownload(st: DownloadState): boolean {
+    return this.#download === st;
+  }
+
+  #endDownload(st: DownloadState): void {
+    if (st.timer) clearTimeout(st.timer);
+    if (this.#download === st) this.#download = undefined;
+  }
+
+  /** Job della CPU dentro `runDownload`: risponde con ack-data (ROSCTR 3), stesso riferimento. */
+  #onDownloadJob(st: DownloadState, pdu: S7Pdu): void {
+    const fn = pdu.param[0];
+    let param: Uint8Array;
+    let data: Uint8Array;
+    if (fn === 0x1b) {
+      const job = decodeDownloadBlockJob(pdu.param);
+      const r = st.provideChunk({ type: job.type, number: job.number });
+      ({ param, data } = encodeDownloadBlockAck(r.eos, r.chunk));
+    } else if (fn === 0x1c) {
+      const job = decodeDownloadEnded(pdu.param);
+      st.onEnded({ type: job.type, number: job.number });
+      param = Uint8Array.of(0x1c);
+      data = new Uint8Array(0);
+    } else {
+      const f = fn === undefined ? 'vuota' : h(fn);
+      throw new S7Error('PROTOCOL', `job dalla CPU (funzione ${f}) durante il download`);
+    }
+    const s7 = encodeS7({
+      rosctr: 3,
+      pduRef: pdu.pduRef,
+      errorClass: 0,
+      errorCode: 0,
+      param,
+      data,
+    });
+    if (s7.length > this.#pduLength) {
+      throw new RangeError(`PDU di ${s7.length} byte oltre la PDU negoziata ${this.#pduLength}`);
+    }
+    this.#sendFrame(encodeTpkt(encodeCotp({ type: 'DT', eot: true, data: s7 })));
+    if (fn === 0x1c) {
+      this.#endDownload(st);
+      st.resolve();
+    } else {
+      this.#armDownload(st);
+    }
   }
 
   close(): Promise<void> {
@@ -441,6 +583,11 @@ export class S7Connection {
   }
 
   #onPdu(pdu: S7Pdu): void {
+    if (pdu.rosctr === 1 && this.#download && !this.#current) {
+      // Inversione dei ruoli del download (proto §10.2): solo dopo l'ack del request 0x1A.
+      this.#onDownloadJob(this.#download, pdu);
+      return;
+    }
     if (pdu.rosctr === 1) {
       // La CPU non deve mandare job; il client non risponde mai.
       const fn = pdu.param.length > 0 ? h(pdu.param[0]!) : 'vuota';
@@ -476,6 +623,12 @@ export class S7Connection {
     if (w) {
       clearTimeout(w.timer);
       w.reject(err);
+    }
+    const dl = this.#download;
+    this.#download = undefined;
+    if (dl) {
+      if (dl.timer) clearTimeout(dl.timer);
+      dl.reject(err);
     }
     const cur = this.#current;
     this.#current = undefined;

@@ -12,6 +12,7 @@ import {
   encodeTpkt,
   encodeUpload,
   encodeUserdata,
+  encodeWriteRequest,
   guardedSender,
   memoryTransportPair,
   reqBlockCounts,
@@ -492,5 +493,27 @@ describe('TOCTOU: il registratore non può cambiare i byte approvati', () => {
     const send = guardedSender({ send: () => undefined }, rec, () => undefined);
     expect(() => send(good)).not.toThrow();
     expect(seen[0]).toEqual(good.slice(4));
+  });
+});
+
+describe('guardedSender e modo', () => {
+  const w = encodeWriteRequest([
+    { area: 'M', db: 0, start: 0, size: 'BYTE', count: 1, data: Uint8Array.of(1) },
+  ]);
+  const frame = dt(encodeS7(job(w.param, w.data)));
+
+  it('il modo di default rifiuta la write var e non invia nulla; online-write la invia', () => {
+    const r = senderRig();
+    expect(() => r.send(frame)).toThrowError(expect.objectContaining({ code: 'FORBIDDEN' }));
+    expect(r.sends).toHaveLength(0);
+    expect(r.refused()).toBe(1);
+    const sends: Uint8Array[] = [];
+    guardedSender(
+      { send: (b) => void sends.push(b) },
+      undefined,
+      () => undefined,
+      'online-write',
+    )(frame);
+    expect(sends).toHaveLength(1);
   });
 });
