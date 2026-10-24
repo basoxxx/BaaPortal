@@ -63,11 +63,11 @@ La ditta per ora non ha una CPU S7-300; un amico che userà BaaPortal ce l'ha. I
 
 ## Tappa 2 — Simulatore
 
-| Piano                                      | Contenuto                                                                                                                                                                  |
-| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **2A Nucleo CPU simulata**                 | Esecuzione MC7, parola di stato, accumulatori, AR1/AR2, registri DB, stack L e di annidamento, ciclo OB1, OB100, STOP/RUN, cancellazione totale **Stato: fatto** (v0.6.0). |
-| **2B Temporizzatori, contatori, OB e SFC** | Temporizzatori S5, contatori, SFB 0–5 IEC, merker di clock, OB35 e OB di errore, SFC/SFB principali simulate, avviso "non simulata" per le altre                           |
-| **2C Strumenti di test sul simulatore**    | Pannello di comando CPU, pannello I/O, carica nel simulatore, osservazione AWL, tabelle di controllo                                                                       |
+| Piano                                      | Contenuto                                                                                                                                                                   |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **2A Nucleo CPU simulata**                 | Esecuzione MC7, parola di stato, accumulatori, AR1/AR2, registri DB, stack L e di annidamento, ciclo OB1, OB100, STOP/RUN, cancellazione totale **Stato: fatto** (v0.6.0).  |
+| **2B Temporizzatori, contatori, OB e SFC** | Temporizzatori S5, contatori, SFB 0–5 IEC, merker di clock, OB35 e OB di errore, SFC/SFB principali simulate, avviso "non simulata" per le altre **Stato: fatto** (v0.7.0). |
+| **2C Strumenti di test sul simulatore**    | Pannello di comando CPU, pannello I/O, carica nel simulatore, osservazione AWL, tabelle di controllo                                                                        |
 
 ## Tappa 3 — Collegamento a S7-300 reali
 
