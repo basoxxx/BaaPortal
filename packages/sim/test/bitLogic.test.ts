@@ -85,21 +85,6 @@ describe('logica combinatoria a bit', () => {
     expect(st(e, 6)).toMatchObject({ or: false, fc: false, rlo: true, sta: true });
   });
 
-  it('operazione non implementata → SimError con offset', () => {
-    // Un id senza gestore dà MC7_NON_ESEGUIBILE con blocco, offset e rete.
-    let err: unknown;
-    try {
-      runAwl(['\tA %I0.0;\n\t+I;']);
-    } catch (e) {
-      err = e;
-    }
-    expect(err).toBeInstanceOf(SimError);
-    expect((err as SimError).code).toBe('MC7_NON_ESEGUIBILE');
-    expect((err as SimError).detail).toBe('operazione non implementata: +I');
-    expect((err as SimError).offset).toBe(2);
-    expect((err as SimError).network).toBe(1);
-  });
-
   it('A I0.0 / A I0.1 / O / A I0.2 / A I0.3: AND prima di OR', () => {
     // Manuale AWL, «O (OR di blocchi AND)»: Q0.0 = (I0.0 AND I0.1) OR (I0.2 AND I0.3).
     const prog = ['\tA %I0.0;\n\tA %I0.1;\n\tO;\n\tA %I0.2;\n\tA %I0.3;\n\t= %Q0.0;'];

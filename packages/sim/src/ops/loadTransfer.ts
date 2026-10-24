@@ -74,16 +74,17 @@ const L: OpHandler = (st, stmt) => {
 /** Manuale AWL, «T»: scrive la parte bassa dell'ACCU1; con MCR spento scrive 0. */
 const T: OpHandler = (st, stmt) => {
   const op = stmt.operand;
-  const value = mcrOff(st) ? 0 : st.regs.accu1;
   if (op?.kind === 'special' && op.name === 'STW') {
     // Manuale AWL, «T STW»: tutti i bit 0–8 tranne /FC.
     const fc = st.regs.stw.fc;
-    st.regs.stw = { ...wordToStw(value & 0x1ff), fc };
+    st.regs.stw = { ...wordToStw(st.regs.accu1 & 0x1ff), fc };
     return;
   }
   if (!op || op.kind === 'special' || op.kind === 'constant')
     throw new SimError('MC7_NON_ESEGUIBILE', 'T: operando non valido');
   if (op.kind === 'timerCounter') throw new SimError('NON_SIMULATA_2B', `${op.area}${op.number}`);
+  // Solo le scritture in memoria seguono l'MCR (non T STW).
+  const value = mcrOff(st) ? 0 : st.regs.accu1;
   const size = memSize(op);
   writeBits(
     st.mem,

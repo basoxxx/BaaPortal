@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { SimError, stwToWord, type SimMemory } from '../src';
+import type { DecodedStatement } from '@baaportal/mc7';
+import { SimError, SimMemory, memorySizesFor, newRegisters, stwToWord } from '../src';
+import type { ExecState } from '../src/executor';
+import { OPS } from '../src/ops';
 import { runAwl } from './helpers';
 
 const prog = (...lines: string[]): string[] => [lines.map((l) => `\t${l};`).join('\n')];
@@ -189,8 +192,81 @@ describe('accumulatori e registri di indirizzo', () => {
     expect(neg.regs.ar1).toBe(0x83000050 - 8);
     const ar2 = runAwl(prog('+AR2 P#1.0'), { regs: { ar2: 0x01 } });
     expect(ar2.regs.ar2).toBe(0x09);
-    // il risultato resta nei 19 bit dell'indirizzo
+    // l'offset si somma ai 24 bit bassi; area e bit 31 restano
     const wrap = runAwl(prog('L 1', '+AR1'), { regs: { ar1: 0x8307ffff } });
-    expect(wrap.regs.ar1).toBe(0x83000000);
+    expect(wrap.regs.ar1).toBe(0x83080000);
+    const top = runAwl(prog('L 1', '+AR1'), { regs: { ar1: 0x83ffffff } });
+    expect(top.regs.ar1).toBe(0x83000000);
+  });
+
+  it('TAR1/TAR2 senza operando: ACCU1 passa in ACCU2', () => {
+    // Manuale AWL, «TAR1», «TAR2»: l'AR va in ACCU1, il vecchio ACCU1 in ACCU2.
+    const r = runAwl(prog('TAR1'), { regs: { ar1: 0x83000010, accu1: 7, accu2: 9 } });
+    expect([r.regs.accu1, r.regs.accu2]).toEqual([0x83000010, 7]);
+    const r2 = runAwl(prog('TAR2'), { regs: { ar2: 0x20, accu1: 5 } });
+    expect([r2.regs.accu1, r2.regs.accu2]).toEqual([0x20, 5]);
+  });
+
+  it('LAR1/LAR2 da memoria non a doppia parola → MC7_NON_ESEGUIBILE', () => {
+    // La sintassi AWL non le compila: si prova il gestore con un'istruzione costruita a mano.
+    const st = { regs: newRegisters(), mem: new SimMemory(memorySizesFor('cpu-315-2-pn-dp')) };
+    const frame = { lBase: 0, prevLBase: 0 };
+    for (const id of ['LAR1', 'LAR2']) {
+      const stmt = {
+        id,
+        text: id,
+        operand: { kind: 'address', area: 'M', size: 'W', byte: 0 },
+      } as unknown as DecodedStatement;
+      const run = (): unknown => OPS[id]!({ ...st, frame } as unknown as ExecState, stmt);
+      expect(errorOf(run).code).toBe('MC7_NON_ESEGUIBILE');
+    }
+  });
+
+  it('T STW non segue l MCR', () => {
+    const r = runAwl(prog('MCRA', 'CLR', 'MCR(', 'L W#16#0020', 'T STW', ')MCR'));
+    // T STW scrive OS (bit 5) anche con MCR spento; con zero scritto OS resterebbe 0
+    expect(r.trace[4]!.stw & 0x20).toBe(0x20);
+  });
+
+  it('L DILG e L DINO, OPN DI non caricato', () => {
+    const r = runAwl(prog('OPN DI 6', 'L DILG', 'L DINO'), { setup: (m) => openDb(m, 6, 12) });
+    expect([r.regs.accu1, r.regs.accu2]).toEqual([6, 12]);
+    expect(errorOf(() => runAwl(prog('OPN DI 9'))).code).toBe('DB_NON_CARICATO');
+  });
+});
+
+describe('L di costanti, tutte le forme', () => {
+  const l = (c: string): number => runAwl(prog(`L ${c}`)).regs.accu1;
+  it('forme del manuale AWL, «Formato delle costanti»', () => {
+    expect(l('W#16#ABCD')).toBe(0xabcd);
+    expect(l('DW#16#DEADBEEF')).toBe(0xdeadbeef);
+    expect(l('2#1010101010101010')).toBe(0xaaaa);
+    expect(l('B#(1,2)')).toBe(0x0102);
+    expect(l('B#(1,2,3,4)')).toBe(0x01020304);
+    expect(l('C#123')).toBe(0x0123);
+    expect(l('S5T#2S')).toBe(0x0200);
+    expect(l("'A'")).toBe(0x41);
+    expect(l('D#1990-01-02')).toBe(1);
+    expect(l('TOD#0:0:1.5')).toBe(1500);
+    expect(l('T#1S')).toBe(1000);
+  });
+});
+
+describe('scorrimenti a larghezza piena', () => {
+  it('SLW 16 / SRW 16: tutto fuori, CC1 = ultimo bit uscito', () => {
+    const a = runAwl(prog('SLW'), { regs: { accu1: 0xaaaa0001, accu2: 16 } });
+    expect(a.regs.accu1).toBe(0xaaaa0000);
+    expect(a.regs.stw.cc1).toBe(true);
+    const b = runAwl(prog('SRW'), { regs: { accu1: 0xbbbb8000, accu2: 16 } });
+    expect(b.regs.accu1).toBe(0xbbbb0000);
+    expect(b.regs.stw.cc1).toBe(true);
+  });
+  it('SLD 32 / SRD 32 / RLD 32', () => {
+    const a = runAwl(prog('SLD'), { regs: { accu1: 1, accu2: 32 } });
+    expect([a.regs.accu1, a.regs.stw.cc1]).toEqual([0, true]);
+    const b = runAwl(prog('SRD'), { regs: { accu1: 0x80000000, accu2: 32 } });
+    expect([b.regs.accu1, b.regs.stw.cc1]).toEqual([0, true]);
+    const c = runAwl(prog('RLD'), { regs: { accu1: 0x80000001, accu2: 32 } });
+    expect([c.regs.accu1, c.regs.stw.cc1]).toEqual([0x80000001, true]);
   });
 });

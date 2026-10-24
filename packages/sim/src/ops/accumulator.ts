@@ -6,8 +6,8 @@ import { constantValue, readMem } from './loadTransfer';
 
 type Ar = 'ar1' | 'ar2';
 
-/** Parte indirizzo di AR1/AR2: bit 0–18 (manuale AWL, «Formato dei puntatori»). */
-const ADDR = 0x7ffff;
+/** Parte indirizzo di AR1/AR2: bit 0–23 (manuale AWL, «Formato dei puntatori»). */
+const ADDR = 0xffffff;
 
 function loadAr(ar: Ar): OpHandler {
   return (st, stmt) => {
@@ -16,7 +16,12 @@ function loadAr(ar: Ar): OpHandler {
     if (!op) v = st.regs.accu1;
     else if (op.kind === 'constant') v = constantValue(op);
     else if (op.kind === 'special' && op.name === 'AR2') v = st.regs.ar2;
-    else v = readMem(st, op);
+    else {
+      if (op.kind !== 'address' && op.kind !== 'indirect')
+        throw new SimError('MC7_NON_ESEGUIBILE', 'LAR: operando non valido');
+      if (op.size !== 'D') throw new SimError('MC7_NON_ESEGUIBILE', 'LAR: serve una doppia parola');
+      v = readMem(st, op);
+    }
     st.regs[ar] = v >>> 0;
   };
 }
@@ -25,8 +30,11 @@ function transferAr(ar: Ar): OpHandler {
   return (st, stmt) => {
     const op = stmt.operand;
     const v = st.regs[ar];
-    if (!op) st.regs.accu1 = v;
-    else if (op.kind === 'special' && op.name === 'AR2') st.regs.ar2 = v;
+    if (!op) {
+      // Manuale AWL, «TAR1»/«TAR2» senza operando: ACCU1 passa in ACCU2, poi riceve l'AR.
+      st.regs.accu2 = st.regs.accu1;
+      st.regs.accu1 = v;
+    } else if (op.kind === 'special' && op.name === 'AR2') st.regs.ar2 = v;
     else writeD(st, op, v);
   };
 }
@@ -41,7 +49,7 @@ function writeD(st: ExecState, op: Operand, v: number): void {
 function addAr(ar: Ar): OpHandler {
   return (st, stmt) => {
     // Manuale AWL, «+AR1», «+AR2»: senza operando si somma ACCU1-L con segno, con P#x.y quel
-    // puntatore; il risultato resta nei bit 0–18, il resto di AR non cambia.
+    // puntatore; l'offset è esteso a 24 bit e si somma ai bit 0–23, area e bit 31 non cambiano.
     const add = stmt.operand ? constantValue(stmt.operand) : ((st.regs.accu1 & 0xffff) << 16) >> 16;
     const cur = st.regs[ar];
     st.regs[ar] = ((cur & ~ADDR) | ((cur + add) & ADDR)) >>> 0;
