@@ -7,6 +7,7 @@ import { useAppStore } from '../state/AppContext';
 import { BlockEditor } from './block/BlockEditor';
 import { DbEditor } from './db/DbEditor';
 import { SourceEditor } from './source/SourceEditor';
+import { WatchTableView } from './watch/WatchTableView';
 import { UdtEditor } from './udt/UdtEditor';
 import { AllTagsEditor } from './tags/AllTagsEditor';
 import { TagTableEditor } from './tags/TagTableEditor';
@@ -71,6 +72,13 @@ export const EDITORS: Record<EditorKind, EditorDef> = {
     title: (r, d) => device(r, d)?.sources.find((x) => x.id === r.objectId)?.name ?? '',
     exists: (r, d) => !!device(r, d)?.sources.some((x) => x.id === r.objectId),
     Component: SourceEditor,
+  },
+  watchTable: {
+    kind: 'watchTable',
+    icon: () => 'objWatch',
+    title: (r, d) => device(r, d)?.watchTables.find((x) => x.id === r.objectId)?.name ?? '',
+    exists: (r, d) => !!device(r, d)?.watchTables.some((x) => x.id === r.objectId),
+    Component: WatchTableView,
   },
   tagTable: {
     kind: 'tagTable',

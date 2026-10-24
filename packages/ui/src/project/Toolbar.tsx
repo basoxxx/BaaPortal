@@ -12,7 +12,7 @@ const GROUPS: CommandId[][] = [
   ['project.new', 'project.open', 'project.save', 'project.print'],
   ['edit.cut', 'edit.copy', 'edit.paste', 'edit.delete'],
   ['edit.undo', 'edit.redo'],
-  ['edit.compile', 'online.download', 'online.upload', 'online.simulation'],
+  ['edit.compile', 'online.download', 'online.upload', 'online.simulation', 'online.monitor'],
   [
     'online.goOnline',
     'online.goOffline',

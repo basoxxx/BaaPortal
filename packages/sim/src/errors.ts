@@ -35,6 +35,11 @@ export class SimError extends Error implements SimErrorInfo {
   block?: { kind: string; number: number };
   offset?: number;
   network?: number;
+  /**
+   * Stack dei blocchi al momento dell'errore, dal più interno al più esterno: per ogni blocco
+   * l'offset dell'istruzione in corso (nel chiamante, quella che ha richiamato il blocco interno).
+   */
+  blockStack?: { kind: string; number: number; offset: number }[];
   access?: 'read' | 'write';
   periphery?: { byte: number; width: number };
   faultReg?: number;

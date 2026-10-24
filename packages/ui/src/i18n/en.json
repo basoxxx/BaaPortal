@@ -43,7 +43,10 @@
   "status": {
     "compiling": "Compiling…",
     "cancel": "Stop",
-    "progress": "Progress"
+    "progress": "Progress",
+    "simulation": "Simulation: {{mode}}",
+    "simulationStarting": "Starting simulation…",
+    "simulationFailed": "Simulation unavailable"
   },
   "messages": {
     "replaced": "Replaced {{replaced}} texts, skipped {{skipped}}.",
@@ -70,6 +73,16 @@
     "actionFailed": "The operation failed: {{message}}",
     "compileInterrupted": "Compilation stopped: the blocks already compiled stay compiled.",
     "compileFailed": "Compilation failed: {{message}}",
+    "simStarted": "Simulation started for {{name}} (CPU in STOP).",
+    "simStopped": "Simulation ended.",
+    "simStartFailed": "Could not start the simulation: {{message}}",
+    "simFailed": "The simulation stopped: {{message}}",
+    "simDownloadBlocked": "Download cancelled: the compilation has {{errors}} errors.",
+    "simDownloadStale": "Download cancelled: {{count}} blocks are not compiled from their current content.",
+    "simMonitorFailed": "Monitoring failed: {{message}}",
+    "simDownloadFailed": "Download to the simulator failed: {{message}}",
+    "simDownloaded": "{{count}} blocks loaded into the simulator.",
+    "simModeFailed": "Changing the CPU mode failed: {{message}}",
     "blockExported": "Block \"{{name}}\" exported to {{path}}.",
     "blockExportFailed": "Cannot export block \"{{name}}\": {{message}}",
     "blocksImported": "Block import: created {{created}}, replaced {{replaced}}, metadata updated {{refreshed}}, skipped {{skipped}}.",
@@ -84,7 +97,12 @@
     "tagsImportFailed": "Cannot import tags from \"{{name}}\": {{message}}",
     "tagsExported": "Table \"{{name}}\" exported to \"{{path}}\".",
     "tagsExportFailed": "Cannot export table \"{{name}}\": {{message}}",
-    "archived": "Project \"{{name}}\" archived to \"{{path}}\"."
+    "archived": "Project \"{{name}}\" archived to \"{{path}}\".",
+    "simMresFailed": "Memory reset failed: {{message}}",
+    "simInputsFailed": "The simulator did not accept the inputs: {{message}}",
+    "simInterruptFailed": "The simulator did not accept the interrupt: {{message}}",
+    "simWatchFailed": "Watch table monitoring failed: {{message}}",
+    "simWriteFailed": "Command failed: {{message}}"
   },
   "commands": {
     "project.new": "New…",
@@ -120,6 +138,7 @@
     "online.goOffline": "Go offline",
     "online.simulation": "Simulation",
     "online.download": "Download to device",
+    "online.monitor": "Monitor program",
     "online.upload": "Upload from device…",
     "online.accessibleDevices": "Accessible devices…",
     "online.startCpu": "Start CPU",
@@ -182,6 +201,27 @@
       "PROTETTO": "Protected block: the text cannot be edited.",
       "MC7_GREZZO": "Undecodable MC7 code: the text cannot be edited."
     }
+  },
+  "sim": {
+    "monitor": {
+      "title": "Program monitoring",
+      "on": "Monitoring on: values are those of the first execution in the last cycle.",
+      "format": "Accumulator format",
+      "hex": "Hexadecimal",
+      "dec": "Decimal",
+      "reason": {
+        "notLoaded": "Monitoring not available: the block is not loaded in the simulator. Use \"Download to device\".",
+        "stale": "Monitoring not available: the block is not compiled with the current changes. Download it to the device again.",
+        "noLines": "Monitoring not available: the block is imported and has no mapping to the text lines.",
+        "edited": "Monitoring suspended: the text is being edited. Download it to the device again to resume."
+      }
+    },
+    "startCpuTitle": "Download to device",
+    "startCpuMessage": "Start the CPU?",
+    "yes": "Yes",
+    "no": "No",
+    "mresTitle": "Memory reset",
+    "mresMessage": "Clear the CPU work memory (MRES)? Loaded blocks are kept."
   },
   "toolbar": {
     "search": "Search"
@@ -261,7 +301,8 @@
       "watch": "Watch and force tables",
       "backup": "Online backups",
       "progInfo": "Program info",
-      "addSource": "Add new external file"
+      "addSource": "Add new external file",
+      "addWatchTable": "Add new watch table"
     }
   },
   "navigation": {
@@ -316,7 +357,8 @@
     "generateSource": "Generate source from blocks",
     "editSource": "Edit source",
     "importBlocks": "Import blocks",
-    "importTags": "Import tags"
+    "importTags": "Import tags",
+    "addWatchTable": "Add watch table"
   },
   "inspector": {
     "tab": {
@@ -368,7 +410,8 @@
       },
       "test": {
         "cpuPanel": "CPU operator panel",
-        "callStack": "Call stack"
+        "callStack": "Call stack",
+        "ioPanel": "Simulator I/O panel"
       },
       "tasks": {
         "findReplace": "Find and replace"
@@ -402,7 +445,8 @@
     },
     "group": "Group_1",
     "tag": "Tag_1",
-    "constant": "Constant_1"
+    "constant": "Constant_1",
+    "watchTable": "Watch table_1"
   },
   "settings": {
     "title": "Settings",
@@ -575,7 +619,9 @@
     "INSTANCE_FB_MISSING": "The instance function block does not exist.",
     "HEADER_INVALID": "The header is not valid.",
     "PROPERTY_INVALID": "The property value is not valid.",
-    "CPU_UNKNOWN": "The CPU is not in the catalog."
+    "CPU_UNKNOWN": "The CPU is not in the catalog.",
+    "WATCH_NAME_DUPLICATE": "A watch table with this name already exists.",
+    "WATCH_OPERAND_INVALID": "The operand \"{{operand}}\" of a row does not resolve."
   },
   "block": {
     "interface": "Block interface",
@@ -926,6 +972,115 @@
       "message": "The file \"{{path}}\" already exists. Do you want to overwrite it?",
       "yes": "Overwrite",
       "no": "Cancel"
+    }
+  },
+  "cpuPanel": {
+    "needSim": "Start the simulation to use the panel",
+    "run": "RUN",
+    "stop": "STOP",
+    "sf": "SF",
+    "runBtn": "RUN",
+    "stopBtn": "STOP",
+    "mres": "MRES",
+    "cycle": "Cycle time",
+    "last": "Last",
+    "min": "Minimum",
+    "max": "Maximum",
+    "ms": "{{value}} ms",
+    "diagnostics": "Diagnostic buffer",
+    "diagEmpty": "No entries.",
+    "warnings": "Warnings",
+    "noWarnings": "No warnings.",
+    "callStackEmpty": "No call stack recorded.",
+    "callStackNote": "Last STOP caused by an error",
+    "inBlock": "in {{block}}",
+    "offset": "offset {{offset}}",
+    "network": "network {{network}}",
+    "code": {
+      "AREA_LUNGHEZZA": "Access beyond the area length",
+      "DB_NON_CARICATO": "Data block not loaded",
+      "DB_NON_APERTO": "No data block open",
+      "BLOCCO_NON_CARICATO": "Called block not loaded",
+      "STACK_BLOCCHI_PIENO": "Block stack full",
+      "STACK_ANNIDAMENTO_PIENO": "Nesting stack full",
+      "STACK_L_PIENO": "Local data stack full",
+      "ISTRUZIONE_NON_S7300": "Instruction not available on S7-300",
+      "MC7_NON_ESEGUIBILE": "MC7 code not executable",
+      "BCD_NON_VALIDO": "Invalid BCD value",
+      "NUMERO_TEMPORIZZATORE": "Invalid timer number",
+      "NUMERO_CONTATORE": "Invalid counter number",
+      "TEMPO_CICLO_SUPERATO": "Maximum cycle time exceeded",
+      "OB_NON_CARICATO": "Event OB not loaded",
+      "STOP_RICHIESTO": "STOP requested",
+      "AVVIO": "CPU startup",
+      "CANCELLAZIONE_TOTALE": "Memory reset",
+      "OB_RICHIAMATO": "Event OB called",
+      "SFC_NON_SIMULATA": "SFC not simulated",
+      "SFB_NON_SIMULATA": "SFB not simulated"
+    },
+    "ledOn": "on",
+    "ledOff": "off"
+  },
+  "ioPanel": {
+    "inputs": "Inputs",
+    "outputs": "Outputs",
+    "noBytes": "No bytes: add one with \"+ byte\".",
+    "byteLabel": "Byte {{byte}}",
+    "bitLabel": "{{area}} {{byte}}.{{bit}}",
+    "bitSym": "{{area}} {{byte}}.{{bit}} ({{symbol}})",
+    "on": "1",
+    "off": "0",
+    "byteInput": "Byte number",
+    "addByte": "+ byte",
+    "byteInvalid": "Invalid byte or outside the area.",
+    "analog": "Peripheral word (PIW)",
+    "piwAddress": "Address",
+    "piwValue": "Value (INT)",
+    "piwWrite": "Write",
+    "piwBadAddress": "Invalid address: use for example PIW 256.",
+    "piwOutOfArea": "Address outside the input area.",
+    "piwBadValue": "Invalid value: integer from -32768 to 32767.",
+    "fault": "Simulate fault",
+    "moduleAddress": "Module address",
+    "ob82": "Diagnostic interrupt (OB82)",
+    "ob86": "Rack failure (OB86)",
+    "addressBad": "Invalid address: integer from 0 to 65535.",
+    "needRun": "The CPU must be in RUN."
+  },
+  "watch": {
+    "col": {
+      "name": "Name",
+      "address": "Address",
+      "format": "Display format",
+      "status": "Monitor value",
+      "modify": "Modify value",
+      "comment": "Comment"
+    },
+    "simOff": "Start the simulation of this table's PLC to monitor and modify variables.",
+    "on": "Monitoring on: the monitor values are refreshed.",
+    "off": "Monitoring off.",
+    "commanded": "Modify done: {{count}} rows written, {{failed}} with errors.",
+    "watchAll": "Monitor all",
+    "command": "Modify",
+    "err": {
+      "row": {
+        "EMPTY": "The operand is missing.",
+        "SYNTAX": "Operand not recognized.",
+        "UNKNOWN": "Unknown symbol or member.",
+        "NOT_OPERAND": "Not a variable: constants and blocks cannot be monitored.",
+        "UNSUPPORTED": "Operand cannot be monitored (L and DI areas, indirect addresses and composite types are not allowed).",
+        "RANGE": "Number beyond the CPU limits."
+      },
+      "FORMAT": "The format {{format}} does not suit the operand size.",
+      "LENGTH": "Value of unexpected length.",
+      "BCD": "The value is not valid BCD.",
+      "HOST": "{{message}}",
+      "TC_WRITE": "The simulator does not allow writing timers and counters.",
+      "BOOL": "Allowed values: TRUE, FALSE, 1 or 0.",
+      "SYNTAX": "Value not valid for the format.",
+      "RANGE": "Value out of range ({{min}} … {{max}}).",
+      "S5_RESOLUTION": "Time not representable: minimum resolution 10 ms (100 ms above 9.99 s, 1 s above 99.9 s, 10 s above 999 s).",
+      "TOO_MANY": "Too many rows to monitor: the simulator accepts at most 1000."
     }
   }
 }

@@ -18,6 +18,35 @@ export interface TraceStep {
   accu2: number;
 }
 
+/** Stato dopo un'istruzione del blocco osservato (piano 2C): prima esecuzione nel ciclo. */
+export interface MonitorStep {
+  offset: number;
+  rlo: boolean;
+  sta: boolean;
+  /** Parola di stato (come `TraceStep.stw`). */
+  stw: number;
+  accu1: number;
+  accu2: number;
+  ar1: number;
+  db: number;
+  di: number;
+}
+
+/** Blocco da osservare. */
+export interface MonitorRequest {
+  kind: 'OB' | 'FB' | 'FC';
+  number: number;
+}
+
+/** Registro dell'osservazione condiviso dai contesti di esecuzione del ciclo. */
+export interface MonitorSink extends MonitorRequest {
+  steps: MonitorStep[];
+  /** Offset già registrati nel ciclo: solo la prima esecuzione conta. */
+  seen: Set<number>;
+  /** Classe di priorità che per prima è entrata nel blocco nel ciclo: le altre non si registrano. */
+  prio?: number;
+}
+
 export interface ExecContext {
   mem: SimMemory;
   regs: Registers;
@@ -32,6 +61,10 @@ export interface ExecContext {
   maxCycleMs: number;
   cycleStart: number;
   trace?: (t: TraceStep) => void;
+  /** Osservazione di un blocco; senza, l'esecutore non fa altro che questo controllo. */
+  monitor?: MonitorSink;
+  /** Classe di priorità dell'OB in esecuzione (la imposta `runOb` della CPU). */
+  prio?: number;
   /** Istruzioni eseguite dal ciclo (contatore condiviso fra i blocchi). */
   instructions?: number;
   /**
@@ -94,6 +127,24 @@ function restore(st: ExecState, s: Saved): void {
   st.nest.length = Math.min(st.nest.length, s.nest);
   st.mcr.active = s.mcrActive;
   st.mcr.stack.length = Math.min(st.mcr.stack.length, s.mcrDepth);
+}
+
+/** Registra lo stato del blocco osservato; solo la prima esecuzione dell'offset nel ciclo. */
+function recordStep(mon: MonitorSink, st: ExecState, at: number): void {
+  if (mon.seen.has(at)) return;
+  mon.seen.add(at);
+  const { regs } = st;
+  mon.steps.push({
+    offset: at,
+    rlo: regs.stw.rlo,
+    sta: regs.stw.sta,
+    stw: stwToWord(regs.stw),
+    accu1: regs.accu1,
+    accu2: regs.accu2,
+    ar1: regs.ar1,
+    db: regs.db,
+    di: regs.di,
+  });
 }
 
 /** Ogni quante istruzioni si controlla il tempo di ciclo (Global Constraints, piano 2A). */
@@ -240,6 +291,10 @@ function handled(ctx: ExecContext, e: SimError, st: ExecState): boolean {
       e2.block = e.block;
       e2.offset = e.offset;
       e2.network = e.network;
+      if (e.blockStack) e2.blockStack = [...e.blockStack];
+    } else if (e2 instanceof SimError && e.blockStack) {
+      // Errore dentro il gestore (OB121/OB122): sotto il suo blocco c'è il blocco che ha sbagliato.
+      e2.blockStack?.push(...e.blockStack);
     }
     throw e2;
   }
@@ -254,6 +309,15 @@ export function execBlock(st: ExecState): void {
   const code = block.code;
   const max = ctx.maxInstructions ?? MAX_INSTRUCTIONS;
   const scratch = ctx.onError ? newSaved() : undefined;
+  let mon =
+    ctx.monitor && ctx.monitor.kind === block.kind && ctx.monitor.number === block.number
+      ? ctx.monitor
+      : undefined;
+  if (mon) {
+    // Un'interruzione (OB35…) dentro il blocco osservato non si mescola all'esecuzione interrotta.
+    mon.prio ??= ctx.prio ?? 0;
+    if (mon.prio !== (ctx.prio ?? 0)) mon = undefined;
+  }
   let at = 0;
   while (at < code.length) {
     st.offset = at;
@@ -276,6 +340,9 @@ export function execBlock(st: ExecState): void {
         save(st, scratch);
         saved = true;
       }
+      // BE e BEU cambiano lo stato lasciato al chiamante (STA = 1, OS = OR = /FC = 0): il passo
+      // mostra lo stato prima di questa uscita, cioè quello del blocco sull'ultima riga.
+      if (mon && (d.stmt.id === 'BE' || d.stmt.id === 'BEU')) recordStep(mon, st, at);
       const r = handler(st, withFormal(d.stmt));
       ctx.trace?.({
         block: { kind: block.kind, number: block.number },
@@ -285,6 +352,7 @@ export function execBlock(st: ExecState): void {
         accu1: st.regs.accu1,
         accu2: st.regs.accu2,
       });
+      if (mon) recordStep(mon, st, at);
       if (r === 'return') return;
       if (r && typeof r === 'object') {
         if (!instructionStarts(block).has(r.jump))
@@ -296,10 +364,15 @@ export function execBlock(st: ExecState): void {
       } else at += d.length;
     } catch (e) {
       // Un errore già localizzato viene da un blocco richiamato (o da un OB d'errore): passa oltre.
-      if (!(e instanceof SimError) || e.offset !== undefined) throw e;
+      if (!(e instanceof SimError)) throw e;
+      if (e.offset !== undefined) {
+        e.blockStack?.push({ kind: block.kind, number: block.number, offset: at });
+        throw e;
+      }
       e.block = { kind: block.kind, number: block.number };
       e.offset = at;
       e.network = networkOf(block, at);
+      e.blockStack = [{ kind: block.kind, number: block.number, offset: at }];
       if (d && 'stmt' in d && e.access === undefined && WRITES.has(d.stmt.id)) e.access = 'write';
       // `saved` c'è solo se l'errore viene dall'istruzione (non dal tick): solo allora la si salta.
       if (!saved || !scratch || !d || !handled(ctx, e, st)) throw e;

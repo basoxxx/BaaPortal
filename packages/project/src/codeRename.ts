@@ -53,6 +53,23 @@ export function renameSymbolInCode(device: PlcDevice, oldName: string, newName: 
   rewrite(codeBlocks(device), { kind: 'symbol', oldName }, newName);
 }
 
+/**
+ * Righe delle tabelle di controllo il cui operando comincia con il simbolo `"Nome"` (da solo, o
+ * seguito da `.membro` / `[indice]`): il simbolo viene riscritto con il nome nuovo.
+ */
+export function renameSymbolInWatchRows(device: PlcDevice, oldName: string, newName: string): void {
+  if (!usable(oldName, newName)) return;
+  const key = nameKey(oldName);
+  for (const w of device.watchTables) {
+    for (const r of w.rows) {
+      const m = /^(\s*)"([^"]*)"(?=$|[.\[\s])/.exec(r.operand);
+      if (m && nameKey(m[2]!) === key) {
+        r.operand = `${m[1]}"${newName}"${r.operand.slice(m[0].length)}`;
+      }
+    }
+  }
+}
+
 /** Il membro con `id` e la catena dei suoi antenati (dal livello superiore al membro). */
 function chainTo(list: Member[], id: string): Member[] | undefined {
   for (const m of list) {

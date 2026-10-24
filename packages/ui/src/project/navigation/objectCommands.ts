@@ -2,11 +2,13 @@ import type { StoreApi } from 'zustand/vanilla';
 import { findCpu } from '@baaportal/catalog';
 import {
   deleteSource,
+  deleteWatchTable,
   findBlock,
   findDevice,
   findSource,
   findTagTable,
   findUdt,
+  findWatchTable,
   renameWithReferences,
   uniqueName,
   type ObjectRef,
@@ -104,6 +106,16 @@ export function sourcesOfNodes(nodeIds: Iterable<string>): { dev: string; id: st
   for (const n of nodeIds) {
     const p = parseNodeId(n);
     if (p.kind === 'source') out.push({ dev: p.dev, id: p.id });
+  }
+  return out;
+}
+
+/** Tabelle di controllo rappresentate dai nodi. */
+export function watchTablesOfNodes(nodeIds: Iterable<string>): { dev: string; id: string }[] {
+  const out: { dev: string; id: string }[] = [];
+  for (const n of nodeIds) {
+    const p = parseNodeId(n);
+    if (p.kind === 'watchTable') out.push({ dev: p.dev, id: p.id });
   }
   return out;
 }
@@ -206,7 +218,9 @@ export const selectRef = (store: StoreApi<AppState>, r: ObjectRef | undefined) =
           ? ids.tagTable(r.deviceId, r.id)
           : r?.kind === 'source'
             ? ids.source(r.deviceId, r.id)
-            : null;
+            : r?.kind === 'watchTable'
+              ? ids.watchTable(r.deviceId, r.id)
+              : null;
   if (target) store.getState().select(target);
 };
 
@@ -269,7 +283,12 @@ export async function deleteNodes(ctx: ObjectCtx, nodeIds: Iterable<string>): Pr
   if (removable.length < refs.length) {
     store.getState().pushMessage({ severity: 'warning', textKey: 'messages.standardTableLocked' });
   }
-  if (removable.length === 0 && groups.length === 0 && sources.length === 0) return;
+  const watches = watchTablesOfNodes(all).filter((x) => {
+    const dev = deviceOf(doc, x.dev);
+    return !!dev && !!findWatchTable(dev, x.id);
+  });
+  if (removable.length === 0 && groups.length === 0 && sources.length === 0 && watches.length === 0)
+    return;
 
   const names = [
     ...removable.flatMap((r) => {
@@ -279,6 +298,7 @@ export async function deleteNodes(ctx: ObjectCtx, nodeIds: Iterable<string>): Pr
     }),
     ...groups.map((g) => lastOf(g.path)),
     ...sources.map((x) => findSource(deviceOf(doc, x.dev)!, x.id)!.name),
+    ...watches.map((x) => findWatchTable(deviceOf(doc, x.dev)!, x.id)!.name),
   ];
   const listed = names.slice(0, MAX_LISTED);
   if (names.length > MAX_LISTED) {
@@ -305,6 +325,10 @@ export async function deleteNodes(ctx: ObjectCtx, nodeIds: Iterable<string>): Pr
       const dev = findDevice(p, x.dev);
       if (dev) deleteSource(dev, x.id);
     }
+    for (const x of watches) {
+      const dev = findDevice(p, x.dev);
+      if (dev) deleteWatchTable(dev, x.id);
+    }
   });
   const sel = store.getState().selection;
   const first = removable[0];
@@ -314,6 +338,8 @@ export async function deleteNodes(ctx: ObjectCtx, nodeIds: Iterable<string>): Pr
   if (sel && area && dev && all.includes(sel)) store.getState().select(folderNodeId(dev, area));
   else if (sel && sources[0] && all.includes(sel)) {
     store.getState().select(ids.folder(sources[0].dev, 'sources'));
+  } else if (sel && watches[0] && all.includes(sel)) {
+    store.getState().select(ids.folder(watches[0].dev, 'watch'));
   }
 }
 
@@ -345,6 +371,10 @@ export function renameInfo(doc: OpenDoc | null, nodeId: string): { name: string 
       const x = findSource(dev, p.id);
       return x ? { name: x.name } : null;
     }
+    case 'watchTable': {
+      const w = findWatchTable(dev, p.id);
+      return w ? { name: w.name } : null;
+    }
     default:
       return null;
   }
@@ -374,6 +404,12 @@ export function checkRename(doc: OpenDoc | null, nodeId: string, name: string): 
       return 'INVALID';
     return dev.sources.some((x) => x.id !== p.id && sameName(x.name, name)) ? 'DUPLICATE' : null;
   }
+  if (p.kind === 'watchTable') {
+    if (name.trim() === '') return 'INVALID';
+    return dev.watchTables.some((w) => w.id !== p.id && sameName(w.name, name))
+      ? 'DUPLICATE'
+      : null;
+  }
   return 'INVALID';
 }
 
@@ -399,7 +435,11 @@ export function renameNode(
   const ref: ObjectRef | null =
     p.kind === 'plc'
       ? { kind: 'device', deviceId: p.dev }
-      : p.kind === 'block' || p.kind === 'udt' || p.kind === 'tagTable' || p.kind === 'source'
+      : p.kind === 'block' ||
+          p.kind === 'udt' ||
+          p.kind === 'tagTable' ||
+          p.kind === 'source' ||
+          p.kind === 'watchTable'
         ? { kind: p.kind, deviceId: p.dev, id: p.id }
         : null;
   if (ref) {

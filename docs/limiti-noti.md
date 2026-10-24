@@ -19,7 +19,7 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§4.1 per la semantica). T
 
 - **Nessuna CPU reale per confermare la semantica** (spec §10). Il simulatore controlla la coerenza interna con i manuali pubblici, ma nessun risultato è stato confrontato con una S7-300 vera.
 - **Temporizzatori, contatori, SFC/SFB e OB di errore: risolti dal piano 2B** (vedi la sezione «Simulatore (piano 2B)» qui sotto).
-- **Nessuna interfaccia fino al piano 2C.** Il simulatore è un pacchetto senza pannelli; si usa da codice e dai test.
+- **Interfaccia: piano 2C.** Il pacchetto non ha pannelli; li offre il piano 2C (vedi «Strumenti di test (piano 2C)» sotto).
 - **Il tempo di ciclo non è quello di una CPU vera.** Dipende dal computer e dall'orologio iniettato.
 - **ENT e LEAVE rifiutati** (`ISTRUZIONE_NON_S7300`): sono delle CPU a 4 accumulatori.
 
@@ -81,6 +81,32 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§10–§13). Come per il 
 - **Senza OB1:** OB35 gira comunque all'inizio del ciclo, ma non c'è un controllo di fine ciclo (watchdog, evento di ciclo).
 - **OB121, profondità dei blocchi:** la profondità dei blocchi dentro l'OB121 riparte da 0 invece di sommarsi a quella del blocco interrotto.
 - **SFC e SFB non simulati:** sono un avviso («non simulata», BR = 0, uscite intatte, una volta per numero e per RUN), non un errore. Sono non simulate **tutte** le SFC e gli SFB tranne SFC 0, 1, 20, 21, 22, 23, 24, 46, 47, 51, 64 e SFB 0–5.
+
+## Strumenti di test (piano 2C)
+
+Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simulatore.md`. Come per i piani 2A e 2B, nessuna è confermata da una CPU reale.
+
+- **Nessun PLC vero fino alla tappa 3.** Pannello CPU, pannello I/O, osservazione e tabelle di controllo funzionano solo sul simulatore; il collegamento a un PLC reale usa lo stesso `watch`/`write` nella tappa 3.
+- **Il tempo di ciclo del Worker non è quello di una CPU vera.** Dipende dal computer.
+- **Osservazione del programma.**
+  - Rileva solo la prima esecuzione di ogni riga nel ciclo; non c'è l'opzione «ultima esecuzione».
+  - I blocchi importati e non ricompilati non si possono osservare (mancano le righe del compilatore).
+  - Gli editor nelle finestre staccate non vengono osservati.
+  - Il tasto esadecimale/decimale non viene salvato e torna esadecimale a ogni simulazione.
+- **Nessun FORCE.** Il pannello I/O simula gli ingressi fisici e non forza valori; il forzamento è della tappa 7.
+- **Blocchi cancellati.** «Carica nel dispositivo» cancella dalla CPU simulata i blocchi (compresi i DB) non più nel progetto; un blocco cancellato che era in osservazione smette di essere osservato. Anche i DB creati dal programma con SFC 22 (CREAT_DB) vengono cancellati da un nuovo caricamento.
+- **Byte aggiunti a mano nel pannello I/O** («+ byte») durano solo la sessione di simulazione e non sono salvati nel progetto.
+- **Tabelle di controllo.**
+  - La scrittura di T e C non è supportata (lo stato si legge).
+  - Non si osservano L, DI, accessi indiretti, puntatori, variabili locali (`#x`) né tipi composti (ARRAY, STRUCT, STRING interi).
+  - Si osserva una sola tabella alla volta: quella su cui si è attivato «Osserva tutto», finché è visibile in un riquadro qualsiasi; una tabella in una finestra staccata smette di essere osservata.
+  - Gli operandi si risolvono sul **progetto offline**, non sul programma caricato: se si modifica il layout di un DB senza caricarlo, letture e scritture usano i nuovi offset della modifica e non c'è confronto online/offline.
+  - Le modifiche alle proprietà della CPU (tempo di ciclo, merker di clock, intervallo di OB35) valgono solo dopo aver riavviato la simulazione.
+  - La rinomina di un tag, di una costante o di un blocco/DB aggiorna le righe che usano `"Nome"` o `"Nome".membro`; la rinomina di un **membro** di un DB o di un UDT non aggiorna le tabelle di controllo (la riga mostra un errore di risoluzione finché non si corregge).
+  - Non c'è un forzamento permanente né un «trigger»: c'è solo «Comanda», una scrittura una tantum.
+  - Le tabelle non si copiano, tagliano, incollano né trascinano nell'albero; non ci sono gruppi né importazione o esportazione.
+  - Al più 1000 righe osservate per richiesta; le righe oltre il limite danno un errore di riga.
+  - Un file `.baap` del formato 4 non si apre con un'app più vecchia (`NEWER_FORMAT`).
 
 ## Funzioni 1F (piano 1F)
 

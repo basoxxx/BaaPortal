@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { EditorRef } from '../../state/workArea';
 import { InterfaceTable } from './InterfaceTable';
+import { MonitorBar } from './MonitorBar';
 import { NetworksView } from './NetworksView';
 
 /** Editor di OB, FB e FC: interfaccia in alto (comprimibile), poi intestazione e segmenti. */
@@ -26,6 +27,7 @@ export function BlockEditor({ editor }: { editor: EditorRef }) {
           valueHeaderKey="block.col.default"
         />
       ) : null}
+      <MonitorBar deviceId={editor.deviceId} blockId={editor.objectId} />
       <NetworksView deviceId={editor.deviceId} blockId={editor.objectId} />
     </div>
   );

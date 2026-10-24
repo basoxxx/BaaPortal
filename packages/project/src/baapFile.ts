@@ -9,6 +9,7 @@ import {
   type ProjectMeta,
   type TagTable,
   type Udt,
+  type WatchTable,
 } from './model';
 
 export type BaapErrorCode =
@@ -43,7 +44,7 @@ const projectV1Schema = z.object({
   formatVersion: z.literal(1),
   meta: z.object(metaShape).strict(),
 });
-const projectSchema = (version: 2 | 3) =>
+const projectSchema = (version: 2 | 3 | 4) =>
   obj({
     formatVersion: z.literal(version),
     meta: obj(metaShape),
@@ -93,6 +94,26 @@ const deviceShape = {
 // Formato 2: nessun elenco di sorgenti. Formato 3: elenco ordinato di sorgenti (il testo sta in file a parte).
 const deviceSchemaV2 = obj(deviceShape);
 const deviceSchemaV3 = obj({ ...deviceShape, sources: z.array(obj({ id, name: str })) });
+// Formato 4: in piu l'elenco ordinato delle tabelle di controllo (ciascuna in un file a parte).
+const deviceSchemaV4 = obj({
+  ...deviceShape,
+  sources: z.array(obj({ id, name: str })),
+  watchTables: z.array(id),
+});
+
+const watchTableSchema = obj({
+  id,
+  name: str,
+  rows: z.array(
+    obj({
+      id,
+      operand: str,
+      format: z.enum(['BOOL', 'DEC', 'HEX', 'BIN', 'CHAR', 'FLOAT', 'S5TIME', 'TIME', 'BCD']),
+      modify: str.optional(),
+      comment: str.optional(),
+    }),
+  ),
+});
 
 const tagTableSchema = obj({
   id,
@@ -190,7 +211,7 @@ export function writeBaap(project: Project, opts: { appVersion: string }): Uint8
   };
   for (const device of devices) {
     const dir = deviceDir(device.id);
-    const { tagTables, udts, blocks, sources, ...deviceRest } = device;
+    const { tagTables, udts, blocks, sources, watchTables, ...deviceRest } = device;
     // Le chiavi della voce di project.json restano lì.
     delete deviceRest.listExtras;
     files[`${dir}/device.json`] = toJson({
@@ -199,8 +220,10 @@ export function writeBaap(project: Project, opts: { appVersion: string }): Uint8
       udts: udts.map((u) => u.id),
       blocks: blocks.map((b) => b.id),
       sources: sources.map((x) => ({ ...x.listExtras, id: x.id, name: x.name })),
+      watchTables: watchTables.map((w) => w.id),
     });
     for (const t of tagTables) files[`${dir}/tags/${t.id}.json`] = toJson(t);
+    for (const w of watchTables) files[`${dir}/watch/${w.id}.json`] = toJson(w);
     for (const u of udts) files[`${dir}/types/${u.id}.json`] = toJson(u);
     for (const b of blocks) files[`${dir}/blocks/${b.id}.json`] = toJson(b);
     // UTF-8 senza BOM, come in memoria (strToU8 non aggiunge il BOM).
@@ -257,6 +280,10 @@ function checkUniqueIds(device: PlcDevice): void {
     collectMemberIds(u.members, add);
   }
   for (const x of device.sources) add(x.id);
+  for (const w of device.watchTables) {
+    add(w.id);
+    for (const r of w.rows) add(r.id);
+  }
   for (const b of device.blocks) {
     add(b.id);
     if (b.kind === 'DB') collectMemberIds(b.members, add);
@@ -296,18 +323,25 @@ function readSources(
   });
 }
 
-function readDevice(files: Map<string, Uint8Array>, listedId: string, version: 2 | 3): PlcDevice {
+function readDevice(
+  files: Map<string, Uint8Array>,
+  listedId: string,
+  version: 2 | 3 | 4,
+): PlcDevice {
   const dir = deviceDir(listedId);
   const raw = readListed(
     files,
     `${dir}/device.json`,
-    version === 3 ? deviceSchemaV3 : deviceSchemaV2,
+    version === 4 ? deviceSchemaV4 : version === 3 ? deviceSchemaV3 : deviceSchemaV2,
     listedId,
   );
   const { tagTables, udts, blocks, ...rest } = raw;
+  const listedWatch = 'watchTables' in raw ? (raw.watchTables as string[]) : [];
   const listedSources = 'sources' in raw ? (raw.sources as { id: string; name: string }[]) : [];
   // Nel formato 2 una chiave `sources` non esiste: se c'e, e di un'altra origine e si ignora.
   delete (rest as { sources?: unknown }).sources;
+  // Prima del formato 4 non ci sono tabelle di controllo: una chiave `watchTables` e di un'altra origine.
+  delete (rest as { watchTables?: unknown }).watchTables;
   const device = {
     ...rest,
     tagTables: tagTables.map((x) =>
@@ -315,7 +349,13 @@ function readDevice(files: Map<string, Uint8Array>, listedId: string, version: 2
     ) as TagTable[],
     udts: udts.map((x) => readListed(files, `${dir}/types/${x}.json`, udtSchema, x)) as Udt[],
     blocks: blocks.map((x) => readListed(files, `${dir}/blocks/${x}.json`, blockSchema, x)),
-    sources: version === 3 ? readSources(files, dir, listedSources) : [],
+    sources: version >= 3 ? readSources(files, dir, listedSources) : [],
+    watchTables:
+      version === 4
+        ? listedWatch.map(
+            (x) => readListed(files, `${dir}/watch/${x}.json`, watchTableSchema, x) as WatchTable,
+          )
+        : [],
   } as PlcDevice;
   checkUniqueIds(device);
   return device;
@@ -349,8 +389,9 @@ export function readBaap(bytes: Uint8Array): Project {
     if (!v1.success) throw invalid();
     return { formatVersion: FORMAT_VERSION, meta: v1.data.meta as ProjectMeta, devices: [] };
   }
-  // Il formato 2 si apre com'e, con `sources: []`; il 3 e quello attuale. Altri valori non esistono.
-  if (version !== 2 && version !== 3) throw invalid();
+  // Il formato 2 si apre con `sources: []`, il 3 anche con `watchTables: []`; il 4 e quello attuale.
+  // Altri valori non esistono.
+  if (version !== 2 && version !== 3 && version !== 4) throw invalid();
 
   const project = projectSchema(version).safeParse(json);
   if (!project.success) throw invalid();

@@ -71,6 +71,7 @@ export const MENUS: MenuDef[] = [
       'sep',
       'online.download',
       'online.upload',
+      'online.monitor',
       'sep',
       'online.accessibleDevices',
       'online.startCpu',

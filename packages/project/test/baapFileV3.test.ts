@@ -129,9 +129,9 @@ describe('file .baap formato 3: sorgenti esterne', () => {
     expect(code(zipSync(f))).toBe('INVALID_SCHEMA');
   });
 
-  it('formato 4 → NEWER_FORMAT', () => {
+  it('formato 5 → NEWER_FORMAT', () => {
     const f = files(makeProject());
-    put(f, 'baaportal.json', { format: 'baaportal-project', formatVersion: 4 });
+    put(f, 'baaportal.json', { format: 'baaportal-project', formatVersion: 5 });
     expect(code(zipSync(f))).toBe('NEWER_FORMAT');
   });
 });
@@ -164,7 +164,7 @@ describe('migrazione dal formato 2', () => {
     second.name = 'PLC_2';
     p.devices.push(second);
     const opened = readBaap(asFormat2(p));
-    expect(opened.formatVersion).toBe(3);
+    expect(opened.formatVersion).toBe(4);
     expect(opened.devices).toHaveLength(2);
     expect(opened.devices.map((d) => d.blocks.length)).toEqual(
       p.devices.map((d) => d.blocks.length),

@@ -76,7 +76,6 @@ describe('buildTree', () => {
     expect(plc.children.filter((c) => !c.enabled).map((c) => c.labelKey)).toEqual([
       'tree.plc.deviceConfig',
       'tree.plc.onlineDiag',
-      'tree.plc.watch',
       'tree.plc.backup',
       'tree.plc.progInfo',
     ]);
@@ -94,6 +93,7 @@ describe('buildTree', () => {
       'Tabella delle variabili standard [0]',
     ]);
     expect(plc.children[5]!.children.map((c) => labelOf(c))).toEqual(['tree.plc.addUdt']);
+    expect(plc.children[6]!.children.map((c) => labelOf(c))).toEqual(['tree.plc.addWatchTable']);
     expect([blocks.dropArea, tags.dropArea, plc.children[5]!.dropArea]).toEqual([
       'blocks',
       'tags',

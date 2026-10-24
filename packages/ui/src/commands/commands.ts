@@ -7,6 +7,8 @@ import { getProgress } from '../project/progress';
 import { compileProgram } from '../project/compile/compileActions';
 import { openReference } from '../project/reference/referenceStore';
 import { requestFind } from '../search/findActions';
+import { activeCodeBlock } from '../sim/monitorStatus';
+import { simControllerFor } from '../sim/simController';
 import { targetPlcId } from '../project/navigation/treeIds';
 
 export type CommandId =
@@ -44,6 +46,7 @@ export type CommandId =
   | 'online.goOffline'
   | 'online.simulation'
   | 'online.download'
+  | 'online.monitor'
   | 'online.upload'
   | 'online.accessibleDevices'
   | 'online.startCpu'
@@ -241,12 +244,36 @@ const list: Command[] = [
   }),
   def('online.goOnline', { icon: 'goOnline' }),
   def('online.goOffline', { icon: 'goOffline' }),
-  def('online.simulation', { icon: 'simulation' }),
-  def('online.download', { icon: 'download' }),
+  def('online.simulation', {
+    icon: 'simulation',
+    isEnabled: (s) => hasPlc(s) || s.sim.phase !== 'off',
+    isChecked: (s) => s.sim.phase !== 'off',
+    run: ({ store }) => simControllerFor(store).toggle(),
+  }),
+  def('online.download', {
+    icon: 'download',
+    isEnabled: (s) => s.sim.phase === 'on' && !s.sim.downloading && !getProgress(),
+    run: ({ store, bridge }) => simControllerFor(store).download({ store, bridge }),
+  }),
+  def('online.monitor', {
+    icon: 'monitor',
+    // Si può spegnere sempre; si accende su un blocco di codice aperto del PLC simulato.
+    isEnabled: (s) => s.sim.monitor !== null || activeCodeBlock(s) !== undefined,
+    isChecked: (s) => s.sim.monitor !== null,
+    run: ({ store }) => simControllerFor(store).toggleMonitor(),
+  }),
   def('online.upload', { icon: 'upload' }),
   def('online.accessibleDevices', { icon: 'accessibleDevices' }),
-  def('online.startCpu', { icon: 'startCpu' }),
-  def('online.stopCpu', { icon: 'stopCpu' }),
+  def('online.startCpu', {
+    icon: 'startCpu',
+    isEnabled: (s) => s.sim.phase === 'on' && s.sim.mode === 'STOP',
+    run: ({ store }) => simControllerFor(store).setMode('RUN'),
+  }),
+  def('online.stopCpu', {
+    icon: 'stopCpu',
+    isEnabled: (s) => s.sim.phase === 'on' && s.sim.mode !== 'STOP',
+    run: ({ store }) => simControllerFor(store).setMode('STOP'),
+  }),
   def('online.diagnostics'),
   def('options.settings', {
     isEnabled: always,

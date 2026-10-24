@@ -10,7 +10,7 @@ const SECTIONS = {
     'Comunicazione',
     'Pacchetti opzionali',
   ],
-  test: ['Pannello di comando CPU', 'Stack di chiamata'],
+  test: ['Pannello di comando CPU', 'Stack di chiamata', 'Pannello I/O del simulatore'],
   tasks: ['Trova e sostituisci'],
   libraries: ['Libreria di progetto', 'Librerie globali'],
 } as const;

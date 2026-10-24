@@ -12,6 +12,7 @@ import {
 } from '@baaportal/s7-types';
 import type { CpuType } from '@baaportal/catalog';
 import { findSystemFb, systemFbMembers, toTypedMembers, typeResolver } from './members';
+import { watchResolverFor } from './watchOperand';
 import type {
   Block,
   CodeBlock,
@@ -42,13 +43,15 @@ export type DiagnosticCode =
   | 'INSTANCE_FB_MISSING'
   | 'HEADER_INVALID'
   | 'PROPERTY_INVALID'
-  | 'CPU_UNKNOWN';
+  | 'CPU_UNKNOWN'
+  | 'WATCH_NAME_DUPLICATE'
+  | 'WATCH_OPERAND_INVALID';
 
 export interface Diagnostic {
   severity: 'error' | 'warning';
   code: DiagnosticCode;
   ref: ObjectRef;
-  field?: 'name' | 'type' | 'address' | 'value' | 'number' | 'header' | 'property';
+  field?: 'name' | 'type' | 'address' | 'value' | 'number' | 'header' | 'property' | 'operand';
   property?: string;
   params?: Record<string, string>;
 }
@@ -752,6 +755,38 @@ function checkBlocks(ctx: Ctx): void {
   }
 }
 
+// ---- Tabelle di controllo ----
+
+// Avvisi (mai errori): una tabella con lo stesso nome di un'altra, o una riga il cui operando non si risolve.
+function checkWatchTables(ctx: Ctx): void {
+  const { device } = ctx;
+  if (device.watchTables.length === 0) return;
+  const byName = groupByName(device.watchTables, (w) => w.name);
+  const resolve = device.watchTables.some((w) => w.rows.some((r) => r.operand.trim() !== ''))
+    ? watchResolverFor(device, ctx.cpu)
+    : undefined;
+  for (const w of device.watchTables) {
+    const ref: ObjectRef = { kind: 'watchTable', deviceId: device.id, id: w.id };
+    if ((byName.get(nameKey(w.name))?.length ?? 0) > 1) {
+      add(ctx, { severity: 'warning', code: 'WATCH_NAME_DUPLICATE', ref, field: 'name' });
+    }
+    for (const row of w.rows) {
+      // Una riga vuota e solo segnaposto: non e un errore.
+      if (row.operand.trim() === '' || !resolve) continue;
+      const r = resolve(row.operand);
+      if (!r.ok) {
+        add(ctx, {
+          severity: 'warning',
+          code: 'WATCH_OPERAND_INVALID',
+          ref,
+          field: 'operand',
+          params: { operand: row.operand, reason: r.code },
+        });
+      }
+    }
+  }
+}
+
 // ---- Ingresso ----
 
 export function checkDevice(device: PlcDevice, cpu: CpuType | undefined): Diagnostic[] {
@@ -797,5 +832,6 @@ export function checkDevice(device: PlcDevice, cpu: CpuType | undefined): Diagno
   checkTagTables(ctx);
   checkUdts(ctx);
   checkBlocks(ctx);
+  checkWatchTables(ctx);
   return ctx.out;
 }

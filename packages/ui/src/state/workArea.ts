@@ -1,6 +1,6 @@
 import { ids, parseNodeId } from '../project/navigation/treeIds';
 
-export type EditorKind = 'tagTable' | 'allTags' | 'block' | 'udt' | 'source';
+export type EditorKind = 'tagTable' | 'allTags' | 'block' | 'udt' | 'source' | 'watchTable';
 export interface EditorRef {
   /** `${kind}:${deviceId}:${objectId}`; "Mostra tutte le variabili" ha objectId ''. */
   key: string;
@@ -54,6 +54,8 @@ export function nodeIdOfEditor(e: EditorTarget): string {
       return ids.tagTable(e.deviceId, e.objectId);
     case 'source':
       return ids.source(e.deviceId, e.objectId);
+    case 'watchTable':
+      return ids.watchTable(e.deviceId, e.objectId);
     case 'allTags':
       return ids.folder(e.deviceId, 'tags-all');
   }
@@ -62,7 +64,13 @@ export function nodeIdOfEditor(e: EditorTarget): string {
 /** Editor che il nodo apre (blocco, UDT, tabella, "Mostra tutte le variabili"), altrimenti null. */
 export function editorOfNode(nodeId: string): EditorTarget | null {
   const p = parseNodeId(nodeId);
-  if (p.kind === 'block' || p.kind === 'udt' || p.kind === 'tagTable' || p.kind === 'source') {
+  if (
+    p.kind === 'block' ||
+    p.kind === 'udt' ||
+    p.kind === 'tagTable' ||
+    p.kind === 'source' ||
+    p.kind === 'watchTable'
+  ) {
     return { kind: p.kind, deviceId: p.dev, objectId: p.id };
   }
   if (p.kind === 'folder' && p.folder === 'tags-all') {

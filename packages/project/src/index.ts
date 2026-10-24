@@ -9,3 +9,4 @@ export * from './memberRename';
 export * from './awlContext';
 export * from './codeRename';
 export * from './mc7Bridge';
+export * from './watchOperand';

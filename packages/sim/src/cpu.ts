@@ -4,7 +4,15 @@ import { readBlockFile } from '@baaportal/mc7';
 import { diagFromError, syntheticEventId, type DiagEntry } from './diagnostics';
 import { SimError, StopRequest } from './errors';
 import { EVENT, PRIORITY, hwEventId, syncFaultOf, type HwInterrupt } from './events';
-import { execBlock, newExecState, type ExecContext, type ExecState } from './executor';
+import {
+  execBlock,
+  newExecState,
+  type ExecContext,
+  type ExecState,
+  type MonitorRequest,
+  type MonitorSink,
+  type MonitorStep,
+} from './executor';
 import { Program } from './program';
 import { SimMemory, memorySizesFor } from './memory';
 import {
@@ -136,6 +144,8 @@ export class SimCpu {
   private ob35Running = false;
   /** Allarmi di diagnostica e guasti in attesa (`raiseInterrupt`). */
   private pending: HwInterrupt[] = [];
+  /** Osservazione di un blocco (`setMonitor`); `undefined` = nessuna, costo zero nell'esecutore. */
+  private monitor: MonitorSink | undefined;
 
   constructor(o: SimCpuOptions) {
     this.props = o.props;
@@ -183,6 +193,26 @@ export class SimCpu {
     return () => this.listeners.delete(cb);
   }
 
+  /** Osserva un blocco: dopo ogni ciclo `monitorSnapshot` dà lo stato dopo le sue istruzioni. */
+  setMonitor(req: MonitorRequest | undefined): void {
+    this.monitor = req
+      ? { kind: req.kind, number: req.number, steps: [], seen: new Set() }
+      : undefined;
+  }
+
+  /**
+   * Stato dopo ogni istruzione del blocco osservato, nella **prima** esecuzione dell'ultimo ciclo
+   * (⚠️ TIA può mostrare un'altra esecuzione). `undefined` senza osservazione.
+   */
+  monitorSnapshot(): MonitorStep[] | undefined {
+    return this.monitor ? this.monitor.steps.map((s) => ({ ...s })) : undefined;
+  }
+
+  /** Il blocco osservato è cambiato o sparito: l'osservazione finisce. */
+  private monitorGone(kind: string, number: number): void {
+    if (this.monitor?.kind === kind && this.monitor.number === number) this.monitor = undefined;
+  }
+
   loadBlock(file: Uint8Array): void {
     const f = readBlockFile(file);
     if (f.header.kind === 'DB') {
@@ -195,9 +225,12 @@ export class SimCpu {
       return;
     }
     this.program.load(file);
+    // Solo a caricamento riuscito: un file respinto lascia il blocco (e l'osservazione) com'erano.
+    this.monitorGone(f.header.kind ?? '', f.header.number);
   }
 
   deleteBlock(kind: string, number: number): void {
+    this.monitorGone(kind, number);
     if (kind === 'DB') this.memory.dbs.delete(number);
     else this.program.delete(kind, number);
   }
@@ -275,6 +308,11 @@ export class SimCpu {
     const m = this.memory;
     this.updateClock(start);
     m.I.set(m.physIn);
+    if (this.monitor) {
+      this.monitor.steps = [];
+      this.monitor.seen.clear();
+      delete this.monitor.prio;
+    }
     const ctx = this.newContext(start);
     let elapsedMs: number;
     try {
@@ -365,6 +403,7 @@ export class SimCpu {
       counters: this.counters,
       maxCycleMs: this.props.maxCycleMs,
       cycleStart,
+      ...(this.monitor ? { monitor: this.monitor } : {}),
       ...(this.maxInstructions !== undefined ? { maxInstructions: this.maxInstructions } : {}),
       onTick: (st) => this.tick(st),
       onOverrun: (st, reason) => {
@@ -387,7 +426,7 @@ export class SimCpu {
     const block = this.program.get('OB', ob);
     if (!block) throw new SimError('BLOCCO_NON_CARICATO', `OB${ob}`, { missingBlock: 'OB' });
     // Registri propri: quelli del blocco interrotto restano nel suo contesto e si ritrovano al ritorno.
-    const sub: ExecContext = { ...parent, regs: newRegisters() };
+    const sub: ExecContext = { ...parent, regs: newRegisters(), prio };
     const prevL = this.memory.selectL(prio);
     this.running.push({ ob, prio });
     try {

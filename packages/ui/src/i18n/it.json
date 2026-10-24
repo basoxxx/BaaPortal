@@ -43,7 +43,10 @@
   "status": {
     "compiling": "Compilazione in corso…",
     "cancel": "Interrompi",
-    "progress": "Avanzamento"
+    "progress": "Avanzamento",
+    "simulation": "Simulazione: {{mode}}",
+    "simulationStarting": "Simulazione in avvio…",
+    "simulationFailed": "Simulazione non disponibile"
   },
   "messages": {
     "replaced": "Sostituiti {{replaced}} testi, saltati {{skipped}}.",
@@ -70,6 +73,16 @@
     "actionFailed": "Operazione non riuscita: {{message}}",
     "compileInterrupted": "Compilazione interrotta: i blocchi già compilati restano compilati.",
     "compileFailed": "Compilazione non riuscita: {{message}}",
+    "simStarted": "Simulazione avviata per {{name}} (CPU in STOP).",
+    "simStopped": "Simulazione terminata.",
+    "simStartFailed": "Impossibile avviare la simulazione: {{message}}",
+    "simFailed": "La simulazione si è interrotta: {{message}}",
+    "simDownloadBlocked": "Caricamento annullato: la compilazione ha {{errors}} errori.",
+    "simDownloadStale": "Caricamento annullato: {{count}} blocchi non sono compilati con il contenuto attuale.",
+    "simMonitorFailed": "Osservazione non riuscita: {{message}}",
+    "simDownloadFailed": "Caricamento nel simulatore non riuscito: {{message}}",
+    "simDownloaded": "Caricati {{count}} blocchi nel simulatore.",
+    "simModeFailed": "Cambio di modo della CPU non riuscito: {{message}}",
     "blockExported": "Blocco \"{{name}}\" esportato in {{path}}.",
     "blockExportFailed": "Impossibile esportare il blocco \"{{name}}\": {{message}}",
     "blocksImported": "Importazione blocchi: creati {{created}}, sostituiti {{replaced}}, aggiornati i metadati {{refreshed}}, saltati {{skipped}}.",
@@ -84,7 +97,12 @@
     "tagsImportFailed": "Impossibile importare le variabili da \"{{name}}\": {{message}}",
     "tagsExported": "Tabella \"{{name}}\" esportata in \"{{path}}\".",
     "tagsExportFailed": "Impossibile esportare la tabella \"{{name}}\": {{message}}",
-    "archived": "Progetto \"{{name}}\" archiviato in \"{{path}}\"."
+    "archived": "Progetto \"{{name}}\" archiviato in \"{{path}}\".",
+    "simMresFailed": "Cancellazione totale non riuscita: {{message}}",
+    "simInputsFailed": "Il simulatore non ha accettato gli ingressi: {{message}}",
+    "simInterruptFailed": "Il simulatore non ha accettato l'allarme: {{message}}",
+    "simWatchFailed": "Osservazione della tabella di controllo non riuscita: {{message}}",
+    "simWriteFailed": "Comando non riuscito: {{message}}"
   },
   "commands": {
     "project.new": "Nuovo…",
@@ -120,6 +138,7 @@
     "online.goOffline": "Interrompi collegamento online",
     "online.simulation": "Simulazione",
     "online.download": "Carica nel dispositivo",
+    "online.monitor": "Osserva programma",
     "online.upload": "Carica dal dispositivo…",
     "online.accessibleDevices": "Dispositivi accessibili…",
     "online.startCpu": "Avvia CPU",
@@ -182,6 +201,27 @@
       "PROTETTO": "Blocco protetto: il testo non si può modificare.",
       "MC7_GREZZO": "Codice MC7 non decodificabile: il testo non si può modificare."
     }
+  },
+  "sim": {
+    "monitor": {
+      "title": "Osservazione del programma",
+      "on": "Osservazione attiva: i valori sono quelli della prima esecuzione nell'ultimo ciclo.",
+      "format": "Formato degli accumulatori",
+      "hex": "Esadecimale",
+      "dec": "Decimale",
+      "reason": {
+        "notLoaded": "Osservazione non disponibile: il blocco non è caricato nel simulatore. Usa «Carica nel dispositivo».",
+        "stale": "Osservazione non disponibile: il blocco non è compilato con le modifiche correnti. Caricalo di nuovo nel dispositivo.",
+        "noLines": "Osservazione non disponibile: il blocco è importato e non ha la corrispondenza con le righe del testo.",
+        "edited": "Osservazione sospesa: il testo è in modifica. Caricalo di nuovo nel dispositivo per riprendere."
+      }
+    },
+    "startCpuTitle": "Carica nel dispositivo",
+    "startCpuMessage": "Avviare la CPU?",
+    "yes": "Sì",
+    "no": "No",
+    "mresTitle": "Cancellazione totale",
+    "mresMessage": "Cancellare la memoria di lavoro della CPU (MRES)? I blocchi caricati restano."
   },
   "toolbar": {
     "search": "Ricerca"
@@ -261,7 +301,8 @@
       "watch": "Tabelle di controllo e forzamento",
       "backup": "Backup online",
       "progInfo": "Informazioni sul programma",
-      "addSource": "Aggiungi nuovo file esterno"
+      "addSource": "Aggiungi nuovo file esterno",
+      "addWatchTable": "Aggiungi nuova tabella di controllo"
     }
   },
   "navigation": {
@@ -316,7 +357,8 @@
     "generateSource": "Genera sorgente dai blocchi",
     "editSource": "Modifica sorgente",
     "importBlocks": "Importa blocchi",
-    "importTags": "Importa variabili"
+    "importTags": "Importa variabili",
+    "addWatchTable": "Aggiungi tabella di controllo"
   },
   "inspector": {
     "tab": {
@@ -368,7 +410,8 @@
       },
       "test": {
         "cpuPanel": "Pannello di comando CPU",
-        "callStack": "Stack di chiamata"
+        "callStack": "Stack di chiamata",
+        "ioPanel": "Pannello I/O del simulatore"
       },
       "tasks": {
         "findReplace": "Trova e sostituisci"
@@ -402,7 +445,8 @@
     },
     "group": "Gruppo_1",
     "tag": "Variabile_1",
-    "constant": "Costante_1"
+    "constant": "Costante_1",
+    "watchTable": "Tabella di controllo_1"
   },
   "settings": {
     "title": "Impostazioni",
@@ -575,7 +619,9 @@
     "INSTANCE_FB_MISSING": "Il blocco funzionale dell'istanza non esiste.",
     "HEADER_INVALID": "L'intestazione non è valida.",
     "PROPERTY_INVALID": "Il valore della proprietà non è valido.",
-    "CPU_UNKNOWN": "La CPU non è nel catalogo."
+    "CPU_UNKNOWN": "La CPU non è nel catalogo.",
+    "WATCH_NAME_DUPLICATE": "Esiste già una tabella di controllo con questo nome.",
+    "WATCH_OPERAND_INVALID": "L'operando «{{operand}}» di una riga non si risolve."
   },
   "block": {
     "interface": "Interfaccia del blocco",
@@ -926,6 +972,115 @@
       "message": "Il file \"{{path}}\" esiste già. Vuoi sovrascriverlo?",
       "yes": "Sovrascrivi",
       "no": "Annulla"
+    }
+  },
+  "cpuPanel": {
+    "needSim": "Avvia la simulazione per usare il pannello",
+    "run": "RUN",
+    "stop": "STOP",
+    "sf": "SF",
+    "runBtn": "RUN",
+    "stopBtn": "STOP",
+    "mres": "MRES",
+    "cycle": "Tempo di ciclo",
+    "last": "Ultimo",
+    "min": "Minimo",
+    "max": "Massimo",
+    "ms": "{{value}} ms",
+    "diagnostics": "Buffer di diagnostica",
+    "diagEmpty": "Nessuna voce.",
+    "warnings": "Avvisi",
+    "noWarnings": "Nessun avviso.",
+    "callStackEmpty": "Nessuno stack di chiamata registrato.",
+    "callStackNote": "Ultimo STOP per errore",
+    "inBlock": "in {{block}}",
+    "offset": "offset {{offset}}",
+    "network": "rete {{network}}",
+    "code": {
+      "AREA_LUNGHEZZA": "Accesso a un'area oltre la sua lunghezza",
+      "DB_NON_CARICATO": "Il blocco dati non è caricato",
+      "DB_NON_APERTO": "Nessun blocco dati aperto",
+      "BLOCCO_NON_CARICATO": "Il blocco richiamato non è caricato",
+      "STACK_BLOCCHI_PIENO": "Stack dei blocchi pieno",
+      "STACK_ANNIDAMENTO_PIENO": "Stack di annidamento pieno",
+      "STACK_L_PIENO": "Stack dei dati locali pieno",
+      "ISTRUZIONE_NON_S7300": "Istruzione non disponibile sulla S7-300",
+      "MC7_NON_ESEGUIBILE": "Codice MC7 non eseguibile",
+      "BCD_NON_VALIDO": "Valore BCD non valido",
+      "NUMERO_TEMPORIZZATORE": "Numero di temporizzatore non valido",
+      "NUMERO_CONTATORE": "Numero di contatore non valido",
+      "TEMPO_CICLO_SUPERATO": "Tempo di ciclo massimo superato",
+      "OB_NON_CARICATO": "OB dell'evento non caricato",
+      "STOP_RICHIESTO": "STOP richiesto",
+      "AVVIO": "Avvio della CPU",
+      "CANCELLAZIONE_TOTALE": "Cancellazione totale",
+      "OB_RICHIAMATO": "OB d'evento richiamato",
+      "SFC_NON_SIMULATA": "SFC non simulata",
+      "SFB_NON_SIMULATA": "SFB non simulato"
+    },
+    "ledOn": "acceso",
+    "ledOff": "spento"
+  },
+  "ioPanel": {
+    "inputs": "Ingressi",
+    "outputs": "Uscite",
+    "noBytes": "Nessun byte: aggiungine uno con «+ byte».",
+    "byteLabel": "Byte {{byte}}",
+    "bitLabel": "{{area}} {{byte}}.{{bit}}",
+    "bitSym": "{{area}} {{byte}}.{{bit}} ({{symbol}})",
+    "on": "1",
+    "off": "0",
+    "byteInput": "Numero del byte",
+    "addByte": "+ byte",
+    "byteInvalid": "Byte non valido o fuori area.",
+    "analog": "Parola di periferia (PIW)",
+    "piwAddress": "Indirizzo",
+    "piwValue": "Valore (INT)",
+    "piwWrite": "Scrivi",
+    "piwBadAddress": "Indirizzo non valido: usa per esempio PIW 256.",
+    "piwOutOfArea": "Indirizzo fuori dall'area degli ingressi.",
+    "piwBadValue": "Valore non valido: intero da -32768 a 32767.",
+    "fault": "Simula guasto",
+    "moduleAddress": "Indirizzo del modulo",
+    "ob82": "Allarme di diagnostica (OB82)",
+    "ob86": "Guasto del rack (OB86)",
+    "addressBad": "Indirizzo non valido: intero da 0 a 65535.",
+    "needRun": "La CPU deve essere in RUN."
+  },
+  "watch": {
+    "col": {
+      "name": "Nome",
+      "address": "Indirizzo",
+      "format": "Formato",
+      "status": "Valore di stato",
+      "modify": "Valore di comando",
+      "comment": "Commento"
+    },
+    "simOff": "Avvia la simulazione dal PLC di questa tabella per osservare e comandare le variabili.",
+    "on": "Osservazione attiva: i valori di stato si aggiornano.",
+    "off": "Osservazione spenta.",
+    "commanded": "Comando eseguito: {{count}} righe scritte, {{failed}} con errore.",
+    "watchAll": "Osserva tutto",
+    "command": "Comanda",
+    "err": {
+      "row": {
+        "EMPTY": "Manca l'operando.",
+        "SYNTAX": "Operando non riconosciuto.",
+        "UNKNOWN": "Simbolo o membro sconosciuto.",
+        "NOT_OPERAND": "Non è una variabile: costanti e blocchi non si osservano.",
+        "UNSUPPORTED": "Operando non osservabile (aree L e DI, indirizzi indiretti e tipi composti non sono ammessi).",
+        "RANGE": "Numero fuori dai limiti della CPU."
+      },
+      "FORMAT": "Il formato {{format}} non si addice alla dimensione dell'operando.",
+      "LENGTH": "Valore di lunghezza inattesa.",
+      "BCD": "Il valore non è un BCD valido.",
+      "HOST": "{{message}}",
+      "TC_WRITE": "Il simulatore non permette di scrivere temporizzatori e contatori.",
+      "BOOL": "Valore ammesso: TRUE, FALSE, 1 o 0.",
+      "SYNTAX": "Valore non valido per il formato.",
+      "RANGE": "Valore fuori dai limiti ({{min}} … {{max}}).",
+      "S5_RESOLUTION": "Tempo non rappresentabile: risoluzione minima 10 ms (100 ms oltre 9,99 s, 1 s oltre 99,9 s, 10 s oltre 999 s).",
+      "TOO_MANY": "Troppe righe da osservare: il simulatore ne accetta al più 1000."
     }
   }
 }

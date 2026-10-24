@@ -316,6 +316,16 @@
   text-overflow: ellipsis;
 }
 
+/* Indicatore del simulatore: a destra, prima del testo nel DOM perché il float lo ammetta */
+.baa-status-sim {
+  float: right;
+  margin-left: 12px;
+  font-weight: 600;
+}
+.baa-status-sim[data-mode='RUN'] {
+  color: var(--baa-accent-strong);
+}
+
 /* Albero, tabelle, schede */
 .baa-tree {
   list-style: none;
@@ -879,4 +889,75 @@
 }
 .baa-status-progress button {
   line-height: 16px;
+}
+
+/* Pannello di comando CPU */
+.baa-cpu-leds {
+  display: flex;
+  gap: 12px;
+  padding: 4px 6px;
+}
+.baa-led::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 4px;
+  border-radius: 50%;
+  background: var(--baa-border, #999);
+}
+.baa-led-run[data-on='true']::before {
+  background: #2e9e44;
+}
+.baa-led-stop[data-on='true']::before {
+  background: #e0b000;
+}
+.baa-led-sf[data-on='true']::before {
+  background: var(--baa-error, #c42b1c);
+}
+.baa-cpu-buttons {
+  display: flex;
+  gap: 6px;
+  padding: 4px 6px;
+}
+.baa-cpu-diag li[data-error='true'] {
+  color: var(--baa-error, #c42b1c);
+}
+
+/* Pannello I/O del simulatore */
+.baa-io-bytes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 6px;
+}
+.baa-io-byte {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.baa-io-bits {
+  display: flex;
+  gap: 2px;
+}
+.baa-io-bit {
+  min-width: 22px;
+  text-align: center;
+  border: 1px solid var(--baa-border, #999);
+}
+.baa-io-bit[data-on='true'] {
+  background: #2e9e44;
+  color: #fff;
+}
+.baa-io-add,
+.baa-io-fault {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+}
+.baa-io-panel [role='alert'] {
+  color: var(--baa-error, #c42b1c);
+  padding: 0 6px;
 }

@@ -24,6 +24,8 @@ export interface DiagEntry {
   offset?: number;
   /** Rete (da 1) del blocco. */
   network?: number;
+  /** Stack dei blocchi al momento dell'errore, dal più interno (come `block`) al più esterno (OB). */
+  stack?: { kind: string; number: number; offset: number }[];
   detail?: string;
 }
 
@@ -72,6 +74,7 @@ export function diagFromError(time: number, e: SimError): DiagEntry {
   if (e.block) d.block = `${e.block.kind}${e.block.number}`;
   if (e.offset !== undefined) d.offset = e.offset;
   if (e.network !== undefined) d.network = e.network;
+  if (e.blockStack !== undefined) d.stack = e.blockStack.map((f) => ({ ...f }));
   if (e.detail !== undefined) d.detail = e.detail;
   return d;
 }

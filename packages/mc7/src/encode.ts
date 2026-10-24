@@ -17,6 +17,19 @@ export interface Mc7Diagnostic {
   params?: Record<string, string>;
 }
 
+/**
+ * Una istruzione del codice MC7 e la riga di testo da cui viene. `offset` e `length` sono in byte
+ * dall'inizio del codice (senza coda), `network` e `line` partono da 0; `line` è l'indice nel testo
+ * della rete come lo riceve il codificatore (commenti e righe vuote contano). Tutte le istruzioni
+ * di una `CALL` espansa puntano alla riga della `CALL`.
+ */
+export interface LineMapEntry {
+  offset: number;
+  length: number;
+  network: number;
+  line: number;
+}
+
 export interface EncodeCodeOptions {
   /**
    * Espande una `CALL` (macro) in istruzioni semplici. `network` è la rete, da 1. Senza questo
@@ -181,7 +194,7 @@ export function encodeCode(
   networks: string[],
   meta?: CodeMeta,
   opts: EncodeCodeOptions = {},
-): { mc7: Uint8Array; add: Mc7Add; diagnostics: Mc7Diagnostic[] } {
+): { mc7: Uint8Array; add: Mc7Add; diagnostics: Mc7Diagnostic[]; lines: LineMapEntry[] } {
   const diagnostics: Mc7Diagnostic[] = [];
   const diag = (
     severity: 'error' | 'warning',
@@ -432,6 +445,7 @@ export function encodeCode(
   const code: number[] = [];
   const lengths: number[] = [];
   const codeJumps: number[] = [];
+  const lines: LineMapEntry[] = [];
   const origLengths = meta?.networkLengths;
   const origStarts: number[] = [];
   (origLengths ?? []).reduce((a, n) => (origStarts.push(a), a + n), 0);
@@ -508,6 +522,8 @@ export function encodeCode(
       const { starts, size: pos } = layout[k]!;
       entries.forEach((e, i) => {
         const at = starts[i]!;
+        const length = (starts[i + 1] ?? pos) - at;
+        if (length > 0) lines.push({ offset: base + at, length, network: k, line: e.line - 1 });
         if (e.rawJump || e.jump) codeJumps.push((base + at) >> 1);
         if (e.rawJump && e.rawTo !== undefined) checkRawJump(k, at, e.rawTo, e.line);
         if (!e.jump) {
@@ -586,7 +602,7 @@ export function encodeCode(
     );
   }
   if (diagnostics.some((d) => d.severity === 'error')) {
-    return { mc7: new Uint8Array(0), add: emptyAdd(), diagnostics };
+    return { mc7: new Uint8Array(0), add: emptyAdd(), diagnostics, lines: [] };
   }
 
   const tail = meta?.tail !== undefined ? (parseHex(meta.tail) ?? new Uint8Array(0)) : [0x65, 0x00];
@@ -618,5 +634,6 @@ export function encodeCode(
       rest,
     },
     diagnostics,
+    lines,
   };
 }

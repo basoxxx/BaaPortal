@@ -1,0 +1,25 @@
+.baa-watch-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+}
+.baa-watch-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border: 1px solid var(--baa-border);
+  background: var(--baa-surface);
+  color: var(--baa-text);
+}
+.baa-watch-bar.is-unavailable {
+  border-color: var(--baa-accent);
+}
+.baa-watch-msg {
+  flex: 1;
+}
+.baa-watch-grid {
+  flex: 1;
+  min-height: 0;
+}

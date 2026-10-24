@@ -1,6 +1,6 @@
 import { formatType, incrementName, parseType, sameName } from '@baaportal/s7-types';
 import { findOb, type CpuType } from '@baaportal/catalog';
-import { renameSymbolInCode } from './codeRename';
+import { renameSymbolInCode, renameSymbolInWatchRows } from './codeRename';
 import { renameMemberWithOverrides } from './memberRename';
 import type {
   Block,
@@ -18,6 +18,9 @@ import type {
   Project,
   TagTable,
   Udt,
+  WatchFormat,
+  WatchRow,
+  WatchTable,
 } from './model';
 
 export type NewId = () => string;
@@ -45,6 +48,18 @@ export function createSource(
   newId: NewId = defaultNewId,
 ): ExternalSource {
   return { id: newId(), name, text };
+}
+
+export function createWatchTable(name: string, newId: NewId = defaultNewId): WatchTable {
+  return { id: newId(), name, rows: [] };
+}
+
+export function createWatchRow(
+  operand = '',
+  format: WatchFormat = 'DEC',
+  newId: NewId = defaultNewId,
+): WatchRow {
+  return { id: newId(), operand, format };
 }
 
 export function createUdt(a: { name: string; number: number; newId?: NewId }): Udt {
@@ -177,6 +192,7 @@ export function createPlcDevice(a: {
     udts: [],
     blocks: [createCodeBlock({ kind: 'OB', number: 1, name: 'Main', language: 'AWL', newId })],
     sources: [],
+    watchTables: [],
     groups: { blocks: [], tags: [], types: [] },
   };
 }
@@ -252,6 +268,8 @@ export const findUdt = (d: PlcDevice, id: string): Udt | undefined =>
   d.udts.find((u) => u.id === id);
 export const findSource = (d: PlcDevice, id: string): ExternalSource | undefined =>
   d.sources.find((s) => s.id === id);
+export const findWatchTable = (d: PlcDevice, id: string): WatchTable | undefined =>
+  d.watchTables.find((w) => w.id === id);
 export const findTagTable = (d: PlcDevice, id: string): TagTable | undefined =>
   d.tagTables.find((t) => t.id === id);
 
@@ -281,6 +299,28 @@ export function uniqueFileName(name: string, taken: Iterable<string>): string {
       : t,
   );
   return `${uniqueName(stem, stems)}${ext}`;
+}
+
+/** Aggiunge una tabella di controllo con un nome libero (Nome, Nome_1...) e la restituisce. */
+export function addWatchTable(
+  device: PlcDevice,
+  name: string,
+  newId: NewId = defaultNewId,
+): WatchTable {
+  const table = createWatchTable(
+    uniqueName(
+      name,
+      device.watchTables.map((w) => w.name),
+    ),
+    newId,
+  );
+  device.watchTables.push(table);
+  return table;
+}
+
+export function deleteWatchTable(device: PlcDevice, id: string): void {
+  const at = device.watchTables.findIndex((w) => w.id === id);
+  if (at >= 0) device.watchTables.splice(at, 1);
 }
 
 export function deleteSource(device: PlcDevice, id: string): void {
@@ -330,6 +370,11 @@ export function renameWithReferences(device: PlcDevice, ref: ObjectRef, newName:
       if (t) t.name = newName;
       return;
     }
+    case 'watchTable': {
+      const w = findWatchTable(device, ref.id);
+      if (w) w.name = newName;
+      return;
+    }
     case 'source': {
       // Il nome e un nome di file: il testo non cambia.
       const s = findSource(device, ref.id);
@@ -344,6 +389,7 @@ export function renameWithReferences(device: PlcDevice, ref: ObjectRef, newName:
       const old = item.name;
       item.name = newName;
       renameSymbolInCode(device, old, newName);
+      renameSymbolInWatchRows(device, old, newName);
       return;
     }
     case 'udt': {
@@ -360,6 +406,7 @@ export function renameWithReferences(device: PlcDevice, ref: ObjectRef, newName:
       const old = b.name;
       b.name = newName;
       renameSymbolInCode(device, old, newName);
+      renameSymbolInWatchRows(device, old, newName);
       if (b.kind !== 'FB') return;
       for (const list of allMemberLists(device)) retypeMembers(list, old, newName);
       for (const x of device.blocks) {
