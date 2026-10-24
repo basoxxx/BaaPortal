@@ -4,7 +4,7 @@ Questo documento descrive la CPU simulata del pacchetto `@baaportal/sim` (piano 
 
 ## 0. Fonti e regole
 
-- **Clean-room** (spec §5): la semantica viene solo dai manuali Siemens pubblici: _Statement List (STL) for S7-300 and S7-400 Programming_ (in seguito [AWL]) e i manuali delle CPU 31x (in seguito [CPU]). Non si analizza PLCSIM né altro software Siemens e non si copia codice di simulatori.
+- **Clean-room** (spec §5): la semantica viene solo dai manuali Siemens pubblici: _Statement List (STL) for S7-300 and S7-400 Programming_ (in seguito [AWL], «manuale AWL S7-300/400»; i riferimenti sono ad argomenti generici, non ai titoli dei capitoli) e i manuali delle CPU 31x (in seguito [CPU]). Non si analizza PLCSIM né altro software Siemens e non si copia codice di simulatori.
 - **Si eseguono i byte MC7**, non il testo AWL: l'esecutore chiama `decodeInstruction` (`@baaportal/mc7`) istruzione per istruzione, con una cache per blocco e per offset. Si prova così esattamente ciò che si carica nel PLC (spec §6). Formato dei byte: `docs/protocollo/mc7.md`.
 - **Carica**: la CPU simulata implementa `CpuBackend` del server S7 in memoria, quindi si carica con lo stesso `S7WriteClient.downloadBlock` del PLC vero.
 - **Nessuna CPU reale ha confermato queste semantiche** (spec §10): il simulatore verifica la coerenza interna, non sostituisce le prove su una CPU vera.
@@ -23,9 +23,11 @@ Tutte le aree sono **big-endian**. Le dimensioni vengono dal catalogo della CPU 
 | DB, DI | blocchi dati; si leggono con il registro DB o DI aperto (`OPN`), oppure con il numero esplicito (`DB5.DBX 0.0`) |
 | T, C   | riservate (2048 elementi a 16 bit ciascuna); le istruzioni arrivano con il piano 2B                             |
 
-Un accesso fuori area dà `AREA_LUNGHEZZA`, un DB assente `DB_NON_CARICATO`, DB/DI con registro 0 `DB_NON_APERTO`. Un puntatore a 32 bit senza il bit 31 (nessuna area) dà `AREA_LUNGHEZZA`; con il bit 31 e area 0 indica la periferia (`P`). L'offset di AR1/AR2 è di 24 bit (bit 0–23, [AWL] «Formato dei puntatori»); per gli operandi la parte byte occupa i bit 3–18.
+**⚠️ PQ → Q**: una scrittura diretta in PQ (o in `P` da puntatore) scrive gli stessi byte anche in Q, se l'indirizzo vi cade, così l'uscita non si perde alla copia di Q in `physOut` a fine ciclo (la S7-300 aggiorna la PIQ negli accessi diretti alle uscite; non verificato su una CPU).
 
-Sorgente: [AWL] «Aree di memoria», «Indirizzamento indiretto da memoria» e «Indirizzamento indiretto da registro».
+Un accesso fuori area dà `AREA_LUNGHEZZA`, un DB assente `DB_NON_CARICATO`, DB/DI con registro 0 `DB_NON_APERTO`. Un puntatore a 32 bit senza il bit 31 (nessuna area) dà `AREA_LUNGHEZZA`; con il bit 31 e area 0 indica la periferia (`P`). L'offset di AR1/AR2 è di 24 bit (bit 0–23, [AWL], indirizzamento indiretto); per gli operandi la parte byte occupa i bit 3–18.
+
+Sorgente: manuale AWL S7-300/400, aree di memoria e indirizzamento indiretto (da memoria e da registro).
 
 ## 2. Registri e parola di stato
 
@@ -35,13 +37,13 @@ La S7-300 ha **2 accumulatori**. ACCU1, ACCU2, AR1, AR2 sono a 32 bit; i registr
 - `ENT` e `LEAVE` esistono solo con 4 accumulatori: danno `ISTRUZIONE_NON_S7300`. ⚠️ Sono registrati così perché l'MC7 li decodifica ma la S7-300 non li ha.
 - Le operazioni intere a 16 bit lasciano invariate la parola alta di ACCU1 e ACCU2.
 
-**Parola di stato** ([AWL] «Parola di stato»): bit 0 /FC, 1 RLO, 2 STA, 3 OR, 4 OS, 5 OV, 6 CC0, 7 CC1, 8 BR. `L STW` e `T STW` usano questa disposizione e portano solo i bit 0–8 (⚠️ i bit 9–15 si leggono 0).
+**Parola di stato** ([AWL], parola di stato): bit 0 /FC, 1 RLO, 2 STA, 3 OR, 4 OS, 5 OV, 6 CC0, 7 CC1, 8 BR. `L STW` e `T STW` usano questa disposizione e portano solo i bit 0–8 (⚠️ i bit 9–15 si leggono 0).
 
 ### 2.1 Nuova catena logica e stack di annidamento
 
 Il modello è quello delle tabelle del manuale: la funzione `A`/`O`/`X` con la sua negazione, e `OR` per la forma `O` senza operando (`A`/`O`/`A` vale `(a o b) e c`). L'apertura di parentesi (`A(`, `O(`, `X(` e le forme negate) salva RLO, OR, /FC e la funzione nello **stack di annidamento**; la chiusura `)` le ripristina. Una `)` non bilanciata dà `MC7_NON_ESEGUIBILE`; un annidamento oltre la profondità dà `STACK_ANNIDAMENTO_PIENO`.
 
-Sorgente: [AWL] capitoli «Operazioni logiche a bit», «Parola di stato».
+Sorgente: manuale AWL S7-300/400, operazioni logiche a bit e parola di stato.
 
 ## 3. Richiamo dei blocchi
 
@@ -54,24 +56,24 @@ Sorgente: [AWL] capitoli «Operazioni logiche a bit», «Parola di stato».
 - **Puntatori ai dati**: ⚠️ i puntatori a DB (`0x84` DB, `0x85` DI) legano il numero del DB al **momento della chiamata**; `0x86` (V) è trattato come V.
 - **Salti**: la destinazione deve essere l'inizio di un'istruzione del blocco, altrimenti `MC7_NON_ESEGUIBILE`. ⚠️ Un salto alla fine esatta del codice è rifiutato (il compilatore termina sempre con `BE`).
 
-Sorgente: [AWL] «Operazioni di controllo del programma» (`UC`, `CC`, `BE`, `BEU`, `BEC`), [CPU] «Stack dei blocchi» e «Dati locali».
+Sorgente: manuale AWL S7-300/400, controllo del programma (`UC`, `CC`, `BE`, `BEU`, `BEC`); manuale delle CPU 31x, stack dei blocchi e dati locali.
 
-## 4. Gruppi di istruzioni e capitoli del manuale
+## 4. Gruppi di istruzioni e argomenti del manuale
 
-| gruppo                                                              | capitolo [AWL]                                                         |
-| ------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `A O X AN ON XN`, parentesi, `= S R`, `NOT SET CLR SAVE`, `FP FN`   | «Operazioni logiche a bit»                                             |
-| `MCR(`, `)MCR`, `MCRA`, `MCRD`                                      | «Operazioni di controllo» (relè master)                                |
-| `L T LAR TAR +AR` e relative                                        | «Operazioni di caricamento e trasferimento», «Registri di indirizzo»   |
-| `AW OW XW AD OD XD`                                                 | «Logica a parola»                                                      |
-| `SLW SRW SLD SRD SSI SSD RLD RRD RLDA RRDA`                         | «Operazioni di scorrimento e rotazione»                                |
-| `+I -I *I /I +D -D *D /D MOD +`                                     | «Operazioni con numeri interi»                                         |
-| `+R -R *R /R ABS NEGR SQR SQRT` e funzioni trascendenti             | «Operazioni in virgola mobile»                                         |
-| `==I … <=R`                                                         | «Operazioni di confronto»                                              |
-| `BTI ITB BTD ITD DTB DTR RND TRUNC CAI CAD INVI INVD NEGI NEGD`     | «Operazioni di conversione»                                            |
-| `JU JL JC JCN JCB JNB JBI JNBI JO JOS JZ JN JP JM JPZ JMZ JUO LOOP` | «Operazioni di salto»                                                  |
-| `UC CC BE BEU BEC BLD NOP OPN CDB`                                  | «Operazioni di controllo del programma», «Operazioni sui blocchi dati» |
-| `TAK PUSH POP ENT LEAVE INC DEC`                                    | «Operazioni sugli accumulatori»                                        |
+| gruppo                                                              | argomento del manuale AWL S7-300/400               |
+| ------------------------------------------------------------------- | -------------------------------------------------- |
+| `A O X AN ON XN`, parentesi, `= S R`, `NOT SET CLR SAVE`, `FP FN`   | operazioni logiche a bit                           |
+| `MCR(`, `)MCR`, `MCRA`, `MCRD`                                      | controllo del programma (relè master)              |
+| `L T LAR TAR +AR` e relative                                        | caricamento e trasferimento, registri di indirizzo |
+| `AW OW XW AD OD XD`                                                 | operazioni logiche a parola                        |
+| `SLW SRW SLD SRD SSI SSD RLD RRD RLDA RRDA`                         | operazioni di scorrimento e rotazione              |
+| `+I -I *I /I +D -D *D /D MOD +`                                     | operazioni aritmetiche sugli interi                |
+| `+R -R *R /R ABS NEGR SQR SQRT` e funzioni trascendenti             | operazioni in virgola mobile                       |
+| `==I … <=R`                                                         | operazioni di confronto                            |
+| `BTI ITB BTD ITD DTB DTR RND TRUNC CAI CAD INVI INVD NEGI NEGD`     | operazioni di conversione                          |
+| `JU JL JC JCN JCB JNB JBI JNBI JO JOS JZ JN JP JM JPZ JMZ JUO LOOP` | operazioni di salto                                |
+| `UC CC BE BEU BEC BLD NOP OPN CDB`                                  | controllo del programma, blocchi dati              |
+| `TAK PUSH POP ENT LEAVE INC DEC`                                    | operazioni sugli accumulatori                      |
 
 Istruzioni rimandate al piano 2B (errore `NON_SIMULATA_2B`, mai ignorate): `SP SE SD SS SF FR LC CU CD`, i parametri formali Timer/Counter/Block_*, le chiamate di SFC e SFB e gli operandi T e C.
 
@@ -121,13 +123,13 @@ Senza OB1 il ciclo gira a vuoto: gli ingressi e le uscite si aggiornano lo stess
 **⚠️ Modello del tempo**:
 
 - l'orologio è **iniettato** (`now(): number` in ms) e nei test è deterministico;
-- il tempo di ciclo si controlla **ogni 1024 istruzioni** e alla fine del ciclo, contro `maxCycleMs` delle proprietà della CPU; un salto su se stesso termina sempre con `TEMPO_CICLO_SUPERATO`;
-- il **byte del merker di clock** si aggiorna all'inizio del ciclo e ogni 1024 istruzioni, non a ogni lettura: può restare indietro fino a 1024 istruzioni. Periodi dei bit 0–7: 100, 200, 400, 500, 800, 1000, 1600, 2000 ms ([CPU] «Merker di clock»);
+- il tempo di ciclo si controlla **ogni 1024 istruzioni** e alla fine del ciclo, contro `maxCycleMs` delle proprietà della CPU. Indipendente dall'orologio c'è un **limite fisso di 10 000 000 istruzioni per ciclo** (e per OB100): oltre, `TEMPO_CICLO_SUPERATO`. Un salto su se stesso termina quindi sempre, anche con un orologio fermo (⚠️ il limite è una scelta del simulatore);
+- il **byte del merker di clock** si aggiorna all'inizio del ciclo e ogni 1024 istruzioni, non a ogni lettura: può restare indietro fino a 1024 istruzioni. Periodi dei bit 0–7: 100, 200, 400, 500, 800, 1000, 1600, 2000 ms ([CPU], merker di clock);
 - il tempo di ciclo del simulatore non è quello di una CPU vera.
 
 ## 6. Avvio, STOP, RUN e cancellazione totale
 
-- **`run()`** (solo da STOP): STARTUP, voce `AVVIO`, **avvio a caldo** (azzera I, Q, i merker e i T/C non ritentivi; la ritentività conta da 0 gli MB, i T e i C; i DB restano), poi OB100 se presente (informazioni di avvio con evento 0x13, priorità 27, data e ora BCD), infine RUN. Un errore in OB100 lascia la CPU in STOP.
+- **`run()`** (solo da STOP; azzera anche le statistiche del ciclo, così le informazioni di avvio del primo OB1 non portano i tempi del RUN precedente): STARTUP, voce `AVVIO`, **avvio a caldo** (azzera I, Q, i merker e i T/C non ritentivi; la ritentività conta da 0 gli MB, i T e i C; i DB restano), poi OB100 se presente (informazioni di avvio con evento 0x13, priorità 27, data e ora BCD), infine RUN. Un errore in OB100 lascia la CPU in STOP. **⚠️ Watchdog di OB100**: su una CPU vera il tempo di OB100 non è limitato dal tempo di ciclo massimo; il simulatore applica comunque `maxCycleMs` (e il limite di istruzioni) anche a OB100.
 - **`stop()`**: voce `STOP_RICHIESTO` (con il motivo) e STOP. In STOP le uscite della periferia (`physOut`) sono azzerate.
 - **Qualsiasi errore** durante OB100 o un ciclo: voce di diagnostica e STOP (R4; OB121/OB122/OB80/OB85 arrivano con il 2B). Un errore che non è un `SimError` (un difetto del simulatore) dà la voce `MC7_NON_ESEGUIBILE` con dettaglio «errore interno» e viene anche rilanciato.
 - **`memoryReset()`** (cancellazione totale, solo in STOP, altrimenti errore): azzera I, Q, M, `physOut`, T e C e torna ai **valori iniziali** dei DB; **⚠️** azzera anche le statistiche del ciclo. I blocchi restano caricati (R5: le CPU con MMC ricaricano il programma dalla scheda). **⚠️** I valori iniziali di un DB sono la sezione MC7 del file caricato, non quella letta dalle sezioni SSB.
@@ -158,6 +160,7 @@ Altre voci del buffer: `AVVIO`, `STOP_RICHIESTO`, `CANCELLAZIONE_TOTALE`.
 
 `connectToSim` collega un `S7WriteClient` alla CPU simulata attraverso `CpuBackend` (stesso protocollo del PLC). Scrittura, lettura di aree, carica nel dispositivo, STOP/RUN e SZL funzionano come sul finto PLC.
 
+- ⚠️ Il download di un **SDB** è rifiutato (le configurazioni di sistema non sono simulate).
 - ⚠️ I blocchi caricati **non** tramite il backend (messi direttamente in `cpu.program`) compaiono nell'elenco ma non hanno upload né informazioni di blocco.
 - ⚠️ Gli identificatori degli eventi del buffer di diagnostica nelle SZL sono sintetici (da `0x9000`), non quelli Siemens.
 - ⚠️ Una sezione ADD corrotta non fa rifiutare il download (il lettore MC7 è tollerante); un tipo che il simulatore non sa caricare (per esempio SFC) viene rifiutato dalla CPU.

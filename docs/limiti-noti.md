@@ -32,7 +32,7 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§4.1 per la semantica). T
 - **REAL:** NaN memorizzato come 0x7FC00000; denormali conservati; CC per ±infinito e precisione delle funzioni trascendenti (float32) non verificati al ulp.
 - **`+AR1`/`+AR2` senza operando** e `L STW`/`T STW` (solo bit 0–8) seguono la lettura del manuale, non provata.
 - **Stack dei blocchi a 16** per ogni CPU e per ogni classe di priorità (nel manuale varia con la CPU); stack L unico, finestra per blocco, **non azzerato** all'ingresso del blocco.
-- **Tempo:** orologio iniettato; controllo del tempo di ciclo ogni 1024 istruzioni e a fine ciclo; byte del merker di clock aggiornato all'inizio del ciclo e ogni 1024 istruzioni, non a ogni lettura.
+- **Tempo:** orologio iniettato; controllo del tempo di ciclo ogni 1024 istruzioni e a fine ciclo (più il limite fisso di istruzioni); byte del merker di clock aggiornato all'inizio del ciclo e ogni 1024 istruzioni, non a ogni lettura.
 - **Chiamate:** lo stack MCR del chiamato parte vuoto; i puntatori `0x84`/`0x85` legano DB/DI al momento della chiamata; `0x86` è trattato come V; DB = DB di istanza dopo `CALL FB`.
 - **Salto alla fine esatta del codice** rifiutato (`MC7_NON_ESEGUIBILE`).
 - **Buffer di diagnostica** limitato a 100 voci; gli id degli eventi nelle SZL sono sintetici (da 0x9000).
@@ -40,6 +40,15 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§4.1 per la semantica). T
 - **Cancellazione totale** azzera anche le statistiche del ciclo e `physOut`; i DB tornano ai valori della sezione MC7 del file caricato (i valori iniziali separati non sono letti); i blocchi restano.
 - **Blocchi non caricati dal backend** (messi direttamente nel programma) non hanno upload né informazioni di blocco.
 - **Sezioni ADD corrotte** non fanno rifiutare il download.
+- **`*I`:** il prodotto a 32 bit va in ACCU1 intero; OV fuori dai 16 bit.
+- **Confronti:** forzano OR = 0. Conseguenza: in `A a; A b; O; L; L; ==I; A c` l'`O` pendente è perso dal confronto e `A c` si combina in AND con il risultato.
+- **`T STW`** non segue MCR (scrive anche con MCR spento).
+- **`BTI`/`BTD`:** si controlla solo il bit di segno e le cifre > 9 (`BCD_NON_VALIDO`).
+- **Immagine di processo** = tutto l'intervallo di I/O del catalogo della CPU (nessuna configurazione dell'area dell'immagine).
+- **Watchdog di OB100:** il simulatore applica `maxCycleMs` (e il limite di 10 000 000 istruzioni) anche a OB100; su una CPU vera OB100 non ha il limite del tempo di ciclo.
+- **Limite di istruzioni:** 10 000 000 per ciclo, indipendente dall'orologio; scelta del simulatore.
+- **PQ → Q:** una scrittura diretta nella periferia (PQ o `P` da puntatore) scrive anche in Q se l'indirizzo vi cade; non verificato su una CPU.
+- **Download di SDB rifiutato:** le configurazioni di sistema non sono simulate.
 
 ## Funzioni 1F (piano 1F)
 
