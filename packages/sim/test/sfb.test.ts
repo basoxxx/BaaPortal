@@ -101,6 +101,19 @@ describe('TON (SFB 4) in un DB di istanza', () => {
   });
 });
 
+describe('TON oltre 2^31 ms', () => {
+  it('con IN tenuto a 1, Q e ET restano fissi dopo il giro dell’orologio', () => {
+    const c = TIMER(4, 'TON');
+    step(c, 0, [0, 1]);
+    step(c, 5000, [0, 1]);
+    expect([q(c), et(c)]).toEqual([1, 5000]);
+    step(c, 2 ** 31 + 10000, [0, 1]);
+    expect([q(c), et(c)]).toEqual([1, 5000]);
+    step(c, 2 ** 31 + 20000, [0, 0]);
+    expect([q(c), et(c)]).toEqual([0, 0]);
+  });
+});
+
 describe('TP (SFB 3)', () => {
   it('non riavviabile durante l’impulso; ET a 0 con IN = 0 a impulso finito', () => {
     const c = TIMER(3, 'TP');
@@ -122,7 +135,31 @@ describe('TP (SFB 3)', () => {
   });
 });
 
+describe('TP, fine impulso con IN = 0', () => {
+  it('a impulso finito con IN = 0, ET torna a 0', () => {
+    const c = TIMER(3, 'TP');
+    step(c, 0, [0, 0]);
+    step(c, 1000, [0, 1]);
+    step(c, 2000, [0, 0]);
+    step(c, 7000, [0, 0]);
+    expect([q(c), et(c)]).toEqual([0, 0]);
+  });
+});
+
 describe('TOF (SFB 5)', () => {
+  it('IN che risale durante il ritardo: ET a 0, Q resta 1', () => {
+    const c = TIMER(5, 'TOF');
+    step(c, 0, [0, 1]);
+    step(c, 1000, [0, 0]);
+    step(c, 3000, [0, 0]);
+    expect([q(c), et(c)]).toEqual([1, 2000]);
+    step(c, 3500, [0, 1]);
+    expect([q(c), et(c)]).toEqual([1, 0]);
+    step(c, 4000, [0, 0]); // il ritardo riparte da qui
+    step(c, 8000, [0, 0]);
+    expect([q(c), et(c)]).toEqual([1, 4000]);
+  });
+
   it('Q = 1 con IN = 1; Q = 0 dopo PT dal fronte di discesa', () => {
     const c = TIMER(5, 'TOF');
     step(c, 0, [0, 0]);
@@ -187,6 +224,32 @@ describe('contatori IEC', () => {
     expect([cv(c), q(c)]).toEqual([0, 1]);
     pulse(c, 0, 0);
     expect([cv(c), q(c)]).toEqual([-1, 1]);
+  });
+
+  it('CTD: saturazione a −32768', () => {
+    const c = counter(
+      1,
+      'CTD',
+      '\tCALL SFB 1, DB 5 (CD := M 0.0, LOAD := M 0.1, PV := 2, Q := M 1.0, CV := MW 4);',
+    );
+    c.cpu.memory.dbs.get(5)!.data.set([0x80, 0x00], 6);
+    step(c, 0, [0, 0]);
+    pulse(c, 0, 0);
+    expect(cv(c)).toBe(-32768);
+  });
+
+  it('CTUD: CU e CD sullo stesso ciclo si annullano; R prevale su LOAD', () => {
+    const c = counter(
+      2,
+      'CTUD',
+      '\tCALL SFB 2, DB 5 (CU := M 0.0, CD := M 0.1, R := M 0.2, LOAD := M 0.3, PV := 2, QU := M 1.0, QD := M 1.1, CV := MW 4);',
+    );
+    pulse(c, 0, 0);
+    expect(cv(c)).toBe(1);
+    step(c, 0, [0, 3]);
+    expect(cv(c)).toBe(1);
+    step(c, 0, [0, 12]);
+    expect(cv(c)).toBe(0);
   });
 
   it('CTUD: CU, CD, R e LOAD', () => {

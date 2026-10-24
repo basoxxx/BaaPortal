@@ -112,13 +112,13 @@ const elapsed = (call: SystemCall, s: SfbState): number =>
 /** Prologo comune: istanza, stato e ingresso IN. */
 function timer(
   call: SystemCall,
-  body: (i: Instance, s: SfbState, inp: boolean, pt: number) => { q: boolean; et: number },
+  body: (s: SfbState, inp: boolean, pt: number) => { q: boolean; et: number },
 ): void {
   const i = new Instance(call);
   const s = stateOf(call, i.key);
   const inp = i.bool('IN');
   const pt = ptOf(i);
-  const r = body(i, s, inp, pt);
+  const r = body(s, inp, pt);
   s.prevIn = inp;
   i.setBool('Q', r.q);
   i.setTime('ET', r.et);
@@ -126,7 +126,7 @@ function timer(
 
 /** SFB 3 TP: impulso di durata PT sul fronte di salita, non riavviabile. */
 const tp: SystemHandler = (call) =>
-  timer(call, (_i, s, inp, pt) => {
+  timer(call, (s, inp, pt) => {
     if (!s.active && !s.done && inp && !s.prevIn) {
       s.active = true;
       s.start = call.services.tickMs();
@@ -146,22 +146,27 @@ const tp: SystemHandler = (call) =>
 
 /** SFB 4 TON: Q = 1 dopo PT con IN = 1. */
 const ton: SystemHandler = (call) =>
-  timer(call, (_i, s, inp, pt) => {
+  timer(call, (s, inp, pt) => {
     if (!inp) {
       s.running = false;
+      s.done = false;
       return { q: false, et: 0 };
     }
+    // Concluso: Q e ET restano fissi finché IN = 1, senza rileggere l'orologio (che può girare oltre 2^31 ms).
+    if (s.done) return { q: true, et: pt };
     if (!s.running) {
       s.running = true;
       s.start = call.services.tickMs();
     }
     const el = elapsed(call, s);
-    return el >= pt ? { q: true, et: pt } : { q: false, et: el };
+    if (el < pt) return { q: false, et: el };
+    s.done = true;
+    return { q: true, et: pt };
   });
 
 /** SFB 5 TOF: Q = 1 con IN = 1; Q = 0 dopo PT dal fronte di discesa. */
 const tof: SystemHandler = (call) =>
-  timer(call, (_i, s, inp, pt) => {
+  timer(call, (s, inp, pt) => {
     if (inp) {
       s.active = false;
       s.done = false;
