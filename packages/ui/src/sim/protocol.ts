@@ -23,11 +23,25 @@ export interface WriteItemReq extends WatchItem {
   data: Uint8Array;
 }
 
+/** Dimensioni di operando ammesse (controllate dall'ospite a ogni richiesta `watch` e `write`). */
+export const WATCH_SIZES = ['X', 'B', 'W', 'D'] as const;
+/** Allarmi che l'ospite accetta nella richiesta `interrupt`. */
+export const INTERRUPT_OBS = [82, 86] as const;
+
 export type WriteResult = { ok: true } | { error: string };
 
 export type SimRequest =
   | { op: 'start'; cpuTypeId: string; props: SimCpuProps }
-  | { op: 'download'; files: Uint8Array[] }
+  /**
+   * Carica i blocchi dati. Con `keep` (l'elenco di tutti i blocchi del progetto, tipo e numero; i DB
+   * di istanza come `DB`), dopo il caricamento l'ospite cancella dalla CPU i blocchi che non vi
+   * compaiono: quelli cancellati dal progetto smettono di girare.
+   */
+  | {
+      op: 'download';
+      files: Uint8Array[];
+      keep?: { kind: 'OB' | 'FB' | 'FC' | 'DB'; number: number }[];
+    }
   | { op: 'mode'; to: 'RUN' | 'STOP' }
   | { op: 'mres' }
   | { op: 'setInputs'; byte: number; bytes: Uint8Array }

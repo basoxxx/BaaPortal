@@ -1,7 +1,9 @@
 import { parseBlockFile, type S7WriteClient } from '@baaportal/s7comm';
 import { SimCpu, connectToSim, type MonitorRequest } from '@baaportal/sim';
 import {
+  INTERRUPT_OBS,
   MAX_WATCH_ITEMS,
+  WATCH_SIZES,
   type SimNotice,
   type SimRequest,
   type SimWarning,
@@ -30,6 +32,13 @@ const MAX_WARNINGS = 100;
 export { MAX_WATCH_ITEMS };
 
 const SIZE_BYTES = { X: 1, B: 1, W: 2, D: 4 } as const;
+
+/** Rifiuta la richiesta se una voce ha una dimensione sconosciuta (il renderer non è fidato). */
+function checkSizes(items: readonly WatchItem[]): void {
+  for (const it of items)
+    if (!(WATCH_SIZES as readonly unknown[]).includes(it.size))
+      throw new RangeError(`dimensione non valida: ${String(it.size)}`);
+}
 
 /**
  * Ospite della CPU simulata, puro: gira nel Worker (`simWorker.ts`) ma i test lo usano in memoria.
@@ -69,7 +78,7 @@ export class SimHost {
     if (!cpu || !this.client) throw new Error('simulazione non avviata');
     switch (req.op) {
       case 'download':
-        return this.download(req.files);
+        return this.download(req.files, req.keep);
       case 'mode':
         if (req.to === 'RUN') await this.client.start();
         else await this.client.stop();
@@ -87,6 +96,8 @@ export class SimHost {
         return undefined;
       }
       case 'interrupt':
+        if (!(INTERRUPT_OBS as readonly unknown[]).includes(req.ob))
+          throw new RangeError(`OB di allarme non supportato: ${String(req.ob)}`);
         if (
           req.address !== undefined &&
           !(Number.isInteger(req.address) && req.address >= 0 && req.address <= 0xffff)
@@ -103,6 +114,7 @@ export class SimHost {
           throw new RangeError(
             `troppe voci da osservare: ${req.items.length} (al più ${MAX_WATCH_ITEMS})`,
           );
+        checkSizes(req.items);
         this.watchItems = req.items;
         return undefined;
       case 'write':
@@ -110,6 +122,7 @@ export class SimHost {
           throw new RangeError(
             `troppe voci da scrivere: ${req.items.length} (al più ${MAX_WATCH_ITEMS})`,
           );
+        checkSizes(req.items);
         return req.items.map((it) => this.writeOne(cpu, it));
       case 'stop':
         await this.shutdown();
@@ -139,7 +152,10 @@ export class SimHost {
     this.scheduleTick();
   }
 
-  private async download(files: Uint8Array[]): Promise<void> {
+  private async download(
+    files: Uint8Array[],
+    keep?: { kind: string; number: number }[],
+  ): Promise<void> {
     for (const [i, file] of files.entries()) {
       let name = `file ${i + 1}`;
       try {
@@ -154,6 +170,19 @@ export class SimHost {
         throw new Error(`${name}: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
+    if (keep) this.deleteMissing(keep);
+  }
+
+  /** Cancella dalla CPU i blocchi (compresi i DB) che non sono in `keep`. */
+  private deleteMissing(keep: { kind: string; number: number }[]): void {
+    const cpu = this.cpu!;
+    const wanted = new Set(keep.map((b) => `${b.kind}${b.number}`));
+    const gone: { kind: string; number: number }[] = [];
+    for (const b of cpu.program.list())
+      if (!wanted.has(`${b.kind}${b.number}`)) gone.push({ kind: b.kind, number: b.number });
+    for (const n of cpu.memory.dbs.keys())
+      if (!wanted.has(`DB${n}`)) gone.push({ kind: 'DB', number: n });
+    for (const b of gone) cpu.deleteBlock(b.kind, b.number);
   }
 
   // ---- ciclo -----------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 import { formatType, incrementName, parseType, sameName } from '@baaportal/s7-types';
 import { findOb, type CpuType } from '@baaportal/catalog';
-import { renameSymbolInCode } from './codeRename';
+import { renameSymbolInCode, renameSymbolInWatchRows } from './codeRename';
 import { renameMemberWithOverrides } from './memberRename';
 import type {
   Block,
@@ -389,6 +389,7 @@ export function renameWithReferences(device: PlcDevice, ref: ObjectRef, newName:
       const old = item.name;
       item.name = newName;
       renameSymbolInCode(device, old, newName);
+      renameSymbolInWatchRows(device, old, newName);
       return;
     }
     case 'udt': {
@@ -405,6 +406,7 @@ export function renameWithReferences(device: PlcDevice, ref: ObjectRef, newName:
       const old = b.name;
       b.name = newName;
       renameSymbolInCode(device, old, newName);
+      renameSymbolInWatchRows(device, old, newName);
       if (b.kind !== 'FB') return;
       for (const list of allMemberLists(device)) retypeMembers(list, old, newName);
       for (const x of device.blocks) {

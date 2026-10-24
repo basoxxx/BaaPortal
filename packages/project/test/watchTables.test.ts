@@ -247,3 +247,35 @@ describe('controlli delle tabelle di controllo', () => {
     expect(checkDevice(d, cpu315pn).filter((x) => x.ref.kind === 'watchTable')).toEqual([]);
   });
 });
+
+describe('rinomina e tabelle di controllo', () => {
+  it('rinominare un tag riscrive le righe che lo usano, non le altre', () => {
+    const p = withTable();
+    const d = p.devices[0]!;
+    const rows = d.watchTables[0]!.rows;
+    rows.push(
+      createWatchRow('"START"', 'BOOL', seq('r')),
+      createWatchRow('"Stop"', 'BOOL', seq('s')),
+    );
+    const tag = d.tagTables[0]!.tags.find((t) => t.name === 'Start')!;
+    renameWithReferences(
+      d,
+      { kind: 'tag', deviceId: d.id, tableId: d.tagTables[0]!.id, id: tag.id },
+      'Avvio',
+    );
+    expect(rows.map((r) => r.operand)).toEqual(['"Avvio"', 'MW10', '"Avvio"', '"Stop"']);
+  });
+
+  it('rinominare un DB riscrive "Dati".membro e "Dati"', () => {
+    const p = makeProject();
+    const d = p.devices[0]!;
+    const t = addWatchTable(d, 'T', seq('w'));
+    t.rows.push(
+      createWatchRow('"Dati".A', 'DEC', seq('r')),
+      createWatchRow('"Datiextra".A', 'DEC', seq('q')),
+    );
+    const db = d.blocks.find((b) => b.kind === 'DB')!;
+    renameWithReferences(d, { kind: 'block', deviceId: d.id, id: db.id }, 'Valori');
+    expect(t.rows.map((r) => r.operand)).toEqual(['"Valori".A', '"Datiextra".A']);
+  });
+});

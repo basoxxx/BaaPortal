@@ -343,6 +343,54 @@ describe('comandi online sul simulatore', () => {
     expect(s.store.getState().sim.phase).toBe('off');
   });
 
+  it('blocco cancellato dal progetto: il secondo caricamento lo toglie dalla CPU e da sim.loaded', async () => {
+    await initI18n('it');
+    const s = setup();
+    const dev0 = findDevice(s.store.getState().doc!.project, DEV)!;
+    const ob35 = createCodeBlock({ kind: 'OB', number: 35, name: 'OB35', language: 'AWL' });
+    ob35.networks[0]!.source = 'A %I0.0\n= %Q0.1';
+    s.store.getState().edit('test.addOb35', (p) => {
+      findDevice(p, DEV)!.blocks.push(ob35);
+    });
+    expect(dev0).toBeDefined();
+    await on(s);
+    await commands['online.download'].run(s.ctx);
+    const loaded1 = Object.keys(s.store.getState().sim.loaded);
+    expect(loaded1).toContain(ob35.id);
+    s.store.getState().edit('test.delOb35', (p) => {
+      const d = findDevice(p, DEV)!;
+      d.blocks = d.blocks.filter((b) => b.id !== ob35.id);
+    });
+    await commands['online.download'].run(s.ctx);
+    const reqs = s.workers[0]!.sent.map((m) => m.req).filter((r) => r.op === 'download');
+    const last = reqs.at(-1)!;
+    if (last.op !== 'download') throw new Error('atteso download');
+    expect(last.keep).toBeDefined();
+    expect(last.keep!.some((b) => b.kind === 'OB' && b.number === 35)).toBe(false);
+    expect(last.keep!.some((b) => b.kind === 'OB' && b.number === 1)).toBe(true);
+    expect(Object.keys(s.store.getState().sim.loaded)).not.toContain(ob35.id);
+  });
+
+  it('spenta durante il cambio di modo: nessun errore simModeFailed', async () => {
+    await initI18n('it');
+    const s = setup();
+    await on(s);
+    const w = s.workers[0]!;
+    const post = w.postMessage.bind(w);
+    w.postMessage = (m) => {
+      if (m.req.op === 'mode') s.controller.shutdown();
+      post(m);
+    };
+    const n0 = s.store.getState().messages.length;
+    await s.controller.setMode('RUN');
+    expect(
+      s.store
+        .getState()
+        .messages.slice(n0)
+        .map((m) => m.textKey),
+    ).toEqual([]);
+  });
+
   it('doppio clic su Carica: un solo caricamento, il comando è disabilitato mentre dura', async () => {
     await initI18n('it');
     const s = setup();

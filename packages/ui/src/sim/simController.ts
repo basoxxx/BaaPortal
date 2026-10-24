@@ -211,6 +211,7 @@ export class SimController {
     try {
       await s.request({ op: 'mode', to });
     } catch (e) {
+      if (this.session !== s) return;
       this.push('error', 'simModeFailed', { message: errorText(e) });
     }
   }
@@ -501,7 +502,11 @@ export class SimController {
     const wasStopped = store.getState().sim.mode === 'STOP';
     let failure: unknown;
     try {
-      await s.request({ op: 'download', files });
+      const keep = dev.blocks.map((b) => ({
+        kind: b.kind === 'IDB' ? ('DB' as const) : b.kind,
+        number: b.number,
+      }));
+      await s.request({ op: 'download', files, keep });
     } catch (e) {
       failure = e;
     }

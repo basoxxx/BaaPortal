@@ -367,3 +367,58 @@ describe('SimHost', () => {
     await expect(f.host.handle({ op: 'mres' })).rejects.toThrow();
   });
 });
+
+describe('SimHost: blocchi cancellati e controlli', () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const cpuOf = (h: SimHost): any => (h as any).cpu;
+
+  it('il download con keep cancella dalla CPU i blocchi non più nel progetto (OB e DB)', async () => {
+    const f = fake();
+    await start(f.host);
+    const net = ['\tA I 0.0;\n\t= Q 4.0;'];
+    await f.host.handle({ op: 'download', files: [ob1(net), ob1(net, 35)] });
+    expect(cpuOf(f.host).program.get('OB', 35)).toBeDefined();
+    cpuOf(f.host).memory.dbs.set(7, {
+      data: new Uint8Array(2),
+      initial: new Uint8Array(2),
+      retentive: false,
+    });
+    await f.host.handle({
+      op: 'download',
+      files: [ob1(net)],
+      keep: [{ kind: 'OB', number: 1 }],
+    });
+    expect(cpuOf(f.host).program.get('OB', 35)).toBeUndefined();
+    expect(cpuOf(f.host).program.get('OB', 1)).toBeDefined();
+    expect(cpuOf(f.host).memory.dbs.has(7)).toBe(false);
+  });
+
+  it('senza keep non si cancella niente', async () => {
+    const f = fake();
+    await start(f.host);
+    const net = ['\tA I 0.0;\n\t= Q 4.0;'];
+    await f.host.handle({ op: 'download', files: [ob1(net, 35)] });
+    await f.host.handle({ op: 'download', files: [ob1(net)] });
+    expect(cpuOf(f.host).program.get('OB', 35)).toBeDefined();
+  });
+
+  it('interrupt con OB non supportato e dimensioni sconosciute sono rifiutati', async () => {
+    const f = fake();
+    await start(f.host);
+    await expect(f.host.handle({ op: 'interrupt', ob: 35 as 82 })).rejects.toThrow(/OB/);
+    const bad = { area: 'M', byte: 0, size: 'Z' } as never;
+    await expect(f.host.handle({ op: 'watch', items: [bad] })).rejects.toThrow(/dimensione/);
+    await expect(
+      f.host.handle({
+        op: 'write',
+        items: [{ ...(bad as object), data: Uint8Array.of(1) } as never],
+      }),
+    ).rejects.toThrow(/dimensione/);
+    await expect(
+      f.host.handle({
+        op: 'write',
+        items: [{ area: 'M', byte: 0, size: 'B', data: Uint8Array.of(1) }],
+      }),
+    ).resolves.toEqual([{ ok: true }]);
+  });
+});
