@@ -22,9 +22,8 @@ describe('logica combinatoria a bit', () => {
     const [a, on, eq] = r.trace.map((t) => wordToStw(t.stw));
     // A M0.0 (=1): inizio catena, /FC = 1, RLO = STA = 1, OR = 0
     expect(a).toMatchObject({ fc: true, rlo: true, sta: true, or: false });
-    // ON M0.1 (=1): il termine nuovo vale 0, ma il termine AND precedente (1) è già chiuso: RLO = 1,
-    // OR = 1; STA è il bit interrogato (1)
-    expect(on).toMatchObject({ fc: true, rlo: true, sta: true, or: true });
+    // ON M0.1 (=1): RLO = 1 OR 0 = 1; OR = 0; STA è il bit interrogato (1)
+    expect(on).toMatchObject({ fc: true, rlo: true, sta: true, or: false });
     // = M1.0: fine catena, /FC = 0, RLO invariato, OR = 0
     expect(eq).toMatchObject({ fc: false, rlo: true, sta: true, or: false });
     expect(bit(r.mem.M[1]!, 0)).toBe(1);
@@ -50,6 +49,57 @@ describe('logica combinatoria a bit', () => {
     expect(wordToStw(r.trace[3]!.stw)).toMatchObject({ fc: true, rlo: true });
   });
 
+  it('A a / O b / A c = (a|b)&c, tabella completa', () => {
+    // Manuale AWL, «Parola di stato» e «O»: con /FC = 1 l'O fa l'OR con l'RLO.
+    const prog = ['\tA %I0.0;\n\tO %I0.1;\n\tA %I0.2;\n\t= %Q0.0;'];
+    for (let i = 0; i < 8; i++) {
+      const r = runAwl(prog, { setup: (m) => (m.I[0] = i) });
+      expect(bit(r.mem.Q[0]!, 0)).toBe((bit(i, 0) | bit(i, 1)) & bit(i, 2));
+    }
+  });
+
+  it('stato dopo `)`, O da solo, X con OR = 1 e S/R/=', () => {
+    // Manuale AWL, «Parola di stato»: tabelle di O (AND prima di OR), `)`, X, S, R, =.
+    const st = (r: { trace: { stw: number }[] }, k: number) => wordToStw(r.trace[k]!.stw);
+    // O da solo: OR := RLO, STA = 1, /FC = 0, RLO invariato
+    const o = runAwl(['\tA %I0.0;\n\tO;'], { setup: (m) => (m.I[0] = 1) });
+    expect(st(o, 1)).toMatchObject({ or: true, sta: true, fc: false, rlo: true });
+    // `)` dopo A(: ripristina OR dall'elemento salvato, STA = 1, /FC = 1
+    const c = runAwl(['\tA %I0.0;\n\tO;\n\tA(;\n\tA %I0.1;\n\t);'], {
+      setup: (m) => (m.I[0] = 1),
+    });
+    expect(st(c, 2)).toMatchObject({ or: false, sta: true, fc: false, rlo: true });
+    expect(st(c, 4)).toMatchObject({ or: true, sta: true, fc: true, rlo: true });
+    // X con OR = 1 dopo O da solo: l'X azzera OR
+    const x = runAwl(['\tA %I0.0;\n\tO;\n\tX %I0.1;'], { setup: (m) => (m.I[0] = 3) });
+    expect(st(x, 2)).toMatchObject({ or: false, fc: true, rlo: true, sta: true });
+    // S, R e = : /FC = 0, OR = 0, RLO invariato; STA = valore scritto / RLO
+    const e = runAwl(
+      ['\tA %I0.0;\n\tO;\n\tS %M1.0;', '\tA %I0.0;\n\tR %M1.0;\n\tA %I0.0;\n\t= %M1.1;'],
+      {
+        setup: (m) => (m.I[0] = 1),
+      },
+    );
+    expect(st(e, 2)).toMatchObject({ or: false, fc: false, rlo: true, sta: true });
+    expect(st(e, 4)).toMatchObject({ or: false, fc: false, rlo: true, sta: true });
+    expect(st(e, 6)).toMatchObject({ or: false, fc: false, rlo: true, sta: true });
+  });
+
+  it('operazione non implementata → SimError con offset', () => {
+    // Un id senza gestore dà MC7_NON_ESEGUIBILE con blocco, offset e rete.
+    let err: unknown;
+    try {
+      runAwl(['\tA %I0.0;\n\tL MB0;']);
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(SimError);
+    expect((err as SimError).code).toBe('MC7_NON_ESEGUIBILE');
+    expect((err as SimError).detail).toBe('operazione non implementata: L');
+    expect((err as SimError).offset).toBe(2);
+    expect((err as SimError).network).toBe(1);
+  });
+
   it('A I0.0 / A I0.1 / O / A I0.2 / A I0.3: AND prima di OR', () => {
     // Manuale AWL, «O (OR di blocchi AND)»: Q0.0 = (I0.0 AND I0.1) OR (I0.2 AND I0.3).
     const prog = ['\tA %I0.0;\n\tA %I0.1;\n\tO;\n\tA %I0.2;\n\tA %I0.3;\n\t= %Q0.0;'];
@@ -57,15 +107,6 @@ describe('logica combinatoria a bit', () => {
       const r = runAwl(prog, { setup: (m) => (m.I[0] = i) });
       const expected = (bit(i, 0) & bit(i, 1)) | (bit(i, 2) & bit(i, 3));
       expect(bit(r.mem.Q[0]!, 0)).toBe(expected);
-    }
-  });
-
-  it('A I0.0 / O I0.1 / A I0.2: l’AND precede l’OR', () => {
-    // Manuale AWL, «O»: I0.0 OR (I0.1 AND I0.2)
-    const prog = ['\tA %I0.0;\n\tO %I0.1;\n\tA %I0.2;\n\t= %Q0.0;'];
-    for (let i = 0; i < 8; i++) {
-      const r = runAwl(prog, { setup: (m) => (m.I[0] = i) });
-      expect(bit(r.mem.Q[0]!, 0)).toBe(bit(i, 0) | (bit(i, 1) & bit(i, 2)));
     }
   });
 
@@ -165,8 +206,12 @@ describe('logica combinatoria a bit', () => {
       sta: true,
       or: false,
     });
-    expect(wordToStw(r.trace[1]!.stw)).toMatchObject({ fc: true, rlo: false, sta: true });
+    // NOT: /FC e OR restano come erano (SET ha messo /FC = 0)
+    expect(wordToStw(r.trace[1]!.stw)).toMatchObject({ fc: false, rlo: false, sta: true });
     expect(wordToStw(r.trace[2]!.stw)).toMatchObject({ fc: false, rlo: false, sta: false });
+    // dopo SET / NOT /FC = 0: il successivo A I0.0 apre una catena nuova
+    const n = runAwl(['\tSET;\n\tNOT;\n\tA %I0.0;\n\t= %Q0.0;'], { setup: (m) => (m.I[0] = 1) });
+    expect(bit(n.mem.Q[0]!, 0)).toBe(1);
   });
 
   it('FP: un solo ciclo a 1 sul fronte di salita', () => {

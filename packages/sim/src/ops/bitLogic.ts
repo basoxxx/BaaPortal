@@ -11,53 +11,22 @@ export const MCR_DEPTH = 8;
 export type ChainFn = 'A' | 'O' | 'X';
 
 /**
- * Riallinea la catena interna all'RLO della parola di stato. Se un'altra istruzione (confronto,
- * L STW, ...) ha scritto l'RLO, la catena riparte da quel valore.
- */
-function sync(st: ExecState): void {
-  const c = st.chain;
-  if (st.regs.stw.rlo !== (c.done || c.term)) {
-    c.done = false;
-    c.term = st.regs.stw.rlo;
-  }
-}
-
-/** Imposta RLO e catena insieme; `done` falso. */
-function setRlo(st: ExecState, v: boolean): void {
-  st.chain.done = false;
-  st.chain.term = v;
-  st.regs.stw.rlo = v;
-}
-
-/**
  * Logica di prima interrogazione (/FC) per A, O e X, condivisa con i confronti.
- * Manuale AWL, «Operazioni di combinazione logica a bit» e «Parola di stato»:
- * - /FC = 0: il risultato dell'interrogazione diventa l'RLO (inizio catena);
- * - /FC = 1: A fa l'AND con il termine in corso; O chiude il termine e ne apre uno nuovo
- *   (l'AND precede l'OR); X fa l'OR esclusivo con l'RLO.
- * Poi /FC = 1; STA = `sta` (di norma il bit interrogato, non negato); OR = termini OR già chiusi.
+ * Manuale AWL, «Operazioni di combinazione logica a bit» e «Parola di stato» (solo bit reali):
+ * - A: RLO = (/FC ? RLO AND v : v) OR OR-bit; l'OR-bit resta;
+ * - O: RLO = /FC ? RLO OR v : v; OR-bit = 0;
+ * - X: RLO = /FC ? RLO XOR v : v; OR-bit = 0.
+ * Poi /FC = 1 e STA = `sta` (di norma il bit interrogato, non negato).
  */
 export function checkBit(st: ExecState, fn: ChainFn, v: boolean, sta: boolean): void {
-  sync(st);
-  combine(st, fn, v, sta);
-}
-
-function combine(st: ExecState, fn: ChainFn, v: boolean, sta: boolean): void {
-  const c = st.chain;
   const s = st.regs.stw;
-  if (fn === 'A') c.term = s.fc ? c.term && v : v;
-  else if (fn === 'O') {
-    if (s.fc) c.done = c.done || c.term;
-    c.term = v;
-  } else {
-    const x = s.fc ? c.done || c.term !== v : v;
-    c.done = false;
-    c.term = x;
+  if (fn === 'A') s.rlo = (s.fc ? s.rlo && v : v) || s.or;
+  else {
+    s.rlo = s.fc ? (fn === 'O' ? s.rlo || v : s.rlo !== v) : v;
+    s.or = false;
   }
   s.fc = true;
-  s.rlo = c.done || c.term;
   s.sta = sta;
-  s.or = c.done;
 }
 
 /** Valore di un operando a bit: bit di memoria o condizione di stato (`A ==0`, `A OV`, ...). */
@@ -119,63 +88,58 @@ function interrogation(fn: ChainFn, negate: boolean): OpHandler {
   };
 }
 
-/** Fine della catena: /FC = 0, OR = 0; l'RLO resta com'è. */
+/** Fine della catena (=, S, R): /FC = 0, OR = 0; l'RLO resta com'è. */
 function endChain(st: ExecState): void {
-  const s = st.regs.stw;
-  s.fc = false;
-  s.or = false;
-  setRlo(st, s.rlo);
+  st.regs.stw.fc = false;
+  st.regs.stw.or = false;
 }
 
 function open(fn: ChainFn, negate: boolean): OpHandler {
   return (st) => {
-    sync(st);
     if (st.nest.length >= NEST_DEPTH)
       throw new SimError('STACK_ANNIDAMENTO_PIENO', 'parentesi annidate');
     const s = st.regs.stw;
-    st.nest.push({ done: st.chain.done, term: st.chain.term, fc: s.fc, fn, negate });
-    // Dentro la parentesi la catena riparte con /FC = 0.
-    st.chain.done = false;
-    st.chain.term = false;
-    s.fc = false;
+    st.nest.push({ rlo: s.rlo, or: s.or, fc: s.fc, fn, negate });
+    // Manuale AWL, «A(»: OR = 0, STA = 1, /FC = 0; RLO invariato.
     s.or = false;
+    s.sta = true;
+    s.fc = false;
   };
 }
 
 const close: OpHandler = (st) => {
   const e = st.nest.pop();
   if (!e) throw new SimError('MC7_NON_ESEGUIBILE', 'parentesi chiusa senza apertura');
-  sync(st);
   const s = st.regs.stw;
   const inner = e.negate ? !s.rlo : s.rlo;
-  // Si ricompone con la catena salvata come farebbe l'interrogazione corrispondente.
-  st.chain.done = e.done;
-  st.chain.term = e.term;
-  s.fc = e.fc;
-  combine(st, e.fn, inner, true);
+  // Si combina l'RLO salvato con quello interno secondo la funzione salvata (senza catena prima
+  // della parentesi, il risultato è l'RLO interno). Per A( / AN( si aggiunge l'OR salvato.
+  if (e.fn === 'A') s.rlo = (e.fc ? e.rlo && inner : inner) || e.or;
+  else if (e.fn === 'O') s.rlo = e.fc ? e.rlo || inner : inner;
+  else s.rlo = e.fc ? e.rlo !== inner : inner;
+  s.or = e.or;
+  s.sta = true;
+  s.fc = true;
 };
 
 const OR_BLOCKS: OpHandler = (st) => {
-  // Manuale AWL, «O»: AND prima di OR. Chiude il termine AND in corso; la catena riparte.
-  sync(st);
-  const c = st.chain;
-  c.done = c.done || c.term;
-  c.term = false;
-  st.regs.stw.fc = false;
-  st.regs.stw.or = c.done;
+  // Manuale AWL, «O» (AND prima di OR): OR := RLO, STA = 1, /FC = 0; RLO invariato.
+  const s = st.regs.stw;
+  s.or = s.rlo;
+  s.sta = true;
+  s.fc = false;
 };
 
 function edge(rising: boolean): OpHandler {
   return (st, stmt) => {
     // Manuale AWL, «FP»/«FN»: l'RLO corrente è confrontato col merker di fronte, che poi lo memorizza.
-    sync(st);
     const cur = st.regs.stw.rlo;
     const loc = bitLocation(st, stmt.operand);
     const prev = readBits(st.mem, loc, 'X') === 1;
     writeBits(st.mem, loc, 'X', cur ? 1 : 0);
     const out = rising ? cur && !prev : !cur && prev;
     const s = st.regs.stw;
-    setRlo(st, out);
+    s.rlo = out;
     s.fc = true;
     s.sta = out;
     s.or = false;
@@ -184,12 +148,11 @@ function edge(rising: boolean): OpHandler {
 
 function setReset(value: 0 | 1): OpHandler {
   return (st, stmt) => {
-    sync(st);
     const s = st.regs.stw;
     const loc = bitLocation(st, stmt.operand);
     // Manuale AWL, «S»/«R»: agiscono solo con RLO = 1 (e fuori da una zona MCR spenta).
     if (s.rlo && !mcrOff(st)) writeBits(st.mem, loc, 'X', value);
-    s.sta = readBits(st.mem, loc, 'X') === 1;
+    s.sta = s.rlo;
     endChain(st);
   };
 }
@@ -209,7 +172,6 @@ export const BIT_OPS: Record<string, OpHandler> = {
   'XN(': open('X', true),
   ')': close,
   '=': (st, stmt) => {
-    sync(st);
     const loc = bitLocation(st, stmt.operand);
     // Con MCR attivo e RLO dell'MCR a 0, `=` scrive 0.
     const v = st.regs.stw.rlo && !mcrOff(st);
@@ -219,13 +181,10 @@ export const BIT_OPS: Record<string, OpHandler> = {
   },
   S: setReset(1),
   R: setReset(0),
+  // Manuale AWL, «NOT»: RLO invertito, STA = 1; /FC e OR restano.
   NOT: (st) => {
-    sync(st);
-    const s = st.regs.stw;
-    setRlo(st, !s.rlo);
-    s.fc = true;
-    s.sta = true;
-    s.or = false;
+    st.regs.stw.rlo = !st.regs.stw.rlo;
+    st.regs.stw.sta = true;
   },
   SET: (st) => setConst(st, true),
   CLR: (st) => setConst(st, false),
@@ -236,15 +195,15 @@ export const BIT_OPS: Record<string, OpHandler> = {
   FN: edge(false),
   // Manuale AWL, «MCR»: pila di 8 livelli degli RLO salvati.
   'MCR(': (st) => {
-    sync(st);
     if (st.mcr.stack.length >= MCR_DEPTH)
       throw new SimError('STACK_ANNIDAMENTO_PIENO', 'MCR annidati');
     st.mcr.stack.push(st.regs.stw.rlo);
-    endChain(st);
+    mcrStatus(st);
   },
   ')MCR': (st) => {
     if (st.mcr.stack.pop() === undefined)
       throw new SimError('MC7_NON_ESEGUIBILE', ')MCR senza MCR(');
+    mcrStatus(st);
   },
   MCRA: (st) => {
     st.mcr.active = true;
@@ -254,9 +213,18 @@ export const BIT_OPS: Record<string, OpHandler> = {
   },
 };
 
+/** Manuale AWL, «MCR(» e «)MCR»: OR = 0, STA = 1, RLO = 1, /FC = 0. */
+function mcrStatus(st: ExecState): void {
+  const s = st.regs.stw;
+  s.or = false;
+  s.sta = true;
+  s.rlo = true;
+  s.fc = false;
+}
+
 function setConst(st: ExecState, v: boolean): void {
   const s = st.regs.stw;
-  setRlo(st, v);
+  s.rlo = v;
   s.fc = false;
   s.sta = v;
   s.or = false;

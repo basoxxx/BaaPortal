@@ -27,8 +27,8 @@ export interface ExecContext {
 
 /** Elemento dello stack di annidamento (manuale AWL, «Parola di stato»): catena salvata e funzione. */
 export interface NestEntry {
-  done: boolean;
-  term: boolean;
+  rlo: boolean;
+  or: boolean;
   fc: boolean;
   fn: 'A' | 'O' | 'X';
   negate: boolean;
@@ -41,8 +41,7 @@ export interface McrState {
 }
 
 /**
- * Stato di esecuzione di un blocco. `chain` tiene i due pezzi dell'RLO: `done` = OR dei termini AND
- * già chiusi, `term` = termine AND in corso; RLO = done OR term. `mcr` va salvato e ripristinato
+ * Stato di esecuzione di un blocco. `nest` è lo stack di annidamento; `mcr` va salvato e ripristinato
  * attorno ai richiami (Task 5).
  */
 export interface ExecState {
@@ -53,7 +52,6 @@ export interface ExecState {
   frame: FrameView;
   /** Offset MC7 dell'istruzione in corso. */
   offset: number;
-  chain: { done: boolean; term: boolean };
   nest: NestEntry[];
   mcr: McrState;
 }
@@ -90,7 +88,6 @@ export function newExecState(ctx: ExecContext, block: LoadedBlock, frame?: Frame
     block,
     frame: frame ?? { lBase: 0, prevLBase: 0 },
     offset: 0,
-    chain: { done: false, term: false },
     nest: [],
     mcr: { active: false, stack: [] },
   };
@@ -107,7 +104,8 @@ export function execBlock(st: ExecState): void {
       const d = decodeAt(block, at);
       if (!('stmt' in d)) throw new SimError('MC7_NON_ESEGUIBILE', `byte grezzi a ${at}`);
       const handler = OPS[d.stmt.id];
-      if (!handler) throw new Error(`OP non implementata: ${d.stmt.id}`);
+      if (!handler)
+        throw new SimError('MC7_NON_ESEGUIBILE', `operazione non implementata: ${d.stmt.id}`);
       const r = handler(st, d.stmt);
       ctx.trace?.({
         block: { kind: block.kind, number: block.number },
