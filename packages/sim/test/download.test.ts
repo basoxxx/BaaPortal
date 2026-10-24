@@ -10,6 +10,7 @@ const PROPS: SimCpuOptions['props'] = {
   minCycleMs: 0,
   clockMemory: { enabled: false, byte: 0 },
   retentivity: { mBytes: 16, timers: 2, counters: 2 },
+  cyclicInterruptMs: 100,
 };
 
 const newCpu = (): SimCpu => new SimCpu({ cpuTypeId: 'cpu-315-2-pn-dp', props: PROPS });

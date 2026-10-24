@@ -49,7 +49,11 @@ export function callBlock(
   pointers?: readonly Uint8Array[],
 ): void {
   const callee = st.ctx.program.get(kind, number);
-  if (!callee) throw new SimError('BLOCCO_NON_CARICATO', `${kind}${number}`);
+  if (!callee)
+    throw new SimError('BLOCCO_NON_CARICATO', `${kind}${number}`, {
+      missingBlock: kind,
+      faultReg: number,
+    });
   if (st.depth + 1 > MAX_BLOCK_STACK)
     throw new SimError('STACK_BLOCCHI_PIENO', `oltre ${MAX_BLOCK_STACK} blocchi annidati`);
   const callerSize = st.frame.lSize ?? st.block.localBytes;

@@ -18,6 +18,7 @@ const PROPS: SimCpuOptions['props'] = {
   minCycleMs: 0,
   clockMemory: { enabled: false, byte: 0 },
   retentivity: { mBytes: 16, timers: 2, counters: 2 },
+  cyclicInterruptMs: 100,
 };
 
 /** CPU con orologio finto: `clock.t` si muove a mano; `step` lo avanza a ogni lettura. */

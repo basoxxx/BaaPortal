@@ -10,5 +10,6 @@ export * from './ops';
 export * from './calls';
 export * from './diagnostics';
 export * from './obStartInfo';
+export * from './events';
 export * from './cpu';
 export * from './backend';

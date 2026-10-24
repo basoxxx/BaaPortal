@@ -38,7 +38,7 @@ export class CounterBank {
 
   get(n: number): S5Counter {
     if (!Number.isInteger(n) || n < 0 || n >= this.count)
-      throw new SimError('NUMERO_CONTATORE', `C ${n}`);
+      throw new SimError('NUMERO_CONTATORE', `C ${n}`, { faultReg: n & 0xffff });
     return this.counters[n]!;
   }
 

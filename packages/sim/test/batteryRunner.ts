@@ -34,6 +34,7 @@ const PROPS: SimCpuOptions['props'] = {
   minCycleMs: 0,
   clockMemory: { enabled: false, byte: 0 },
   retentivity: { mBytes: 16, timers: 2, counters: 2 },
+  cyclicInterruptMs: 100,
 };
 
 const BATTERY_DIR = join(__dirname, 'battery');

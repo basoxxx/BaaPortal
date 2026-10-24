@@ -31,8 +31,31 @@ export interface ExecContext {
   trace?: (t: TraceStep) => void;
   /** Istruzioni eseguite dal ciclo (contatore condiviso fra i blocchi). */
   instructions?: number;
-  /** Chiamato ogni `TICK_EVERY` istruzioni: controllo del tempo di ciclo, merker di clock. */
-  onTick?: () => void;
+  /**
+   * Chiamato ogni `TICK_EVERY` istruzioni, al confine fra due istruzioni del blocco `st`: controllo del
+   * tempo di ciclo, merker di clock, interruzioni (OB35, OB82, OB86).
+   */
+  onTick?: (st: ExecState) => void;
+  /** Limite di istruzioni per ciclo (predefinito `MAX_INSTRUCTIONS`). */
+  maxInstructions?: number;
+  /**
+   * Limite di istruzioni superato. Se c'è e ritorna, il ciclo prosegue (OB80 richiamato, contatore
+   * azzerato); se manca, l'esecutore lancia TEMPO_CICLO_SUPERATO.
+   */
+  onOverrun?: (st: ExecState, reason: string) => void;
+  /**
+   * Errore di un'istruzione del blocco `st` (già con blocco e offset). `true` = gestito al posto
+   * dell'istruzione (OB121/OB122 richiamato): i registri si ripristinano e si prosegue con l'istruzione
+   * successiva. Se c'è, prima di ogni istruzione si salvano i registri.
+   */
+  onError?: (e: SimError, st: ExecState) => boolean;
+}
+
+/** Istruzioni che scrivono il loro operando: un DB non aperto vi conta come errore in scrittura. */
+const WRITES = new Set(['T', '=', 'S', 'R', 'TAR1', 'TAR2']);
+
+function saveRegs(r: Registers): Registers {
+  return { ...r, stw: { ...r.stw } };
 }
 
 /** Ogni quante istruzioni si controlla il tempo di ciclo (Global Constraints, piano 2A). */
@@ -166,23 +189,33 @@ function withFormal(stmt: DecodedStatement): DecodedStatement {
   return { ...stmt, operand: { ...stmt.operand, size } as typeof stmt.operand };
 }
 
-/** Esegue il codice del blocco dall'inizio fino a `BE` o alla fine; gli errori portano blocco e offset. */
+/**
+ * Esegue il codice del blocco dall'inizio fino a `BE` o alla fine; gli errori portano blocco e offset.
+ * Un errore di un'istruzione passa a `ctx.onError`, che può gestirlo al posto dell'istruzione.
+ */
 export function execBlock(st: ExecState): void {
   const { block, ctx } = st;
   const code = block.code;
+  const max = ctx.maxInstructions ?? MAX_INSTRUCTIONS;
   let at = 0;
-  try {
-    while (at < code.length) {
-      st.offset = at;
+  while (at < code.length) {
+    st.offset = at;
+    let d: Decoded | undefined;
+    let saved: Registers | undefined;
+    try {
       const n = (ctx.instructions = (ctx.instructions ?? 0) + 1);
-      if (n > MAX_INSTRUCTIONS)
-        throw new SimError('TEMPO_CICLO_SUPERATO', `oltre ${MAX_INSTRUCTIONS} istruzioni`);
-      if (ctx.onTick && (n & (TICK_EVERY - 1)) === 0) ctx.onTick();
-      const d = decodeAt(block, at);
+      if (n > max) {
+        const reason = `oltre ${max} istruzioni`;
+        if (!ctx.onOverrun) throw new SimError('TEMPO_CICLO_SUPERATO', reason);
+        ctx.onOverrun(st, reason);
+      }
+      if (ctx.onTick && (n & (TICK_EVERY - 1)) === 0) ctx.onTick(st);
+      d = decodeAt(block, at);
       if (!('stmt' in d)) throw new SimError('MC7_NON_ESEGUIBILE', `byte grezzi a ${at}`);
       const handler = OPS[d.stmt.id];
       if (!handler)
         throw new SimError('MC7_NON_ESEGUIBILE', `operazione non implementata: ${d.stmt.id}`);
+      if (ctx.onError) saved = saveRegs(st.regs);
       const r = handler(st, withFormal(d.stmt));
       ctx.trace?.({
         block: { kind: block.kind, number: block.number },
@@ -192,7 +225,7 @@ export function execBlock(st: ExecState): void {
         accu1: st.regs.accu1,
         accu2: st.regs.accu2,
       });
-      if (r === 'return') break;
+      if (r === 'return') return;
       if (r && typeof r === 'object') {
         if (!instructionStarts(block).has(r.jump))
           throw new SimError(
@@ -201,17 +234,21 @@ export function execBlock(st: ExecState): void {
           );
         at = r.jump;
       } else at += d.length;
-    }
-    // Fine del codice senza BE: come BE.
-    if (at >= code.length) endBlock(st);
-  } catch (e) {
-    if (e instanceof SimError && e.offset === undefined) {
+    } catch (e) {
+      // Un errore già localizzato viene da un blocco richiamato (o da un OB d'errore): passa oltre.
+      if (!(e instanceof SimError) || e.offset !== undefined) throw e;
       e.block = { kind: block.kind, number: block.number };
-      e.offset = st.offset;
-      e.network = networkOf(block, st.offset);
+      e.offset = at;
+      e.network = networkOf(block, at);
+      if (d && 'stmt' in d && e.access === undefined && WRITES.has(d.stmt.id)) e.access = 'write';
+      // `saved` c'è solo se l'errore viene dall'istruzione (non dal tick): solo allora la si salta.
+      if (!saved || !d || !ctx.onError?.(e, st)) throw e;
+      Object.assign(st.regs, saved);
+      at += d.length;
     }
-    throw e;
   }
+  // Fine del codice senza BE: come BE.
+  endBlock(st);
 }
 
 /** Esegue un blocco caricato. Lancia SimError (BLOCCO_NON_CARICATO se manca). */

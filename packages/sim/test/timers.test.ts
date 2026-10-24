@@ -234,6 +234,7 @@ describe('temporizzatori S5: CPU', () => {
         minCycleMs: 0,
         clockMemory: { enabled: false, byte: 0 },
         retentivity: { mBytes: 0, timers: 0, counters: 0 },
+        cyclicInterruptMs: 100,
       },
     });
     expect(cpu.timers.count).toBe(256);
@@ -248,6 +249,7 @@ describe('temporizzatori S5: CPU', () => {
         minCycleMs: 0,
         clockMemory: { enabled: false, byte: 0 },
         retentivity: { mBytes: 16, timers: 2, counters: 2 },
+        cyclicInterruptMs: 100,
       },
       now: () => clock.t,
     });

@@ -194,6 +194,7 @@ describe('contatori S5: ritentività e dimensione', () => {
         minCycleMs: 0,
         clockMemory: { enabled: false, byte: 0 },
         retentivity: { mBytes: 16, timers: 2, counters: 2 },
+        cyclicInterruptMs: 100,
       },
     });
     cpu.run();
@@ -214,6 +215,7 @@ describe('contatori S5: ritentività e dimensione', () => {
         minCycleMs: 0,
         clockMemory: { enabled: false, byte: 0 },
         retentivity: { mBytes: 0, timers: 0, counters: 0 },
+        cyclicInterruptMs: 100,
       },
     });
     expect(cpu.counters.count).toBe(256);

@@ -63,7 +63,7 @@ export class TimerBank {
 
   get(n: number): S5Timer {
     if (!Number.isInteger(n) || n < 0 || n >= this.count)
-      throw new SimError('NUMERO_TEMPORIZZATORE', `T ${n}`);
+      throw new SimError('NUMERO_TEMPORIZZATORE', `T ${n}`, { faultReg: n & 0xffff });
     return this.timers[n]!;
   }
 

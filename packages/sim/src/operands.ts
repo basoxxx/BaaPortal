@@ -172,9 +172,21 @@ function checkWindow(loc: Location, size: Size): void {
     throw new SimError('AREA_LUNGHEZZA', `${loc.area} byte ${loc.bit >> 3} fuori dalla finestra`);
 }
 
+/** Dà all'errore di un accesso la sua direzione (OB121_SW_FLT 16#22/16#23, OB122 16#42/16#43). */
+function tagged<T>(access: 'read' | 'write', f: () => T): T {
+  try {
+    return f();
+  } catch (e) {
+    if (e instanceof SimError && e.access === undefined) e.access = access;
+    throw e;
+  }
+}
+
 export function readBits(mem: SimMemory, loc: Location, size: Size): number {
-  checkWindow(loc, size);
-  const b = mem.bytes(loc.area === 'P' ? 'PI' : loc.area, loc.db, loc.bit >> 3, BYTES[size]);
+  const b = tagged('read', () => {
+    checkWindow(loc, size);
+    return mem.bytes(loc.area === 'P' ? 'PI' : loc.area, loc.db, loc.bit >> 3, BYTES[size]);
+  });
   if (size === 'X') return (b[0]! >> (loc.bit & 7)) & 1;
   let v = 0;
   for (const x of b) v = v * 256 + x;
@@ -182,9 +194,12 @@ export function readBits(mem: SimMemory, loc: Location, size: Size): number {
 }
 
 export function writeBits(mem: SimMemory, loc: Location, size: Size, value: number): void {
-  checkWindow(loc, size);
   const periph = loc.area === 'P' || loc.area === 'PQ';
-  const b = mem.bytes(loc.area === 'P' ? 'PQ' : loc.area, loc.db, loc.bit >> 3, BYTES[size]);
+  // Tutti i controlli prima di scrivere: una scrittura fallita non scrive niente.
+  const b = tagged('write', () => {
+    checkWindow(loc, size);
+    return mem.bytes(loc.area === 'P' ? 'PQ' : loc.area, loc.db, loc.bit >> 3, BYTES[size]);
+  });
   store(b, loc.bit & 7, size, value);
   // ⚠️ L'accesso diretto alle uscite di periferia aggiorna anche la PIQ (Q), se l'indirizzo vi cade.
   if (periph && (loc.bit >> 3) + BYTES[size] <= mem.Q.length)
