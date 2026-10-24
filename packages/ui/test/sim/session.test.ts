@@ -11,6 +11,7 @@ function fakeWorker() {
     sent: [],
     onmessage: null,
     onerror: null,
+    onmessageerror: null,
     postMessage(m: SimWireRequest) {
       w.sent.push(m);
       void host.handle(m.req).then(
@@ -93,5 +94,46 @@ describe('SimSession', () => {
     w.onerror?.({ message: 'boom' });
     await expect(p).rejects.toThrow(/boom/);
     s.dispose();
+  });
+
+  it('onerror: la sessione è fallita, le richieste successive sono rifiutate, il worker terminato', async () => {
+    const w = fakeWorker();
+    const s = await SimSession.start({
+      cpuTypeId: 'cpu-315-2-pn-dp',
+      props: PROPS,
+      createWorker: () => w,
+    });
+    w.onerror?.({ message: 'boom' });
+    expect(w.terminated).toBe(true);
+    await expect(s.request({ op: 'mres' })).rejects.toThrow();
+  });
+
+  it('messageerror: richieste pendenti e future rifiutate', async () => {
+    const w = fakeWorker();
+    const s = await SimSession.start({
+      cpuTypeId: 'cpu-315-2-pn-dp',
+      props: PROPS,
+      createWorker: () => w,
+    });
+    w.postMessage = () => undefined;
+    const p = s.request({ op: 'mres' });
+    w.onmessageerror?.({});
+    await expect(p).rejects.toThrow(/illeggibile/);
+    expect(w.terminated).toBe(true);
+    await expect(s.request({ op: 'mres' })).rejects.toThrow();
+  });
+
+  it("notifica di errore fatale dell'ospite: sessione fallita", async () => {
+    const w = fakeWorker();
+    const s = await SimSession.start({
+      cpuTypeId: 'cpu-315-2-pn-dp',
+      props: PROPS,
+      createWorker: () => w,
+    });
+    w.postMessage = () => undefined;
+    const p = s.request({ op: 'mres' });
+    w.onmessage?.({ data: { type: 'notice', notice: { kind: 'error', message: 'guasto' } } });
+    await expect(p).rejects.toThrow(/guasto/);
+    expect(w.terminated).toBe(true);
   });
 });

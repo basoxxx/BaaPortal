@@ -7,6 +7,7 @@ export interface SimWorkerLike {
   terminate(): void;
   onmessage: ((e: { data: SimWireMessage }) => void) | null;
   onerror: ((e: { message?: string }) => void) | null;
+  onmessageerror: ((e: unknown) => void) | null;
 }
 
 export interface SimSessionOptions {
@@ -17,9 +18,14 @@ export interface SimSessionOptions {
 }
 
 function defaultWorker(): SimWorkerLike {
-  return new Worker(new URL('./simWorker.ts', import.meta.url), {
-    type: 'module',
-  }) as unknown as SimWorkerLike;
+  // Produzione: la build emette uno script IIFE, che va caricato come worker classico (un modulo da
+  // file:// è bloccato). Sviluppo: il server di Vite serve moduli, quindi serve `module`.
+  const dev = (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV === true;
+  if (dev)
+    return new Worker(new URL('./simWorker.ts', import.meta.url), {
+      type: 'module',
+    }) as unknown as SimWorkerLike;
+  return new Worker(new URL('./simWorker.ts', import.meta.url)) as unknown as SimWorkerLike;
 }
 
 /** Lato renderer: parla con l'ospite del simulatore nel Worker per richiesta/risposta numerate. */
@@ -34,8 +40,8 @@ export class SimSession {
 
   private constructor(private readonly worker: SimWorkerLike) {
     worker.onmessage = (e) => this.receive(e.data);
-    worker.onerror = (e) =>
-      this.failAll(new Error(e.message ?? 'errore del worker del simulatore'));
+    worker.onerror = (e) => this.fail(new Error(e.message ?? 'errore del worker del simulatore'));
+    worker.onmessageerror = () => this.fail(new Error('messaggio del worker illeggibile'));
   }
 
   /** Crea il worker e avvia la CPU simulata; se l'avvio fallisce il worker è terminato. */
@@ -76,6 +82,10 @@ export class SimSession {
 
   private receive(m: SimWireMessage): void {
     if (m.type === 'notice') {
+      if (m.notice.kind === 'error') {
+        this.fail(new Error(m.notice.message));
+        return;
+      }
       for (const cb of [...this.listeners]) cb(m.notice);
       return;
     }
@@ -84,6 +94,15 @@ export class SimSession {
     this.pending.delete(m.id);
     if (m.ok) p.resolve(m.value as never);
     else p.reject(new Error(m.error));
+  }
+
+  /** Guasto del worker: la sessione è finita (worker terminato, richieste rifiutate). */
+  private fail(e: Error): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.worker.terminate();
+    this.listeners.clear();
+    this.failAll(e);
   }
 
   private failAll(e: Error): void {

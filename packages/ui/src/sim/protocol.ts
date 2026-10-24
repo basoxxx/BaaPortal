@@ -59,7 +59,9 @@ export type SimNotice =
       outputs: Uint8Array;
     }
   | { kind: 'monitor'; block: MonitorRequest; steps: MonitorStep[] }
-  | { kind: 'watch'; values: WatchValue[] };
+  | { kind: 'watch'; values: WatchValue[] }
+  /** Errore fatale dell'ospite (eccezione in un timer): la sessione lo considera fallito. */
+  | { kind: 'error'; message: string };
 
 /** Messaggio renderer → worker. */
 export interface SimWireRequest {

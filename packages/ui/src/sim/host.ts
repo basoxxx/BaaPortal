@@ -79,7 +79,7 @@ export class SimHost {
         return undefined;
       case 'setInputs': {
         const buf = cpu.memory.physIn;
-        if (req.byte < 0 || req.byte + req.bytes.length > buf.length)
+        if (!Number.isInteger(req.byte) || req.byte < 0 || req.byte + req.bytes.length > buf.length)
           throw new RangeError(`ingressi fuori area: byte ${req.byte}, ${req.bytes.length} byte`);
         buf.set(req.bytes, req.byte);
         return undefined;
@@ -154,6 +154,14 @@ export class SimHost {
    */
   private pump(): void {
     this.cancelPump = undefined;
+    try {
+      this.pumpSlice();
+    } catch (e) {
+      this.fatal(e);
+    }
+  }
+
+  private pumpSlice(): void {
     const cpu = this.cpu;
     if (!cpu || this.dead || cpu.mode !== 'RUN') return;
     const minMs = Math.max(0, this.minCycleMs);
@@ -176,13 +184,28 @@ export class SimHost {
     }
   }
 
+  /** Eccezione inattesa in un timer: si avvisa il renderer e si ferma tutto. */
+  private fatal(e: unknown): void {
+    const message = e instanceof Error ? e.message : String(e);
+    this.dead = true;
+    this.cancelPump?.();
+    this.cancelTick?.();
+    this.cancelPump = this.cancelTick = undefined;
+    this.env.post({ kind: 'error', message });
+  }
+
   // ---- notifiche -------------------------------------------------------------------------
 
   private scheduleTick(): void {
     this.cancelTick = this.env.schedule(() => {
       this.cancelTick = undefined;
       if (this.dead) return;
-      this.tick();
+      try {
+        this.tick();
+      } catch (e) {
+        this.fatal(e);
+        return;
+      }
       this.scheduleTick();
     }, NOTICE_INTERVAL_MS);
   }
@@ -293,13 +316,15 @@ export class SimHost {
   // ---- fine ------------------------------------------------------------------------------
 
   private async shutdown(): Promise<void> {
+    const cpu = this.cpu;
+    if (cpu && cpu.mode !== 'STOP') cpu.stop('simulazione terminata');
+    this.sendStatus(); // ultimo stato (STOP) prima di spegnersi
     this.dead = true;
     this.cancelPump?.();
     this.cancelTick?.();
     this.cancelPump = this.cancelTick = undefined;
     const c = this.client;
     this.client = undefined;
-    this.cpu?.stop('simulazione terminata');
     await c?.close().catch(() => undefined);
   }
 }

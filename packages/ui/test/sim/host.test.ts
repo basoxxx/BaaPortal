@@ -41,7 +41,15 @@ function fake() {
   }
   const of = <K extends SimNotice['kind']>(k: K) =>
     notices.filter((n): n is Extract<SimNotice, { kind: K }> => n.kind === k);
-  return { host, advance, notices, of, now: () => t };
+  return {
+    host,
+    advance,
+    notices,
+    of,
+    pending: () => jobs.length,
+    now: () => t,
+    pending: () => jobs.length,
+  };
 }
 
 const start = (h: SimHost) => h.handle({ op: 'start', cpuTypeId: 'cpu-315-2-pn-dp', props: PROPS });
@@ -172,6 +180,118 @@ describe('SimHost', () => {
     await expect(f.host.handle({ op: 'mres' })).rejects.toThrow();
     await start(f.host);
     await f.host.handle({ op: 'stop' });
+    await expect(f.host.handle({ op: 'mres' })).rejects.toThrow();
+  });
+
+  it('RUN ripetuti non raddoppiano la pianificazione', async () => {
+    const f = fake();
+    await start(f.host);
+    await f.host.handle({ op: 'download', files: [ob1(['\tNOP 0;'])] });
+    for (let i = 0; i < 3; i++) {
+      await f.host.handle({ op: 'mode', to: 'RUN' });
+      await f.host.handle({ op: 'mode', to: 'STOP' });
+    }
+    await f.host.handle({ op: 'mode', to: 'RUN' });
+    await f.host.handle({ op: 'mode', to: 'RUN' });
+    expect(f.pending()).toBeLessThanOrEqual(2); // un timer di notifica e una fetta
+    await f.host.handle({ op: 'stop' });
+  });
+
+  it('minCycleMs > 0 scandisce i cicli', async () => {
+    const f = fake();
+    await f.host.handle({
+      op: 'start',
+      cpuTypeId: 'cpu-315-2-pn-dp',
+      props: { ...PROPS, minCycleMs: 50 },
+    });
+    await f.host.handle({ op: 'download', files: [ob1(['\tNOP 0;'])] });
+    await f.host.handle({ op: 'mode', to: 'RUN' });
+    await f.advance(1000);
+    const cycles = f.of('status').at(-1)!.stats.cycles;
+    expect(cycles).toBeGreaterThanOrEqual(15);
+    expect(cycles).toBeLessThanOrEqual(21);
+    await f.host.handle({ op: 'stop' });
+  });
+
+  it("con l'orologio fermo una fetta è limitata e cede", async () => {
+    const jobs: { fn: () => void; ms: number }[] = [];
+    let tickJob: (() => void) | undefined;
+    const notices: SimNotice[] = [];
+    const host = new SimHost({
+      post: (n) => notices.push(n),
+      now: () => 5000,
+      schedule: (fn, ms) => {
+        jobs.push({ fn, ms });
+        if (ms === 200) tickJob = fn;
+        return () => undefined;
+      },
+    });
+    await start(host);
+    await host.handle({ op: 'download', files: [ob1(['\tNOP 0;'])] });
+    await host.handle({ op: 'mode', to: 'RUN' });
+    jobs.length = 0;
+    // la fetta già pianificata al RUN è stata annullata dal test: se ne pianifica una nuova
+    await host.handle({ op: 'mode', to: 'STOP' });
+    await host.handle({ op: 'mode', to: 'RUN' });
+    const pump = jobs.filter((j) => j.ms === 0).at(-1)!;
+    jobs.length = 0;
+    pump.fn(); // deve tornare
+    expect(jobs.map((j) => j.ms)).toEqual([0]); // ha ceduto, non gira all'infinito
+    const st = (): SimNotice | undefined => notices.filter((n) => n.kind === 'status').at(-1);
+    tickJob!(); // notifica di stato
+    const s = st();
+    expect(s && s.kind === 'status' && s.stats.cycles).toBe(5000);
+    await host.handle({ op: 'stop' });
+  });
+
+  it('download in RUN: il blocco nuovo vale dai cicli successivi', async () => {
+    const f = fake();
+    await start(f.host);
+    await f.host.handle({ op: 'download', files: [ob1(['\tL 1;\n\tT MB 0;'])] });
+    await f.host.handle({ op: 'mode', to: 'RUN' });
+    await f.advance(300);
+    await f.host.handle({ op: 'download', files: [ob1(['\tL 2;\n\tT MB 0;'])] });
+    await f.host.handle({ op: 'watch', items: [{ area: 'M', byte: 0, size: 'B' }] });
+    await f.advance(300);
+    const v = f.of('watch').at(-1)!.values[0]!;
+    expect('bytes' in v && v.bytes[0]).toBe(2);
+    expect(f.of('status').at(-1)!.mode).toBe('RUN');
+    await f.host.handle({ op: 'stop' });
+  });
+
+  it('setInputs con byte non intero o fuori area è rifiutato', async () => {
+    const f = fake();
+    await start(f.host);
+    await expect(
+      f.host.handle({ op: 'setInputs', byte: 0.5, bytes: Uint8Array.of(1) }),
+    ).rejects.toThrow();
+    await expect(
+      f.host.handle({ op: 'setInputs', byte: -1, bytes: Uint8Array.of(1) }),
+    ).rejects.toThrow();
+    await f.host.handle({ op: 'stop' });
+  });
+
+  it('stop: ultimo status in STOP prima di spegnersi', async () => {
+    const f = fake();
+    await start(f.host);
+    await f.host.handle({ op: 'mode', to: 'RUN' });
+    await f.host.handle({ op: 'stop' });
+    expect(f.of('status').at(-1)!.mode).toBe('STOP');
+  });
+
+  it("un'eccezione in un timer è segnalata come errore fatale", async () => {
+    const f = fake();
+    await start(f.host);
+    await f.host.handle({ op: 'watch', items: [{ area: 'M', byte: 0, size: 'B' }] });
+    await f.host.handle({ op: 'monitor', block: { kind: 'OB', number: 1 } });
+    // rompe il lettore dei valori
+    Object.defineProperty(f.host, 'readOne', {
+      value: () => {
+        throw new Error('guasto');
+      },
+    });
+    await f.advance(250);
+    expect(f.of('error')[0]?.message).toBe('guasto');
     await expect(f.host.handle({ op: 'mres' })).rejects.toThrow();
   });
 });

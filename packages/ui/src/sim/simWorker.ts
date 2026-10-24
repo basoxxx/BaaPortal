@@ -11,7 +11,23 @@ const send = (m: SimWireMessage): void => {
   const buffers: Transferable[] = [];
   if (m.type === 'notice' && m.notice.kind === 'status')
     buffers.push(m.notice.inputs.buffer, m.notice.outputs.buffer); // copie già staccate dalla memoria
-  scope.postMessage(m, buffers);
+  try {
+    scope.postMessage(m, buffers);
+  } catch (e) {
+    // valore non clonabile: la richiesta non resta senza risposta
+    if (m.type === 'response')
+      scope.postMessage({
+        type: 'response',
+        id: m.id,
+        ok: false,
+        error: `risposta non trasmissibile: ${e instanceof Error ? e.message : String(e)}`,
+      });
+    else
+      scope.postMessage({
+        type: 'notice',
+        notice: { kind: 'error', message: 'notifica non trasmissibile' },
+      });
+  }
 };
 
 const host = new SimHost({
