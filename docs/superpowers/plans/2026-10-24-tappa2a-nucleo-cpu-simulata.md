@@ -42,6 +42,7 @@ Piano generale: `docs/superpowers/plans/2026-10-18-baaportal-roadmap.md`, riga 2
   - `STACK_L_PIENO`;
   - `ISTRUZIONE_NON_S7300`;
   - `MC7_NON_ESEGUIBILE` (byte grezzi non decodificati);
+  - `BCD_NON_VALIDO`;
   - `TEMPO_CICLO_SUPERATO`;
   - `NON_SIMULATA_2B` (temporizzatori, contatori, SFC e SFB, finché il piano 2B non li fa).
 - **Nessuna dipendenza di runtime nuova.** `@baaportal/sim` dipende solo da `@baaportal/mc7`, `@baaportal/awl`, `@baaportal/s7-types` e `@baaportal/catalog`. `@baaportal/s7-server` e `@baaportal/s7comm` servono solo come dipendenze di sviluppo, per i test di integrazione.
@@ -243,7 +244,7 @@ Regole (manuale AWL: «Operazioni con numeri interi», «… in virgola mobile»
   - risultato non valido o infinito: OV e OS secondo la tabella del manuale;
   - funzioni con argomento fuori dominio (`SQRT` di un negativo, `LN` di 0): NaN, con i bit della tabella.
 - **Conversioni:**
-  - `BTI` e `BTD` su un BCD non valido: errore di BCD, che nel piano 2B sarà l'OB121. Nel piano 2A il codice è `AREA_LUNGHEZZA`? **No**: si aggiunge `BCD_NON_VALIDO` a `SimErrorCode`.
+  - `BTI` e `BTD` su un BCD non valido: errore `BCD_NON_VALIDO` (STOP nel piano 2A, OB121 nel piano 2B).
   - `RND` arrotonda al pari più vicino, come il manuale per x.5;
   - `RND+` e `RND-` arrotondano verso l'alto e verso il basso;
   - `TRUNC` tronca;
