@@ -39,6 +39,8 @@ export type HitLocation =
 
 export interface Hit {
   loc: HitLocation;
+  /** Il testo trovato in `loc`: un hit il cui testo è cambiato è obsoleto. */
+  match: string;
   preview: string;
   editable: boolean;
   reason?: 'PROTETTO' | 'MC7_GREZZO';

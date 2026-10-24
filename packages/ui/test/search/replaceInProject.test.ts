@@ -105,4 +105,23 @@ describe('replaceInProject', () => {
     expect(r.replaced).toBe(1);
     expect(src(p, 0)).toBe('L MW10');
   });
+
+  it('un hit con lo stesso posto ma testo cambiato è obsoleto', () => {
+    const p = withBlocks([block('A', ['L MW10'])]);
+    const o = opts('MW\\d+', { regex: true });
+    const [h] = findInProject(p, o) as Hit[];
+    const p2 = withBlocks([block('A', ['L MW11'])]);
+    p2.devices[0] = { ...p2.devices[0]!, id: p.devices[0]!.id };
+    const r = replaceInProject(p2, o, 'MW12', [h!]);
+    expect(r.replaced).toBe(0);
+    expect(r.skipped).toBe(1);
+    expect(src(r.project, 0)).toBe('L MW11');
+  });
+
+  it('regex: $1 e $2 con più corrispondenze nella stessa riga', () => {
+    const p = withBlocks([block('A', ['L MW10, MD20'])]);
+    const r = replaceInProject(p, opts('(M[WD])(\\d+)', { regex: true }), '$2$1');
+    expect(r.replaced).toBe(2);
+    expect(src(r.project, 0)).toBe('L 10MW, 20MD');
+  });
 });

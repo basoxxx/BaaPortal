@@ -15,7 +15,7 @@ const PREVIEW_MAX = 200;
 // Confini di identificatore AWL: lettere, cifre, `_`, `#` e `"` restano dentro la parola.
 const WORD = '[\\p{L}\\p{N}_#"]';
 
-const escapeRegExp = (s: string): string => s.replace(/[.*+?^${}()|[\]\\/-]/g, '\\$&');
+const escapeRegExp = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** Compila la ricerca. Una regex non valida dà un errore, mai un'eccezione. */
 export function buildRegExp(o: FindOptions): RegExp | FindError {
@@ -77,7 +77,12 @@ function scanText(
     const match = m;
     const from = m.index;
     const to = from + m[0].length;
-    const hit: Hit = { loc: locate(from, to), preview: previewOf(text, from, to), ...meta };
+    const hit: Hit = {
+      loc: locate(from, to),
+      match: m[0],
+      preview: previewOf(text, from, to),
+      ...meta,
+    };
     out.push({
       hit,
       text,
@@ -89,7 +94,9 @@ function scanText(
 const isProtected = (b: Block): boolean => b.knowHowProtected || isKnowHowLocked(b);
 
 function scanBlock(re: RegExp, o: FindOptions, d: PlcDevice, b: Block, out: Match[]): void {
-  const ok: Meta = { editable: true };
+  const unwritable = isLockedImport(b);
+  // Un blocco non esatto è tutto in sola lettura nell'editor: anche titoli e commenti.
+  const ok: Meta = unwritable ? { editable: false, reason: 'MC7_GREZZO' } : { editable: true };
   const protectedBlock = isProtected(b);
   const head: Meta = protectedBlock ? { editable: false, reason: 'PROTETTO' } : ok;
   const at =
@@ -106,14 +113,12 @@ function scanBlock(re: RegExp, o: FindOptions, d: PlcDevice, b: Block, out: Matc
   if (protectedBlock) return;
   scanText(re, b.header.comment, o, at('blockComment'), ok, out);
   if (b.kind === 'DB' || b.kind === 'IDB') return;
-  const unwritable = isLockedImport(b);
   b.networks.forEach((n: Network, i) => {
     const ni = (kind: 'networkTitle' | 'networkComment') => (from: number, to: number) =>
       ({ kind, deviceId: d.id, blockId: b.id, networkIndex: i, from, to }) as HitLocation;
     scanText(re, n.title, o, ni('networkTitle'), ok, out);
     scanText(re, n.comment, o, ni('networkComment'), ok, out);
-    const meta: Meta =
-      unwritable || hasRawLines(n.source) ? { editable: false, reason: 'MC7_GREZZO' } : ok;
+    const meta: Meta = hasRawLines(n.source) ? { editable: false, reason: 'MC7_GREZZO' } : ok;
     const shown = displayText(n.source, o.mnemonic === 'de' ? 'german' : 'international');
     scanText(
       re,

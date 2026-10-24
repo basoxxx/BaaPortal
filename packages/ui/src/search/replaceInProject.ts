@@ -3,8 +3,9 @@ import { lineEndingOf, storedText } from '../editors/awl/awlExtensions';
 import { scanProject, type Match } from './findInProject';
 import type { FindOptions, Hit, HitLocation } from './types';
 
-const key = (l: HitLocation): string => {
-  const parts: unknown[] = [l.kind, l.from, l.to];
+const key = (h: Hit): string => {
+  const l: HitLocation = h.loc;
+  const parts: unknown[] = [l.kind, l.from, l.to, h.match];
   if ('deviceId' in l) parts.push(l.deviceId);
   if ('blockId' in l) parts.push(l.blockId, 'networkIndex' in l ? l.networkIndex : '');
   if ('sourceId' in l) parts.push(l.sourceId);
@@ -42,14 +43,14 @@ export function replaceInProject(
 ): { project: Project; replaced: number; skipped: number } {
   const scanned = scanProject(p, o);
   if (!Array.isArray(scanned)) return { project: p, replaced: 0, skipped: 0 };
-  const wanted = only && new Set(only.map((h) => key(h.loc)));
+  const wanted = only && new Set(only.map((h) => key(h)));
   // Un hit di `only` che non è più una corrispondenza (testo cambiato) è obsoleto: saltato.
   let skipped = 0;
   if (wanted) {
-    const live = new Set(scanned.map((m) => key(m.hit.loc)));
+    const live = new Set(scanned.map((m) => key(m.hit)));
     for (const k of wanted) if (!live.has(k)) skipped++;
   }
-  const chosen: Match[] = wanted ? scanned.filter((m) => wanted.has(key(m.hit.loc))) : scanned;
+  const chosen: Match[] = wanted ? scanned.filter((m) => wanted.has(key(m.hit))) : scanned;
   const todo = chosen.filter((m) => m.hit.editable);
   skipped += chosen.length - todo.length;
   if (todo.length === 0) return { project: p, replaced: 0, skipped };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createTagTable } from '@baaportal/project';
+import { createTagTable, type CodeBlock } from '@baaportal/project';
 import { findInProject } from '../../src/search/findInProject';
 import type { Hit } from '../../src/search/types';
 import { block, opts, withBlocks } from './fixtures';
@@ -97,5 +97,43 @@ describe('findInProject', () => {
     );
     expect(r).toHaveLength(1);
     expect(r[0]!.loc).toMatchObject({ blockId: b.id });
+  });
+
+  it('letterali con "-", "/" e "#" non sono errori', () => {
+    const p = withBlocks([block('A', ['L M-1 // a/b #x'])]);
+    for (const q of ['M-1', 'a/b', '#x']) {
+      expect(hits(findInProject(p, opts(q)))).toHaveLength(1);
+    }
+  });
+
+  it('wholeWord non trova dentro "#M1" né dentro "\"M1\""', () => {
+    const p = withBlocks([block('A', ['L #M1\nL "M1"\nL M1'])]);
+    const r = hits(findInProject(p, opts('M1', { wholeWord: true })));
+    expect(r).toHaveLength(1);
+    expect(r[0]!.preview).toBe('L M1');
+  });
+
+  it('blocco non esatto: titolo e commenti sono editable:false MC7_GREZZO', () => {
+    const b = block('A', ['L 1']);
+    b.header.title = 'MW10';
+    b.header.comment = 'MW10';
+    b.networks[0]!.title = 'MW10';
+    b.networks[0]!.comment = 'MW10';
+    b.mc7 = { exact: false } as CodeBlock['mc7'];
+    const r = hits(findInProject(withBlocks([b]), opts('MW10')));
+    expect(r.map((h) => h.loc.kind).sort()).toEqual([
+      'blockComment',
+      'blockTitle',
+      'networkComment',
+      'networkTitle',
+    ]);
+    expect(r.every((h) => !h.editable && h.reason === 'MC7_GREZZO')).toBe(true);
+  });
+
+  it('blocco protetto: il commento del blocco non si cerca', () => {
+    const b = block('A', ['L 1']);
+    b.knowHowProtected = true;
+    b.header.comment = 'MW10';
+    expect(hits(findInProject(withBlocks([b]), opts('MW10')))).toHaveLength(0);
   });
 });
