@@ -1,6 +1,9 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createTagTable, type CodeBlock } from '@baaportal/project';
+import { updateSettings } from '../src/settings/settings';
+import { registerEditDocument } from '../src/flushPendingEdits';
+import { replaceHits, runFind } from '../src/search/findActions';
 import { dev, fb, openEditor, PLC } from './blockFixtures';
 import type { RenderedApp } from './renderApp';
 
@@ -221,5 +224,58 @@ describe('Trova e sostituisci', () => {
       app.store.getState().setTaskCard('tasks');
     });
     expect(screen.getByRole('option', { name: 'Editor attivo' })).toBeDisabled();
+  });
+
+  it('cambiando la mnemonica i risultati sono segnati non aggiornati', async () => {
+    const app = await setup();
+    await search(app, 'MW10');
+    expect(screen.getByRole('button', { name: 'Sostituisci tutto' })).toBeEnabled();
+    act(() => updateSettings({ editor: { mnemonic: 'de' } }));
+    try {
+      expect(screen.getByText('Risultati non aggiornati, ripeti la ricerca')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Sostituisci tutto' })).toBeDisabled();
+    } finally {
+      act(() => updateSettings({ editor: { mnemonic: 'int' } }));
+    }
+  });
+
+  it('Sostituisci conferma prima la bozza in un campo con il focus', async () => {
+    const app = await setup();
+    await search(app, 'MW10');
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    let blurred = 0;
+    input.addEventListener('blur', () => blurred++);
+    input.focus();
+    act(() => replaceHits(app.store));
+    expect(blurred).toBe(1);
+    input.remove();
+  });
+
+  it('Trova non toglie il focus alla finestra principale, ma conferma le bozze delle staccate', async () => {
+    const app = await setup();
+    const iframe = document.createElement('iframe');
+    document.body.appendChild(iframe);
+    const frame = iframe.contentDocument!;
+    const other = frame.createElement('input');
+    frame.body.appendChild(other);
+    const main = document.createElement('input');
+    document.body.appendChild(main);
+    const blurOther = vi.fn();
+    const blurMain = vi.fn();
+    other.addEventListener('blur', blurOther);
+    main.addEventListener('blur', blurMain);
+    const unregister = registerEditDocument(frame);
+    act(() => app.store.getState().patchFind({ query: 'MW10' }));
+    other.focus();
+    runFind(app.store);
+    expect(blurOther).toHaveBeenCalledTimes(1);
+    main.focus();
+    runFind(app.store);
+    expect(blurMain).not.toHaveBeenCalled();
+    expect(main).toHaveFocus();
+    unregister();
+    iframe.remove();
+    main.remove();
   });
 });

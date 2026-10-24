@@ -45,6 +45,31 @@ const menu = async (app: RenderedApp, name: string) => {
 };
 
 describe('applyTagImport', () => {
+  it('"aggiornate" conta solo le righe che cambiano davvero', () => {
+    const t: TagTable = {
+      id: 'tb',
+      name: 'T',
+      group: '',
+      tags: [tag('A', 'Int', '%MW2'), tag('B', 'Int', '%MW4')],
+      constants: [],
+    };
+    const row = (name: string, address: string, line: number) => ({
+      line,
+      name,
+      path: '',
+      type: 'Int',
+      address,
+      comment: '',
+      hmi: true,
+    });
+    const { summary } = applyTagImport(t, {
+      tags: [row('A', '%MW2', 2), row('B', '%MW8', 3)],
+      constants: [],
+      errors: [],
+    });
+    expect(summary.updated).toBe(1);
+  });
+
   it('applyTagImport: nome esistente aggiornato con stesso id, nome nuovo creato, riga errata in skipped', () => {
     const t: TagTable = {
       id: 'tb',
@@ -281,10 +306,30 @@ describe('tagTableIo', () => {
       app.bridge.saveFileResults.push('/out/T2.csv');
       await menu(app, 'Esporta variabili…');
       await waitFor(() => expect(app.bridge.files.has('/out/T2.csv')).toBe(true));
-      expect([...app.bridge.files.get('/out/T2.csv')!.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+      const head = [...app.bridge.files.get('/out/T2.csv')!.slice(0, 7)];
+      expect(head).toEqual([0xef, 0xbb, 0xbf, ...new TextEncoder().encode('Name')]);
       expect(
         parseTagsCsv(new TextDecoder().decode(app.bridge.files.get('/out/T2.csv')!)).tags,
       ).toHaveLength(1);
+    },
+    T,
+  );
+
+  it(
+    'reimportare un file identico: nessun passo di annullamento, progetto non modificato, 0 aggiornate',
+    async () => {
+      const app = await setup([tag('A', 'Int', '%MW2', 'c')]);
+      const dirty = app.store.getState().doc!.dirty;
+      const rev = app.store.getState().doc!.revision;
+      app.bridge.files.set('/in/v.csv', csv('A;;Int;%MW2;c;True;True;True'));
+      app.bridge.openFileResults.push(['/in/v.csv']);
+      const n = past(app);
+      await menu(app, 'Importa variabili…');
+      await screen.findByTestId('import-tags-report');
+      expect(past(app)).toBe(n);
+      expect(app.store.getState().doc!.revision).toBe(rev);
+      expect(app.store.getState().doc!.dirty).toBe(dirty);
+      expect(app.store.getState().messages.at(-1)?.params).toMatchObject({ updated: '0' });
     },
     T,
   );

@@ -1,5 +1,6 @@
 import type { StoreApi } from 'zustand/vanilla';
 import { findDevice, findSource, type ObjectRef } from '@baaportal/project';
+import { flushDetachedEdits, flushPendingEdits } from '../flushPendingEdits';
 import { currentMnemonic } from '../editors/awl/mnemonicPreference';
 import type { AppState } from '../state/store';
 import { findInProject } from './findInProject';
@@ -37,6 +38,8 @@ function optionsOf(s: AppState): FindOptions | null {
 
 /** Cerca con le impostazioni correnti e salva l'esito (sul progetto di adesso). */
 export function runFind(store: Store, selected: number | null = null): void {
+  // Le finestre separate hanno un focus proprio: le loro bozze si confermano, il campo Trova resta com'è.
+  flushDetachedEdits();
   const s = store.getState();
   if (!s.doc) return;
   const options = optionsOf(s);
@@ -79,9 +82,12 @@ const sameSpot = (a: Hit, b: Hit): boolean =>
  * Lavora solo su risultati non scaduti: i loro offset sono quelli del progetto attuale.
  */
 export function replaceHits(store: Store, only?: Hit[]): void {
+  // Una bozza non confermata cambia il progetto: prima si conferma, poi si guarda se i risultati valgono.
+  flushPendingEdits();
   const s = store.getState();
   const out = s.find.outcome;
   if (!s.doc || out?.kind !== 'hits' || out.project !== s.doc.project) return;
+  if (out.options.mnemonic !== currentMnemonic()) return;
   const result = replaceInProject(s.doc.project, out.options, s.find.replacement, only ?? out.hits);
   if (result.replaced > 0) {
     s.edit('history.replace', (draft) => {

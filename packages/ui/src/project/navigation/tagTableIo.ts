@@ -58,6 +58,9 @@ const filters = (first: Format): FileFilter[] => {
   return [all[first], all[first === 'xlsx' ? 'csv' : 'xlsx']];
 };
 
+const sameFields = (a: object, b: object): boolean =>
+  JSON.stringify(Object.entries(a).sort()) === JSON.stringify(Object.entries(b).sort());
+
 /**
  * Applica righe lette da file a una tabella (senza toccarla): nome già presente (maiuscole
  * indifferenti) aggiornato con lo stesso id, nome nuovo creato. Vale anche per le costanti.
@@ -107,8 +110,9 @@ export function applyTagImport(
       out.tags.push({ id: newId(), ...values });
       created++;
     } else {
-      out.tags[i] = { id: out.tags[i]!.id, ...values };
-      updated++;
+      const next = { id: out.tags[i]!.id, ...values };
+      if (!sameFields(out.tags[i]!, next)) updated++;
+      out.tags[i] = next;
     }
   }
   const constAt = indexOf(out.constants);
@@ -121,8 +125,9 @@ export function applyTagImport(
       out.constants.push({ id: newId(), ...values });
       created++;
     } else {
-      out.constants[i] = { id: out.constants[i]!.id, ...values };
-      updated++;
+      const next = { id: out.constants[i]!.id, ...values };
+      if (!sameFields(out.constants[i]!, next)) updated++;
+      out.constants[i] = next;
     }
   }
   return { table: out, summary: { created, updated, skipped } };
@@ -163,8 +168,7 @@ export async function exportTagTable(
     if (extOf(path) !== chosen) path = `${path}.${chosen}`;
     // La tabella si rilegge dopo la finestra: è quella di adesso.
     const table = find() ?? first;
-    const bytes =
-      chosen === 'csv' ? new TextEncoder().encode(`﻿${tagsToCsv(table)}`) : tagsToXlsx(table);
+    const bytes = chosen === 'csv' ? new TextEncoder().encode(tagsToCsv(table)) : tagsToXlsx(table);
     await bridge.writeFileAtomic(path, bytes);
     store.getState().pushMessage({
       severity: 'info',
@@ -233,8 +237,11 @@ export async function importTagTable(
         const res = applyTagImport(table, parsed, others);
         summary = res.summary;
         tableName = res.table.name;
-        if (existing) Object.assign(existing, res.table);
-        else if (res.summary.created > 0) {
+        if (existing) {
+          // Nulla è cambiato: nessuna assegnazione, quindi nessun passo di annullamento.
+          if (res.summary.created > 0 || res.summary.updated > 0)
+            Object.assign(existing, res.table);
+        } else if (res.summary.created > 0) {
           dev.tagTables.push(res.table);
           tableId = res.table.id;
         }

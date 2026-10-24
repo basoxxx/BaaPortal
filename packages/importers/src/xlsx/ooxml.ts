@@ -38,7 +38,7 @@ function decodeEntities(s: string): string {
         ? String.fromCodePoint(code)
         : m;
     }
-    return ENTITIES[body] ?? m;
+    return Object.hasOwn(ENTITIES, body) ? ENTITIES[body]! : m;
   });
 }
 
@@ -159,17 +159,58 @@ const normalizePath = (p: string): string => {
 };
 
 const MAX_ZIP_BYTES = 50 * 1024 * 1024;
+/** Tetto di ogni voce e, insieme, di tutto ciò che si gonfia. */
+const MAX_INFLATED_TOTAL = 200 * 1024 * 1024;
+
+/**
+ * Gonfia solo le voci `names` (le altre restano compresse), rifiutando prima di gonfiare una voce
+ * che dichiara più di quanto resta del tetto, e ricontrollando la misura reale dopo.
+ * `budget.left` scende a ogni voce estratta.
+ */
+function inflateEntries(
+  bytes: Uint8Array,
+  names: ReadonlySet<string>,
+  budget: { left: number },
+): Record<string, Uint8Array> {
+  let declared = 0;
+  let tooBig = false;
+  let out: Record<string, Uint8Array>;
+  try {
+    out = unzipSync(bytes, {
+      filter: (f) => {
+        if (!names.has(f.name) || tooBig) return false;
+        declared += f.originalSize;
+        if (f.originalSize > budget.left || declared > budget.left) tooBig = true;
+        return !tooBig;
+      },
+    });
+  } catch {
+    throw new XlsxFormatError('NON_ZIP');
+  }
+  if (tooBig) throw new XlsxFormatError('NON_XLSX', 'troppo grande');
+  let actual = 0;
+  for (const v of Object.values(out)) actual += v.length;
+  if (actual > budget.left) throw new XlsxFormatError('NON_XLSX', 'troppo grande');
+  budget.left -= actual;
+  return out;
+}
+
 const MAX_COLS = 16384;
 const MAX_ROWS = 1048576;
 
 export function readXlsx(bytes: Uint8Array): Sheet[] {
   if (bytes.length > MAX_ZIP_BYTES) throw new XlsxFormatError('NON_XLSX', 'file troppo grande');
-  let files: Record<string, Uint8Array>;
-  try {
-    files = unzipSync(bytes);
-  } catch {
-    throw new XlsxFormatError('NON_ZIP');
-  }
+  const budget = { left: MAX_INFLATED_TOTAL };
+  const files: Record<string, Uint8Array> = inflateEntries(
+    bytes,
+    new Set([
+      '[Content_Types].xml',
+      'xl/workbook.xml',
+      'xl/_rels/workbook.xml.rels',
+      'xl/sharedStrings.xml',
+    ]),
+    budget,
+  );
   const bookBytes = files['xl/workbook.xml'];
   if (!bookBytes) throw new XlsxFormatError('NON_XLSX');
 
@@ -199,6 +240,10 @@ export function readXlsx(bytes: Uint8Array): Sheet[] {
       }
     }
   }
+  // I fogli si gonfiano solo ora che si sa quali sono.
+  const sheetPaths = new Set<string>();
+  for (const t of targets.values()) sheetPaths.add(t);
+  Object.assign(files, inflateEntries(bytes, sheetPaths, budget));
   const shared: string[] = [];
   if (files['xl/sharedStrings.xml']) {
     for (const si of elements(xml('xl/sharedStrings.xml'), 'si')) shared.push(richText(si));

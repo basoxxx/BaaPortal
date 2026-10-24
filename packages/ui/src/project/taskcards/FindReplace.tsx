@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { findDevice, type Project } from '@baaportal/project';
 import { useAppStore, useServices } from '../../state/AppContext';
+import { useMnemonic } from '../../editors/awl/mnemonicPreference';
 import { activeObjectRef, openHit, replaceHits, runFind } from '../../search/findActions';
 import type { FindUi } from '../../search/findState';
 import type { Hit } from '../../search/types';
@@ -37,7 +38,10 @@ export function FindReplace() {
 
   const out = find.outcome;
   const hits = out?.kind === 'hits' ? out.hits : [];
-  const stale = out?.kind === 'hits' && out.project !== project;
+  const [mnemonic] = useMnemonic();
+  const stale =
+    out?.kind === 'hits' &&
+    (out.project !== project || out.options.mnemonic !== (mnemonic === 'german' ? 'de' : 'int'));
   const current = find.selected !== null ? hits[find.selected] : undefined;
   const scope = find.scope === 'active' && !hasActive ? 'project' : find.scope;
 

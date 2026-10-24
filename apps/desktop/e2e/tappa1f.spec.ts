@@ -117,9 +117,9 @@ test('esporta e reimporta una tabella di variabili in csv e in xlsx', async () =
     await typeCell(addressCell(), changed);
     await expect(addressCell()).toContainText(changed);
     await contextMenu('Importa variabili…');
-    // Il resoconto dell'importazione: 2 variabili aggiornate, nessuna scartata.
+    // Il resoconto dell'importazione: solo la variabile cambiata risulta aggiornata, nessuna scartata.
     const report = page.getByRole('dialog', { name: 'Importazione variabili' });
-    await expect(report).toContainText('Aggiornati: 2');
+    await expect(report).toContainText('Aggiornati: 1');
     await expect(report).toContainText('Scartati: 0');
     await report.getByRole('button', { name: 'OK' }).click();
     await expect(report).toHaveCount(0);

@@ -118,4 +118,57 @@ describe('ooxml minimo', () => {
   it('zip oltre 50 MB rifiutato prima di decomprimere', () => {
     expect(() => readXlsx(new Uint8Array(50 * 1024 * 1024 + 1))).toThrow(XlsxFormatError);
   });
+
+  it('un nome di entità come &constructor; resta letterale', () => {
+    const bytes = zip({
+      ...workbook(
+        '<sheet name="F" sheetId="1" r:id="rId1"/>',
+        '<Relationship Id="rId1" Type="x" Target="worksheets/s.xml"/>',
+      ),
+      'xl/worksheets/s.xml':
+        '<worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>a &constructor; b &toString;</t></is></c></row></sheetData></worksheet>',
+    });
+    expect(readXlsx(bytes)[0]!.rows).toEqual([['a &constructor; b &toString;']]);
+  });
+
+  it('una voce che gonfia oltre il limite → NON_XLSX "troppo grande"', () => {
+    // 201 MB di zeri si comprimono in ~200 KB.
+    const big = new Uint8Array(201 * 1024 * 1024);
+    const bytes = zipSync({
+      ...Object.fromEntries(
+        Object.entries(
+          workbook(
+            '<sheet name="F" sheetId="1" r:id="rId1"/>',
+            '<Relationship Id="rId1" Type="x" Target="worksheets/s.xml"/>',
+          ),
+        ).map(([k, v]) => [k, strToU8(v)]),
+      ),
+      'xl/worksheets/s.xml': big,
+    });
+    expect(bytes.length).toBeLessThan(50 * 1024 * 1024);
+    try {
+      readXlsx(bytes);
+      expect.unreachable();
+    } catch (e) {
+      expect(e).toBeInstanceOf(XlsxFormatError);
+      expect((e as XlsxFormatError).code).toBe('NON_XLSX');
+      expect((e as XlsxFormatError).message).toBe('NON_XLSX: troppo grande');
+    }
+  });
+
+  it('voci inutili nello zip non vengono gonfiate', () => {
+    const bytes = zipSync({
+      ...Object.fromEntries(
+        Object.entries(
+          workbook(
+            '<sheet name="F" sheetId="1" r:id="rId1"/>',
+            '<Relationship Id="rId1" Type="x" Target="worksheets/s.xml"/>',
+          ),
+        ).map(([k, v]) => [k, strToU8(v)]),
+      ),
+      'xl/worksheets/s.xml': strToU8('<worksheet><sheetData/></worksheet>'),
+      'docProps/bomba.bin': new Uint8Array(201 * 1024 * 1024),
+    });
+    expect(readXlsx(bytes)).toEqual([{ name: 'F', rows: [] }]);
+  });
 });
