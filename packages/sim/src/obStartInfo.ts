@@ -1,8 +1,8 @@
 /**
  * Dati di avvio degli OB (20 byte negli L 0..19), nella forma di `OB_DEFINITIONS[n].startInfo`
  * del catalogo: sei byte (classe, informazione, priorità, numero, due riservati), tre Int (tempo
- * del ciclo precedente, minimo, massimo) e Date_And_Time in BCD (manuale «System Software for
- * S7-300/400 System and Standard Functions», OB1).
+ * del ciclo precedente, minimo, massimo) e Date_And_Time in BCD (manuale delle funzioni di
+ * sistema e standard S7-300/400, OB1).
  */
 export const START_INFO_BYTES = 20;
 

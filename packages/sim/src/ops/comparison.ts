@@ -14,7 +14,7 @@ const TESTS: Record<string, Test> = {
 };
 
 /**
- * Manuale AWL, «Operazioni di confronto»: ACCU2 con ACCU1; il risultato entra nell'RLO come una
+ * Manuale AWL S7-300/400, operazioni di confronto: ACCU2 con ACCU1; il risultato entra nell'RLO come una
  * prima interrogazione, STA = risultato, OR = 0. CC: uguale 00, ACCU2 < ACCU1 01, ACCU2 > ACCU1 10,
  * non confrontabile (REAL con NaN) 11 con OV = OS = 1 e risultato falso. OV = 0 altrimenti.
  */

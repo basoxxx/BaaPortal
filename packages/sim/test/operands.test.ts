@@ -102,7 +102,7 @@ describe('risoluzione degli operandi', () => {
     writeBits(mem, resolveOperand(address('PQ', 'W', 4), regs, mem, frame), 'W', 0x1122);
     expect(mem.physOut[4]).toBe(0x11);
     expect(mem.physOut[5]).toBe(0x22);
-    expect(mem.Q[4]).toBe(0);
+    expect(mem.Q[4]).toBe(0x11); // la PIQ segue le scritture dirette in periferia
     expect(mem.I[2]).toBe(0);
   });
 

@@ -1,7 +1,7 @@
 import type { ExecState, OpHandler } from '../executor';
 import { constantValue } from './loadTransfer';
 
-/** Posizioni: l'operando, oppure ACCU2-LL (manuale AWL, «Operazioni di scorrimento»). */
+/** Posizioni: l'operando, oppure ACCU2-LL (manuale AWL S7-300/400, «Operazioni di scorrimento»). */
 function count(st: ExecState, operand: Parameters<OpHandler>[1]['operand']): number {
   return operand ? constantValue(operand) : st.regs.accu2 & 0xff;
 }
@@ -68,7 +68,7 @@ function rotate(left: boolean): OpHandler {
 
 function rotateCc1(left: boolean): OpHandler {
   return (st) => {
-    // Manuale AWL, «RLDA», «RRDA»: rotazione di una posizione attraverso CC1.
+    // Manuale AWL S7-300/400, «RLDA», «RRDA»: rotazione di una posizione attraverso CC1.
     const a = st.regs.accu1;
     const cc1 = st.regs.stw.cc1;
     const r = left ? (a << 1) | (cc1 ? 1 : 0) : (a >>> 1) | (cc1 ? 0x80000000 : 0);

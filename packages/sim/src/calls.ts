@@ -2,7 +2,7 @@ import { SimError } from './errors';
 import { execBlock, newExecState, type ExecState } from './executor';
 import type { FrameView, Location } from './operands';
 
-/** Profondità massima dei blocchi annidati (manuale CPU 31x: 8 per classe di priorità; vedi Rulings R6). */
+/** Profondità massima dei blocchi annidati: costante 16 (R6); nel manuale delle CPU 31x il valore varia con la CPU (vedi sim.md §3). */
 export const MAX_BLOCK_STACK = 16;
 
 const ADDR_MASK = 0x7ffff;

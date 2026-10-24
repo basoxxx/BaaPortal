@@ -6,7 +6,7 @@ import { constantValue, readMem } from './loadTransfer';
 
 type Ar = 'ar1' | 'ar2';
 
-/** Parte indirizzo di AR1/AR2: bit 0–23 (manuale AWL, «Formato dei puntatori»). */
+/** Parte indirizzo di AR1/AR2: bit 0–23 (manuale AWL S7-300/400, indirizzamento indiretto). */
 const ADDR = 0xffffff;
 
 function loadAr(ar: Ar): OpHandler {
@@ -31,7 +31,7 @@ function transferAr(ar: Ar): OpHandler {
     const op = stmt.operand;
     const v = st.regs[ar];
     if (!op) {
-      // Manuale AWL, «TAR1»/«TAR2» senza operando: ACCU1 passa in ACCU2, poi riceve l'AR.
+      // Manuale AWL S7-300/400, «TAR1»/«TAR2» senza operando: ACCU1 passa in ACCU2, poi riceve l'AR.
       st.regs.accu2 = st.regs.accu1;
       st.regs.accu1 = v;
     } else if (op.kind === 'special' && op.name === 'AR2') st.regs.ar2 = v;
@@ -48,7 +48,7 @@ function writeD(st: ExecState, op: Operand, v: number): void {
 
 function addAr(ar: Ar): OpHandler {
   return (st, stmt) => {
-    // Manuale AWL, «+AR1», «+AR2»: senza operando si somma ACCU1-L con segno, con P#x.y quel
+    // Manuale AWL S7-300/400, «+AR1», «+AR2»: senza operando si somma ACCU1-L con segno, con P#x.y quel
     // puntatore; l'offset è esteso a 24 bit e si somma ai bit 0–23, area e bit 31 non cambiano.
     const add = stmt.operand ? constantValue(stmt.operand) : ((st.regs.accu1 & 0xffff) << 16) >> 16;
     const cur = st.regs[ar];
@@ -58,7 +58,7 @@ function addAr(ar: Ar): OpHandler {
 
 function incDec(sign: 1 | -1): OpHandler {
   return (st, stmt) => {
-    // Manuale AWL, «INC», «DEC»: solo ACCU1-LL, senza riporto; la parola di stato non cambia.
+    // Manuale AWL S7-300/400, «INC», «DEC»: solo ACCU1-LL, senza riporto; la parola di stato non cambia.
     const n = constantValue(stmt.operand) & 0xff;
     const a = st.regs.accu1;
     st.regs.accu1 = ((a & 0xffffff00) | ((a + sign * n) & 0xff)) >>> 0;

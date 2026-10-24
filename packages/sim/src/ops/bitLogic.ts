@@ -12,7 +12,7 @@ export type ChainFn = 'A' | 'O' | 'X';
 
 /**
  * Logica di prima interrogazione (/FC) per A, O e X, condivisa con i confronti.
- * Manuale AWL, «Operazioni di combinazione logica a bit» e «Parola di stato» (solo bit reali):
+ * manuale AWL S7-300/400, operazioni logiche a bit e «Parola di stato» (solo bit reali):
  * - A: RLO = (/FC ? RLO AND v : v) OR OR-bit; l'OR-bit resta;
  * - O: RLO = /FC ? RLO OR v : v; OR-bit = 0;
  * - X: RLO = /FC ? RLO XOR v : v; OR-bit = 0.
@@ -35,7 +35,7 @@ function bitValue(st: ExecState, op: Operand | undefined): boolean {
   const s = st.regs.stw;
   switch (op.kind) {
     case 'status':
-      // Manuale AWL, «Parola di stato»: decodifica di CC0/CC1 (==0, >0, <0, <>0, >=0, <=0, UO).
+      // Manuale AWL S7-300/400, parola di stato: decodifica di CC0/CC1 (==0, >0, <0, <>0, >=0, <=0, UO).
       switch (op.condition) {
         case '==0':
           return !s.cc0 && !s.cc1;
@@ -101,7 +101,7 @@ function open(fn: ChainFn, negate: boolean): OpHandler {
       throw new SimError('STACK_ANNIDAMENTO_PIENO', 'parentesi annidate');
     const s = st.regs.stw;
     st.nest.push({ rlo: s.rlo, or: s.or, fc: s.fc, fn, negate });
-    // Manuale AWL, «A(»: OR = 0, STA = 1, /FC = 0; RLO invariato.
+    // Manuale AWL S7-300/400, «A(»: OR = 0, STA = 1, /FC = 0; RLO invariato.
     s.or = false;
     s.sta = true;
     s.fc = false;
@@ -124,7 +124,7 @@ const close: OpHandler = (st) => {
 };
 
 const OR_BLOCKS: OpHandler = (st) => {
-  // Manuale AWL, «O» (AND prima di OR): OR := RLO, STA = 1, /FC = 0; RLO invariato.
+  // Manuale AWL S7-300/400, «O» (AND prima di OR): OR := RLO, STA = 1, /FC = 0; RLO invariato.
   const s = st.regs.stw;
   s.or = s.rlo;
   s.sta = true;
@@ -133,7 +133,7 @@ const OR_BLOCKS: OpHandler = (st) => {
 
 function edge(rising: boolean): OpHandler {
   return (st, stmt) => {
-    // Manuale AWL, «FP»/«FN»: l'RLO corrente è confrontato col merker di fronte, che poi lo memorizza.
+    // Manuale AWL S7-300/400, «FP»/«FN»: l'RLO corrente è confrontato col merker di fronte, che poi lo memorizza.
     const cur = st.regs.stw.rlo;
     const loc = bitLocation(st, stmt.operand);
     const prev = readBits(st.mem, loc, 'X') === 1;
@@ -151,7 +151,7 @@ function setReset(value: 0 | 1): OpHandler {
   return (st, stmt) => {
     const s = st.regs.stw;
     const loc = bitLocation(st, stmt.operand);
-    // Manuale AWL, «S»/«R»: agiscono solo con RLO = 1 (e fuori da una zona MCR spenta).
+    // Manuale AWL S7-300/400, «S»/«R»: agiscono solo con RLO = 1 (e fuori da una zona MCR spenta).
     if (s.rlo && !mcrOff(st)) writeBits(st.mem, loc, 'X', value);
     s.sta = s.rlo;
     endChain(st);
@@ -182,7 +182,7 @@ export const BIT_OPS: Record<string, OpHandler> = {
   },
   S: setReset(1),
   R: setReset(0),
-  // Manuale AWL, «NOT»: RLO invertito, STA = 1; /FC e OR restano.
+  // Manuale AWL S7-300/400, «NOT»: RLO invertito, STA = 1; /FC e OR restano.
   NOT: (st) => {
     st.regs.stw.rlo = !st.regs.stw.rlo;
     st.regs.stw.sta = true;
@@ -194,7 +194,7 @@ export const BIT_OPS: Record<string, OpHandler> = {
   },
   FP: edge(true),
   FN: edge(false),
-  // Manuale AWL, «MCR»: pila di 8 livelli degli RLO salvati.
+  // Manuale AWL S7-300/400, «MCR»: pila di 8 livelli degli RLO salvati.
   'MCR(': (st) => {
     if (st.mcr.stack.length >= MCR_DEPTH)
       throw new SimError('STACK_ANNIDAMENTO_PIENO', 'MCR annidati');
@@ -214,7 +214,7 @@ export const BIT_OPS: Record<string, OpHandler> = {
   },
 };
 
-/** Manuale AWL, «MCR(» e «)MCR»: OR = 0, STA = 1, RLO = 1, /FC = 0. */
+/** Manuale AWL S7-300/400, «MCR(» e «)MCR»: OR = 0, STA = 1, RLO = 1, /FC = 0. */
 function mcrStatus(st: ExecState): void {
   const s = st.regs.stw;
   s.or = false;

@@ -18,7 +18,7 @@ function callee(st: ExecState, stmt: Parameters<OpHandler>[1]): { kind: 'FC' | '
 }
 
 /**
- * Manuale AWL, «UC» e «CC»: OS = 0, OR = 0, STA = 1, /FC = 0; CC mette anche RLO = 1 (anche se
+ * Manuale AWL S7-300/400, «UC» e «CC»: OS = 0, OR = 0, STA = 1, /FC = 0; CC mette anche RLO = 1 (anche se
  * non chiama, con RLO = 0). UC chiama sempre, CC solo con RLO = 1.
  */
 function call(conditional: boolean): OpHandler {
@@ -35,7 +35,7 @@ function call(conditional: boolean): OpHandler {
   };
 }
 
-/** Fine blocco condizionata (manuale AWL, «BEC»): con RLO = 1 termina; con RLO = 0 OR 0, STA 1, RLO 1, /FC 0. */
+/** Fine blocco condizionata (manuale AWL S7-300/400, «BEC»): con RLO = 1 termina; con RLO = 0 OR 0, STA 1, RLO 1, /FC 0. */
 const BEC: OpHandler = (st) => {
   const s = st.regs.stw;
   if (s.rlo) {
@@ -55,7 +55,7 @@ const later: OpHandler = (_st, stmt) => {
 };
 
 export const CONTROL_OPS: Record<string, OpHandler> = {
-  // Manuale AWL, «Operazioni di controllo»: BLD e NOP non fanno niente, BE e BEU terminano il blocco.
+  // Manuale AWL S7-300/400, controllo del programma: BLD e NOP non fanno niente, BE e BEU terminano il blocco.
   BLD: () => undefined,
   NOP: () => undefined,
   BE: (st) => {

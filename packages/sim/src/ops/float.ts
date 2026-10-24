@@ -18,7 +18,7 @@ export function fromReal(x: number): number {
 const MIN_NORMAL = 1.1754943508222875e-38;
 
 /**
- * Bit di stato di un risultato REAL (manuale AWL, «Operazioni in virgola mobile», tabella):
+ * Bit di stato di un risultato REAL (manuale AWL S7-300/400, «Operazioni in virgola mobile», tabella):
  * normalizzato +/− → CC 10/01, OV 0; ±0 → 00; denormalizzato → 00, OV = OS = 1; ±infinito → 10/01,
  * OV = OS = 1; NaN → 11, OV = OS = 1.
  */
@@ -63,7 +63,7 @@ export const FLOAT_OPS: Record<string, OpHandler> = {
   '-R': binary((a, b) => a - b),
   '*R': binary((a, b) => a * b),
   '/R': binary((a, b) => a / b),
-  // Manuale AWL, «ABS»: azzera il bit di segno; la parola di stato non cambia.
+  // Manuale AWL S7-300/400, «ABS»: azzera il bit di segno; la parola di stato non cambia.
   ABS: (st) => {
     st.regs.accu1 = (st.regs.accu1 & 0x7fffffff) >>> 0;
   },

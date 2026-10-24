@@ -32,7 +32,10 @@ export interface ExecContext {
 /** Ogni quante istruzioni si controlla il tempo di ciclo (Global Constraints, piano 2A). */
 export const TICK_EVERY = 1024;
 
-/** Elemento dello stack di annidamento (manuale AWL, «Parola di stato»): catena salvata e funzione. */
+/** Limite fisso di istruzioni per ciclo (e per OB100), indipendente dall'orologio. */
+export const MAX_INSTRUCTIONS = 10_000_000;
+
+/** Elemento dello stack di annidamento (manuale AWL S7-300/400, parola di stato): catena salvata e funzione. */
 export interface NestEntry {
   rlo: boolean;
   or: boolean;
@@ -163,8 +166,10 @@ export function execBlock(st: ExecState): void {
   try {
     while (at < code.length) {
       st.offset = at;
-      if (ctx.onTick && ((ctx.instructions = (ctx.instructions ?? 0) + 1) & (TICK_EVERY - 1)) === 0)
-        ctx.onTick();
+      const n = (ctx.instructions = (ctx.instructions ?? 0) + 1);
+      if (n > MAX_INSTRUCTIONS)
+        throw new SimError('TEMPO_CICLO_SUPERATO', `oltre ${MAX_INSTRUCTIONS} istruzioni`);
+      if (ctx.onTick && (n & (TICK_EVERY - 1)) === 0) ctx.onTick();
       const d = decodeAt(block, at);
       if (!('stmt' in d)) throw new SimError('MC7_NON_ESEGUIBILE', `byte grezzi a ${at}`);
       const handler = OPS[d.stmt.id];

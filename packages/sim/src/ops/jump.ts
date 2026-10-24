@@ -8,7 +8,7 @@ function target(stmt: Parameters<OpHandler>[1]): { jump: number } {
 }
 
 /**
- * Manuale AWL, «JC», «JCN», «JCB», «JNB», «JBI», «JNBI»: dopo l'istruzione (saltata o no)
+ * Manuale AWL S7-300/400, «JC», «JCN», «JCB», «JNB», «JBI», «JNBI»: dopo l'istruzione (saltata o no)
  * OR = 0, STA = 1, RLO = 1, /FC = 0.
  */
 function endJump(st: ExecState): void {
@@ -41,7 +41,7 @@ function onBr(when: boolean): OpHandler {
   };
 }
 
-/** Salti sul codice di condizione CC1/CC0 (manuale AWL, «Parola di stato»); non toccano la parola di stato. */
+/** Salti sul codice di condizione CC1/CC0 (manuale AWL S7-300/400, parola di stato); non toccano la parola di stato. */
 function onCc(test: (cc0: boolean, cc1: boolean) => boolean): OpHandler {
   return (st, stmt) => (test(st.regs.stw.cc0, st.regs.stw.cc1) ? target(stmt) : undefined);
 }
@@ -50,13 +50,13 @@ export const JUMP_OPS: Record<string, OpHandler> = {
   JU: (_st, stmt) => target(stmt),
   JC: onRlo(true, false),
   JCN: onRlo(false, false),
-  // Manuale AWL, «JCB» e «JNB»: l'RLO passa in BR.
+  // Manuale AWL S7-300/400, «JCB» e «JNB»: l'RLO passa in BR.
   JCB: onRlo(true, true),
   JNB: onRlo(false, true),
   JBI: onBr(true),
   JNBI: onBr(false),
   JO: (st, stmt) => (st.regs.stw.ov ? target(stmt) : undefined),
-  // Manuale AWL, «JOS»: salta se OS = 1 e azzera OS.
+  // Manuale AWL S7-300/400, «JOS»: salta se OS = 1 e azzera OS.
   JOS: (st, stmt) => {
     const take = st.regs.stw.os;
     st.regs.stw.os = false;
@@ -69,7 +69,7 @@ export const JUMP_OPS: Record<string, OpHandler> = {
   JPZ: onCc((c0) => !c0),
   JMZ: onCc((_c0, c1) => !c1),
   JUO: onCc((c0, c1) => c0 && c1),
-  // Manuale AWL, «JL»: ACCU1-LL sceglie la voce della lista di JU che segue; fuori lista salta
+  // Manuale AWL S7-300/400, «JL»: ACCU1-LL sceglie la voce della lista di JU che segue; fuori lista salta
   // all'etichetta (JL + 4 + 4·voci). Non tocca la parola di stato.
   JL: (st, stmt) => {
     const end = target(stmt).jump;
@@ -77,7 +77,7 @@ export const JUMP_OPS: Record<string, OpHandler> = {
     const v = st.regs.accu1 & 0xff;
     return v < entries ? { jump: st.offset + 4 + 4 * v } : { jump: end };
   },
-  // Manuale AWL, «LOOP»: ACCU1-L - 1; salta se il risultato non è 0.
+  // Manuale AWL S7-300/400, «LOOP»: ACCU1-L - 1; salta se il risultato non è 0.
   LOOP: (st, stmt) => {
     const low = ((st.regs.accu1 & 0xffff) - 1) & 0xffff;
     st.regs.accu1 = ((st.regs.accu1 & 0xffff0000) | low) >>> 0;

@@ -27,7 +27,23 @@ const BLOCK_TYPES: readonly BlockType[] = ['OB', 'DB', 'SDB', 'FC', 'SFC', 'FB',
 
 /** Id evento sintetici (0x9000 + n) per i codici della diagnostica simulata: non sono id Siemens. */
 const EVENT_BASE = 0x9000;
-const CODE_ORDER = ['AVVIO', 'STOP_RICHIESTO', 'CANCELLAZIONE_TOTALE'];
+const CODE_ORDER: readonly DiagEntry['code'][] = [
+  'AVVIO',
+  'STOP_RICHIESTO',
+  'CANCELLAZIONE_TOTALE',
+  'AREA_LUNGHEZZA',
+  'DB_NON_CARICATO',
+  'DB_NON_APERTO',
+  'BLOCCO_NON_CARICATO',
+  'STACK_BLOCCHI_PIENO',
+  'STACK_ANNIDAMENTO_PIENO',
+  'STACK_L_PIENO',
+  'ISTRUZIONE_NON_S7300',
+  'MC7_NON_ESEGUIBILE',
+  'BCD_NON_VALIDO',
+  'TEMPO_CICLO_SUPERATO',
+  'NON_SIMULATA_2B',
+];
 
 function dateTimeOf(ms: number, fallback: S7DateTime): S7DateTime {
   if (!Number.isFinite(ms) || ms < 1e11) return fallback; // orologio non da calendario (test)
@@ -198,7 +214,9 @@ export function simBackend(cpu: SimCpu, o: { orderNumber?: string } = {}): CpuBa
       const fallback = wallClock();
       return [...cpu.diagnostics].reverse().map((e: DiagEntry) => {
         const rec = new Uint8Array(20);
-        const id = EVENT_BASE + Math.max(CODE_ORDER.indexOf(e.code), 0);
+        const index = CODE_ORDER.indexOf(e.code);
+        if (index < 0) throw new RangeError(`codice di diagnostica sconosciuto: ${e.code}`);
+        const id = EVENT_BASE + index;
         rec[0] = id >>> 8;
         rec[1] = id & 0xff;
         rec.set(encodeBcdDateTimeShort(dateTimeOf(e.time, fallback)), 12);

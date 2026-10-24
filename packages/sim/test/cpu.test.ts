@@ -5,6 +5,7 @@ import {
   OPS,
   SimCpu,
   dateTimeBcd,
+  simBackend,
   ob100StartInfo,
   ob1StartInfo,
   type SimCpuOptions,
@@ -229,6 +230,58 @@ describe('SimCpu', () => {
       network: 2,
     });
     expect(cpu.diagnostics.at(-1)).toBe(r.error);
+  });
+
+  it('T PQW 0 scrive anche la PIQ (Q) oltre alla periferia', () => {
+    const { cpu } = makeCpu([ob1('\tL 1234;\n\tT PQW 0;')]);
+    cpu.run();
+    expect(cpu.cycle().ok).toBe(true);
+    expect(cpu.memory.physOut.subarray(0, 2)).toEqual(new Uint8Array([0x04, 0xd2]));
+    expect(cpu.memory.Q.subarray(0, 2)).toEqual(new Uint8Array([0x04, 0xd2]));
+  });
+
+  it('un errore ha un id diagnostico distinto da AVVIO nelle SZL', () => {
+    const { cpu } = makeCpu([ob1('\tL MB 4000;')]);
+    cpu.run();
+    cpu.cycle();
+    const ids = simBackend(cpu).diagnosticRecords.map((r) => (r[0]! << 8) | r[1]!);
+    expect(ids).toHaveLength(2);
+    expect(new Set(ids).size).toBe(2);
+  });
+
+  it('JU su se stesso con orologio fermo → TEMPO_CICLO_SUPERATO per limite di istruzioni', () => {
+    const { cpu } = makeCpu([ob1('x: JU x;')], {}, 0, () => 0);
+    cpu.run();
+    const r = cpu.cycle();
+    expect(r.ok).toBe(false);
+    expect(r.error?.code).toBe('TEMPO_CICLO_SUPERATO');
+    expect(cpu.mode).toBe('STOP');
+  });
+
+  it('OB100 che non termina con orologio fermo → STOP per limite di istruzioni', () => {
+    const { cpu } = makeCpu(
+      [ob1('\tNOP 0;'), { kind: 'OB', number: 100, networks: ['x: JU x;'] }],
+      {},
+      0,
+      () => 0,
+    );
+    cpu.run();
+    expect(cpu.mode).toBe('STOP');
+    expect(cpu.diagnostics.at(-1)?.code).toBe('TEMPO_CICLO_SUPERATO');
+  });
+
+  it('dopo STOP → RUN le informazioni di avvio di OB1 non portano i tempi del RUN precedente', () => {
+    const { cpu } = makeCpu([ob1('\tL LW 6;\n\tT MW 20;')], {}, 5);
+    cpu.run();
+    cpu.cycle();
+    cpu.cycle();
+    expect(cpu.stats().last).toBeGreaterThan(0);
+    expect(cpu.memory.M[21]).toBeGreaterThan(0);
+    cpu.stop();
+    cpu.run();
+    expect(cpu.stats()).toEqual({ last: 0, min: 0, max: 0, cycles: 0 });
+    cpu.cycle();
+    expect(cpu.memory.M.subarray(20, 22)).toEqual(new Uint8Array([0, 0]));
   });
 
   it('accesso fuori area in FC2 → STOP con blocco FC2 e offset', () => {

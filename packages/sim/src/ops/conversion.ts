@@ -35,7 +35,7 @@ function roundEven(x: number): number {
   return f % 2 === 0 ? f : f + 1;
 }
 
-/** Manuale AWL, «RND», «TRUNC», «RND+», «RND-»: fuori dal campo DINT o NaN → OV = OS = 1, ACCU1 invariato. */
+/** Manuale AWL S7-300/400, «RND», «TRUNC», «RND+», «RND-»: fuori dal campo DINT o NaN → OV = OS = 1, ACCU1 invariato. */
 function toDint(fn: (x: number) => number): OpHandler {
   return (st) => {
     const r = fn(toReal(st.regs.accu1));
@@ -49,7 +49,7 @@ function toDint(fn: (x: number) => number): OpHandler {
 }
 
 export const CONVERSION_OPS: Record<string, OpHandler> = {
-  // Manuale AWL, «BTI»: BCD a 3 cifre con segno nel bit 15 → INT in ACCU1-L; ACCU1-H invariata.
+  // Manuale AWL S7-300/400, «BTI»: BCD a 3 cifre con segno nel bit 15 → INT in ACCU1-L; ACCU1-H invariata.
   BTI: (st) => {
     const w = low(st);
     const n = bcdDigits(w & 0x0fff, 3);

@@ -27,7 +27,7 @@ export interface Location {
 
 type Size = 'X' | 'B' | 'W' | 'D';
 
-/** Bit utili di un puntatore a 32 bit: byte nei bit 3–18, bit nei bit 0–2 (manuale AWL, «Formato dei puntatori»). */
+/** Bit utili di un puntatore a 32 bit: byte nei bit 3–18, bit nei bit 0–2 (manuale AWL S7-300/400, indirizzamento indiretto). */
 const ADDR_MASK = 0x7ffff;
 
 function openDb(area: 'DB' | 'DI', explicit: number | undefined, regs: Registers): number {
@@ -109,7 +109,7 @@ export function resolveOperand(
       if (op.area === 'T' || op.area === 'C')
         throw new SimError('NON_SIMULATA_2B', `accesso indiretto a ${op.area}`);
       if (op.via.kind === 'register') {
-        // Manuale AWL, «Indirizzamento indiretto da registro»: AR + offset (P#x.y, 16 bit).
+        // Manuale AWL S7-300/400, indirizzamento indiretto: AR + offset (P#x.y, 16 bit).
         const off = parseOffset(op.via.offset);
         if (off === undefined) throw new SimError('MC7_NON_ESEGUIBILE', op.via.offset);
         const ar = op.via.ar === 1 ? regs.ar1 : regs.ar2;
@@ -138,7 +138,7 @@ export function resolveOperand(
 
 /**
  * Numero di T, C o blocco da un accesso indiretto da memoria: puntatore a 16 bit
- * (manuale AWL, «Indirizzamento indiretto da memoria», parola per T/C/blocchi).
+ * (manuale AWL S7-300/400, indirizzamento indiretto, parola per T/C/blocchi).
  */
 export function resolveIndirectNumber(
   op: Operand,
@@ -169,9 +169,17 @@ export function readBits(mem: SimMemory, loc: Location, size: Size): number {
 
 export function writeBits(mem: SimMemory, loc: Location, size: Size, value: number): void {
   checkWindow(loc, size);
-  const b = mem.bytes(loc.area === 'P' ? 'PQ' : loc.area, loc.db, loc.bit >> 3, BYTES[size]);
+  const periph = loc.area === 'P' || loc.area === 'PQ';
+  const b = mem.bytes(periph ? 'PQ' : loc.area, loc.db, loc.bit >> 3, BYTES[size]);
+  store(b, loc.bit & 7, size, value);
+  // ⚠️ L'accesso diretto alle uscite di periferia aggiorna anche la PIQ (Q), se l'indirizzo vi cade.
+  if (periph && (loc.bit >> 3) + BYTES[size] <= mem.Q.length)
+    store(mem.Q.subarray(loc.bit >> 3, (loc.bit >> 3) + BYTES[size]), loc.bit & 7, size, value);
+}
+
+function store(b: Uint8Array, bit: number, size: Size, value: number): void {
   if (size === 'X') {
-    const m = 1 << (loc.bit & 7);
+    const m = 1 << bit;
     b[0] = value ? b[0]! | m : b[0]! & ~m;
     return;
   }

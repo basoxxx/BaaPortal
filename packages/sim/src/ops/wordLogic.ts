@@ -3,7 +3,7 @@ import { constantValue } from './loadTransfer';
 
 type Fn = (a: number, b: number) => number;
 
-/** CC1 = (risultato ≠ 0), CC0 = 0, OV = 0 (manuale AWL, «Logica a parola»). */
+/** CC1 = (risultato ≠ 0), CC0 = 0, OV = 0 (manuale AWL S7-300/400, operazioni logiche a parola). */
 function setCc(st: ExecState, result: number): void {
   const s = st.regs.stw;
   s.cc1 = result !== 0;

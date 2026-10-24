@@ -2,7 +2,7 @@ import { parseConstant } from '@baaportal/mc7';
 import { SimError } from '../errors';
 import type { ExecState, OpHandler } from '../executor';
 
-/** CC dal segno di un valore (manuale AWL, «Operazioni con numeri interi»): 0 → 00, <0 → 01, >0 → 10. */
+/** CC dal segno di un valore (manuale AWL S7-300/400, operazioni aritmetiche): 0 → 00, <0 → 01, >0 → 10. */
 export function setSignCc(st: ExecState, v: bigint | number): void {
   const s = st.regs.stw;
   s.cc0 = v < 0;
@@ -43,13 +43,13 @@ function op32(fn: Fn, ccTrue = false): OpHandler {
     const r = fn(i32(st.regs.accu2), i32(st.regs.accu1));
     const w = BigInt.asIntN(32, r);
     st.regs.accu1 = Number(BigInt.asUintN(32, w));
-    // Manuale AWL, «*D»: con overflow CC segue il segno del risultato vero.
+    // Manuale AWL S7-300/400, «*D»: con overflow CC segue il segno del risultato vero.
     setSignCc(st, ccTrue ? r : w);
     setOverflow(st, w !== r);
   };
 }
 
-/** Manuale AWL, «*I»: prodotto a 32 bit in ACCU1; OV fuori da -32768..32767, CC dal segno vero. */
+/** Manuale AWL S7-300/400, «*I»: prodotto a 32 bit in ACCU1; OV fuori da -32768..32767, CC dal segno vero. */
 const mulI: OpHandler = (st) => {
   const r = i16(st.regs.accu2) * i16(st.regs.accu1);
   st.regs.accu1 = Number(BigInt.asUintN(32, r));
@@ -57,7 +57,7 @@ const mulI: OpHandler = (st) => {
   setOverflow(st, r !== BigInt.asIntN(16, r));
 };
 
-/** Manuale AWL, «/I»: quoziente in ACCU1-L, resto in ACCU1-H. Per 0: ACCU1 = 0 (piano 2A). */
+/** Manuale AWL S7-300/400, «/I»: quoziente in ACCU1-L, resto in ACCU1-H. Per 0: ACCU1 = 0 (piano 2A). */
 const divI: OpHandler = (st) => {
   const a = i16(st.regs.accu2);
   const b = i16(st.regs.accu1);
@@ -70,7 +70,7 @@ const divI: OpHandler = (st) => {
   const w = BigInt.asIntN(16, q);
   const rem = a % b;
   st.regs.accu1 = ((Number(BigInt.asUintN(16, rem)) << 16) | Number(BigInt.asUintN(16, w))) >>> 0;
-  // Manuale AWL, «/I»: con overflow del quoziente (-32768 / -1) CC segue il quoziente vero.
+  // Manuale AWL S7-300/400, «/I»: con overflow del quoziente (-32768 / -1) CC segue il quoziente vero.
   setSignCc(st, q);
   setOverflow(st, w !== q);
 };
@@ -93,7 +93,7 @@ function div32(remainder: boolean): OpHandler {
 }
 
 /**
- * Manuale AWL, «+ <costante intera>»: costante a 16 bit su ACCU1-L (ACCU1-H invariata), a 32 bit su
+ * Manuale AWL S7-300/400, «+ <costante intera>»: costante a 16 bit su ACCU1-L (ACCU1-H invariata), a 32 bit su
  * tutto ACCU1; la parola di stato non cambia.
  */
 const addConst: OpHandler = (st, stmt) => {

@@ -41,7 +41,7 @@ function special(st: ExecState, name: string): number {
   const r = st.regs;
   switch (name) {
     case 'STW':
-      // Manuale AWL, «L STW»: bit 0 /FC … bit 8 BR.
+      // Manuale AWL S7-300/400, «L STW»: bit 0 /FC … bit 8 BR.
       return stwToWord(r.stw);
     case 'DBLG':
       return dbLength(st, r.db);
@@ -67,18 +67,18 @@ function loadValue(st: ExecState, op: Operand | undefined): number {
   }
 }
 
-/** Manuale AWL, «L»: ACCU1 passa in ACCU2, poi si carica; byte e parola a zero esteso. */
+/** Manuale AWL S7-300/400, «L»: ACCU1 passa in ACCU2, poi si carica; byte e parola a zero esteso. */
 const L: OpHandler = (st, stmt) => {
   const v = loadValue(st, stmt.operand);
   st.regs.accu2 = st.regs.accu1;
   st.regs.accu1 = v >>> 0;
 };
 
-/** Manuale AWL, «T»: scrive la parte bassa dell'ACCU1; con MCR spento scrive 0. */
+/** Manuale AWL S7-300/400, «T»: scrive la parte bassa dell'ACCU1; con MCR spento scrive 0. */
 const T: OpHandler = (st, stmt) => {
   const op = stmt.operand;
   if (op?.kind === 'special' && op.name === 'STW') {
-    // Manuale AWL, «T STW»: tutti i bit 0–8 tranne /FC.
+    // Manuale AWL S7-300/400, «T STW»: tutti i bit 0–8 tranne /FC.
     const fc = st.regs.stw.fc;
     st.regs.stw = { ...wordToStw(st.regs.accu1 & 0x1ff), fc };
     return;
