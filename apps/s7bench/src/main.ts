@@ -18,18 +18,25 @@ const OPTIONS = {
   modo: { type: 'string' },
   blocchi: { type: 'string' },
   hex: { type: 'boolean' },
+  conferma: { type: 'boolean' },
+  'non-in-produzione': { type: 'boolean' },
   aiuto: { type: 'boolean', short: 'h' },
 } as const;
 
 function usage(): string {
   const w = Math.max(...COMMANDS.map((c) => c.usage.length));
   return [
-    's7bench - strumento interno per il banco di prova S7 (sola lettura, nessun comando di scrittura)',
+    's7bench - strumento interno per il banco di prova S7',
     '',
     'uso: s7bench <comando> [argomenti] [opzioni]',
     '',
-    'comandi:',
-    ...COMMANDS.map((c) => `  ${c.usage.padEnd(w)}  ${c.summary}`),
+    'comandi di lettura (non modificano la CPU):',
+    ...COMMANDS.filter((c) => !c.writes).map((c) => `  ${c.usage.padEnd(w)}  ${c.summary}`),
+    '',
+    'comandi di SCRITTURA (modificano la CPU, solo su CPU proprie e mai in produzione):',
+    ...COMMANDS.filter((c) => c.writes).map((c) => `  ${c.usage.padEnd(w)}  ${c.summary}`),
+    '  ATTENZIONE: prima di agire stampano un riepilogo (cosa, IP, ordine CPU, modo) e procedono',
+    '  SOLO con entrambe --conferma e --non-in-produzione; senza, escono con codice 2 senza scrivere.',
     '',
     'opzioni di connessione (comandi che parlano con una CPU):',
     '  --host <indirizzo>   obbligatoria',
