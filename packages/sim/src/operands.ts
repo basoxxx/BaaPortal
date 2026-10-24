@@ -170,7 +170,7 @@ export function readBits(mem: SimMemory, loc: Location, size: Size): number {
 export function writeBits(mem: SimMemory, loc: Location, size: Size, value: number): void {
   checkWindow(loc, size);
   const periph = loc.area === 'P' || loc.area === 'PQ';
-  const b = mem.bytes(periph ? 'PQ' : loc.area, loc.db, loc.bit >> 3, BYTES[size]);
+  const b = mem.bytes(loc.area === 'P' ? 'PQ' : loc.area, loc.db, loc.bit >> 3, BYTES[size]);
   store(b, loc.bit & 7, size, value);
   // ⚠️ L'accesso diretto alle uscite di periferia aggiorna anche la PIQ (Q), se l'indirizzo vi cade.
   if (periph && (loc.bit >> 3) + BYTES[size] <= mem.Q.length)
