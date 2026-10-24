@@ -104,8 +104,8 @@ export class TimerBank {
     return (BASES.indexOf(base as TimerBase) << 12) | bcd;
   }
 
-  private start(t: S5Timer, kind: TimerKind, s5time: number): void {
-    const { units, base } = decodeS5Time(s5time);
+  private start(t: S5Timer, kind: TimerKind, time: { units: number; base: TimerBase }): void {
+    const { units, base } = time;
     t.kind = kind;
     t.base = base;
     t.preset = units * base;
@@ -128,11 +128,14 @@ export class TimerBank {
     this.settle(t);
     const risen = rlo && !t.edge;
     const fallen = !rlo && t.edge;
+    // L'S5TIME si decodifica prima di toccare lo stato: un BCD non valido (OB121 e ripresa) non deve
+    // consumare il fronte, così il successivo avvio valido con RLO ancora a 1 parte.
+    const time = (kind === 'SF' ? fallen : risen) ? decodeS5Time(s5time) : undefined;
     t.edge = rlo;
     switch (kind) {
       case 'SP':
         if (risen) {
-          this.start(t, kind, s5time);
+          this.start(t, kind, time!);
           t.q = true;
         } else if (!rlo && t.running) {
           // Impulso: con RLO = 0 si ferma e Q torna a 0.
@@ -143,13 +146,13 @@ export class TimerBank {
       case 'SE':
         if (risen) {
           // Impulso prolungato: un nuovo fronte durante l'impulso lo riavvia.
-          this.start(t, kind, s5time);
+          this.start(t, kind, time!);
           t.q = true;
         }
         break;
       case 'SD':
         if (risen) {
-          this.start(t, kind, s5time);
+          this.start(t, kind, time!);
           t.q = false;
         } else if (!rlo) {
           if (t.running) this.stop(t);
@@ -160,7 +163,7 @@ export class TimerBank {
         if (risen) {
           // ⚠️ Un riavvio con Q già a 1 lascia Q a 1 fino a R.
           const q = t.q;
-          this.start(t, kind, s5time);
+          this.start(t, kind, time!);
           t.q = q;
         }
         break;
@@ -170,7 +173,7 @@ export class TimerBank {
           if (t.running) this.stop(t);
           t.q = true;
         } else if (fallen) {
-          this.start(t, kind, s5time);
+          this.start(t, kind, time!);
           t.q = true;
         } else t.q = t.running;
         break;

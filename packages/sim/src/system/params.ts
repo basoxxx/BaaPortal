@@ -10,8 +10,8 @@ export type Size = 'X' | 'B' | 'W' | 'D';
 
 /**
  * Errore di una SFC con il suo RET_VAL: lo lanciano gli accessi ai parametri; il richiamo lo trasforma
- * in RET_VAL negativo e BR = 0, senza errore di programmazione (manuale delle funzioni di sistema,
- * «Evaluating Errors with the Output Parameter RET_VAL»).
+ * in RET_VAL negativo e BR = 0, senza errore di programmazione (manuale delle funzioni di sistema e
+ * standard S7-300/400, valutazione degli errori di RET_VAL).
  */
 export class SysError extends Error {
   constructor(public readonly retVal: number) {
@@ -20,7 +20,7 @@ export class SysError extends Error {
   }
 }
 
-/** Codice generale 16#8xyy: `x` = numero del parametro (da 1), `yy` = errore (manuale, «General error codes»). */
+/** Codice generale 16#8xyy: `x` = numero del parametro (da 1), `yy` = errore (manuale, codici d'errore generali). */
 export const paramError = (param: number, yy: number): SysError =>
   new SysError(0x8000 | (param << 8) | yy);
 
@@ -51,7 +51,7 @@ export interface ParamRef {
   read(size: Size): number;
   write(size: Size, value: number): void;
   /** Vista di `length` byte sulla memoria del parametro (DATE_AND_TIME, strutture): già convalidata. */
-  bytes(length: number): Uint8Array;
+  bytes(length: number, access?: 'read' | 'write'): Uint8Array;
   /** Il parametro è un ANY: lo decodifica (SysError se non lo è). */
   any(): AnyRef;
   /** I byte che l'ANY designa, già convalidati; una scrittura fuori area è un SysError, senza effetti. */
@@ -163,28 +163,50 @@ function viewOfAny(st: ExecState, a: AnyRef, access: 'read' | 'write', index: nu
   }
 }
 
-/** Il parametro attuale in posizione `pos` della lista dei puntatori. */
+/**
+ * Gli errori di memoria di un parametro scalare diventano i codici generali 16#8xyy (22 lettura,
+ * 23 scrittura, 3A DB non caricato o non aperto); gli altri restano errori di programmazione.
+ */
+function asSysError<T>(index: number, access: 'read' | 'write', f: () => T): T {
+  try {
+    return f();
+  } catch (e) {
+    if (!(e instanceof SimError)) throw e;
+    if (e.code === 'DB_NON_CARICATO' || e.code === 'DB_NON_APERTO') throw paramError(index, 0x3a);
+    if (e.code === 'AREA_LUNGHEZZA') throw paramError(index, access === 'write' ? 0x23 : 0x22);
+    throw e;
+  }
+}
+
+/**
+ * Il parametro attuale in posizione `index`. Con `mapErrors = false` gli errori restano SimError:
+ * serve per RET_VAL, la cui scrittura fallita è un errore di programmazione (OB121 / STOP).
+ */
 export function paramRef(
   st: ExecState,
   loc: Location | null,
   name: string,
   index: number,
+  mapErrors = true,
 ): ParamRef {
   const here = (): Location => {
     if (!loc) throw new SimError('MC7_NON_ESEGUIBILE', `parametro ${name}: puntatore senza area`);
     return loc;
   };
-  const bytes = (length: number): Uint8Array => {
-    const l = here();
-    if (l.limit !== undefined && (l.bit >> 3) + length > l.limit)
-      throw new SimError('AREA_LUNGHEZZA', `${name}: fuori dalla finestra`);
-    return st.mem.bytes(l.area === 'P' ? 'PI' : l.area, l.db, l.bit >> 3, length);
-  };
+  const guard = <T>(access: 'read' | 'write', f: () => T): T =>
+    mapErrors ? asSysError(index, access, f) : f();
+  const bytes = (length: number, access: 'read' | 'write' = 'read'): Uint8Array =>
+    guard(access, () => {
+      const l = here();
+      if (l.limit !== undefined && (l.bit >> 3) + length > l.limit)
+        throw new SimError('AREA_LUNGHEZZA', `${name}: fuori dalla finestra`);
+      return st.mem.bytes(l.area === 'P' ? 'PI' : l.area, l.db, l.bit >> 3, length);
+    });
   return {
     name,
     index,
-    read: (size) => readBits(st.mem, here(), size),
-    write: (size, value) => writeBits(st.mem, here(), size, value),
+    read: (size) => guard('read', () => readBits(st.mem, here(), size)),
+    write: (size, value) => guard('write', () => writeBits(st.mem, here(), size, value)),
     bytes,
     any: () => decodeAny(st, bytes(10), index),
     anyBytes: (a, access) => viewOfAny(st, a, access, index),

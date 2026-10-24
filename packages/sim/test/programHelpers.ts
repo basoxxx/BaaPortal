@@ -1,6 +1,12 @@
 import { findSystemBlock } from '@baaportal/catalog';
 import { compileBlock, type CompileInput } from '@baaportal/mc7';
 import type { AwlBlockInfo, AwlContext } from '@baaportal/awl';
+import type {
+  DataType,
+  ElementaryTypeName,
+  ParameterTypeName,
+  TypedMember,
+} from '@baaportal/s7-types';
 import {
   CounterBank,
   Program,
@@ -16,9 +22,14 @@ import {
 
 type Sections = CompileInput['sections'];
 
-export const el = (name: string) => ({ kind: 'elementary', name }) as never;
-export const named = (name: string) => ({ kind: 'named', name }) as never;
-export const m = (name: string, type: never) => ({ name, type });
+/** `name` arriva anche da testo (batteria): il nome non riconosciuto lo respinge il compilatore. */
+export const el = (name: string): DataType => ({
+  kind: 'elementary',
+  name: name as ElementaryTypeName,
+});
+export const named = (name: string): DataType => ({ kind: 'named', name });
+export const param = (name: ParameterTypeName): DataType => ({ kind: 'parameter', name });
+export const m = (name: string, type: DataType): TypedMember => ({ name, type });
 export const EMPTY: Sections = { in: [], out: [], inOut: [], stat: [], temp: [], ret: [] };
 export const sec = (s: Partial<Sections>): Sections => ({ ...EMPTY, ...s });
 

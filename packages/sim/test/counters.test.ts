@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CounterBank, SimCpu, SimError, SimMemory, memorySizesFor } from '../src';
 import { runAwl, type RunResult } from './helpers';
-import { buildProgram, m, runProgram, sec, word, type BlockSpec } from './programHelpers';
+import { buildProgram, m, param, runProgram, sec, word, type BlockSpec } from './programHelpers';
 
 /** Memoria e banco condivisi fra le scansioni. `M 0.0` = RLO di CU/CD/S, `M 0.1` = RLO di R/FR. */
 function rig(limit = 256) {
@@ -150,6 +150,8 @@ describe('contatori S5: lettura', () => {
     expect(code(() => scan(['\tA C 8;']))).toBe('NUMERO_CONTATORE');
     expect(code(() => scan(['\tSET;\n\tCU C 9;']))).toBe('NUMERO_CONTATORE');
     expect(code(() => scan(['\tL C 8;']))).toBe('NUMERO_CONTATORE');
+    expect(code(() => scan(['\tSET;\n\tR C 8;']))).toBe('NUMERO_CONTATORE');
+    expect(code(() => scan(['\tSET;\n\tFR C 8;']))).toBe('NUMERO_CONTATORE');
   });
 
   it('accesso indiretto C [MW 10]', () => {
@@ -169,7 +171,7 @@ describe('contatori S5: lettura', () => {
     const FC1: BlockSpec = {
       kind: 'FC',
       number: 1,
-      sections: sec({ in: [m('C_IN', { kind: 'parameter', name: 'Counter' } as never)] }),
+      sections: sec({ in: [m('C_IN', param('Counter'))] }),
       networks: ['\tA M 0.0;\n\tCU #C_IN;\n\tA #C_IN;\n\t= M 1.0;\n\tL #C_IN;\n\tT MW 4;'],
     };
     const p = buildProgram([

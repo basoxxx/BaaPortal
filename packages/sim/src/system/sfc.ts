@@ -37,7 +37,7 @@ const setClk: SystemHandler = (call) => {
 };
 
 const readClk: SystemHandler = (call) => {
-  call.param('CDT').bytes(8).set(dateTimeBcd(call.services.clockMs()));
+  call.param('CDT').bytes(8, 'write').set(dateTimeBcd(call.services.clockMs()));
   call.ret(0);
 };
 
@@ -120,9 +120,13 @@ const testDb: SystemHandler = (call) => {
   if (n < 1 || n > call.services.maxDb) return call.ret(BAD_DB_NUMBER);
   const db = call.ctx.mem.dbs.get(n);
   if (!db) return call.ret(BAD_LENGTH_OR_MISSING);
-  call.param('DB_LENGTH').write('W', db.data.length);
+  // Prima si convalidano le due uscite, poi si scrive: nessuna scrittura parziale.
+  const [length, prot] = [call.param('DB_LENGTH'), call.param('WRITE_PROT')];
+  length.bytes(2, 'write');
+  prot.bytes(1, 'write');
+  length.write('W', db.data.length);
   // ⚠️ La CPU simulata non ha DB protetti da scrittura.
-  call.param('WRITE_PROT').write('X', 0);
+  prot.write('X', 0);
   call.ret(0);
 };
 
@@ -151,25 +155,33 @@ const SSL_BAD_INDEX = 0x8083;
  */
 const rdsysst: SystemHandler = (call: SystemCall) => {
   const busy = call.param('BUSY');
-  // Sincrona: BUSY = 0 subito, qualunque sia l'esito.
-  busy.write('X', 0);
-  // ⚠️ Con REQ = 0 non si fa niente.
-  if (!call.param('REQ').read('X')) return call.ret(0);
+  // ⚠️ Con REQ = 0 non si fa niente, tranne BUSY = 0.
+  if (!call.param('REQ').read('X')) {
+    busy.write('X', 0);
+    return call.ret(0);
+  }
   const id = call.param('SSL_ID').read('W');
   const index = call.param('INDEX').read('W');
   const list = call.services.szl(id, index);
   if (!list) {
+    busy.write('X', 0);
     return call.ret(szlIdList().includes(id) ? SSL_BAD_INDEX : SSL_UNKNOWN_ID);
   }
-  const header = call.param('SSL_HEADER').bytes(4);
+  // Tutte le uscite si risolvono prima di scrivere (BUSY compreso): un errore non lascia scritture parziali.
+  busy.bytes(1, 'write');
+  const header = call.param('SSL_HEADER').bytes(4, 'write');
   const dr = call.param('DR');
   const out = dr.anyBytes(dr.any(), 'write');
-  const data = Uint8Array.from(list.records.flatMap((r) => [...r]));
-  const count = list.declaredCount ?? list.records.length;
-  header.set([list.recordLength >> 8, list.recordLength & 255, count >> 8, count & 255]);
-  const n = Math.min(out.length, data.length);
-  out.set(data.subarray(0, n));
-  call.ret(n < data.length ? SSL_TRUNCATED : 0);
+  // Sincrona: BUSY = 0 subito, qualunque sia l'esito.
+  busy.write('X', 0);
+  // Si copiano solo record interi: N_DR = quelli che stanno in DR.
+  const len = list.recordLength;
+  const fit = len > 0 ? Math.min(list.records.length, Math.floor(out.length / len)) : 0;
+  const truncated = fit < list.records.length;
+  const count = truncated ? fit : (list.declaredCount ?? list.records.length);
+  header.set([len >> 8, len & 255, count >> 8, count & 255]);
+  out.set(Uint8Array.from(list.records.slice(0, fit).flatMap((r) => [...r])));
+  call.ret(truncated ? SSL_TRUNCATED : 0);
 };
 
 export const SFC_TABLE: Record<number, SystemHandler> = {

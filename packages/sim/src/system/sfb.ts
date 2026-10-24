@@ -55,6 +55,11 @@ class Instance {
     // AR2: byte nei bit 3–18 (le altre parti sono l'area del puntatore).
     this.base = (regs.ar2 & 0x7ffff) >>> 3;
     this.key = `${regs.di}:${this.base}`;
+    // Ogni parametro dell'istanza deve stare nel DB: un'istanza corta è un errore di programmazione
+    // prima di toccare stato e uscite (nessuna scrittura parziale, nessun fronte perso).
+    const mem = call.ctx.ctx.mem;
+    for (const e of this.entries.values())
+      mem.bytes('DI', regs.di || null, this.base + e.byte, Math.ceil((e.bit + e.sizeBits) / 8));
   }
 
   private loc(name: string): Location {

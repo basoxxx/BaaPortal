@@ -52,7 +52,10 @@ export class CounterBank {
     return this.get(n).value;
   }
 
-  /** Imposta il valore (0–999) senza toccare i fronti. */
+  /**
+   * Imposta il valore senza toccare i fronti. Il valore è limitato a 0–999 senza segnalare errore: è un
+   * accesso diretto per prove e preparazione, non l'istruzione `S C` (che legge un BCD già valido).
+   */
   setValue(n: number, v: number): void {
     this.get(n).value = Math.min(MAX_COUNT, Math.max(0, Math.trunc(v)));
   }

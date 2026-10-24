@@ -83,7 +83,8 @@ export function servicesOf(ctx: ExecContext): SystemServices {
 /**
  * UC/CC di una SFC o di un SFB. Numero assente dal catalogo: errore di programmazione (SFC/SFB non
  * caricata, OB121 16#3D/16#3F). Senza gestore: avviso «non simulata», BR = 0, uscite intatte, la CPU
- * prosegue. Un errore del parametro (area, DB, lunghezza) dà RET_VAL negativo e BR = 0, senza scritture.
+ * prosegue. Un errore del parametro (area, DB, lunghezza) dà RET_VAL negativo (16#8x22, 16#8x23, 16#8x3A) e BR = 0, senza
+ * scritture; se è RET_VAL stessa a non poter essere scritta, è un errore di programmazione.
  */
 export function callSystem(
   st: ExecState,
@@ -112,6 +113,11 @@ export function callSystem(
       `${block.name}: ${pointers?.length ?? 0} puntatori, attesi ${layout.names.length}`,
     );
   const locs = (pointers ?? []).map((p) => pointerLocation(st, p));
+  // RET_VAL non passa dalla conversione in codici 16#8xyy: se non si può scrivere è un errore di programmazione.
+  const retRef = () => {
+    const i = layout.names.indexOf('RET_VAL');
+    return paramRef(st, locs[i] ?? null, 'RET_VAL', layout.numbers[i]!, false);
+  };
   const call: SystemCall = {
     ctx: st,
     kind,
@@ -128,8 +134,7 @@ export function callSystem(
     ret(value) {
       // RET_VAL di tipo INT: errore se negativo; TIME (TIME_TCK) non è un codice d'errore.
       const isInt = block.returnType === 'Int';
-      if (block.returnType !== undefined)
-        call.param('RET_VAL').write(isInt ? 'W' : 'D', value >>> 0);
+      if (block.returnType !== undefined) retRef().write(isInt ? 'W' : 'D', value >>> 0);
       stw.br = isInt ? (value & 0x8000) === 0 : true;
     },
   };

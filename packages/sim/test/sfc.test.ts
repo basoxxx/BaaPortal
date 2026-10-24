@@ -361,6 +361,25 @@ describe('RDSYSST (SFC 51)', () => {
     expect(bytes(m, 110, 4)).toEqual([0xff, 0xff, 0xff, 0xff]);
   });
 
+  it('DR corto: si copiano solo record interi, N_DR = record copiati, RET_VAL 16#0081', () => {
+    const { cpu } = makeCpu();
+    const list = buildSzl(simBackend(cpu), 0x0011, 0)!;
+    expect(list.records.length).toBeGreaterThan(2);
+    const len = list.recordLength;
+    cpu.program.put(ob1Raw(rd()));
+    cpu.run();
+    const m = cpu.memory.M;
+    m[0] = 1;
+    m.set(w16(0x0011), 2);
+    m.fill(0xff, 100, 100 + 3 * len);
+    m.set(any(0x02, 2 * len + 1, 0, M(100)), 20);
+    cpu.cycle();
+    expect(word(cpu.memory, 6)).toBe(0x0081);
+    expect(bytes(m, 12, 2)).toEqual(w16(2));
+    expect(bytes(m, 100, 2 * len)).toEqual(list.records.slice(0, 2).flatMap((r) => [...r]));
+    expect(bytes(m, 100 + 2 * len, len).every((b) => b === 0xff)).toBe(true);
+  });
+
   it('SZL-ID sconosciuto → 16#8082', () => {
     expect(szlIdList()).not.toContain(0x7777);
     const { cpu } = read(0x7777, 0);
@@ -436,22 +455,84 @@ describe('giro 1: effetti parziali e aree ANY', () => {
     return { cpu, clock, m: cpu.memory.M };
   }
 
-  it('CREAT_DB con DB_NUMBER fuori area: STOP e nessun DB orfano', () => {
-    const { cpu } = run(rawSfc(22, [M(0), M(2), M(4), M(6), M(65000)]), (m) => {
+  const ret = (m: Uint8Array, at = 6): number => (m[at]! << 8) | m[at + 1]!;
+  const br = '\tA BR;\n\t= M 10.0;';
+
+  it('CREAT_DB con DB_NUMBER fuori area: RET_VAL 16#8423, BR = 0, nessun DB creato', () => {
+    const { cpu } = run(ob1Raw(rawSfc(22, [M(0), M(2), M(4), M(6), M(65000)]), br), (m) => {
       m.set([0, 10, 0, 20, 0, 8], 0);
+      m[10] = 1;
     });
-    expect(cpu.mode).toBe('STOP');
+    expect(cpu.mode).toBe('RUN');
+    expect(ret(cpu.memory.M)).toBe(0x8423);
+    expect(cpu.memory.M[10]! & 1).toBe(0);
     expect(cpu.memory.dbs.size).toBe(0);
   });
 
-  it('RDSYSST: BUSY = 0 anche se DR non è valido', () => {
+  it('SET_CLK con PDT in un DB non caricato: RET_VAL 16#813A, BR = 0', () => {
+    const { cpu } = run(
+      ob1Raw(
+        '\tOPN DB 9;',
+        rawSfc(23, [M(0), M(2)]),
+        rawSfc(0, [ptr(0x84, 0), M(6)]),
+        '\tA BR;\n\t= M 10.0;',
+      ),
+      (m, c) => {
+        c.memory.dbs.set(9, {
+          data: new Uint8Array(8),
+          initial: new Uint8Array(8),
+          retentive: false,
+        });
+        m.set([0, 9], 0);
+      },
+    );
+    expect(cpu.mode).toBe('RUN');
+    expect(ret(cpu.memory.M)).toBe(0x813a);
+    expect(cpu.memory.M[10]! & 1).toBe(0);
+  });
+
+  it('RET_VAL non scrivibile resta un errore di programmazione (STOP senza OB121)', () => {
+    const { cpu } = run(rawSfc(64, [M(65000)]), () => undefined);
+    expect(cpu.mode).toBe('STOP');
+  });
+
+  it('RDSYSST: nessuna scrittura se SSL_HEADER non è scrivibile (BUSY compreso, DR intatta)', () => {
+    const { m } = run(rawSfc(51, [M(0, 0), M(2), M(4), M(6), M(8, 0), M(65000), M(20)]), (m) => {
+      m[0] = 1;
+      m.set(w16(0x0011), 2);
+      m[8] = 1;
+      m.set(any(0x02, 40, 0, M(100)), 20);
+      m.fill(0xee, 100, 140);
+    });
+    expect(ret(m)).toBe(0x8523);
+    expect(m[8]! & 1).toBe(1);
+    expect(bytes(m, 100, 4)).toEqual([0xee, 0xee, 0xee, 0xee]);
+  });
+
+  it('TEST_DB: nessuna scrittura se WRITE_PROT non è scrivibile (DB_LENGTH intatta)', () => {
+    const { m } = run(rawSfc(24, [M(0), M(2), M(4), M(65000)]), (m, c) => {
+      m.set(w16(3), 0);
+      m.fill(0xee, 4, 6);
+      c.memory.dbs.set(3, {
+        data: new Uint8Array(8),
+        initial: new Uint8Array(8),
+        retentive: false,
+      });
+    });
+    expect(ret(m, 2)).toBe(0x8323);
+    expect(bytes(m, 4, 2)).toEqual([0xee, 0xee]);
+  });
+
+  it('RDSYSST con DR non valido: 16#863A, BUSY e SSL_HEADER intatti', () => {
     const { m } = run(rawSfc(51, [M(0, 0), M(2), M(4), M(6), M(8, 0), M(10), M(20)]), (m) => {
       m[0] = 1;
       m.set(w16(0x0011), 2);
       m[8] = 1;
+      m.fill(0xee, 10, 14);
       m.set(any(0x02, 10, 9, ptr(0x84, 0)), 20);
     });
-    expect(m[8]! & 1).toBe(0);
+    expect(m[8]! & 1).toBe(1);
+    expect(bytes(m, 10, 4)).toEqual([0xee, 0xee, 0xee, 0xee]);
     expect((m[6]! << 8) | m[7]!).toBe(0x863a);
   });
 

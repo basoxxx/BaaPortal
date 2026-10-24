@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { findSystemBlock } from '@baaportal/catalog';
 import { compileBlock } from '@baaportal/mc7';
+import { layoutInstance } from '@baaportal/s7-types';
 import type { AwlBlockInfo, AwlContext } from '@baaportal/awl';
 import {
   OPS,
@@ -162,6 +163,13 @@ export function parseProgram(text: string): Parsed {
     else if (cur) cur.nets[cur.nets.length - 1]!.push(line);
   }
   finish();
+  for (const [what, map] of [
+    ['imposta-al-ciclo', out.setupAt],
+    ['atteso-al-ciclo', out.expectedAt],
+  ] as const)
+    for (const k of map.keys())
+      if (k >= out.cycles)
+        throw new Error(`${what}: ciclo ${k} oltre i ${out.cycles} cicli del programma`);
   return out;
 }
 
@@ -366,6 +374,15 @@ function systemInfo(kind: 'SFB' | 'SFC', number: number): AwlBlockInfo {
   } as unknown as AwlBlockInfo;
 }
 
+/** Byte del DB di istanza di un SFB di sistema, dalla disposizione del catalogo (come la calcola il compilatore). */
+function sfbInstanceBytes(number: number): number {
+  const b = findSystemBlock({ kind: 'SFB', number });
+  if (!b) throw new Error(`SFB${number} assente dal catalogo`);
+  const r = layoutInstance({ input: b.input, output: b.output, inOut: [], static: [] }, () => null);
+  if (!r.ok) throw new Error(`SFB${number}: disposizione non calcolabile`);
+  return r.sizeBytes;
+}
+
 /** Controlla `list` e aggiunge le differenze a `failures` (con il prefisso `when`). */
 function check(
   cpu: SimCpu,
@@ -410,7 +427,11 @@ export async function runBatteryFile(file: string): Promise<BatteryRun> {
   // Blocchi di sistema chiamati: ogni `SFC n` o `SFB n` del testo, più gli SFB dei DB di istanza.
   const sysInfos: AwlBlockInfo[] = [];
   const used = new Set<string>(p.sysIdbs.map((i) => `SFB ${i.sfb}`));
-  for (const mt of text.matchAll(/\b(SFC|SFB)\s+(\d+)/g)) used.add(`${mt[1]} ${mt[2]}`);
+  const code = text
+    .split(/\r?\n/)
+    .filter((l) => !/^\s*\/\//.test(l))
+    .join('\n');
+  for (const mt of code.matchAll(/\b(SFC|SFB)\s+(\d+)/g)) used.add(`${mt[1]} ${mt[2]}`);
   for (const u of used) {
     const [kind, n] = u.split(' ') as ['SFB' | 'SFC', string];
     sysInfos.push(systemInfo(kind, Number(n)));
@@ -437,12 +458,14 @@ export async function runBatteryFile(file: string): Promise<BatteryRun> {
     for (const f of files) await c.downloadBlock(f);
     await c.start();
     // DB di istanza degli SFB di sistema: a zeri, come il DB che il PLC riceve vuoto.
-    for (const i of p.sysIdbs)
+    for (const i of p.sysIdbs) {
+      const size = sfbInstanceBytes(i.sfb);
       cpu.memory.dbs.set(i.db, {
-        data: new Uint8Array(16),
-        initial: new Uint8Array(16),
+        data: new Uint8Array(size),
+        initial: new Uint8Array(size),
         retentive: false,
       });
+    }
     apply(cpu, p.setup);
     for (let k = 0; k < p.cycles; k++) {
       clock.t = k * p.stepMs;

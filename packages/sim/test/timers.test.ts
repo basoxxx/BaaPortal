@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SimCpu, SimError, SimMemory, TimerBank, memorySizesFor, decodeS5Time } from '../src';
 import { runAwl, type RunResult } from './helpers';
-import { buildProgram, m, runProgram, sec, word, type BlockSpec } from './programHelpers';
+import { buildProgram, m, param, runProgram, sec, word, type BlockSpec } from './programHelpers';
 
 /** Orologio a mano, memoria e banco condivisi fra le scansioni. */
 function rig(limit = 256) {
@@ -201,6 +201,17 @@ describe('temporizzatori S5: lettura del valore', () => {
     expect(decodeS5Time(0x2999)).toEqual({ units: 999, base: 1000 });
   });
 
+  it('S5TIME non valido: il fronte non è consumato, il successivo avvio valido con RLO = 1 parte', () => {
+    const { mem, scan } = rig();
+    const bad = ['\tA M 0.0;\n\tL W#16#00A5;\n\tSP T 1;\n\tA T 1;\n\t= Q 0.0;'];
+    // L'errore (OB121 e ripresa) non deve aver registrato l'RLO a 1 come fronte già visto.
+    expect(() => scan(bad, { in: 1 })).toThrowError(
+      expect.objectContaining({ code: 'BCD_NON_VALIDO' }),
+    );
+    scan(run('SP'), { in: 1 });
+    expect(q(mem)).toBe(1);
+  });
+
   it('T oltre il limite della CPU → NUMERO_TEMPORIZZATORE', () => {
     const { scan } = rig(4);
     for (const body of [
@@ -337,7 +348,7 @@ describe('temporizzatori S5: casi limite e parametri', () => {
     const FC1: BlockSpec = {
       kind: 'FC',
       number: 1,
-      sections: sec({ in: [m('T_IN', { kind: 'parameter', name: 'Timer' } as never)] }),
+      sections: sec({ in: [m('T_IN', param('Timer'))] }),
       networks: [
         '\tA M 0.0;\n\tL S5T#2S;\n\tSD #T_IN;\n\tA #T_IN;\n\t= M 1.0;\n\tL #T_IN;\n\tT MW 4;',
       ],

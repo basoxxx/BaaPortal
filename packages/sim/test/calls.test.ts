@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Program, SimError, SimMemory, type LoadedBlock } from '../src';
 import { encodeCode } from '@baaportal/mc7';
+import type { AwlInterface } from '@baaportal/awl';
 import {
   buildProgram,
   el,
@@ -13,7 +14,7 @@ import {
   type BlockSpec,
 } from './programHelpers';
 
-const emptyIface = {
+const emptyIface: AwlInterface = {
   input: [],
   output: [],
   inOut: [],
@@ -97,7 +98,7 @@ describe('richiami di FC', () => {
 
   it('richiamo di FC non caricata → BLOCCO_NON_CARICATO', () => {
     const p = buildProgram([ob('\tUC FC 77;')], {}, [
-      { name: 'Mancante', kind: 'FC', number: 77, iface: emptyIface } as never,
+      { name: 'Mancante', kind: 'FC', number: 77, iface: emptyIface },
     ]);
     expect(errorOf(() => runProgram(p)).code).toBe('BLOCCO_NON_CARICATO');
   });

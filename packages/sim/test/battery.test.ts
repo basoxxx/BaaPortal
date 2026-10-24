@@ -5,7 +5,7 @@ describe('batteria di programmi di prova', () => {
   const files = batteryFiles();
 
   it('ci sono i programmi di tutte le categorie', () => {
-    expect(files.length).toBeGreaterThanOrEqual(25);
+    expect(files).toHaveLength(25);
   });
 
   for (const file of files)

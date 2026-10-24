@@ -319,3 +319,33 @@ describe('multi-istanza e stato', () => {
     expect([q(c), et(c)]).toEqual([0, 0]);
   });
 });
+
+describe('istanza troppo corta: nessuna uscita parziale, nessun fronte perso', () => {
+  // TP: IN 0.0, PT 2–5, Q 6.0, ET 8–11. Con 8 byte il DB contiene Q ma non ET.
+  const call = '\tCALL SFB 3, DB 5 (IN := M 0.0, PT := T#5S, Q := M 1.0, ET := MD 4);';
+
+  it('senza OB121: STOP e Q non scritta', () => {
+    const c = makeCpu([ob1(call)], [idb(5, 'TP')], { 5: 8 });
+    c.cpu.run();
+    step(c, 1000, [0, 1]);
+    expect(c.cpu.mode).toBe('STOP');
+    expect(c.cpu.memory.dbs.get(5)!.data[6]! & 1).toBe(0);
+  });
+
+  it('con OB121: il fronte di IN non è consumato, con l’istanza completa il TP parte', () => {
+    const c = makeCpu(
+      [ob1(call), { kind: 'OB', number: 121, networks: ['\tNOP 0;'] }],
+      [idb(5, 'TP')],
+      { 5: 8 },
+    );
+    c.cpu.run();
+    step(c, 0, [0, 0]);
+    step(c, 1000, [0, 1]);
+    expect(c.cpu.mode).toBe('RUN');
+    expect(c.cpu.memory.dbs.get(5)!.data[6]! & 1).toBe(0);
+    const db = c.cpu.memory.dbs.get(5)!;
+    db.data = new Uint8Array(12);
+    step(c, 2000, [0, 1]);
+    expect(q(c)).toBe(1);
+  });
+});
