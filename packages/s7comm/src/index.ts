@@ -7,6 +7,7 @@ export * from './s7/errorCodes';
 export * from './s7/header';
 export * from './s7/plan';
 export * from './s7/readVar';
+export * from './s7/writeVar';
 export * from './s7/setup';
 export * from './s7/blocks';
 export * from './s7/clock';
