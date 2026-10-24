@@ -4,6 +4,7 @@ import {
   decodeBlockListOfTypeRequest,
   decodeCotp,
   decodeEndUpload,
+  decodePlcControlRequest,
   decodeReadRequest,
   decodeS7,
   decodeSetup,
@@ -11,9 +12,11 @@ import {
   decodeSzlRequest,
   decodeUploadRequest,
   decodeUserdata,
+  decodeWriteRequest,
   encodeBcdDateTime,
   encodeBlockCounts,
   encodeBlockListOfType,
+  encodeControlResponse,
   encodeCotp,
   encodeEndUploadResponse,
   encodeReadResponse,
@@ -24,6 +27,7 @@ import {
   encodeTpkt,
   encodeUploadResponse,
   encodeUserdata,
+  encodeWriteResponse,
   itemByteLength,
   itemReturnName,
   parseBlockFileName,
@@ -315,12 +319,14 @@ class Session {
         return this.uploadChunk(p);
       case 0x1f:
         return this.endUpload(p);
-      case 0x05: // write var
+      case 0x05:
+        return this.writeVar(p);
+      case 0x28:
+      case 0x29:
+        return this.plcControl(p);
       case 0x1a: // request download
       case 0x1b: // download block
       case 0x1c: // download ended
-      case 0x28: // PLC control
-      case 0x29: // PLC stop
         // Il finto PLC non cambia mai stato da rete: come una CPU con la scrittura protetta.
         return headerError(p, ERR.PROTECTED);
       default:
@@ -378,6 +384,40 @@ class Session {
     });
     const { param, data } = encodeReadResponse(results);
     return ack(p, param, data);
+  }
+
+  // ---- scrittura e controllo (allowlist) -----------------------------------------------------
+
+  /** Con protezione 2 o 3 le funzioni che cambiano stato sono rifiutate (proto §14); la lettura no. */
+  private writeProtected(): boolean {
+    return this.cpu.config.protectionLevel >= 2;
+  }
+
+  private writeVar(p: S7Pdu): S7Pdu {
+    if (this.writeProtected()) return headerError(p, ERR.PROTECTED);
+    let items;
+    try {
+      items = decodeWriteRequest(p.param, p.data);
+    } catch {
+      return headerError(p, ERR.WRONG_FRAMES);
+    }
+    if (items.length === 0) return headerError(p, ERR.WRONG_FRAMES);
+    const { param, data } = encodeWriteResponse(this.cpu.applyWrite(items));
+    return ack(p, param, data);
+  }
+
+  private plcControl(p: S7Pdu): S7Pdu {
+    let req;
+    try {
+      req = decodePlcControlRequest(p.param);
+    } catch {
+      return headerError(p, ERR.WRONG_FRAMES);
+    }
+    // fuori allowlist (cold restart, _MODU, _GARB, _DELE, _INSE: nessuno cambia stato qui)
+    if (req.service !== 'P_PROGRAM') return headerError(p, ERR.PROTECTED);
+    if (this.writeProtected()) return headerError(p, ERR.PROTECTED);
+    const code = req.function === 0x29 ? this.cpu.applyStop() : this.cpu.applyWarmRestart();
+    return ack(p, encodeControlResponse(req.function, code));
   }
 
   // ---- upload ------------------------------------------------------------------------------

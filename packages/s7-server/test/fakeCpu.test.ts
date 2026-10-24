@@ -364,37 +364,16 @@ describe('read var', () => {
   });
 });
 
-describe('lo stato non cambia mai da rete', () => {
-  it('write var, download, controllo, stop, set clock, sconosciute → errore e stato invariato', async () => {
+describe('lo stato non cambia da rete per le funzioni non ammesse', () => {
+  it('download, controllo fuori allowlist, set clock, sconosciute → errore e stato invariato', async () => {
     const cpu = new FakeCpu();
     cpu.addDb(1, seq(32));
     cpu.setMemory('M', 0, seq(8, 1));
     const before = cpu.snapshot();
     const p = await new TestPeer(cpu).open();
-    // PDU costruite a mano
-    const writeVar = Uint8Array.of(
-      0x05,
-      0x01,
-      0x12,
-      0x0a,
-      0x10,
-      0x02,
-      0x00,
-      0x01,
-      0x00,
-      0x00,
-      0x83,
-      0x00,
-      0x00,
-      0x00,
-    );
-    const writeData = Uint8Array.of(0x00, 0x04, 0x00, 0x08, 0xaa);
-    const wr = await p.job(writeVar, writeData);
-    expect(wr).toMatchObject({ rosctr: 2, errorClass: 0xd2, errorCode: 0x41 });
+    // PDU costruite a mano; write var e stop sono funzioni ammesse (session.test.ts)
     const garb = Uint8Array.of(0x28, 0, 0, 0, 0, 0, 0, 0xfd, 0, 0, 5, 0x5f, 0x47, 0x41, 0x52, 0x42);
     expect(await p.job(garb)).toMatchObject({ rosctr: 2, errorClass: 0xd2, errorCode: 0x41 });
-    const stop = Uint8Array.of(0x29, 0, 0, 0, 0, 0, 9, ...new TextEncoder().encode('P_PROGRAM'));
-    expect(await p.job(stop)).toMatchObject({ rosctr: 2, errorClass: 0xd2, errorCode: 0x41 });
     for (const fn of [0x1a, 0x1b, 0x1c]) {
       expect(await p.job(Uint8Array.of(fn, 0, 1, 0, 0, 0, 0, 0))).toMatchObject({
         rosctr: 2,

@@ -6,7 +6,12 @@ import {
   decodeStartUploadResponse,
   decodeUploadResponse,
   decodeUserdata,
+  decodeWriteResponse,
   encodeEndUpload,
+  encodePlcStop,
+  encodeWarmRestart,
+  encodeWriteRequest,
+  decodeControlResponse,
   encodeReadRequest,
   encodeS7,
   encodeSetup,
@@ -456,5 +461,96 @@ describe('opzioni', () => {
     expect(() => cpu.addBlock(Uint8Array.of(1, 2, 3))).toThrow();
     expect(() => cpu.addDb(70000, seq(1))).toThrow(RangeError);
     expect(() => cpu.addDb(1, new Uint8Array(70000))).toThrow(RangeError);
+  });
+});
+
+describe('write var e stop/avvio (allowlist)', () => {
+  const wr = (
+    area: ReadItem['area'],
+    start: number,
+    data: Uint8Array,
+    db = 0,
+  ): ReturnType<typeof encodeWriteRequest> =>
+    encodeWriteRequest([{ area, db, start, size: 'BYTE', count: data.length, data }]);
+
+  it('write var su MW10 poi read var rilegge il valore scritto', async () => {
+    const cpu = new FakeCpu();
+    const p = await new TestPeer(cpu).open();
+    const { param, data } = wr('M', 10, Uint8Array.of(0x12, 0x34));
+    const r = await p.job(param, data);
+    expect(r).toMatchObject({ rosctr: 3, errorClass: 0, errorCode: 0 });
+    expect(decodeWriteResponse(r!.param, r!.data)[0]!.returnCode).toBe(0xff);
+    const back = await p.job(
+      encodeReadRequest([{ area: 'M', db: 0, start: 10, size: 'BYTE', count: 2 }]),
+    );
+    const item = decodeReadResponse(back!.param, back!.data)[0]!;
+    expect(item).toMatchObject({ ok: true, data: Uint8Array.of(0x12, 0x34) });
+  });
+
+  it('write var su DB inesistente → 0x0A; oltre la dimensione di M → 0x05; stato invariato per quegli item', async () => {
+    const cpu = new FakeCpu();
+    const p = await new TestPeer(cpu).open();
+    const before = cpu.snapshot();
+    const a = wr('DB', 0, Uint8Array.of(1), 99);
+    const ra = await p.job(a.param, a.data);
+    expect(decodeWriteResponse(ra!.param, ra!.data)[0]!.returnCode).toBe(0x0a);
+    const b = wr('M', 2047, Uint8Array.of(1, 2));
+    const rb = await p.job(b.param, b.data);
+    expect(decodeWriteResponse(rb!.param, rb!.data)[0]!.returnCode).toBe(0x05);
+    expect(cpu.snapshot()).toBe(before);
+  });
+
+  it('PLC stop porta mode a STOP; secondo stop → para 0x07; SZL 0x0424 ora dice STOP', async () => {
+    const cpu = new FakeCpu();
+    const p = await new TestPeer(cpu).open();
+    const r1 = await p.job(encodePlcStop());
+    expect(r1).toMatchObject({ rosctr: 3, errorClass: 0, errorCode: 0 });
+    expect(decodeControlResponse(r1!.param).code).toBe(0);
+    expect(cpu.mode).toBe('STOP');
+    const r2 = await p.job(encodePlcStop());
+    expect(decodeControlResponse(r2!.param).code).toBe(0x07);
+    const szl = (await p.readSzl(0x0424, 0)).list!;
+    expect(szl.records[0]![3]! & 0x0f).toBe(0x4);
+  });
+
+  it('warm restart porta mode a RUN; secondo → para 0x03', async () => {
+    const cpu = new FakeCpu({ mode: 'STOP' });
+    const p = await new TestPeer(cpu).open();
+    const r1 = await p.job(encodeWarmRestart());
+    expect(decodeControlResponse(r1!.param).code).toBe(0);
+    expect(cpu.mode).toBe('RUN');
+    const r2 = await p.job(encodeWarmRestart());
+    expect(decodeControlResponse(r2!.param).code).toBe(0x03);
+    const szl = (await p.readSzl(0x0424, 0)).list!;
+    expect(szl.records[0]![3]! & 0x0f).toBe(0x8);
+  });
+
+  it('con protezione 2 la write var risponde 0xD241 e non cambia la memoria', async () => {
+    const cpu = new FakeCpu({ protectionLevel: 2 });
+    const p = await new TestPeer(cpu).open();
+    const before = cpu.snapshot();
+    const { param, data } = wr('M', 10, Uint8Array.of(0x55));
+    const r = await p.job(param, data);
+    expect(r).toMatchObject({ rosctr: 2, errorClass: 0xd2, errorCode: 0x41 });
+    const s = await p.job(encodePlcStop());
+    expect(s).toMatchObject({ rosctr: 2, errorClass: 0xd2, errorCode: 0x41 });
+    const w = await p.job(encodeWarmRestart());
+    expect(w).toMatchObject({ rosctr: 2, errorClass: 0xd2, errorCode: 0x41 });
+    expect(cpu.snapshot()).toBe(before);
+    const back = await p.job(read(1));
+    expect(decodeReadResponse(back!.param, back!.data)[0]).toMatchObject({ ok: true });
+  });
+
+  it('0x28 con servizio _MODU resta ERR.PROTECTED (fuori allowlist)', async () => {
+    const cpu = new FakeCpu();
+    const p = await new TestPeer(cpu).open();
+    const before = cpu.snapshot();
+    const modu = Uint8Array.from([
+      ...[0x28, 0, 0, 0, 0, 0, 0, 0xfd, 0, 0, 5],
+      ...[...'_MODU'].map((c) => c.charCodeAt(0)),
+    ]);
+    const r = await p.job(modu);
+    expect(r).toMatchObject({ rosctr: 2, errorClass: 0xd2, errorCode: 0x41 });
+    expect(cpu.snapshot()).toBe(before);
   });
 });
