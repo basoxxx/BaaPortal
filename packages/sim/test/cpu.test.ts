@@ -1,7 +1,15 @@
 import { compileBlock } from '@baaportal/mc7';
 import type { AwlContext } from '@baaportal/awl';
 import { describe, expect, it } from 'vitest';
-import { SimCpu, type SimCpuOptions, type SimEvent } from '../src';
+import {
+  OPS,
+  SimCpu,
+  dateTimeBcd,
+  ob100StartInfo,
+  ob1StartInfo,
+  type SimCpuOptions,
+  type SimEvent,
+} from '../src';
 import { buildProgram, EMPTY, el, m, sec, type BlockSpec } from './programHelpers';
 
 const PROPS: SimCpuOptions['props'] = {
@@ -16,16 +24,19 @@ function makeCpu(
   specs: BlockSpec[],
   over: Partial<SimCpuOptions['props']> = {},
   step = 0,
+  nowFn?: () => number,
 ): { cpu: SimCpu; clock: { t: number } } {
   const clock = { t: 0 };
   const cpu = new SimCpu({
     cpuTypeId: 'cpu-315-2-pn-dp',
     props: { ...PROPS, ...over },
-    now: () => {
-      const v = clock.t;
-      clock.t += step;
-      return v;
-    },
+    now:
+      nowFn ??
+      (() => {
+        const v = clock.t;
+        clock.t += step;
+        return v;
+      }),
   });
   for (const b of buildProgram(specs).list()) cpu.program.put(b);
   return { cpu, clock };
@@ -273,16 +284,11 @@ describe('SimCpu', () => {
   });
 
   it('stats: min/max/ultimo', () => {
-    const { cpu, clock } = makeCpu([ob1('\tNOP 0;')]);
+    // Letture dell'orologio: AVVIO, poi inizio e fine di ogni ciclo.
+    const seq = [0, 0, 10, 100, 104, 200, 225];
+    const { cpu } = makeCpu([ob1('\tNOP 0;')], {}, 0, () => seq.shift() ?? 0);
     cpu.run();
-    // Ogni ciclo legge l'orologio due volte (inizio e fine): lo avanzo fra le due letture.
-    const durations = [10, 4, 25];
-    for (const d of durations) {
-      let n = 0;
-      const base = clock.t;
-      (cpu as unknown as { now: () => number }).now = () => (n++ === 0 ? base : base + d);
-      cpu.cycle();
-    }
+    for (let i = 0; i < 3; i++) cpu.cycle();
     expect(cpu.stats()).toEqual({ last: 25, min: 4, max: 25, cycles: 3 });
   });
 
@@ -305,5 +311,114 @@ describe('SimCpu', () => {
       'mode:STOP',
     ]);
     expect(cpu.diagnostics.find((d) => d.code === 'STOP_RICHIESTO')?.detail).toBe('prova');
+  });
+
+  it('un errore non SimError in un OB porta comunque in STOP e viene rilanciato', () => {
+    const orig = OPS['NOP'];
+    OPS['NOP'] = () => {
+      throw new Error('boom');
+    };
+    try {
+      const { cpu } = makeCpu([ob1('\tNOP 0;')]);
+      cpu.run();
+      cpu.memory.physOut[0] = 1;
+      expect(() => cpu.cycle()).toThrow('boom');
+      expect(cpu.mode).toBe('STOP');
+      expect(cpu.memory.physOut[0]).toBe(0);
+      expect(cpu.diagnostics.at(-1)?.detail).toContain('boom');
+      const b = makeCpu([ob1('\tNOP 0;'), { kind: 'OB', number: 100, networks: ['\tNOP 0;'] }]);
+      expect(() => b.cpu.run()).toThrow('boom');
+      expect(b.cpu.mode).toBe('STOP');
+    } finally {
+      OPS['NOP'] = orig!;
+    }
+  });
+
+  it('senza OB1 in RUN le immagini di processo si aggiornano lo stesso', () => {
+    const { cpu } = makeCpu([], { clockMemory: { enabled: true, byte: 10 } });
+    cpu.run();
+    cpu.memory.physIn[0] = 7;
+    cpu.memory.Q[2] = 9;
+    const r = cpu.cycle();
+    expect(r).toMatchObject({ ran: true, ok: true });
+    expect(cpu.memory.I[0]).toBe(7);
+    expect(cpu.memory.physOut[2]).toBe(9);
+    expect(cpu.cycle().ran).toBe(true);
+    cpu.stop();
+    expect(cpu.cycle().ran).toBe(false);
+  });
+
+  it('ciclo breve ma orologio che salta oltre il massimo → TEMPO_CICLO_SUPERATO', () => {
+    const { cpu } = makeCpu([ob1('\tSET;\n\t= Q 0.0;')], {}, 200);
+    cpu.run();
+    const r = cpu.cycle();
+    expect(r.ok).toBe(false);
+    expect(r.error?.code).toBe('TEMPO_CICLO_SUPERATO');
+    expect(cpu.mode).toBe('STOP');
+    expect(cpu.memory.physOut[0]).toBe(0);
+  });
+
+  it('Date_And_Time in BCD e intestazione di OB100', () => {
+    const t = new Date(2026, 9, 24, 13, 5, 9, 123).getTime();
+    const b = ob1StartInfo(true, { prev: 0, min: 0, max: 0 }, t);
+    // Giorno della settimana: 1 = domenica, 7 = sabato (24/10/2026 è sabato).
+    expect(Array.from(b.subarray(12, 20))).toEqual([
+      0x26, 0x10, 0x24, 0x13, 0x05, 0x09, 0x12, 0x37,
+    ]);
+    expect(dateTimeBcd(t)).toEqual(Array.from(b.subarray(12, 20)));
+    expect(Array.from(ob100StartInfo(t).subarray(0, 4))).toEqual([0x13, 0x81, 27, 100]);
+  });
+
+  it('merker di clock: tutti gli 8 bit a tempi fissi', () => {
+    const { cpu, clock } = makeCpu([ob1('\tNOP 0;')], {
+      clockMemory: { enabled: true, byte: 10 },
+    });
+    cpu.run();
+    const table: [number, number][] = [
+      [0, 0x00],
+      [50, 0x01],
+      [100, 0x02],
+      [1234, 0xd0],
+      [250, 0x0d],
+    ];
+    for (const [t, expected] of table) {
+      clock.t = t;
+      cpu.cycle();
+      expect(cpu.memory.M[10], `t=${t}`).toBe(expected);
+    }
+  });
+
+  it('il merker di clock si aggiorna anche dentro il ciclo (onTick)', () => {
+    // Letture: AVVIO, inizio ciclo, tick (dopo 1024 istruzioni), fine ciclo.
+    const seq = [0, 0, 500, 500];
+    const { cpu } = makeCpu(
+      [ob1('\tNOP 0;\n'.repeat(1100) + '\tL MB 10;\n\tT MB 50;')],
+      { clockMemory: { enabled: true, byte: 10 }, maxCycleMs: 10000 },
+      0,
+      () => seq.shift() ?? 500,
+    );
+    cpu.run();
+    expect(cpu.cycle().ok).toBe(true);
+    expect(cpu.memory.M[50]).toBe(0x32);
+  });
+
+  it('un ascoltatore che lancia non interrompe le transizioni', () => {
+    const { cpu } = makeCpu([ob1('\tNOP 0;')]);
+    cpu.onEvent(() => {
+      throw new Error('ascoltatore');
+    });
+    cpu.run();
+    expect(cpu.mode).toBe('RUN');
+  });
+
+  it('diagnostica limitata a 100 voci, le più vecchie si perdono', () => {
+    const { cpu } = makeCpu([ob1('\tNOP 0;')]);
+    for (let i = 0; i < 120; i++) {
+      cpu.run();
+      cpu.stop(`n${i}`);
+    }
+    expect(cpu.diagnostics).toHaveLength(100);
+    expect(cpu.diagnostics.at(-1)?.detail).toBe('n119');
+    expect(cpu.diagnostics[0]?.detail).not.toBe('n0');
   });
 });

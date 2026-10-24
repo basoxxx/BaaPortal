@@ -31,6 +31,8 @@ export type SimEvent =
   | { type: 'cycle'; result: CycleResult };
 
 export interface CycleResult {
+  /** false se la CPU non era in RUN (nessun ciclo eseguito). */
+  ran: boolean;
   ok: boolean;
   error?: DiagEntry;
   elapsedMs: number;
@@ -41,6 +43,9 @@ const TIMER_COUNT = 2048;
 const COUNTER_COUNT = 2048;
 
 /** Periodo in ms dei bit 0..7 del merker di clock (manuale CPU 31x: 10, 5, 2.5, 2, 1.25, 1, 0.625, 0.5 Hz). */
+/** Voci di diagnostica conservate (le più vecchie si perdono). */
+const MAX_DIAGNOSTICS = 100;
+
 const CLOCK_PERIODS_MS = [100, 200, 400, 500, 800, 1000, 1600, 2000];
 
 export class SimCpu {
@@ -148,12 +153,16 @@ export class SimCpu {
 
   /** Un ciclo OB1 completo; in STOP non fa niente. */
   cycle(): CycleResult {
-    if (this._mode !== 'RUN') return { ok: true, elapsedMs: 0 };
-    if (!this.program.get('OB', 1)) return { ok: true, elapsedMs: 0 };
+    if (this._mode !== 'RUN') return { ran: false, ok: true, elapsedMs: 0 };
     const start = this.now();
     const m = this.memory;
     this.updateClock(start);
     m.I.set(m.physIn);
+    if (!this.program.get('OB', 1)) {
+      // Senza OB1 il ciclo gira a vuoto: le immagini di processo si aggiornano lo stesso.
+      m.physOut.set(m.Q);
+      return { ran: true, ok: true, elapsedMs: 0 };
+    }
     const ctx = this.newContext(start);
     ctx.mem.L.set(
       ob1StartInfo(
@@ -166,19 +175,33 @@ export class SimCpu {
       runBlock(ctx, 'OB', 1);
     } catch (e) {
       const entry = this.fail(e);
-      const result: CycleResult = { ok: false, error: entry, elapsedMs: this.now() - start };
-      this.emit({ type: 'cycle', result });
-      return result;
+      return this.failedCycle(entry, start);
     }
+    const elapsedMs = this.now() - start;
+    if (elapsedMs > this.props.maxCycleMs)
+      return this.failedCycle(
+        this.fail(new SimError('TEMPO_CICLO_SUPERATO', `oltre ${this.props.maxCycleMs} ms`)),
+        start,
+      );
     m.physOut.set(m.Q);
     this.firstCycle = false;
-    const elapsedMs = this.now() - start;
     const s = this.st;
     s.last = elapsedMs;
     s.min = s.cycles === 0 ? elapsedMs : Math.min(s.min, elapsedMs);
     s.max = Math.max(s.max, elapsedMs);
     s.cycles++;
-    const result: CycleResult = { ok: true, elapsedMs };
+    const result: CycleResult = { ran: true, ok: true, elapsedMs };
+    this.emit({ type: 'cycle', result });
+    return result;
+  }
+
+  private failedCycle(entry: DiagEntry, start: number): CycleResult {
+    const result: CycleResult = {
+      ran: true,
+      ok: false,
+      error: entry,
+      elapsedMs: this.now() - start,
+    };
     this.emit({ type: 'cycle', result });
     return result;
   }
@@ -223,12 +246,19 @@ export class SimCpu {
     this.memory.M[c.byte] = v;
   }
 
-  /** Errore di programmazione: voce di diagnostica e STOP. */
+  /** Qualsiasi errore: voce di diagnostica e STOP; solo i non-SimError (bug) vengono rilanciati. */
   private fail(e: unknown): DiagEntry {
-    if (!(e instanceof SimError)) throw e;
-    const entry = diagFromError(this.now(), e);
+    const entry =
+      e instanceof SimError
+        ? diagFromError(this.now(), e)
+        : {
+            time: this.now(),
+            code: 'MC7_NON_ESEGUIBILE' as const,
+            detail: `errore interno: ${e instanceof Error ? e.message : String(e)}`,
+          };
     this.record(entry);
     this.toStop();
+    if (!(e instanceof SimError)) throw e;
     return entry;
   }
 
@@ -240,6 +270,7 @@ export class SimCpu {
 
   private record(entry: DiagEntry): void {
     this.diag.push(entry);
+    if (this.diag.length > MAX_DIAGNOSTICS) this.diag.shift();
     this.emit({ type: 'diagnostic', entry });
   }
 
@@ -250,6 +281,12 @@ export class SimCpu {
   }
 
   private emit(e: SimEvent): void {
-    for (const cb of [...this.listeners]) cb(e);
+    for (const cb of [...this.listeners]) {
+      try {
+        cb(e);
+      } catch {
+        // Un ascoltatore che lancia non deve interrompere una transizione della CPU.
+      }
+    }
   }
 }
