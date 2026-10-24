@@ -11,6 +11,7 @@ import {
 } from '@codemirror/autocomplete';
 import { setDiagnostics } from '@codemirror/lint';
 import { type AwlDiagnostic, type Completion, type Mnemonic } from '@baaportal/awl';
+import { getSettings } from '../../settings/settings';
 import { awlHighlight, displayText, storedText, toLintDiagnostics } from './awlExtensions';
 import { CommittedEditor, type CommittedEditorHandle, type EditorCodec } from './CommittedEditor';
 
@@ -72,6 +73,8 @@ export function AwlEditor(p: AwlEditorProps): React.JSX.Element {
   // Le estensioni si leggono una volta sola; leggono le proprietà attuali da `latest`.
   const extensions = useMemo<Extension[]>(() => {
     const source = (c: CompletionContext): CompletionResult | null => {
+      // Impostazioni → Comportamento editor: il completamento si può disattivare.
+      if (!getSettings().editor.autocomplete) return null;
       const r = latest.current.complete(c.pos, c.state.doc.toString());
       if (r.options.length === 0) return null;
       return {
@@ -102,7 +105,7 @@ export function AwlEditor(p: AwlEditorProps): React.JSX.Element {
         u.changes.iterChanges((_a, _b, _c, _d, ins) => {
           last = ins.toString().slice(-1);
         });
-        if (TRIGGERS.has(last))
+        if (TRIGGERS.has(last) && getSettings().editor.autocomplete)
           queueMicrotask(() => {
             if (core.current?.getView() === u.view) startCompletion(u.view);
           });
@@ -121,6 +124,7 @@ export function AwlEditor(p: AwlEditorProps): React.JSX.Element {
     p.ref,
     () => ({
       focusAt: (o) => core.current?.focusAt(o),
+      selectRange: (a, b) => core.current?.selectRange(a, b),
       getText: () => core.current?.getText() ?? '',
       getView: () => core.current?.getView() ?? null,
     }),

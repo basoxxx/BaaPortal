@@ -20,7 +20,16 @@
       "RESERVED": "Questo nome è riservato dal sistema operativo: scegline un altro.",
       "TRAILING_DOT_OR_SPACE": "Il nome non può terminare con un punto o uno spazio.",
       "EXISTS": "Esiste già un progetto con questo nome in questa cartella."
-    }
+    },
+    "baapz": {
+      "NON_ZIP": "Il file non è un archivio BaaPortal valido.",
+      "MANIFESTO_MANCANTE": "L'archivio non contiene il manifesto: non è un archivio BaaPortal.",
+      "VERSIONE_FUTURA": "L'archivio è stato creato con una versione più recente di BaaPortal. Aggiorna l'applicazione.",
+      "PROGETTO_MANCANTE": "L'archivio non contiene il file di progetto atteso.",
+      "PROGETTO_ILLEGGIBILE": "Il progetto contenuto nell'archivio è danneggiato."
+    },
+    "baapzFailed": "Impossibile ritirare l'archivio: {{message}} (codice {{code}}). Nessun file è stato scritto.",
+    "archiveFailed": "Impossibile archiviare il progetto: {{message}} (codice {{code}}). Nessun file è stato scritto."
   },
   "confirm": {
     "unsaved": {
@@ -31,13 +40,20 @@
       "cancel": "Annulla"
     }
   },
+  "status": {
+    "compiling": "Compilazione in corso…",
+    "cancel": "Interrompi",
+    "progress": "Avanzamento"
+  },
   "messages": {
+    "replaced": "Sostituiti {{replaced}} testi, saltati {{skipped}}.",
     "detachBlocked": "Impossibile aprire la finestra separata: l'editor resta nell'area di lavoro.",
     "created": "Progetto \"{{name}}\" creato.",
     "opened": "Progetto \"{{name}}\" aperto.",
     "saved": "Progetto \"{{name}}\" salvato.",
     "recentMissing": "Il progetto \"{{name}}\" non è stato trovato: è stato tolto dall'elenco.",
     "standardTableLocked": "La Tabella delle variabili standard non può essere eliminata.",
+    "referenceCopyOnly": "Il progetto di riferimento è in sola lettura: gli oggetti si possono solo copiare nel progetto.",
     "pasteNoNumber": "Nessun numero libero: {{count}} oggetti non sono stati incollati.",
     "recoveryWriteFailed": "Impossibile scrivere la copia di recupero automatico: le modifiche non salvate potrebbero andare perse in caso di chiusura anomala.",
     "recovered": "Modifiche di \"{{name}}\" recuperate.",
@@ -52,6 +68,7 @@
     "fileDialogFailed": "Impossibile aprire la finestra di scelta dei file: {{message}}",
     "sourceReplaceChanged": "Sorgente \"{{name}}\": mentre si confermava il progetto è cambiato e gli oggetti da sostituire non sono più quelli elencati. Nessuna modifica: ripetere \"Genera blocchi dalla sorgente\".",
     "actionFailed": "Operazione non riuscita: {{message}}",
+    "compileInterrupted": "Compilazione interrotta: i blocchi già compilati restano compilati.",
     "compileFailed": "Compilazione non riuscita: {{message}}",
     "blockExported": "Blocco \"{{name}}\" esportato in {{path}}.",
     "blockExportFailed": "Impossibile esportare il blocco \"{{name}}\": {{message}}",
@@ -62,7 +79,12 @@
     "importZipInvalid": "Impossibile leggere l'archivio \"{{name}}\": {{message}}",
     "importZipEmpty": "L'archivio \"{{name}}\" non contiene blocchi (cartella blocchi/).",
     "importFailed": "Importazione dei blocchi non riuscita: {{message}}",
-    "importReplaceChanged": "Il progetto è cambiato durante la domanda: l'importazione è stata annullata."
+    "importReplaceChanged": "Il progetto è cambiato durante la domanda: l'importazione è stata annullata.",
+    "tagsImported": "Importazione variabili da \"{{name}}\": creati {{created}}, aggiornati {{updated}}, scartati {{skipped}}.",
+    "tagsImportFailed": "Impossibile importare le variabili da \"{{name}}\": {{message}}",
+    "tagsExported": "Tabella \"{{name}}\" esportata in \"{{path}}\".",
+    "tagsExportFailed": "Impossibile esportare la tabella \"{{name}}\": {{message}}",
+    "archived": "Progetto \"{{name}}\" archiviato in \"{{path}}\"."
   },
   "commands": {
     "project.new": "Nuovo…",
@@ -70,6 +92,7 @@
     "project.close": "Chiudi",
     "project.save": "Salva",
     "project.saveAs": "Salva con nome…",
+    "project.openReference": "Apri progetto di riferimento…",
     "project.archive": "Archivia…",
     "project.retrieve": "Ritira archivio…",
     "project.print": "Stampa…",
@@ -83,6 +106,7 @@
     "edit.delete": "Elimina",
     "edit.rename": "Rinomina",
     "edit.findReplace": "Trova e sostituisci…",
+    "edit.replace": "Sostituisci…",
     "edit.selectAll": "Seleziona tutto",
     "edit.compile": "Compila → Software (solo modifiche)",
     "view.navigation": "Navigazione del progetto",
@@ -136,6 +160,28 @@
     "autoHide": "Nascondi automaticamente",
     "pin": "Fissa il pannello",
     "toggleReference": "Mostra o nascondi i progetti di riferimento"
+  },
+  "find": {
+    "find": "Trova",
+    "replaceWith": "Sostituisci con",
+    "matchCase": "Maiuscole/minuscole",
+    "wholeWord": "Parola intera",
+    "regex": "Espressione regolare",
+    "scope": "Ambito",
+    "scopeActive": "Editor attivo",
+    "scopeProject": "Tutto il progetto",
+    "search": "Trova",
+    "replace": "Sostituisci",
+    "replaceAll": "Sostituisci tutto",
+    "stale": "Risultati non aggiornati, ripeti la ricerca",
+    "count_one": "{{count}} risultato",
+    "count_other": "{{count}} risultati",
+    "results": "Risultati",
+    "invalidRegex": "Espressione regolare non valida: {{detail}}",
+    "reason": {
+      "PROTETTO": "Blocco protetto: il testo non si può modificare.",
+      "MC7_GREZZO": "Codice MC7 non decodificabile: il testo non si può modificare."
+    }
   },
   "toolbar": {
     "search": "Ricerca"
@@ -239,6 +285,7 @@
     }
   },
   "history": {
+    "replace": "Sostituisci testo",
     "author": "Autore del progetto",
     "comment": "Commento del progetto",
     "addDevice": "Aggiungi dispositivo",
@@ -268,7 +315,8 @@
     "applySource": "Genera blocchi dalla sorgente",
     "generateSource": "Genera sorgente dai blocchi",
     "editSource": "Modifica sorgente",
-    "importBlocks": "Importa blocchi"
+    "importBlocks": "Importa blocchi",
+    "importTags": "Importa variabili"
   },
   "inspector": {
     "tab": {
@@ -356,6 +404,25 @@
     "tag": "Variabile_1",
     "constant": "Costante_1"
   },
+  "settings": {
+    "title": "Impostazioni",
+    "general": "Generale",
+    "appearance": "Aspetto",
+    "editor": "Comportamento editor",
+    "language": "Lingua dell'interfaccia",
+    "author": "Autore predefinito dei nuovi progetti",
+    "recovery": "Salvataggio di recupero",
+    "recoveryOff": "Disattivato",
+    "minutes_one": "Ogni minuto",
+    "minutes_other": "Ogni {{count}} minuti",
+    "uiScale": "Scala dell'interfaccia",
+    "mnemonic": "Mnemonica SIMATIC",
+    "fontSize": "Dimensione del carattere",
+    "tabSize": "Larghezza tabulazione",
+    "autocomplete": "Completamento automatico",
+    "lineNumbers": "Numeri di riga",
+    "reset": "Ripristina predefiniti"
+  },
   "dialog": {
     "ok": "OK",
     "cancel": "Annulla"
@@ -439,6 +506,10 @@
       "allTags": "Variabili PLC",
       "source": "Sorgenti esterne"
     }
+  },
+  "reference": {
+    "copyIntoProject": "Copia nel progetto",
+    "close": "Chiudi il riferimento {{name}}"
   },
   "objects": {
     "deleteTitle": "Elimina",
@@ -711,6 +782,7 @@
     }
   },
   "compile": {
+    "interrupted": "Compilazione interrotta",
     "filterBlk": "Blocco MC7 (*.blk)",
     "filterImport": "Blocchi MC7 e raccolte del kit (*.blk, *.zip)",
     "replaceTitle": "Sostituisci blocchi",
@@ -813,6 +885,47 @@
       "UNSUPPORTED": "Non supportato dal compilatore: {{detail}}",
       "VALORI_ATTUALI_PERSI": "Il DB ricompilato usa i valori iniziali: i valori attuali dell'originale non si conservano.",
       "VALORI_INIZIALI_DA_CAMPIONE": "Valori iniziali dei dati statici interni degli SFB presi dal blocco reale {{sample}}."
+    }
+  },
+  "tagIo": {
+    "import": "Importa variabili…",
+    "export": "Esporta variabili…",
+    "filterXlsx": "Excel (*.xlsx)",
+    "filterCsv": "CSV (*.csv)",
+    "reportTitle": "Importazione variabili",
+    "reportFile": "File \"{{file}}\" nella tabella \"{{table}}\".",
+    "created": "Creati: {{count}}",
+    "updated": "Aggiornati: {{count}}",
+    "skipped": "Scartati: {{count}}",
+    "skippedList": "Righe scartate",
+    "skippedRow": "Riga {{line}}{{sheet}}: {{reason}}",
+    "sheet": {
+      "tags": "(foglio variabili)",
+      "constants": "(foglio costanti)"
+    },
+    "formatErr": {
+      "NON_ZIP": "Il file non è un archivio xlsx valido.",
+      "NON_XLSX": "Il file non è una cartella di lavoro Excel (xlsx).",
+      "FOGLIO_ILLEGGIBILE": "Un foglio del file non si può leggere."
+    },
+    "err": {
+      "COLONNA_MANCANTE": "manca la colonna {{detail}}",
+      "TIPO_NON_VALIDO": "tipo di dati non valido: {{detail}}",
+      "INDIRIZZO_NON_VALIDO": "indirizzo non valido: {{detail}}",
+      "NOME_VUOTO": "nome vuoto",
+      "NOME_DOPPIO": "nome ripetuto nel file: {{detail}}",
+      "RIGA_ILLEGGIBILE": "riga illeggibile",
+      "VALORE_VUOTO": "valore vuoto per {{detail}}",
+      "NOME_IN_ALTRA_TABELLA": "nome già usato nella tabella \"{{detail}}\""
+    }
+  },
+  "archive": {
+    "filter": "Archivio BaaPortal (*.baapz)",
+    "overwrite": {
+      "title": "File esistente",
+      "message": "Il file \"{{path}}\" esiste già. Vuoi sovrascriverlo?",
+      "yes": "Sovrascrivi",
+      "no": "Annulla"
     }
   }
 }

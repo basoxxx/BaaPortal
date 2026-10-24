@@ -23,6 +23,7 @@ export class FakeBridge implements BaaBridge {
   openDialogResults: (string | null)[] = [];
   saveDialogResults: (string | null)[] = [];
   // Come i dialoghi di progetto: una risposta per chiamata; a coda vuota [] / null. Le chiamate si registrano.
+  folderResults: (string | null)[] = [];
   openFileResults: string[][] = [];
   saveFileResults: (string | null)[] = [];
   openFileCalls: { filters: FileFilter[]; multi?: boolean }[] = [];
@@ -90,7 +91,7 @@ export class FakeBridge implements BaaBridge {
     return this.saveDialogResults.shift() ?? null;
   }
   async showSelectFolderDialog() {
-    return null;
+    return this.folderResults.shift() ?? null;
   }
   async showOpenFileDialog(opts: { filters: FileFilter[]; multi?: boolean }) {
     this.openFileCalls.push(opts);

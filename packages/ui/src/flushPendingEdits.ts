@@ -22,8 +22,13 @@ export function flushDocument(doc: Document): void {
   if (isTextField(el)) el.blur();
 }
 
+/** Conferma le bozze solo nelle finestre separate: il campo con il focus nella principale resta com'è. */
+export function flushDetachedEdits(): void {
+  for (const doc of detachedDocuments) flushDocument(doc);
+}
+
 /** Conferma le bozze nella finestra principale e in quelle separate. */
 export function flushPendingEdits(): void {
   flushDocument(document);
-  for (const doc of detachedDocuments) flushDocument(doc);
+  flushDetachedEdits();
 }

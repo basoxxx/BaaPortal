@@ -117,7 +117,7 @@ export function groupsOfNodes(nodeIds: Iterable<string>) {
   return out;
 }
 
-function itemsOf(dev: PlcDevice, refs: ObjectRef[]): ClipboardItem[] {
+export function itemsOf(dev: PlcDevice, refs: ObjectRef[]): ClipboardItem[] {
   const out: ClipboardItem[] = [];
   for (const r of refs) {
     if (r.kind === 'block') {
@@ -134,7 +134,7 @@ function itemsOf(dev: PlcDevice, refs: ObjectRef[]): ClipboardItem[] {
   return out;
 }
 
-const itemName = (i: ClipboardItem) =>
+export const itemName = (i: ClipboardItem) =>
   i.type === 'block' ? i.block.name : i.type === 'udt' ? i.udt.name : i.table.name;
 const itemRef = (deviceId: string, i: ClipboardItem): ObjectRef =>
   i.type === 'block'
@@ -164,7 +164,7 @@ export function copyNodes(ctx: ObjectCtx, nodeIds: Iterable<string>, cut: boolea
   return true;
 }
 
-function reportSkipped(store: StoreApi<AppState>, skipped: number): void {
+export function reportSkipped(store: StoreApi<AppState>, skipped: number): void {
   if (skipped > 0) {
     store.getState().pushMessage({
       severity: 'info',

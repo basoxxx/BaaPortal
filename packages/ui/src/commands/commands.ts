@@ -3,7 +3,10 @@ import type { BaaBridge } from '../bridge';
 import type { IconName } from '../icons';
 import type { ProjectService } from '../services/projectService';
 import type { AppState, EditAction, PanelName } from '../state/store';
+import { getProgress } from '../project/progress';
 import { compileProgram } from '../project/compile/compileActions';
+import { openReference } from '../project/reference/referenceStore';
+import { requestFind } from '../search/findActions';
 import { targetPlcId } from '../project/navigation/treeIds';
 
 export type CommandId =
@@ -12,6 +15,7 @@ export type CommandId =
   | 'project.close'
   | 'project.save'
   | 'project.saveAs'
+  | 'project.openReference'
   | 'project.archive'
   | 'project.retrieve'
   | 'project.print'
@@ -25,6 +29,7 @@ export type CommandId =
   | 'edit.delete'
   | 'edit.rename'
   | 'edit.findReplace'
+  | 'edit.replace'
   | 'edit.selectAll'
   | 'edit.compile'
   | 'edit.compileFull'
@@ -151,8 +156,23 @@ const list: Command[] = [
     isEnabled: hasDoc,
     run: async ({ service }) => void (await service.saveAs()),
   }),
-  def('project.archive'),
-  def('project.retrieve'),
+  def('project.openReference', {
+    isEnabled: always,
+    run: async ({ store, bridge }) => {
+      const path = await bridge.showOpenProjectDialog();
+      if (!path) return;
+      await openReference(path, bridge);
+      store.getState().setReferenceProjectsOpen(true);
+    },
+  }),
+  def('project.archive', {
+    isEnabled: hasDoc,
+    run: async ({ service }) => void (await service.archive()),
+  }),
+  def('project.retrieve', {
+    isEnabled: always,
+    run: async ({ service }) => void (await service.retrieve()),
+  }),
   def('project.print', { icon: 'print' }),
   def('project.printPreview'),
   def('project.exit', { isEnabled: always, run: ({ service }) => service.handleCloseRequest() }),
@@ -174,18 +194,29 @@ const list: Command[] = [
   editCommand('edit.paste', 'paste', 'Mod+V', 'paste'),
   editCommand('edit.delete', 'delete', 'Delete', 'delete'),
   editCommand('edit.rename', 'rename', 'F2'),
-  def('edit.findReplace', { icon: 'search' }),
+  def('edit.findReplace', {
+    icon: 'search',
+    shortcut: 'Mod+F',
+    isEnabled: hasDoc,
+    run: ({ store }) => requestFind(store, 'find'),
+  }),
+  def('edit.replace', {
+    shortcut: 'Mod+H',
+    isEnabled: hasDoc,
+    run: ({ store }) => requestFind(store, 'replace'),
+  }),
   editCommand('edit.selectAll', 'selectAll', 'Mod+A'),
   def('edit.compile', {
     icon: 'compile',
-    isEnabled: hasPlc,
+    shortcut: 'Mod+B',
+    isEnabled: (s) => hasPlc(s) && !getProgress(),
     run: ({ store, bridge }) => {
       const deviceId = targetPlcId(store.getState());
       if (deviceId) compileProgram({ store, bridge }, deviceId, 'changes');
     },
   }),
   def('edit.compileFull', {
-    isEnabled: hasPlc,
+    isEnabled: (s) => hasPlc(s) && !getProgress(),
     run: ({ store, bridge }) => {
       const deviceId = targetPlcId(store.getState());
       if (deviceId) compileProgram({ store, bridge }, deviceId, 'full');
@@ -217,7 +248,10 @@ const list: Command[] = [
   def('online.startCpu', { icon: 'startCpu' }),
   def('online.stopCpu', { icon: 'stopCpu' }),
   def('online.diagnostics'),
-  def('options.settings'),
+  def('options.settings', {
+    isEnabled: always,
+    run: ({ store }) => store.getState().openDialog({ kind: 'settings' }),
+  }),
   def('tools.crossReferences'),
   def('tools.callStructure'),
   def('tools.collectCpuData', {

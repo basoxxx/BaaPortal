@@ -1,6 +1,9 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { Mc7Diagnostic, Project } from '@baaportal/project';
+import type { ImportSummary } from '../project/navigation/tagTableIo';
 import * as wa from './workArea';
+import type { FindRequest, FindUi, TagReveal } from '../search/findState';
+import { initialFindUi } from '../search/findState';
 import { applyHistory, HISTORY_LIMIT, pushLimited, recordEdit, type HistoryEntry } from './history';
 
 export { HISTORY_LIMIT, type HistoryEntry };
@@ -12,7 +15,12 @@ export type StartAction =
   'open' | 'new' | 'migrate' | 'close' | 'firstSteps' | 'installed' | 'help' | 'language';
 /** Finestra modale aperta sopra la vista corrente. */
 export type DialogState =
-  { kind: 'addDevice' } | { kind: 'addBlock'; deviceId: string } | { kind: 'collectKit' } | null;
+  | { kind: 'addDevice' }
+  | { kind: 'addBlock'; deviceId: string }
+  | { kind: 'collectKit' }
+  | { kind: 'settings' }
+  | { kind: 'importTagsReport'; fileName: string; tableName: string; summary: ImportSummary }
+  | null;
 
 export type EditAction = 'cut' | 'copy' | 'paste' | 'delete' | 'rename' | 'selectAll';
 /** Chi riceve i comandi del menu Modifica: l'elemento (albero, griglia…) che ha il focus. */
@@ -38,6 +46,8 @@ export interface InfoTarget {
   sourceId: string;
   line: number;
   col: number;
+  /** Se c'è, il testo da selezionare (spostamenti nel testo mostrato). */
+  range?: { from: number; to: number };
 }
 /** Richiesta all'editor di una sorgente di portare il cursore in un punto (`n` la rende ripetibile). */
 export interface SourceReveal extends Omit<InfoTarget, 'kind'> {
@@ -82,6 +92,8 @@ export interface CompileState {
   files: Record<string, Uint8Array>;
   /** Diagnostiche (avvisi) dell'ultima compilazione riuscita di ogni blocco. */
   diagnostics: Record<string, Mc7Diagnostic[]>;
+  /** L'ultima compilazione è stata interrotta da Interrompi. */
+  interrupted: boolean;
 }
 /** Richiesta all'editor di un blocco di portare il cursore a rete e riga (da 1); `n` la rende ripetibile. */
 export interface CompileReveal {
@@ -89,6 +101,8 @@ export interface CompileReveal {
   blockId: string;
   network: number;
   line: number;
+  /** Se c'è, il testo da selezionare nel segmento (spostamenti nel testo mostrato). */
+  range?: { from: number; to: number };
   n: number;
 }
 export interface PanelState {
@@ -122,6 +136,16 @@ export interface AppState {
   referenceProjectsOpen: boolean;
   taskCard: TaskCardId;
   workArea: wa.WorkAreaState;
+  /** Trova e sostituisci: campi, opzioni e risultati dell'ultima ricerca. */
+  find: FindUi;
+  /** Chiede al pannello di dare il focus a un campo (`n` la rende ripetibile). */
+  findRequest: FindRequest | null;
+  /** Chiede all'editor delle variabili di selezionare una riga. */
+  tagReveal: TagReveal | null;
+  patchFind(patch: Partial<FindUi>): void;
+  setFindRequest(r: Omit<FindRequest, 'n'> | null): void;
+  revealTag(r: Omit<TagReveal, 'n'>): void;
+  clearTagReveal(n: number): void;
   setView(v: View): void;
   setPortal(p: PortalId): void;
   setStartAction(a: StartAction): void;
@@ -155,6 +179,7 @@ export interface AppState {
     summary: CompileSummary;
     compiled: Record<string, { hash: string; file: Uint8Array; diagnostics: Mc7Diagnostic[] }>;
     failed: string[];
+    interrupted?: boolean;
   }): void;
   /** Apre l'editor del blocco e chiede di portare il cursore a rete e riga. */
   openBlockAt(t: Omit<CompileReveal, 'n'>): void;
@@ -187,6 +212,7 @@ const emptyCompile = (): CompileState => ({
   hashes: {},
   files: {},
   diagnostics: {},
+  interrupted: false,
 });
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -219,6 +245,14 @@ export function createAppStore(now: () => Date = () => new Date()): StoreApi<App
     referenceProjectsOpen: false,
     taskCard: 'instructions',
     workArea: wa.initialWorkArea(),
+    find: initialFindUi(),
+    findRequest: null,
+    tagReveal: null,
+    patchFind: (patch) => set((s) => ({ find: { ...s.find, ...patch } })),
+    setFindRequest: (r) =>
+      set((s) => ({ findRequest: r ? { ...r, n: (s.findRequest?.n ?? 0) + 1 } : null })),
+    revealTag: (r) => set((s) => ({ tagReveal: { ...r, n: (s.tagReveal?.n ?? 0) + 1 } })),
+    clearTagReveal: (n) => set((s) => (s.tagReveal?.n === n ? { tagReveal: null } : s)),
     setView: (view) => set({ view }),
     setPortal: (portal) => set({ portal }),
     setStartAction: (startAction) => set({ startAction }),
@@ -232,6 +266,9 @@ export function createAppStore(now: () => Date = () => new Date()): StoreApi<App
         dialog: null,
         compile: emptyCompile(),
         compileReveal: null,
+        find: initialFindUi(),
+        findRequest: null,
+        tagReveal: null,
         history: { past: [], future: [] },
       }));
     },
@@ -320,8 +357,9 @@ export function createAppStore(now: () => Date = () => new Date()): StoreApi<App
     },
     clearReveal: (n) => set((s) => (s.reveal?.n === n ? { reveal: null } : s)),
     setInfoSubTab: (infoSubTab) => set({ infoSubTab }),
-    beginCompile: () => set((s) => ({ compile: { ...s.compile, rows: [], summary: null } })),
-    finishCompile: ({ rows, summary, compiled }) =>
+    beginCompile: () =>
+      set((s) => ({ compile: { ...s.compile, rows: [], summary: null, interrupted: false } })),
+    finishCompile: ({ rows, summary, compiled, interrupted }) =>
       set((s) => {
         const hashes = { ...s.compile.hashes };
         const files = { ...s.compile.files };
@@ -331,7 +369,9 @@ export function createAppStore(now: () => Date = () => new Date()): StoreApi<App
           files[id] = c.file;
           diagnostics[id] = c.diagnostics;
         }
-        return { compile: { rows, summary, hashes, files, diagnostics } };
+        return {
+          compile: { rows, summary, hashes, files, diagnostics, interrupted: interrupted ?? false },
+        };
       }),
     openBlockAt: (t) => {
       if (!get().doc) return;

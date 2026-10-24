@@ -2,17 +2,13 @@ import i18next, { type TFunction } from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import en from './en.json';
 import it from './it.json';
+import { getSettings, updateSettings } from '../settings/settings';
 
 export type Lang = 'it' | 'en';
-const STORAGE_KEY = 'baa.lang';
 
+/** La lingua scelta nelle impostazioni (che migrano la vecchia chiave `baa.lang`). */
 export function readSavedLang(): Lang {
-  try {
-    const v = localStorage.getItem(STORAGE_KEY);
-    return v === 'en' ? 'en' : 'it';
-  } catch {
-    return 'it';
-  }
+  return getSettings().general.language;
 }
 
 export async function initI18n(lang: Lang = readSavedLang()): Promise<void> {
@@ -30,11 +26,7 @@ export async function initI18n(lang: Lang = readSavedLang()): Promise<void> {
 }
 
 export async function setLanguage(lang: Lang): Promise<void> {
-  try {
-    localStorage.setItem(STORAGE_KEY, lang);
-  } catch {
-    /* storage non disponibile: la lingua vale solo per questa sessione */
-  }
+  updateSettings({ general: { language: lang } });
   await i18next.changeLanguage(lang);
 }
 

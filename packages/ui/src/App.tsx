@@ -9,8 +9,11 @@ import { i18next, initI18n, t } from './i18n';
 import { flushPendingEdits } from './flushPendingEdits';
 import { createProjectService } from './services/projectService';
 import { createRecoveryService, type RecoveryService } from './services/recoveryService';
+import { SettingsDialog } from './dialogs/SettingsDialog';
+import { applyDisplaySettings, useSettings } from './settings/settings';
 import { AddBlockDialog } from './project/dialogs/AddBlockDialog';
 import { AddDeviceDialog } from './project/dialogs/AddDeviceDialog';
+import { ImportTagsReport } from './project/dialogs/ImportTagsReport';
 import { KitDialog } from './project/dialogs/KitDialog';
 import { DetachedWindows } from './project/workarea/DetachedWindow';
 import { PortalView } from './portal/PortalView';
@@ -44,10 +47,14 @@ function Shell() {
   const view = useAppStore((s) => s.view);
   const dialog = useAppStore((s) => s.dialog);
   const close = () => store.getState().closeDialog();
+  const [settings] = useSettings();
+  // Scala e carattere degli editor: variabili CSS su :root, senza riavvio.
+  useEffect(() => applyDisplaySettings(document, settings), [settings]);
   return (
     <div data-testid="app-root" className="baa-app">
       {view === 'portal' ? <PortalView /> : <ProjectView />}
       {dialog?.kind === 'addDevice' ? <AddDeviceDialog onClose={close} /> : null}
+      {dialog?.kind === 'settings' ? <SettingsDialog onClose={close} /> : null}
       {dialog?.kind === 'collectKit' ? <KitDialog onClose={close} /> : null}
       {dialog?.kind === 'addBlock' ? (
         <AddBlockDialog
@@ -60,6 +67,14 @@ function Shell() {
                 .openEditor({ kind: 'block', deviceId: ref.deviceId, objectId: ref.id });
             }
           }}
+        />
+      ) : null}
+      {dialog?.kind === 'importTagsReport' ? (
+        <ImportTagsReport
+          fileName={dialog.fileName}
+          tableName={dialog.tableName}
+          summary={dialog.summary}
+          onClose={close}
         />
       ) : null}
       <DetachedWindows />

@@ -232,6 +232,22 @@ test('rinomina del tag usato in tre segmenti: il codice si aggiorna e Mod+Z lo r
   }
 });
 
+/** Opzioni → Impostazioni: apre il dialogo e restituisce il campo "Mnemonica SIMATIC". */
+async function openMnemonic(page: Page) {
+  await page
+    .getByTestId('menu-bar')
+    .getByRole('menuitem', { name: 'Opzioni', exact: true })
+    .click();
+  await page.getByRole('menuitem', { name: 'Impostazioni', exact: true }).click();
+  return page.getByRole('dialog').getByLabel('Mnemonica SIMATIC');
+}
+
+async function setMnemonic(page: Page, value: 'int' | 'de'): Promise<void> {
+  await (await openMnemonic(page)).selectOption(value);
+  await page.getByTestId('dialog-ok').click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+}
+
 test('mnemonico tedesco: si scrive in tedesco, si salva in internazionale, si riapre mostrato in tedesco', async () => {
   test.setTimeout(120_000);
   const file = join(tmp, 'tedesco.baap');
@@ -240,7 +256,7 @@ test('mnemonico tedesco: si scrive in tedesco, si salva in internazionale, si ri
   const { page } = first;
   await treeNode(page, 'Nastro [FB').dblclick();
   await expect(network(page, 1)).toBeVisible();
-  await page.getByLabel('Mnemonica').selectOption('german');
+  await setMnemonic(page, 'de');
   await setCode(page, 1, 'U E 0.0\nUN E 0.1\n= A 0.0');
   await expect(problems(page)).toBeHidden();
   await screenshot(page, '3-german.png');
@@ -256,10 +272,11 @@ test('mnemonico tedesco: si scrive in tedesco, si salva in internazionale, si ri
   await closeApp(first.app);
   const second = await openProject({ file, userData: first.userData });
   await treeNode(second.page, 'Nastro [FB').dblclick();
-  await expect(second.page.getByLabel('Mnemonica')).toHaveValue('german');
+  await expect(await openMnemonic(second.page)).toHaveValue('de');
+  await second.page.getByTestId('dialog-cancel').click();
   await expect(cm(second.page, 1)).toContainText('U E 0.0');
   await expect(cm(second.page, 1)).toContainText('UN E 0.1');
-  await second.page.getByLabel('Mnemonica').selectOption('international');
+  await setMnemonic(second.page, 'int');
   await expect(cm(second.page, 1)).toContainText('A I 0.0');
 });
 

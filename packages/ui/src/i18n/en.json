@@ -20,7 +20,16 @@
       "RESERVED": "This name is reserved by the operating system: choose another one.",
       "TRAILING_DOT_OR_SPACE": "The name cannot end with a dot or a space.",
       "EXISTS": "A project with this name already exists in this folder."
-    }
+    },
+    "baapz": {
+      "NON_ZIP": "The file is not a valid BaaPortal archive.",
+      "MANIFESTO_MANCANTE": "The archive has no manifest: it is not a BaaPortal archive.",
+      "VERSIONE_FUTURA": "The archive was created with a newer version of BaaPortal. Update the application.",
+      "PROGETTO_MANCANTE": "The archive does not contain the expected project file.",
+      "PROGETTO_ILLEGGIBILE": "The project inside the archive is damaged."
+    },
+    "baapzFailed": "Cannot retrieve the archive: {{message}} (code {{code}}). No file was written.",
+    "archiveFailed": "Cannot archive the project: {{message}} (code {{code}}). No file was written."
   },
   "confirm": {
     "unsaved": {
@@ -31,13 +40,20 @@
       "cancel": "Cancel"
     }
   },
+  "status": {
+    "compiling": "Compiling…",
+    "cancel": "Stop",
+    "progress": "Progress"
+  },
   "messages": {
+    "replaced": "Replaced {{replaced}} texts, skipped {{skipped}}.",
     "detachBlocked": "The separate window could not be opened: the editor stays in the work area.",
     "created": "Project \"{{name}}\" created.",
     "opened": "Project \"{{name}}\" opened.",
     "saved": "Project \"{{name}}\" saved.",
     "recentMissing": "The project \"{{name}}\" was not found: it was removed from the list.",
     "standardTableLocked": "The default tag table cannot be deleted.",
+    "referenceCopyOnly": "The reference project is read-only: objects can only be copied into the project.",
     "pasteNoNumber": "No free number: {{count}} objects were not pasted.",
     "recoveryWriteFailed": "The automatic recovery copy could not be written: unsaved changes may be lost if the application closes abnormally.",
     "recovered": "Changes to \"{{name}}\" recovered.",
@@ -52,6 +68,7 @@
     "fileDialogFailed": "The file selection window could not be opened: {{message}}",
     "sourceReplaceChanged": "Source \"{{name}}\": the project changed while confirming and the objects to replace are no longer the ones listed. Nothing was changed: run \"Generate blocks from source\" again.",
     "actionFailed": "The operation failed: {{message}}",
+    "compileInterrupted": "Compilation stopped: the blocks already compiled stay compiled.",
     "compileFailed": "Compilation failed: {{message}}",
     "blockExported": "Block \"{{name}}\" exported to {{path}}.",
     "blockExportFailed": "Cannot export block \"{{name}}\": {{message}}",
@@ -62,7 +79,12 @@
     "importZipInvalid": "Cannot read the archive \"{{name}}\": {{message}}",
     "importZipEmpty": "The archive \"{{name}}\" contains no blocks (blocchi/ folder).",
     "importFailed": "Block import failed: {{message}}",
-    "importReplaceChanged": "The project changed while the question was open: the import was cancelled."
+    "importReplaceChanged": "The project changed while the question was open: the import was cancelled.",
+    "tagsImported": "Tag import from \"{{name}}\": created {{created}}, updated {{updated}}, skipped {{skipped}}.",
+    "tagsImportFailed": "Cannot import tags from \"{{name}}\": {{message}}",
+    "tagsExported": "Table \"{{name}}\" exported to \"{{path}}\".",
+    "tagsExportFailed": "Cannot export table \"{{name}}\": {{message}}",
+    "archived": "Project \"{{name}}\" archived to \"{{path}}\"."
   },
   "commands": {
     "project.new": "New…",
@@ -70,6 +92,7 @@
     "project.close": "Close",
     "project.save": "Save",
     "project.saveAs": "Save as…",
+    "project.openReference": "Open reference project…",
     "project.archive": "Archive…",
     "project.retrieve": "Retrieve archived project…",
     "project.print": "Print…",
@@ -83,6 +106,7 @@
     "edit.delete": "Delete",
     "edit.rename": "Rename",
     "edit.findReplace": "Find and replace…",
+    "edit.replace": "Replace…",
     "edit.selectAll": "Select all",
     "edit.compile": "Compile → Software (changes only)",
     "view.navigation": "Project navigation",
@@ -136,6 +160,28 @@
     "autoHide": "Hide automatically",
     "pin": "Pin the panel",
     "toggleReference": "Show or hide the reference projects"
+  },
+  "find": {
+    "find": "Find",
+    "replaceWith": "Replace with",
+    "matchCase": "Match case",
+    "wholeWord": "Whole word",
+    "regex": "Regular expression",
+    "scope": "Scope",
+    "scopeActive": "Active editor",
+    "scopeProject": "Entire project",
+    "search": "Find",
+    "replace": "Replace",
+    "replaceAll": "Replace all",
+    "stale": "Results out of date, repeat the search",
+    "count_one": "{{count}} result",
+    "count_other": "{{count}} results",
+    "results": "Results",
+    "invalidRegex": "Invalid regular expression: {{detail}}",
+    "reason": {
+      "PROTETTO": "Protected block: the text cannot be edited.",
+      "MC7_GREZZO": "Undecodable MC7 code: the text cannot be edited."
+    }
   },
   "toolbar": {
     "search": "Search"
@@ -239,6 +285,7 @@
     }
   },
   "history": {
+    "replace": "Replace text",
     "author": "Project author",
     "comment": "Project comment",
     "addDevice": "Add device",
@@ -268,7 +315,8 @@
     "applySource": "Generate blocks from source",
     "generateSource": "Generate source from blocks",
     "editSource": "Edit source",
-    "importBlocks": "Import blocks"
+    "importBlocks": "Import blocks",
+    "importTags": "Import tags"
   },
   "inspector": {
     "tab": {
@@ -356,6 +404,25 @@
     "tag": "Tag_1",
     "constant": "Constant_1"
   },
+  "settings": {
+    "title": "Settings",
+    "general": "General",
+    "appearance": "Appearance",
+    "editor": "Editor behavior",
+    "language": "Interface language",
+    "author": "Default author of new projects",
+    "recovery": "Recovery save",
+    "recoveryOff": "Off",
+    "minutes_one": "Every minute",
+    "minutes_other": "Every {{count}} minutes",
+    "uiScale": "Interface scale",
+    "mnemonic": "SIMATIC mnemonics",
+    "fontSize": "Font size",
+    "tabSize": "Tab width",
+    "autocomplete": "Autocomplete",
+    "lineNumbers": "Line numbers",
+    "reset": "Restore defaults"
+  },
   "dialog": {
     "ok": "OK",
     "cancel": "Cancel"
@@ -439,6 +506,10 @@
       "allTags": "PLC tags",
       "source": "External sources"
     }
+  },
+  "reference": {
+    "copyIntoProject": "Copy into project",
+    "close": "Close reference {{name}}"
   },
   "objects": {
     "deleteTitle": "Delete",
@@ -711,6 +782,7 @@
     }
   },
   "compile": {
+    "interrupted": "Compilation stopped",
     "filterBlk": "MC7 block (*.blk)",
     "filterImport": "MC7 blocks and kit archives (*.blk, *.zip)",
     "replaceTitle": "Replace blocks",
@@ -813,6 +885,47 @@
       "UNSUPPORTED": "Not supported by the compiler: {{detail}}",
       "VALORI_ATTUALI_PERSI": "The recompiled DB uses the initial values: the actual values of the original are not kept.",
       "VALORI_INIZIALI_DA_CAMPIONE": "Initial values of the SFB internal static data taken from the real block {{sample}}."
+    }
+  },
+  "tagIo": {
+    "import": "Import tags…",
+    "export": "Export tags…",
+    "filterXlsx": "Excel (*.xlsx)",
+    "filterCsv": "CSV (*.csv)",
+    "reportTitle": "Tag import",
+    "reportFile": "File \"{{file}}\" into table \"{{table}}\".",
+    "created": "Created: {{count}}",
+    "updated": "Updated: {{count}}",
+    "skipped": "Skipped: {{count}}",
+    "skippedList": "Skipped rows",
+    "skippedRow": "Row {{line}}{{sheet}}: {{reason}}",
+    "sheet": {
+      "tags": "(tags sheet)",
+      "constants": "(constants sheet)"
+    },
+    "formatErr": {
+      "NON_ZIP": "The file is not a valid xlsx archive.",
+      "NON_XLSX": "The file is not an Excel workbook (xlsx).",
+      "FOGLIO_ILLEGGIBILE": "A sheet in the file cannot be read."
+    },
+    "err": {
+      "COLONNA_MANCANTE": "column {{detail}} is missing",
+      "TIPO_NON_VALIDO": "invalid data type: {{detail}}",
+      "INDIRIZZO_NON_VALIDO": "invalid address: {{detail}}",
+      "NOME_VUOTO": "empty name",
+      "NOME_DOPPIO": "name repeated in the file: {{detail}}",
+      "RIGA_ILLEGGIBILE": "unreadable row",
+      "VALORE_VUOTO": "empty value for {{detail}}",
+      "NOME_IN_ALTRA_TABELLA": "name already used in table \"{{detail}}\""
+    }
+  },
+  "archive": {
+    "filter": "BaaPortal archive (*.baapz)",
+    "overwrite": {
+      "title": "File exists",
+      "message": "The file \"{{path}}\" already exists. Do you want to overwrite it?",
+      "yes": "Overwrite",
+      "no": "Cancel"
     }
   }
 }

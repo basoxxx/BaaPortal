@@ -68,6 +68,9 @@ export interface DataGridProps<R> {
   /** Classi in più per la riga o la cella (stile, non comportamento). */
   rowClassName?(row: R): string | undefined;
   cellClassName?(row: R, columnId: string): string | undefined;
+  /** Chiede di selezionare una riga (dall'esterno, p.es. un risultato di ricerca); `n` la rende ripetibile. */
+  reveal?: { key: string; n: number } | null;
+  onRevealed?(n: number): void;
 }
 
 const PAGE = 10;
@@ -229,6 +232,24 @@ export function DataGrid<R>(props: DataGridProps<R>) {
     cellEl(it.key, resolved.col)?.focus();
     // Solo a una richiesta esplicita di focus.
   }, [focusTick]);
+
+  // Una richiesta esterna seleziona la riga e la porta in vista; si esegue una volta sola.
+  useEffect(() => {
+    const r = props.reveal;
+    if (!r) return;
+    if (indexOf.has(r.key)) {
+      setSelected(new Set([r.key]));
+      anchor.current = r.key;
+      setActive({ key: r.key, col: 0 });
+      requestAnimationFrame(() =>
+        [...(gridRef.current?.querySelectorAll<HTMLElement>('[data-row-key]') ?? [])]
+          .find((el) => el.dataset.rowKey === r.key)
+          ?.scrollIntoView?.({ block: 'nearest' }),
+      );
+    }
+    props.onRevealed?.(r.n);
+    // Solo alla richiesta, non a ogni ridisegno.
+  }, [props.reveal]);
 
   const goTo = (idx: number, col: number) => {
     const it = items[Math.max(0, Math.min(items.length - 1, idx))];

@@ -50,8 +50,10 @@ import {
   generateSourceFromNodes,
   objectsToGenerate,
 } from './sourceActions';
+import { exportTagTable, importTagTable } from './tagTableIo';
 import { RenameInput } from './RenameInput';
 import { buildTree, type TreeNode } from './treeModel';
+import { getProgress } from '../progress';
 import { parseNodeId } from './treeIds';
 
 const TARGET_ID = 'tree';
@@ -267,6 +269,30 @@ export function ProjectTree() {
             },
           ]
         : [];
+    const tagIoItems: ContextMenuItem[] = [];
+    if (parsed.kind === 'tagTable') {
+      tagIoItems.push(
+        {
+          id: 'importTags',
+          label: t('tagIo.import'),
+          separator: true,
+          run: () => void settle(importTagTable({ deviceId: parsed.dev, tableId: parsed.id }, ctx)),
+        },
+        {
+          id: 'exportTags',
+          label: t('tagIo.export'),
+          run: () =>
+            void settle(exportTagTable({ deviceId: parsed.dev, id: parsed.id }, 'xlsx', ctx)),
+        },
+      );
+    } else if (parsed.kind === 'folder' && parsed.folder === 'tags') {
+      tagIoItems.push({
+        id: 'importTags',
+        label: t('tagIo.import'),
+        separator: true,
+        run: () => void settle(importTagTable({ deviceId: parsed.dev }, ctx)),
+      });
+    }
     // Dei blocchi e dei tipi selezionati; sulle cartelle, di tutti quelli che contengono.
     const generateItems: ContextMenuItem[] =
       parsed.kind === 'block' ||
@@ -296,11 +322,13 @@ export function ProjectTree() {
           id: 'compileChanges',
           label: t('objects.compileChanges'),
           separator: true,
+          disabled: !!getProgress(),
           run: () => compileProgram(ctx, parsed.dev, 'changes'),
         },
         {
           id: 'compileFull',
           label: t('objects.compileFull'),
+          disabled: !!getProgress(),
           run: () => compileProgram(ctx, parsed.dev, 'full'),
         },
       );
@@ -319,7 +347,7 @@ export function ProjectTree() {
           id: 'compileBlock',
           label: t('objects.compile'),
           separator: true,
-          disabled: !blocks,
+          disabled: !blocks || !!getProgress(),
           run: () => blocks && compileProgram(ctx, blocks.deviceId, 'full', blocks.ids),
         },
         {
@@ -362,6 +390,7 @@ export function ProjectTree() {
       },
       ...sourceItems,
       ...generateItems,
+      ...tagIoItems,
       ...compileItems,
       {
         id: 'properties',

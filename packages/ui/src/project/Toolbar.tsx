@@ -1,9 +1,10 @@
-import { Fragment } from 'react';
+import { Fragment, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { commands, type CommandId } from '../commands/commands';
 import { Icon } from '../icons';
 import '../icons/toolbar';
 import { useAppStore, useServices } from '../state/AppContext';
+import { searchFromToolbar } from '../search/findActions';
 import { shortcutLabel } from './MenuBar';
 
 /** Gruppi della barra degli strumenti (spec §8.2, punto 3), nell'ordine di TIA Portal. */
@@ -26,6 +27,7 @@ export function Toolbar() {
   const { t } = useTranslation();
   const ctx = useServices();
   const appState = useAppStore((s) => s);
+  const [text, setText] = useState('');
 
   return (
     <div role="toolbar" data-testid="toolbar" className="baa-toolbar">
@@ -72,7 +74,12 @@ export function Toolbar() {
         className="baa-toolbar-search"
         placeholder={t('toolbar.search')}
         aria-label={t('toolbar.search')}
-        disabled
+        value={text}
+        disabled={!appState.doc}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && text.trim() !== '') searchFromToolbar(ctx.store, text);
+        }}
       />
     </div>
   );

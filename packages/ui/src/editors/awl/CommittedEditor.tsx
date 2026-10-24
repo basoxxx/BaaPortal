@@ -6,8 +6,9 @@ import {
   Transaction,
   type Extension,
 } from '@codemirror/state';
-import { EditorView, keymap, type ViewUpdate } from '@codemirror/view';
+import { EditorView, keymap, lineNumbers, type ViewUpdate } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
+import { getSettings, useSettings } from '../../settings/settings';
 import { lineEndingOf } from './awlExtensions';
 import './awl.css';
 
@@ -22,6 +23,8 @@ export interface EditorCodec {
 export interface CommittedEditorHandle {
   /** Porta il cursore (spostamento nel testo mostrato) e il focus, e lo rende visibile. */
   focusAt(offset: number): void;
+  /** Seleziona un intervallo del testo mostrato, con il focus, e lo rende visibile. */
+  selectRange(from: number, to: number): void;
   /** Il testo mostrato adesso (anche non confermato). */
   getText(): string;
   getView(): EditorView | null;
@@ -76,6 +79,11 @@ export function CommittedEditor(p: CommittedEditorProps): React.JSX.Element {
   const latest = useRef(p);
   const label = useRef(new Compartment());
   const lock = useRef(new Compartment());
+  const tabs = useRef(new Compartment());
+  const gutter = useRef(new Compartment());
+  const [settings] = useSettings();
+  const tabSize = settings.editor.tabSize;
+  const showLineNumbers = settings.editor.lineNumbers;
   const s = useRef<Session>({
     baseline: p.value,
     eol: lineEndingOf(p.value),
@@ -128,6 +136,8 @@ export function CommittedEditor(p: CommittedEditorProps): React.JSX.Element {
           keymap.of([...defaultKeymap, ...historyKeymap]),
           ...(latest.current.extensions ?? []),
           lock.current.of(lockExtension(!!latest.current.readOnly)),
+          gutter.current.of(getSettings().editor.lineNumbers ? lineNumbers() : []),
+          tabs.current.of(EditorState.tabSize.of(getSettings().editor.tabSize)),
           label.current.of(
             EditorView.contentAttributes.of({
               role: 'textbox',
@@ -173,6 +183,18 @@ export function CommittedEditor(p: CommittedEditorProps): React.JSX.Element {
   useEffect(() => {
     viewRef.current?.dispatch({ effects: lock.current.reconfigure(lockExtension(!!p.readOnly)) });
   }, [p.readOnly]);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({
+      effects: tabs.current.reconfigure(EditorState.tabSize.of(tabSize)),
+    });
+  }, [tabSize]);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({
+      effects: gutter.current.reconfigure(showLineNumbers ? lineNumbers() : []),
+    });
+  }, [showLineNumbers]);
 
   useEffect(() => {
     viewRef.current?.dispatch({
@@ -224,6 +246,16 @@ export function CommittedEditor(p: CommittedEditorProps): React.JSX.Element {
         const at = Math.min(Math.max(offset, 0), v.state.doc.length);
         v.focus();
         v.dispatch({ selection: { anchor: at }, scrollIntoView: true });
+        v.dom.scrollIntoView?.({ block: 'nearest' });
+      },
+      selectRange(from: number, to: number) {
+        const v = viewRef.current;
+        if (!v) return;
+        const max = v.state.doc.length;
+        const a = Math.min(Math.max(from, 0), max);
+        const b = Math.min(Math.max(to, a), max);
+        v.focus();
+        v.dispatch({ selection: { anchor: a, head: b }, scrollIntoView: true });
         v.dom.scrollIntoView?.({ block: 'nearest' });
       },
       getText: () => viewRef.current?.state.doc.toString() ?? '',

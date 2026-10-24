@@ -13,6 +13,7 @@
     "@baaportal/awl": "*",
     "@baaportal/catalog": "*",
     "@baaportal/project": "*",
-    "@baaportal/s7-types": "*"
+    "@baaportal/s7-types": "*",
+    "fflate": "^0.8.3"
   }
 }

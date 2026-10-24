@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { validateProjectName } from '@baaportal/project';
 import { isAbsolutePath, joinPath } from '../../services/projectService';
+import { getSettings } from '../../settings/settings';
 import { useServices } from '../../state/AppContext';
 
 const AUTHOR_KEY = 'baa.lastAuthor';
@@ -13,6 +14,9 @@ function readLastAuthor(): string {
     return '';
   }
 }
+
+/** L'autore predefinito dei nuovi progetti (Impostazioni → Generale), altrimenti l'ultimo usato. */
+const defaultAuthor = (): string => getSettings().general.author || readLastAuthor();
 
 function saveLastAuthor(author: string): void {
   try {
@@ -27,7 +31,7 @@ export function NewProjectPane() {
   const { bridge, service } = useServices();
   const [name, setName] = useState('');
   const [dir, setDir] = useState('');
-  const [author, setAuthor] = useState(readLastAuthor);
+  const [author, setAuthor] = useState(defaultAuthor);
   const [comment, setComment] = useState('');
   const [exists, setExists] = useState(false);
   const touched = useRef({ name: false, dir: false });

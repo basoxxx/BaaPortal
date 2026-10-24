@@ -1,12 +1,37 @@
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '../state/AppContext';
+import { useProgress } from './progress';
 
+/** Barra di stato: durante un'operazione lunga avanzamento e Interrompi, altrimenti l'ultimo messaggio. */
 export function StatusBar() {
   const { t } = useTranslation();
   const status = useAppStore((s) => s.status);
+  const progress = useProgress();
   return (
     <div data-testid="status-bar" className="baa-status-bar" role="status">
-      {status ? t(status.textKey, status.params) : ''}
+      {progress ? (
+        <span className="baa-status-progress">
+          <span>{t(progress.labelKey)}</span>
+          <progress
+            data-testid="status-progress"
+            aria-label={t('status.progress')}
+            value={progress.done}
+            max={Math.max(progress.total, 1)}
+          />
+          <span>
+            {progress.done}/{progress.total}
+          </span>
+          {progress.cancel ? (
+            <button type="button" className="baa-panel-btn" onClick={progress.cancel}>
+              {t('status.cancel')}
+            </button>
+          ) : null}
+        </span>
+      ) : status ? (
+        t(status.textKey, status.params)
+      ) : (
+        ''
+      )}
     </div>
   );
 }

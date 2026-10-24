@@ -41,7 +41,7 @@ describe('vista progetto: struttura', () => {
     ]);
   });
 
-  it("la barra degli strumenti ha i comandi nell'ordine della spec e il campo Ricerca disattivato", async () => {
+  it("la barra degli strumenti ha i comandi nell'ordine della spec e il campo Ricerca attivo", async () => {
     await renderApp({ view: 'project', withProject: true });
     const tb = within(screen.getByTestId('toolbar'));
     expect(tb.getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual([
@@ -68,19 +68,23 @@ describe('vista progetto: struttura', () => {
     ]);
     expect(tb.getByRole('button', { name: 'Salva' })).toBeEnabled();
     expect(tb.getByRole('button', { name: 'Taglia' })).toBeDisabled();
-    expect(tb.getByRole('searchbox')).toBeDisabled();
+    expect(tb.getByRole('searchbox')).toBeEnabled();
   });
 });
 
 describe('vista progetto: menu', () => {
-  it('menu Progetto: Salva attivo con progetto, Archivia disattivato', async () => {
+  it('menu Progetto: Salva e Archivia attivi con progetto, Stampa disattivato', async () => {
     const { user } = await renderApp({ view: 'project', withProject: true });
     await user.click(screen.getByRole('menuitem', { name: 'Progetto' }));
     expect(screen.getByRole('menuitem', { name: 'Salva' })).not.toHaveAttribute(
       'aria-disabled',
       'true',
     );
-    expect(screen.getByRole('menuitem', { name: 'Archivia…' })).toHaveAttribute(
+    expect(screen.getByRole('menuitem', { name: 'Archivia…' })).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.getByRole('menuitem', { name: 'Stampa…' })).toHaveAttribute(
       'aria-disabled',
       'true',
     );
