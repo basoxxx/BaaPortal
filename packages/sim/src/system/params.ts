@@ -4,6 +4,7 @@ import type { ExecState } from '../executor';
 import type { Location } from '../operands';
 import { readBits, writeBits } from '../operands';
 import { SimError } from '../errors';
+import type { SfbState } from './sfb';
 
 export type Size = 'X' | 'B' | 'W' | 'D';
 
@@ -75,6 +76,8 @@ export interface SystemServices {
   warnNotSimulated(kind: 'SFC' | 'SFB', number: number): void;
   /** Lista SZL come la dà il server S7; `undefined` se la CPU la rifiuta. */
   szl(id: number, index: number): SzlList | undefined;
+  /** Stato interno degli SFB IEC per (DI, offset AR2); azzerato all'avvio a caldo e dalla cancellazione totale. */
+  readonly sfbState: Map<string, SfbState>;
   /** Numero massimo di DB della CPU (catalogo). */
   readonly maxDb: number;
 }

@@ -155,6 +155,7 @@ export class SimCpu {
       },
       warnNotSimulated: (kind, number) => this.warnNotSimulated(kind, number),
       szl: (id, index) => buildSzl((this.backend ??= simBackend(this)), id, index),
+      sfbState: new Map(),
       maxDb: findCpu(o.cpuTypeId)?.limits.maxDb ?? DEFAULT_MAX_DB,
     };
     this.maxInstructions = o.maxInstructions;
@@ -208,6 +209,7 @@ export class SimCpu {
     const t0 = this.now();
     this.bootAt ??= t0;
     this.warned.clear();
+    this.services.sfbState.clear();
     this.record({ time: t0, code: 'AVVIO' });
     this.warmRestart();
     this.pending = [];
@@ -249,6 +251,7 @@ export class SimCpu {
     m.physOut.fill(0);
     this.timers.reset(0);
     this.counters.reset(0);
+    this.services.sfbState.clear();
     for (const db of m.dbs.values()) db.data.set(db.initial);
     this.st = { last: 0, min: 0, max: 0, cycles: 0 };
     this.record({ time: this.now(), code: 'CANCELLAZIONE_TOTALE' });

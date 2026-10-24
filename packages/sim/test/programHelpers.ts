@@ -1,3 +1,4 @@
+import { findSystemBlock } from '@baaportal/catalog';
 import { compileBlock, type CompileInput } from '@baaportal/mc7';
 import type { AwlBlockInfo, AwlContext } from '@baaportal/awl';
 import {
@@ -35,6 +36,12 @@ function ctxFor(specs: BlockSpec[], infos: Infos, owner: { kind: string; iface: 
     resolve: (name: string) => {
       const f = specs.find((x) => x.kind === 'FB' && `FB${x.number}` === name.toUpperCase());
       const fs = f?.sections ?? EMPTY;
+      const sys = f ? undefined : findSystemBlock({ name });
+      if (sys)
+        return {
+          kind: 'fb',
+          sections: { input: sys.input, output: sys.output, inOut: sys.inOut, static: [] },
+        };
       return f
         ? {
             kind: 'fb',

@@ -2,6 +2,7 @@ import { findSystemBlock, type SystemBlock } from '@baaportal/catalog';
 import { pointerLocation } from '../calls';
 import { SimError, StopRequest } from '../errors';
 import type { ExecContext, ExecState } from '../executor';
+import { SFB_TABLE } from './sfb';
 import { SFC_TABLE } from './sfc';
 import {
   SysError,
@@ -14,8 +15,8 @@ import {
 /** Gestori delle SFC simulate, per numero. Un numero assente dal registro dà l'avviso «non simulata». */
 export const SFC_HANDLERS: Record<number, SystemHandler> = SFC_TABLE;
 
-/** Gestori degli SFB simulati, per numero (il Task 5 vi aggiunge SFB 0–5; leggono il DB di istanza in DI e AR2). */
-export const SFB_HANDLERS: Record<number, SystemHandler> = {};
+/** Gestori degli SFB simulati, per numero (SFB 0–5; leggono il DB di istanza in DI e AR2). */
+export const SFB_HANDLERS: Record<number, SystemHandler> = SFB_TABLE;
 
 /** Ordine dei puntatori nella lista di una SFC (come lo genera il compilatore): IN, RET_VAL, OUT, IN_OUT. */
 interface Layout {
@@ -68,6 +69,7 @@ function standaloneServices(ctx: ExecContext): SystemServices {
       throw new StopRequest(reason);
     },
     warnNotSimulated: () => undefined,
+    sfbState: new Map(),
     szl: () => undefined,
     maxDb: 16000,
   };
