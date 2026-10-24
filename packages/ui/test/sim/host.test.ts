@@ -1,6 +1,6 @@
 import { blockTypeCode } from '@baaportal/s7comm';
 import { describe, expect, it } from 'vitest';
-import { SimHost } from '../../src/sim/host';
+import { MAX_WATCH_ITEMS, SimHost } from '../../src/sim/host';
 import type { SimNotice } from '../../src/sim/protocol';
 import { PROPS, ob1 } from './simFixtures';
 
@@ -140,6 +140,26 @@ describe('SimHost', () => {
     expect('error' in v[0]!).toBe(true);
     expect('error' in v[1]!).toBe(true);
     expect('bytes' in v[2]!).toBe(true);
+    await f.host.handle({ op: 'stop' });
+  });
+
+  it('watch e write: troppe voci sono rifiutate; la notifica porta solo le voci richieste', async () => {
+    const f = fake();
+    await start(f.host);
+    const item = { area: 'M' as const, byte: 0, size: 'D' as const };
+    const many = Array.from({ length: MAX_WATCH_ITEMS + 1 }, () => item);
+    await expect(f.host.handle({ op: 'watch', items: many })).rejects.toThrow(/troppe voci/);
+    await expect(
+      f.host.handle({
+        op: 'write',
+        items: many.map((x) => ({ ...x, data: Uint8Array.of(0, 0, 0, 0) })),
+      }),
+    ).rejects.toThrow(/troppe voci/);
+    await f.host.handle({ op: 'watch', items: [item, item] });
+    await f.advance(250);
+    const v = f.of('watch').at(-1)!.values;
+    expect(v).toHaveLength(2);
+    expect(v.every((x) => 'bytes' in x && x.bytes.length === 4)).toBe(true);
     await f.host.handle({ op: 'stop' });
   });
 

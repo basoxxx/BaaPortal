@@ -100,7 +100,9 @@
     "archived": "Progetto \"{{name}}\" archiviato in \"{{path}}\".",
     "simMresFailed": "Cancellazione totale non riuscita: {{message}}",
     "simInputsFailed": "Il simulatore non ha accettato gli ingressi: {{message}}",
-    "simInterruptFailed": "Il simulatore non ha accettato l'allarme: {{message}}"
+    "simInterruptFailed": "Il simulatore non ha accettato l'allarme: {{message}}",
+    "simWatchFailed": "Osservazione della tabella di controllo non riuscita: {{message}}",
+    "simWriteFailed": "Comando non riuscito: {{message}}"
   },
   "commands": {
     "project.new": "Nuovo…",
@@ -299,7 +301,8 @@
       "watch": "Tabelle di controllo e forzamento",
       "backup": "Backup online",
       "progInfo": "Informazioni sul programma",
-      "addSource": "Aggiungi nuovo file esterno"
+      "addSource": "Aggiungi nuovo file esterno",
+      "addWatchTable": "Aggiungi nuova tabella di controllo"
     }
   },
   "navigation": {
@@ -354,7 +357,8 @@
     "generateSource": "Genera sorgente dai blocchi",
     "editSource": "Modifica sorgente",
     "importBlocks": "Importa blocchi",
-    "importTags": "Importa variabili"
+    "importTags": "Importa variabili",
+    "addWatchTable": "Aggiungi tabella di controllo"
   },
   "inspector": {
     "tab": {
@@ -441,7 +445,8 @@
     },
     "group": "Gruppo_1",
     "tag": "Variabile_1",
-    "constant": "Costante_1"
+    "constant": "Costante_1",
+    "watchTable": "Tabella di controllo_1"
   },
   "settings": {
     "title": "Impostazioni",
@@ -614,7 +619,9 @@
     "INSTANCE_FB_MISSING": "Il blocco funzionale dell'istanza non esiste.",
     "HEADER_INVALID": "L'intestazione non è valida.",
     "PROPERTY_INVALID": "Il valore della proprietà non è valido.",
-    "CPU_UNKNOWN": "La CPU non è nel catalogo."
+    "CPU_UNKNOWN": "La CPU non è nel catalogo.",
+    "WATCH_NAME_DUPLICATE": "Esiste già una tabella di controllo con questo nome.",
+    "WATCH_OPERAND_INVALID": "L'operando «{{operand}}» di una riga non si risolve."
   },
   "block": {
     "interface": "Interfaccia del blocco",
@@ -1039,5 +1046,39 @@
     "ob86": "Guasto del rack (OB86)",
     "addressBad": "Indirizzo non valido: intero da 0 a 65535.",
     "needRun": "La CPU deve essere in RUN."
+  },
+  "watch": {
+    "col": {
+      "name": "Nome",
+      "address": "Indirizzo",
+      "format": "Formato",
+      "status": "Valore di stato",
+      "modify": "Valore di comando",
+      "comment": "Commento"
+    },
+    "simOff": "Avvia la simulazione dal PLC di questa tabella per osservare e comandare le variabili.",
+    "on": "Osservazione attiva: i valori di stato si aggiornano.",
+    "off": "Osservazione spenta.",
+    "commanded": "Comando eseguito: {{count}} righe scritte, {{failed}} con errore.",
+    "watchAll": "Osserva tutto",
+    "command": "Comanda",
+    "err": {
+      "row": {
+        "EMPTY": "Manca l'operando.",
+        "SYNTAX": "Operando non riconosciuto.",
+        "UNKNOWN": "Simbolo o membro sconosciuto.",
+        "NOT_OPERAND": "Non è una variabile: costanti e blocchi non si osservano.",
+        "UNSUPPORTED": "Operando non osservabile (aree L e DI, indirizzi indiretti e tipi composti non sono ammessi).",
+        "RANGE": "Numero fuori dai limiti della CPU."
+      },
+      "FORMAT": "Il formato {{format}} non si addice alla dimensione dell'operando.",
+      "LENGTH": "Valore di lunghezza inattesa.",
+      "BCD": "Il valore non è un BCD valido.",
+      "HOST": "{{message}}",
+      "TC_WRITE": "Il simulatore non permette di scrivere temporizzatori e contatori.",
+      "BOOL": "Valore ammesso: TRUE, FALSE, 1 o 0.",
+      "SYNTAX": "Valore non valido per il formato.",
+      "RANGE": "Valore fuori dai limiti ({{min}} … {{max}})."
+    }
   }
 }

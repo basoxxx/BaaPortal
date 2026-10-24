@@ -1,5 +1,6 @@
 import type { StoreApi } from 'zustand/vanilla';
 import {
+  addWatchTable,
   createTagTable,
   createUdt,
   findDevice,
@@ -33,6 +34,19 @@ export function addTagTable(store: StoreApi<AppState>, deviceId: string): void {
   if (newId) {
     store.getState().select(ids.tagTable(deviceId, newId));
     store.getState().openEditor({ kind: 'tagTable', deviceId, objectId: newId });
+  }
+}
+
+/** Aggiunge una tabella di controllo (un solo passo di annulla), la seleziona e la apre. */
+export function addWatchTableTo(store: StoreApi<AppState>, deviceId: string): void {
+  let newId: string | null = null;
+  store.getState().edit('history.addWatchTable', (p) => {
+    const dev = findDevice(p, deviceId);
+    if (dev) newId = addWatchTable(dev, t('defaults.watchTable')).id;
+  });
+  if (newId) {
+    store.getState().select(ids.watchTable(deviceId, newId));
+    store.getState().openEditor({ kind: 'watchTable', deviceId, objectId: newId });
   }
 }
 
@@ -74,6 +88,9 @@ export function runAddNode(store: StoreApi<AppState>, nodeId: string, bridge: Ba
       return true;
     case 'types-add':
       addUdt(store, p.dev);
+      return true;
+    case 'watch-add':
+      addWatchTableTo(store, p.dev);
       return true;
     case 'sources-add':
       // Un errore imprevisto finisce in Informazioni, non come rifiuto non gestito.

@@ -26,6 +26,8 @@ export const SLICE_MS = 10;
 /** Tetto di cicli per fetta, nel caso l'orologio non avanzi. */
 const MAX_CYCLES_PER_SLICE = 5000;
 const MAX_WARNINGS = 100;
+/** Voci al più per richiesta `watch` o `write`: la notifica porta al più 4 byte per voce. */
+export const MAX_WATCH_ITEMS = 1000;
 
 const SIZE_BYTES = { X: 1, B: 1, W: 2, D: 4 } as const;
 
@@ -97,9 +99,17 @@ export class SimHost {
         cpu.setMonitor(req.block);
         return undefined;
       case 'watch':
+        if (req.items.length > MAX_WATCH_ITEMS)
+          throw new RangeError(
+            `troppe voci da osservare: ${req.items.length} (al più ${MAX_WATCH_ITEMS})`,
+          );
         this.watchItems = req.items;
         return undefined;
       case 'write':
+        if (req.items.length > MAX_WATCH_ITEMS)
+          throw new RangeError(
+            `troppe voci da scrivere: ${req.items.length} (al più ${MAX_WATCH_ITEMS})`,
+          );
         return req.items.map((it) => this.writeOne(cpu, it));
       case 'stop':
         await this.shutdown();

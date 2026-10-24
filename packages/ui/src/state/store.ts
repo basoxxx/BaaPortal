@@ -2,7 +2,7 @@ import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { Mc7Diagnostic, Project } from '@baaportal/project';
 import type { DiagEntry, MonitorStep, SimMode } from '@baaportal/sim';
 import type { LineMapRow } from '../editors/awl/monitorExtension';
-import type { SimStats, SimWarning } from '../sim/protocol';
+import type { SimStats, SimWarning, WatchValue } from '../sim/protocol';
 import type { ImportSummary } from '../project/navigation/tagTableIo';
 import * as wa from './workArea';
 import type { FindRequest, FindUi, TagReveal } from '../search/findState';
@@ -141,6 +141,10 @@ export interface SimUiState {
   monitorSteps: MonitorStep[] | null;
   /** ACCU in esadecimale (predefinito) o in decimale; non si salva. */
   monitorHex: boolean;
+  /** Tabella di controllo osservata (una sola alla volta, quella aperta in un riquadro visibile). */
+  watch: { deviceId: string; tableId: string } | null;
+  /** Ultimi valori ricevuti, per id di riga (solo le righe che si osservano); `null` finché non arrivano. */
+  watchValues: Record<string, WatchValue> | null;
 }
 
 /** Perché l'osservazione non è disponibile (`ok` = disponibile). */
@@ -169,6 +173,8 @@ export const SIM_OFF: SimUiState = {
   monitor: null,
   monitorSteps: null,
   monitorHex: true,
+  watch: null,
+  watchValues: null,
 };
 
 export interface AppState {

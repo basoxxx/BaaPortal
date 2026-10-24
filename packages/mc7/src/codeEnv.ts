@@ -1,10 +1,12 @@
-import type { AwlContext, Statement } from '@baaportal/awl';
+import type { AwlContext, Operand, Statement } from '@baaportal/awl';
 import type { CallEnv } from './callExpand';
 import type { Mc7Diagnostic } from './encode';
 import { callBase } from './localData';
 import {
   instanceLayout,
+  resolveValue,
   structLayout,
+  type Value,
   type LayoutTools,
   type Sections,
   type SymbolEnv,
@@ -78,4 +80,22 @@ export function codeEnvironment(
     warn: (d) => warnings.push(d),
   };
   return { env, callEnv, base, warnings };
+}
+
+/**
+ * Risolve un operando fuori da un blocco (tabelle di controllo): simboli globali, DB e indirizzi
+ * assoluti, senza variabili locali. Stessa risoluzione del compilatore; lancia `SymbolError`.
+ */
+export function resolveGlobalOperand(op: Operand, ctx: AwlContext): Value {
+  const tools = toolsOf(ctx);
+  const env: SymbolEnv = {
+    ctx,
+    owner: 'OB',
+    sections: { in: [], out: [], inOut: [], stat: [], temp: [], ret: [] },
+    tools,
+    temp: structLayout([], tools),
+    formals: new Map(),
+    cache: new Map(),
+  };
+  return resolveValue(op, env);
 }

@@ -15,6 +15,7 @@ export type PlcFolder =
   | 'types'
   | 'types-add'
   | 'watch'
+  | 'watch-add'
   | 'backup'
   | 'prog-info';
 export type TreeArea = 'blocks' | 'tags' | 'types';
@@ -33,6 +34,7 @@ const FOLDERS: ReadonlySet<string> = new Set<PlcFolder>([
   'types',
   'types-add',
   'watch',
+  'watch-add',
   'backup',
   'prog-info',
 ]);
@@ -49,6 +51,7 @@ export const ids = {
   tagTable: (dev: string, id: string) => `plc:${dev}:tagTable:${id}`,
   udt: (dev: string, id: string) => `plc:${dev}:udt:${id}`,
   source: (dev: string, id: string) => `plc:${dev}:source:${id}`,
+  watchTable: (dev: string, id: string) => `plc:${dev}:watchTable:${id}`,
   /** Blocco di sistema richiamato; `tag` è tipo e numero (SFB4). */
   sysBlock: (dev: string, tag: string) => `plc:${dev}:sysBlock:${tag}`,
 };
@@ -58,7 +61,11 @@ export type ParsedNodeId =
   | { kind: 'plc'; dev: string }
   | { kind: 'folder'; dev: string; folder: PlcFolder }
   | { kind: 'group'; dev: string; area: TreeArea; path: string }
-  | { kind: 'block' | 'tagTable' | 'udt' | 'source' | 'sysBlock'; dev: string; id: string };
+  | {
+      kind: 'block' | 'tagTable' | 'udt' | 'source' | 'watchTable' | 'sysBlock';
+      dev: string;
+      id: string;
+    };
 
 export function parseNodeId(id: string): ParsedNodeId {
   const parts = id.split(':');
@@ -79,7 +86,12 @@ export function parseNodeId(id: string): ParsedNodeId {
   if (
     parts.length === 4 &&
     b &&
-    (a === 'block' || a === 'tagTable' || a === 'udt' || a === 'source' || a === 'sysBlock')
+    (a === 'block' ||
+      a === 'tagTable' ||
+      a === 'udt' ||
+      a === 'source' ||
+      a === 'watchTable' ||
+      a === 'sysBlock')
   ) {
     return { kind: a, dev, id: b };
   }
@@ -102,6 +114,8 @@ export function nodeIdForRef(ref: ObjectRef): string | null {
       return ids.tagTable(ref.deviceId, ref.tableId);
     case 'source':
       return ids.source(ref.deviceId, ref.id);
+    case 'watchTable':
+      return ids.watchTable(ref.deviceId, ref.id);
     case 'member':
       return ref.ownerKind === 'udt'
         ? ids.udt(ref.deviceId, ref.ownerId)

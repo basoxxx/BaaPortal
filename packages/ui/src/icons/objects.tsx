@@ -84,6 +84,22 @@ const shapes: Partial<Record<IconName, ReactNode>> = {
       <path d="M2 6.5h12M2 9.8h12M6 3v10" stroke={COLOR.table} />
     </>
   ),
+  objWatch: (
+    <>
+      <rect
+        x="2"
+        y="3"
+        width="12"
+        height="10"
+        rx="1"
+        stroke={COLOR.table}
+        fill={COLOR.table}
+        fillOpacity={0.14}
+      />
+      <path d="M2 6.5h12M6 3v10" stroke={COLOR.table} />
+      <path d="M8 10.2c1-1.4 3.4-1.4 4.4 0-1 1.4-3.4 1.4-4.4 0z" stroke={COLOR.table} />
+    </>
+  ),
   objGroup: (
     <path
       d="M1.5 4h4.5l1.5 1.5h7v7.5h-13z"

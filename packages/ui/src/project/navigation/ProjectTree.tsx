@@ -43,6 +43,7 @@ import {
   renameInfo,
   renameNode,
   sourcesOfNodes,
+  watchTablesOfNodes,
 } from './objectCommands';
 import {
   exportSource,
@@ -135,6 +136,7 @@ export function ProjectTree() {
   const objectRefs = refsOfNodes(selectedIds);
   const groups = groupsOfNodes(selectedIds);
   const sourceNodes = sourcesOfNodes(selectedIds);
+  const watchNodes = watchTablesOfNodes(selectedIds);
   const [mnemonic] = useMnemonic();
   const clip = peekClipboardPayload();
   const pasteTarget = selection ? containerOf(doc, selection) : null;
@@ -147,7 +149,8 @@ export function ProjectTree() {
         return r.kind === 'tagTable' && !!d && isStandardTable(d, r.id);
       }),
     copy: objectRefs.length > 0,
-    delete: objectRefs.length > 0 || groups.length > 0 || sourceNodes.length > 0,
+    delete:
+      objectRefs.length > 0 || groups.length > 0 || sourceNodes.length > 0 || watchNodes.length > 0,
     rename: selectedIds.length === 1 && renameInfo(doc, selectedIds[0]!) !== null,
     paste:
       clip?.kind === 'objects' &&
@@ -162,7 +165,11 @@ export function ProjectTree() {
     const siblings = rows.filter((r) => r.parent === row.parent).map((r) => r.node.id);
     // Oggetti, gruppi e sorgenti: tutto ciò che si può eliminare insieme.
     const selectable = (id: string) =>
-      refsOfNodes([id]).length + groupsOfNodes([id]).length + sourcesOfNodes([id]).length > 0;
+      refsOfNodes([id]).length +
+        groupsOfNodes([id]).length +
+        sourcesOfNodes([id]).length +
+        watchTablesOfNodes([id]).length >
+      0;
     setPicked(new Set(siblings.filter(selectable)));
   };
   // Un'azione asincrona che fallisce (finestra, appunti) finisce in Informazioni, mai come rifiuto

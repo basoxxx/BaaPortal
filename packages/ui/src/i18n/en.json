@@ -100,7 +100,9 @@
     "archived": "Project \"{{name}}\" archived to \"{{path}}\".",
     "simMresFailed": "Memory reset failed: {{message}}",
     "simInputsFailed": "The simulator did not accept the inputs: {{message}}",
-    "simInterruptFailed": "The simulator did not accept the interrupt: {{message}}"
+    "simInterruptFailed": "The simulator did not accept the interrupt: {{message}}",
+    "simWatchFailed": "Watch table monitoring failed: {{message}}",
+    "simWriteFailed": "Command failed: {{message}}"
   },
   "commands": {
     "project.new": "New…",
@@ -299,7 +301,8 @@
       "watch": "Watch and force tables",
       "backup": "Online backups",
       "progInfo": "Program info",
-      "addSource": "Add new external file"
+      "addSource": "Add new external file",
+      "addWatchTable": "Add new watch table"
     }
   },
   "navigation": {
@@ -354,7 +357,8 @@
     "generateSource": "Generate source from blocks",
     "editSource": "Edit source",
     "importBlocks": "Import blocks",
-    "importTags": "Import tags"
+    "importTags": "Import tags",
+    "addWatchTable": "Add watch table"
   },
   "inspector": {
     "tab": {
@@ -441,7 +445,8 @@
     },
     "group": "Group_1",
     "tag": "Tag_1",
-    "constant": "Constant_1"
+    "constant": "Constant_1",
+    "watchTable": "Watch table_1"
   },
   "settings": {
     "title": "Settings",
@@ -614,7 +619,9 @@
     "INSTANCE_FB_MISSING": "The instance function block does not exist.",
     "HEADER_INVALID": "The header is not valid.",
     "PROPERTY_INVALID": "The property value is not valid.",
-    "CPU_UNKNOWN": "The CPU is not in the catalog."
+    "CPU_UNKNOWN": "The CPU is not in the catalog.",
+    "WATCH_NAME_DUPLICATE": "A watch table with this name already exists.",
+    "WATCH_OPERAND_INVALID": "The operand \"{{operand}}\" of a row does not resolve."
   },
   "block": {
     "interface": "Block interface",
@@ -1039,5 +1046,39 @@
     "ob86": "Rack failure (OB86)",
     "addressBad": "Invalid address: integer from 0 to 65535.",
     "needRun": "The CPU must be in RUN."
+  },
+  "watch": {
+    "col": {
+      "name": "Name",
+      "address": "Address",
+      "format": "Display format",
+      "status": "Monitor value",
+      "modify": "Modify value",
+      "comment": "Comment"
+    },
+    "simOff": "Start the simulation of this table's PLC to monitor and modify variables.",
+    "on": "Monitoring on: the monitor values are refreshed.",
+    "off": "Monitoring off.",
+    "commanded": "Modify done: {{count}} rows written, {{failed}} with errors.",
+    "watchAll": "Monitor all",
+    "command": "Modify",
+    "err": {
+      "row": {
+        "EMPTY": "The operand is missing.",
+        "SYNTAX": "Operand not recognized.",
+        "UNKNOWN": "Unknown symbol or member.",
+        "NOT_OPERAND": "Not a variable: constants and blocks cannot be monitored.",
+        "UNSUPPORTED": "Operand cannot be monitored (L and DI areas, indirect addresses and composite types are not allowed).",
+        "RANGE": "Number beyond the CPU limits."
+      },
+      "FORMAT": "The format {{format}} does not suit the operand size.",
+      "LENGTH": "Value of unexpected length.",
+      "BCD": "The value is not valid BCD.",
+      "HOST": "{{message}}",
+      "TC_WRITE": "The simulator does not allow writing timers and counters.",
+      "BOOL": "Allowed values: TRUE, FALSE, 1 or 0.",
+      "SYNTAX": "Value not valid for the format.",
+      "RANGE": "Value out of range ({{min}} … {{max}})."
+    }
   }
 }

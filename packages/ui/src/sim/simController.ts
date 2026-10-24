@@ -1,15 +1,25 @@
 import type { StoreApi } from 'zustand/vanilla';
-import { findDevice, type PlcDevice } from '@baaportal/project';
+import { findCpu } from '@baaportal/catalog';
+import {
+  findDevice,
+  findWatchTable,
+  watchResolverFor,
+  type PlcDevice,
+  type WatchTable,
+} from '@baaportal/project';
 import type { MonitorRequest, SimCpuProps } from '@baaportal/sim';
 import type { BaaBridge } from '../bridge';
 import { t } from '../i18n';
 import { compileProgram, contextHashOf, hashOf } from '../project/compile/compileActions';
 import { targetPlcId } from '../project/navigation/treeIds';
 import { getProgress } from '../project/progress';
+import { planCommand, resolveRow, watchPlan, type WatchRowError } from '../editors/watch/watchRows';
 import { SIM_OFF, type AppState } from '../state/store';
 import { downloadOrder } from './downloadOrder';
 import { activeCodeBlock, codeBlockOf, monitorReasonOf, monitorStillShown } from './monitorStatus';
+import type { WatchItem, WriteResult } from './protocol';
 import { SimSession, type SimSessionOptions } from './session';
+import { watchStillShown } from './watchStatus';
 
 export interface SimCtx {
   store: StoreApi<AppState>;
@@ -51,6 +61,17 @@ export class SimController {
   private failedMonitor: string | undefined;
   /** Ciò da cui dipende il motivo di indisponibilità, per non ricalcolare l'impronta a ogni notifica. */
   private reasonInputs: unknown[] = [];
+  /** Le voci che il worker osserva adesso (testo JSON), o niente. */
+  private sentWatch: string | undefined;
+  /** Righe a cui corrispondono, per posizione, le voci osservate. */
+  private watchRowIds: string[] = [];
+  /** Richieste `watch` in volo: finché ce ne sono, le notifiche (di voci vecchie) si scartano. */
+  private watchInFlight = 0;
+  /** Le voci la cui ultima richiesta è stata rifiutata (segnalato una volta). */
+  private failedWatch: string | undefined;
+  /** Piano già calcolato per un dato dispositivo e una data tabella (oggetti immutabili). */
+  private watchPlanFor:
+    { dev: PlcDevice; table: WatchTable; rowIds: string[]; items: WatchItem[] } | undefined;
 
   constructor(
     private readonly store: StoreApi<AppState>,
@@ -62,7 +83,10 @@ export class SimController {
       load = s.docLoadId;
       this.shutdown();
     });
-    store.subscribe(() => this.syncMonitor());
+    store.subscribe(() => {
+      this.syncMonitor();
+      this.syncWatch();
+    });
   }
 
   private push(
@@ -116,8 +140,24 @@ export class SimController {
     this.session = session;
     this.inputsInFlight = 0;
     this.sentMonitor = undefined;
+    this.sentWatch = undefined;
+    this.watchInFlight = 0;
+    this.failedWatch = undefined;
     session.onNotice((n) => {
       if (this.session !== session) return;
+      if (n.kind === 'watch') {
+        // Valori di voci non più osservate (o appena cambiate): si scartano.
+        if (
+          this.watchInFlight === 0 &&
+          this.sentWatch !== undefined &&
+          n.values.length === this.watchRowIds.length
+        ) {
+          this.store.getState().setSim({
+            watchValues: Object.fromEntries(this.watchRowIds.map((id, i) => [id, n.values[i]!])),
+          });
+        }
+        return;
+      }
       if (n.kind === 'monitor') {
         // Una notifica di un blocco non più osservato (o appena cambiato) si scarta.
         if (this.sentMonitor === `${n.block.kind}${n.block.number}`)
@@ -151,6 +191,8 @@ export class SimController {
     const s = this.session;
     this.session = undefined;
     this.sentMonitor = undefined;
+    this.sentWatch = undefined;
+    this.watchPlanFor = undefined;
     s?.dispose();
     if (this.store.getState().sim.phase !== 'off') this.store.getState().setSim(SIM_OFF);
   }
@@ -289,6 +331,109 @@ export class SimController {
       this.push('error', 'simMonitorFailed', { message: errorText(e) });
     };
     req.then(done, fail);
+  }
+
+  /** «Osserva tutto» di una tabella di controllo: accende l'osservazione, o la spegne se già accesa. */
+  toggleWatch(deviceId: string, tableId: string): void {
+    const st = this.store.getState();
+    if (st.sim.phase !== 'on' || st.sim.deviceId !== deviceId) return;
+    const w = st.sim.watch;
+    if (w && w.deviceId === deviceId && w.tableId === tableId) {
+      st.setSim({ watch: null, watchValues: null });
+    } else st.setSim({ watch: { deviceId, tableId }, watchValues: null });
+  }
+
+  /** Piano di osservazione della tabella (righe con operando risolto e formato adatto). */
+  private planOf(dev: PlcDevice, table: WatchTable) {
+    const cached = this.watchPlanFor;
+    if (cached && cached.dev === dev && cached.table === table) return cached;
+    const resolve = watchResolverFor(dev, findCpu(dev.cpu.typeId));
+    const plan = watchPlan(table.rows, (row) => resolveRow(resolve, row));
+    this.watchPlanFor = { dev, table, ...plan };
+    return this.watchPlanFor;
+  }
+
+  /**
+   * Allinea il worker all'osservazione della tabella di controllo: la ferma se la tabella non è più
+   * visibile, e quando le righe cambiano manda le voci nuove (le notifiche arrivano su richiesta).
+   */
+  private syncWatch(): void {
+    const st = this.store.getState();
+    const w = st.sim.watch;
+    const dev = w && st.doc ? findDevice(st.doc.project, w.deviceId) : undefined;
+    const table = w && dev ? findWatchTable(dev, w.tableId) : undefined;
+    if (w && !(dev && table && watchStillShown(st, w.deviceId, w.tableId))) {
+      st.setSim({ watch: null, watchValues: null });
+      return; // lo stato è cambiato: la sottoscrizione richiama questa funzione
+    }
+    const plan = dev && table ? this.planOf(dev, table) : undefined;
+    const key = plan ? JSON.stringify(plan.items) : undefined;
+    const s = this.session;
+    if (!s) return;
+    if (plan) this.watchRowIds = plan.rowIds;
+    if (key === this.sentWatch) return;
+    this.sentWatch = key;
+    if (!plan && st.sim.watchValues) st.setSim({ watchValues: null });
+    this.watchInFlight++;
+    s.request({ op: 'watch', items: plan?.items ?? [] }).then(
+      () => {
+        if (this.session !== s) return;
+        this.watchInFlight--;
+        if (this.failedWatch === key) this.failedWatch = undefined;
+      },
+      (e: unknown) => {
+        if (this.session !== s) return;
+        this.watchInFlight--;
+        // La richiesta non è arrivata: alla prossima occasione si riprova.
+        if (this.sentWatch === key) this.sentWatch = undefined;
+        // Il messaggio una sola volta per voci: il nuovo tentativo può ripetersi a ogni notifica.
+        if (this.failedWatch === key) return;
+        this.failedWatch = key;
+        this.push('error', 'simWatchFailed', { message: errorText(e) });
+      },
+    );
+  }
+
+  /**
+   * «Comanda»: scrive una volta i valori di comando delle righe valide; gli errori (di riga o del
+   * simulatore) tornano per riga e non bloccano le altre. `null` se la simulazione non c'è.
+   */
+  async commandWatch(
+    deviceId: string,
+    tableId: string,
+  ): Promise<{ errors: Record<string, WatchRowError>; written: number } | null> {
+    const s = this.session;
+    const st = this.store.getState();
+    const dev = st.doc && findDevice(st.doc.project, deviceId);
+    const table = dev && findWatchTable(dev, tableId);
+    if (!s || !dev || !table || st.sim.deviceId !== deviceId) return null;
+    const resolve = watchResolverFor(dev, findCpu(dev.cpu.typeId));
+    const plan = planCommand(table.rows, (row) => resolveRow(resolve, row));
+    const errors = { ...plan.errors };
+    let written = 0;
+    if (plan.writes.length > 0) {
+      let results: WriteResult[] | undefined;
+      let failure: string | undefined;
+      try {
+        results = await s.request<WriteResult[]>({
+          op: 'write',
+          items: plan.writes.map((x) => x.req),
+        });
+      } catch (e) {
+        failure = errorText(e);
+      }
+      if (this.session !== s) return null;
+      if (failure !== undefined) this.push('error', 'simWriteFailed', { message: failure });
+      plan.writes.forEach((x, i) => {
+        const r = results?.[i];
+        if (r && 'ok' in r) written++;
+        else {
+          const message = failure ?? (r && 'error' in r ? r.error : '');
+          errors[x.rowId] = { key: 'HOST', params: { message } };
+        }
+      });
+    }
+    return { errors, written };
   }
 
   /** "Carica nel dispositivo" sul simulatore. */

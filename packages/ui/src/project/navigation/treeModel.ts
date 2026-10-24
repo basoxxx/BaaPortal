@@ -150,6 +150,17 @@ function deviceNode(dev: PlcDevice): TreeNode {
       children: [],
       ref: { kind: 'source', deviceId: dev.id, id: x.id },
     }));
+  const watchNodes = [...dev.watchTables]
+    .sort((a, b) => byName(a.name, b.name))
+    .map((w): TreeNode => ({
+      id: ids.watchTable(dev.id, w.id),
+      labelKey: '',
+      label: `${w.name} [${w.rows.length}]`,
+      icon: 'objWatch',
+      enabled: true,
+      children: [],
+      ref: { kind: 'watchTable', deviceId: dev.id, id: w.id },
+    }));
   const systemNodes = systemBlocksOf(dev).map((b): TreeNode => ({
     id: ids.sysBlock(dev.id, `${b.kind}${b.number}`),
     labelKey: '',
@@ -221,7 +232,10 @@ function deviceNode(dev: PlcDevice): TreeNode {
         [leaf(ids.folder(dev.id, 'types-add'), 'tree.plc.addUdt', 'treeAdd'), ...types],
         'types',
       ),
-      folderNode(dev, 'watch', 'tree.plc.watch', 'treeWatch', false),
+      folderNode(dev, 'watch', 'tree.plc.watch', 'treeWatch', true, [
+        leaf(ids.folder(dev.id, 'watch-add'), 'tree.plc.addWatchTable', 'treeAdd'),
+        ...watchNodes,
+      ]),
       folderNode(dev, 'backup', 'tree.plc.backup', 'treeBackup', false),
       folderNode(dev, 'prog-info', 'tree.plc.progInfo', 'treeProgInfo', false),
     ],

@@ -1,6 +1,6 @@
 import type { BlockMeta } from '@baaportal/mc7';
 
-export const FORMAT_VERSION = 3;
+export const FORMAT_VERSION = 4;
 
 export interface ProjectMeta {
   name: string;
@@ -208,6 +208,27 @@ export interface ExternalSource {
   listExtras?: Record<string, unknown>;
 }
 
+/** Formato di visualizzazione e di comando di una riga di tabella di controllo. */
+export type WatchFormat =
+  'BOOL' | 'DEC' | 'HEX' | 'BIN' | 'CHAR' | 'FLOAT' | 'S5TIME' | 'TIME' | 'BCD';
+
+export interface WatchRow {
+  id: string;
+  /** Simbolo o indirizzo, come scritto dall'utente. */
+  operand: string;
+  format: WatchFormat;
+  /** Valore di comando, come scritto (vuoto o assente: la riga non si comanda). */
+  modify?: string;
+  comment?: string;
+}
+
+/** Tabella di controllo: righe osservabili e comandabili sul simulatore. */
+export interface WatchTable {
+  id: string;
+  name: string;
+  rows: WatchRow[];
+}
+
 export interface PlcDevice {
   id: string;
   name: string;
@@ -217,6 +238,8 @@ export interface PlcDevice {
   udts: Udt[];
   blocks: Block[];
   sources: ExternalSource[];
+  /** Tabelle di controllo (formato 4). */
+  watchTables: WatchTable[];
   /** Percorsi di gruppo, es. 'A' e 'A/B'. */
   groups: { blocks: string[]; tags: string[]; types: string[] };
   /** Chiavi sconosciute della voce del dispositivo in project.json: si riscrivono com'erano. */
@@ -224,14 +247,14 @@ export interface PlcDevice {
 }
 
 export interface Project {
-  formatVersion: 3;
+  formatVersion: 4;
   meta: ProjectMeta;
   devices: PlcDevice[];
 }
 
 export type ObjectRef =
   | { kind: 'device'; deviceId: string }
-  | { kind: 'block' | 'udt' | 'tagTable' | 'source'; deviceId: string; id: string }
+  | { kind: 'block' | 'udt' | 'tagTable' | 'source' | 'watchTable'; deviceId: string; id: string }
   | { kind: 'tag' | 'constant'; deviceId: string; tableId: string; id: string }
   | {
       kind: 'member';
