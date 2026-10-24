@@ -1,4 +1,4 @@
-# CPU S7-300 simulata — riferimento BaaPortal (piani 2A e 2B)
+# CPU S7-300 simulata — riferimento BaaPortal (piani 2A, 2B e 2C)
 
 Questo documento descrive la CPU simulata del pacchetto `@baaportal/sim` (piani 2A e 2B): modello di memoria, registri, parola di stato, regole di richiamo dei blocchi, ciclo, avvio, cancellazione totale e codici d'errore (piano 2A); temporizzatori e contatori S5, eventi e OB, SFC, SFB 0–5 e avviso «non simulata» (piano 2B, §10–§13). Le scelte che il manuale pubblico non copre sono marcate **⚠️**; le raccoglie anche `docs/limiti-noti.md` (sezioni «Simulatore (piano 2A)» e «Simulatore (piano 2B)»).
 
@@ -320,3 +320,14 @@ Il tempo viene dall'orologio della CPU (lo stesso di TIME_TCK).
 ### 13.2 SFC e SFB «non simulati»
 
 Una SFC o un SFB senza gestore (cioè **tutte** quelle diverse da SFC 0, 1, 20, 21, 22, 23, 24, 46, 47, 51, 64 e SFB 0–5) è un **avviso, non un errore** (R5): la chiamata non scrive alcuna uscita, imposta **BR = 0** e la CPU prosegue. L'avviso consiste in una voce nel buffer di diagnostica (`SFC_NON_SIMULATA` o `SFB_NON_SIMULATA`, con numero e nome del blocco) e in un evento `{ type: 'warning' }`; è emesso **una volta per numero e per periodo di RUN**. Una SFC o un SFB che non esiste nemmeno nel catalogo dà invece `BLOCCO_NON_CARICATO` (OB121 con SW_FLT 16#3D o 16#3F).
+
+## 14. Ospite nell'app (piano 2C)
+
+Nell'app la CPU simulata gira in un **Web Worker** del renderer (`packages/ui/src/sim/`), non in un processo separato: il simulatore è TypeScript puro e il Worker non blocca l'interfaccia. `SimHost` (puro, testabile senza Worker) è l'unico che tocca `SimCpu`; `SimController` nel renderer lo pilota per messaggi.
+
+- **Richieste** (renderer → Worker, `SimRequest`): `start`, `download` (blocchi nell'ordine di caricamento), `mode` (RUN/STOP), `mres`, `setInputs` (byte degli ingressi fisici), `interrupt` (OB82/OB86 con indirizzo logico del modulo, 0..65535), `monitor` (blocco da osservare, o nessuno), `watch` (operandi già risolti dal renderer), `write` (comanda), `stop`. Ogni richiesta ha un `id` e una risposta.
+- **Notifiche** (Worker → renderer, `SimNotice`): `status` (modo, tempi di ciclo, buffer di diagnostica, avvisi, ingressi e uscite fisiche) circa ogni 200 ms; `monitor` con i passi registrati; `watch` con i valori grezzi richiesti; `error`.
+- **Osservazione.** La tabella delle righe viene dal compilatore (ogni istruzione MC7 ha la riga AWL che l'ha prodotta, anche per le CALL espanse). Per il blocco osservato la CPU registra, per ogni istruzione, RLO, STA, ACCU1, ACCU2 e parola di stato. ⚠️ Si registra solo la **prima esecuzione** di ogni istruzione nel ciclo. Un blocco modificato dopo il caricamento o importato senza tabella non si osserva.
+- **Ingressi.** Il pannello I/O scrive negli ingressi fisici (`physIn`), come farebbe il campo; non forza. Per PQ si riflette la scrittura anche in Q.
+- **Tabelle di controllo.** Il renderer risolve simboli e indirizzi (stessa risoluzione del compilatore) in area, DB, byte, bit e dimensione; il Worker restituisce byte grezzi big-endian e il renderer li formatta. T e C si leggono come parola BCD; la scrittura su T e C è rifiutata (`TC_WRITE`). Al più 1000 voci per richiesta.
+- La CPU del Worker non avanza il tempo come una CPU vera (§5): i tempi di ciclo mostrati dipendono dal computer.
