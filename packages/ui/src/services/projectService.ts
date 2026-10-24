@@ -238,6 +238,16 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
   const stampOf = (d: Date) =>
     `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}`;
 
+  async function confirmOverwrite(path: string): Promise<boolean> {
+    if (!(await bridge.fileExists(path))) return true;
+    return bridge.askQuestion({
+      title: t('archive.overwrite.title'),
+      message: t('archive.overwrite.message', { path }),
+      yes: t('archive.overwrite.yes'),
+      no: t('archive.overwrite.no'),
+    });
+  }
+
   async function archive(): Promise<boolean> {
     if (!store.getState().doc) return false;
     if (!(await ensureCanDiscard())) return false;
@@ -245,28 +255,56 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
     if (!doc) return false;
     const name = doc.project.meta.name;
     const when = now();
-    const filters = [{ name: t('archive.filter'), extensions: ['baapz'] }];
+    // Nome del .baap nell'archivio: quello del file aperto, altrimenti il nome del progetto ripulito.
+    const fileBase = doc.filePath.replaceAll('\\', '/').split('/').pop() ?? '';
+    const stem = fileBase.replace(/\.baap$/, '');
+    const projectFileName =
+      fileBase.endsWith('.baap') && validateProjectName(stem).ok
+        ? fileBase
+        : `${validateProjectName(name).ok ? name : 'Progetto'}.baap`;
     let path: string | null;
     try {
       path = await bridge.showSaveFileDialog({
         defaultName: `${name}_${stampOf(when)}.baapz`,
-        filters,
+        filters: [{ name: t('archive.filter'), extensions: ['baapz'] }],
       });
     } catch (e) {
       await showError(t('errors.read', { path: '', code: errorCode(e) }));
       return false;
     }
     if (!path) return false;
-    if (!/\.baapz$/i.test(path)) path = `${path}.baapz`;
+    if (!/\.baapz$/i.test(path)) {
+      path = `${path}.baapz`;
+      // L'estensione aggiunta non è passata dal controllo del dialogo nativo.
+      if (!(await confirmOverwrite(path))) return false;
+    }
     try {
+      // Si archivia la versione su disco; la memoria solo se il file non c'è.
+      let baap: Uint8Array | undefined;
+      if (await bridge.fileExists(doc.filePath)) {
+        baap = await bridge.readFile(doc.filePath);
+        readBaap(baap);
+      }
       const bytes = writeBaapz(doc.project, {
         appVersion,
-        projectFileName: `${name}.baap`,
+        projectFileName,
         now: when,
+        ...(baap ? { baap } : {}),
       });
       await bridge.writeFileAtomic(path, bytes);
     } catch (e) {
-      await showError(t('errors.write', { path, code: errorCode(e) }));
+      if (e instanceof BaapzFormatError) {
+        await showError(
+          t('errors.archiveFailed', {
+            message: t(`errors.baapz.${e.code}`),
+            code: e.detail ? `${e.code}: ${e.detail}` : e.code,
+          }),
+        );
+      } else if (e instanceof BaapFormatError) {
+        await showError(t(`errors.baap.${e.code}`));
+      } else {
+        await showError(t('errors.write', { path, code: errorCode(e) }));
+      }
       return false;
     }
     store
@@ -297,15 +335,7 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
     if (!dir) return false;
     // Il nome viene da un file non fidato: readBaapz ha già garantito che sia un nome semplice.
     const target = joinPath(dir, manifest.projectFileName);
-    if (await bridge.fileExists(target)) {
-      const yes = await bridge.askQuestion({
-        title: t('archive.overwrite.title'),
-        message: t('archive.overwrite.message', { path: target }),
-        yes: t('archive.overwrite.yes'),
-        no: t('archive.overwrite.no'),
-      });
-      if (!yes) return false;
-    }
+    if (!(await confirmOverwrite(target))) return false;
     if (!(await ensureCanDiscard())) return false;
     try {
       await bridge.writeFileAtomic(target, baap);

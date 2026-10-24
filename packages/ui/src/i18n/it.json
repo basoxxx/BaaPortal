@@ -28,7 +28,8 @@
       "PROGETTO_MANCANTE": "L'archivio non contiene il file di progetto atteso.",
       "PROGETTO_ILLEGGIBILE": "Il progetto contenuto nell'archivio è danneggiato."
     },
-    "baapzFailed": "Impossibile ritirare l'archivio: {{message}} (codice {{code}}). Nessun file è stato scritto."
+    "baapzFailed": "Impossibile ritirare l'archivio: {{message}} (codice {{code}}). Nessun file è stato scritto.",
+    "archiveFailed": "Impossibile archiviare il progetto: {{message}} (codice {{code}}). Nessun file è stato scritto."
   },
   "confirm": {
     "unsaved": {

@@ -28,7 +28,8 @@
       "PROGETTO_MANCANTE": "The archive does not contain the expected project file.",
       "PROGETTO_ILLEGGIBILE": "The project inside the archive is damaged."
     },
-    "baapzFailed": "Cannot retrieve the archive: {{message}} (code {{code}}). No file was written."
+    "baapzFailed": "Cannot retrieve the archive: {{message}} (code {{code}}). No file was written.",
+    "archiveFailed": "Cannot archive the project: {{message}} (code {{code}}). No file was written."
   },
   "confirm": {
     "unsaved": {

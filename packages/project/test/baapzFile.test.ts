@@ -75,22 +75,68 @@ describe('baapz', () => {
     });
   });
 
-  it.each(['../x.baap', 'a/b.baap', 'a\\b.baap', 'C:x.baap', '..', '.', 'x.txt'])(
-    'nome progetto non valido %s → PROGETTO_MANCANTE (nome non valido)',
-    (name) => {
-      const z = zipSync({
-        'manifest.json': manifest({ projectFileName: name }),
-        [name]: writeBaap(project, { appVersion: '1' }),
-      });
-      expect(codeOf(() => readBaapz(z))).toEqual({
-        code: 'PROGETTO_MANCANTE',
-        detail: 'nome non valido',
-      });
-    },
-  );
+  it.each([
+    'NUL.baap',
+    'a*b.baap',
+    'x .baap',
+    '../x.baap',
+    'a/b.baap',
+    'a\\b.baap',
+    'C:x.baap',
+    '..',
+    '.',
+    'x.txt',
+  ])('nome progetto non valido %s → PROGETTO_MANCANTE (nome non valido)', (name) => {
+    const z = zipSync({
+      'manifest.json': manifest({ projectFileName: name }),
+      [name]: writeBaap(project, { appVersion: '1' }),
+    });
+    expect(codeOf(() => readBaapz(z))).toEqual({
+      code: 'PROGETTO_MANCANTE',
+      detail: 'nome non valido',
+    });
+  });
 
   it('file del progetto assente → PROGETTO_MANCANTE', () => {
     const z = zipSync({ 'manifest.json': manifest({}) });
     expect(codeOf(() => readBaapz(z)).code).toBe('PROGETTO_MANCANTE');
+  });
+
+  it('manifesto non oggetto o con campi di tipo errato → MANIFESTO_MANCANTE', () => {
+    for (const raw of ['[]', 'null', '5']) {
+      const z = zipSync({ 'manifest.json': strToU8(raw) });
+      expect(codeOf(() => readBaapz(z)).code).toBe('MANIFESTO_MANCANTE');
+    }
+    for (const over of [
+      { formatVersion: 0 },
+      { formatVersion: 1.5 },
+      { formatVersion: '1' },
+      { appVersion: 1 },
+      { createdAt: null },
+    ]) {
+      const z = zipSync({ 'manifest.json': manifest(over), 'a.baap': strToU8('x') });
+      expect(codeOf(() => readBaapz(z)).code).toBe('MANIFESTO_MANCANTE');
+    }
+  });
+
+  it('voce troppo grande (manifesto > 1 MB) → NON_ZIP troppo grande, senza gonfiarla', () => {
+    const z = zipSync({ 'manifest.json': new Uint8Array(1024 * 1024 + 1) });
+    expect(codeOf(() => readBaapz(z))).toEqual({ code: 'NON_ZIP', detail: 'troppo grande' });
+  });
+
+  it('writeBaapz con nome non valido lancia BaapzFormatError', () => {
+    expect(() => writeBaapz(project, { ...opts, projectFileName: '../x.baap' })).toThrow(
+      BaapzFormatError,
+    );
+  });
+
+  it('zip con voci in più: le ignora', () => {
+    const z = zipSync({
+      'manifest.json': manifest({ projectFileName: 'a.baap' }),
+      'a.baap': writeBaap(project, { appVersion: '1' }),
+      'extra.txt': strToU8('altro'),
+      '../evil': strToU8('x'),
+    });
+    expect(readBaapz(z).manifest.projectFileName).toBe('a.baap');
   });
 });
