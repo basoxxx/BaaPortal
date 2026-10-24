@@ -831,7 +831,7 @@
     "updated": "Aggiornati: {{count}}",
     "skipped": "Scartati: {{count}}",
     "skippedList": "Righe scartate",
-    "skippedRow": "Riga {{line}} {{sheet}}: {{reason}}",
+    "skippedRow": "Riga {{line}}{{sheet}}: {{reason}}",
     "sheet": {
       "tags": "(foglio variabili)",
       "constants": "(foglio costanti)"
@@ -848,7 +848,8 @@
       "NOME_VUOTO": "nome vuoto",
       "NOME_DOPPIO": "nome ripetuto nel file: {{detail}}",
       "RIGA_ILLEGGIBILE": "riga illeggibile",
-      "VALORE_VUOTO": "valore vuoto per {{detail}}"
+      "VALORE_VUOTO": "valore vuoto per {{detail}}",
+      "NOME_IN_ALTRA_TABELLA": "nome già usato nella tabella \"{{detail}}\""
     }
   }
 }

@@ -12,6 +12,7 @@ import {
   createTagTable,
   findDevice,
   findTagTable,
+  type PlcDevice,
   uniqueName,
   type TagTable,
 } from '@baaportal/project';
@@ -60,10 +61,13 @@ const filters = (first: Format): FileFilter[] => {
 /**
  * Applica righe lette da file a una tabella (senza toccarla): nome già presente (maiuscole
  * indifferenti) aggiornato con lo stesso id, nome nuovo creato. Vale anche per le costanti.
+ * `otherNames`: nomi (in minuscolo) di variabili e costanti delle ALTRE tabelle del PLC, con il
+ * nome della tabella: un nome già lì non si crea (i nomi sono unici per CPU) e va negli scartati.
  */
 export function applyTagImport(
   table: TagTable,
   parsed: ParsedTags,
+  otherNames: ReadonlyMap<string, string> = new Map(),
 ): { table: TagTable; summary: ImportSummary } {
   // Copia a mano: dentro `edit` la tabella è una bozza, che structuredClone non copia.
   const out: TagTable = {
@@ -73,6 +77,18 @@ export function applyTagImport(
   };
   let created = 0;
   let updated = 0;
+  const skipped: RowError[] = [...parsed.errors];
+  const clash = (line: number, name: string, sheet?: 'constants'): boolean => {
+    const other = otherNames.get(name.toLowerCase());
+    if (other === undefined) return false;
+    skipped.push({
+      line,
+      ...(sheet ? { sheet } : {}),
+      code: 'NOME_IN_ALTRA_TABELLA',
+      detail: other,
+    });
+    return true;
+  };
   const indexOf = (list: { name: string }[]) =>
     new Map(list.map((x, i) => [x.name.toLowerCase(), i] as const));
   const tagAt = indexOf(out.tags);
@@ -84,6 +100,7 @@ export function applyTagImport(
       comment: r.comment,
       hmi: r.hmi,
     };
+    if (clash(r.line, r.name)) continue;
     const i = tagAt.get(r.name.toLowerCase());
     if (i === undefined) {
       tagAt.set(r.name.toLowerCase(), out.tags.length);
@@ -97,6 +114,7 @@ export function applyTagImport(
   const constAt = indexOf(out.constants);
   for (const r of parsed.constants) {
     const values = { name: r.name, type: r.type, value: r.value, comment: r.comment };
+    if (clash(r.line, r.name, 'constants')) continue;
     const i = constAt.get(r.name.toLowerCase());
     if (i === undefined) {
       constAt.set(r.name.toLowerCase(), out.constants.length);
@@ -107,7 +125,7 @@ export function applyTagImport(
       updated++;
     }
   }
-  return { table: out, summary: { created, updated, skipped: [...parsed.errors] } };
+  return { table: out, summary: { created, updated, skipped } };
 }
 
 const fail = (store: StoreApi<AppState>, textKey: string, params: Record<string, string>) => {
@@ -188,41 +206,46 @@ export async function importTagTable(
   }
   const hasRows = parsed.tags.length + parsed.constants.length > 0;
   let summary: ImportSummary = { created: 0, updated: 0, skipped: parsed.errors };
-  let tableName = '';
+  const dev0 = hasDevice();
+  // Nome che avrebbe la tabella nuova (mostrato anche se non si crea nulla).
+  const newName = () =>
+    uniqueName(
+      stemOf(path!) || t('defaults.tagTable'),
+      (hasDevice() as PlcDevice).tagTables.map((x) => x.name),
+    );
+  let tableName = target.tableId
+    ? ((dev0 && findTagTable(dev0, target.tableId)?.name) ?? '')
+    : newName();
   let tableId: string | undefined = target.tableId;
   if (hasRows) {
     try {
       store.getState().edit('history.importTags', (p) => {
         const dev = findDevice(p, target.deviceId);
         if (!dev) return;
-        let table = target.tableId ? findTagTable(dev, target.tableId) : undefined;
-        if (target.tableId && !table) return;
-        const isNew = !table;
-        if (!table) {
-          table = createTagTable(
-            uniqueName(
-              stemOf(path!) || t('defaults.tagTable'),
-              dev.tagTables.map((x) => x.name),
-            ),
-          );
+        const existing = target.tableId ? findTagTable(dev, target.tableId) : undefined;
+        if (target.tableId && !existing) return;
+        const table = existing ?? createTagTable(newName());
+        const others = new Map<string, string>();
+        for (const o of dev.tagTables) {
+          if (o.id === table.id) continue;
+          for (const x of [...o.tags, ...o.constants]) others.set(x.name.toLowerCase(), o.name);
         }
-        const res = applyTagImport(table, parsed);
-        if (isNew) dev.tagTables.push(res.table);
-        else Object.assign(table, res.table);
+        const res = applyTagImport(table, parsed, others);
         summary = res.summary;
         tableName = res.table.name;
-        tableId = res.table.id;
+        if (existing) Object.assign(existing, res.table);
+        else if (res.summary.created > 0) {
+          dev.tagTables.push(res.table);
+          tableId = res.table.id;
+        }
       });
     } catch (e) {
       fail(store, 'messages.tagsImportFailed', { name, message: errorText(e) });
       return;
     }
-  } else if (target.tableId) {
-    const dev = hasDevice();
-    tableName = (dev && findTagTable(dev, target.tableId)?.name) || '';
   }
   const s = store.getState();
-  if (!target.tableId && tableId && hasRows) s.select(ids.tagTable(target.deviceId, tableId));
+  if (!target.tableId && tableId) s.select(ids.tagTable(target.deviceId, tableId));
   s.pushMessage({
     severity: summary.skipped.length > 0 ? 'warning' : 'info',
     textKey: 'messages.tagsImported',

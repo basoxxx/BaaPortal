@@ -831,7 +831,7 @@
     "updated": "Updated: {{count}}",
     "skipped": "Skipped: {{count}}",
     "skippedList": "Skipped rows",
-    "skippedRow": "Row {{line}} {{sheet}}: {{reason}}",
+    "skippedRow": "Row {{line}}{{sheet}}: {{reason}}",
     "sheet": {
       "tags": "(tags sheet)",
       "constants": "(constants sheet)"
@@ -848,7 +848,8 @@
       "NOME_VUOTO": "empty name",
       "NOME_DOPPIO": "name repeated in the file: {{detail}}",
       "RIGA_ILLEGGIBILE": "unreadable row",
-      "VALORE_VUOTO": "empty value for {{detail}}"
+      "VALORE_VUOTO": "empty value for {{detail}}",
+      "NOME_IN_ALTRA_TABELLA": "name already used in table \"{{detail}}\""
     }
   }
 }

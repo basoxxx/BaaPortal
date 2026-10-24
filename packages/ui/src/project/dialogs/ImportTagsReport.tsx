@@ -36,7 +36,7 @@ export function ImportTagsReport({ fileName, tableName, summary, onClose }: Prop
             <li key={i}>
               {t('tagIo.skippedRow', {
                 line: e.line,
-                sheet: e.sheet ? t(`tagIo.sheet.${e.sheet}`) : '',
+                sheet: e.sheet ? ` ${t(`tagIo.sheet.${e.sheet}`)}` : '',
                 reason: t(`tagIo.err.${e.code}`, { detail: e.detail ?? '' }),
               })}
             </li>

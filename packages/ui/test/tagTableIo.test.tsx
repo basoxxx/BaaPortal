@@ -1,6 +1,6 @@
 import { act, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { parseTagsXlsx } from '@baaportal/importers';
+import { parseTagsCsv, parseTagsXlsx, tagsToXlsx } from '@baaportal/importers';
 import { findDevice, type Tag, type TagTable } from '@baaportal/project';
 import { applyTagImport } from '../src/project/navigation/tagTableIo';
 import { ids } from '../src/project/navigation/treeIds';
@@ -81,6 +81,57 @@ describe('applyTagImport', () => {
     expect(out.tags[1]!.id).not.toBe('t-A');
     expect(summary).toMatchObject({ created: 1, updated: 1 });
     expect(summary.skipped).toEqual([{ line: 4, code: 'TIPO_NON_VALIDO', detail: 'Foo' }]);
+  });
+});
+
+describe('applyTagImport: nomi unici per CPU', () => {
+  const base: TagTable = { id: 'tb', name: 'T', group: '', tags: [], constants: [] };
+  it("un nome presente in un'altra tabella non si crea: scartato con NOME_IN_ALTRA_TABELLA", () => {
+    const row = (name: string, line: number) => ({
+      line,
+      name,
+      path: '',
+      type: 'Int',
+      address: `%MW${line * 2}`,
+      comment: '',
+      hmi: true,
+    });
+    const crow = (name: string, line: number) => ({
+      line,
+      name,
+      path: '',
+      type: 'Int',
+      value: '1',
+      comment: '',
+    });
+    const { table, summary } = applyTagImport(
+      base,
+      { tags: [row('Dup', 2), row('Ok', 3)], constants: [crow('K', 2)], errors: [] },
+      new Map([
+        ['dup', 'Altra'],
+        ['k', 'Costanti'],
+      ]),
+    );
+    expect(table.tags.map((x) => x.name)).toEqual(['Ok']);
+    expect(table.constants).toEqual([]);
+    expect(summary.created).toBe(1);
+    expect(summary.skipped).toEqual([
+      { line: 2, code: 'NOME_IN_ALTRA_TABELLA', detail: 'Altra' },
+      { line: 2, sheet: 'constants', code: 'NOME_IN_ALTRA_TABELLA', detail: 'Costanti' },
+    ]);
+  });
+
+  it('maiuscole diverse: aggiorna il tag esistente, stesso id, nome del file', () => {
+    const t: TagTable = { ...base, tags: [tag('motore', 'Int', '%MW2')] };
+    const { table } = applyTagImport(t, {
+      tags: [
+        { line: 2, name: 'MOTORE', path: '', type: 'Int', address: '%MW4', comment: '', hmi: true },
+      ],
+      constants: [],
+      errors: [],
+    });
+    expect(table.tags).toHaveLength(1);
+    expect(table.tags[0]).toMatchObject({ id: 't-motore', name: 'MOTORE', address: '%MW4' });
   });
 });
 
@@ -167,9 +218,134 @@ describe('tagTableIo', () => {
       expect(dlg).toHaveTextContent('Creati: 2');
       expect(dlg).toHaveTextContent('Aggiornati: 1');
       expect(dlg).toHaveTextContent('Scartati: 1');
-      expect(dlg).toHaveTextContent('Riga 5');
-      expect(dlg).toHaveTextContent('Foo');
+      expect(dlg).toHaveTextContent('Riga 5: tipo di dati non valido: Foo');
       expect(table(app).tags.map((x) => x.name)).toEqual(['A', 'B', 'C']);
+    },
+    T,
+  );
+
+  it(
+    'sulla cartella Variabili PLC: tabella nuova col nome del file; nome in collisione → _1; punto nel nome',
+    async () => {
+      const app = await setup();
+      const folder = () =>
+        app.user.pointer({ keys: '[MouseRight]', target: tn(ids.folder(PLC, 'tags')) });
+      const run = async (file: string, tagName: string) => {
+        app.bridge.files.set(file, csv(`${tagName};;Int;%MW2;;True;True;True`));
+        app.bridge.openFileResults.push([file]);
+        await folder();
+        await app.user.click(screen.getByRole('menuitem', { name: 'Importa variabili…' }));
+        await screen.findByTestId('import-tags-report');
+        await app.user.click(screen.getByTestId('dialog-ok'));
+      };
+      const names = () => dev(app).tagTables.map((x) => x.name);
+      await run('/in/Motori.csv', 'X');
+      expect(names()).toEqual(['Tabella delle variabili standard', 'Motori']);
+      expect(past(app)).toBeGreaterThan(0);
+      await run('/in/Motori.csv', 'Y');
+      expect(names()).toContain('Motori_1');
+      await run('/in/tags.v2.csv', 'Z');
+      expect(names()).toContain('tags.v2');
+    },
+    T,
+  );
+
+  it(
+    'importa costanti da xlsx e le conta nel riepilogo',
+    async () => {
+      const app = await setup();
+      const src: TagTable = {
+        id: 's',
+        name: 'S',
+        group: '',
+        tags: [tag('A', 'Int', '%MW2')],
+        constants: [{ id: 'c1', name: 'Max', type: 'Int', value: '5', comment: 'm' }],
+      };
+      app.bridge.files.set('/in/v.xlsx', tagsToXlsx(src));
+      app.bridge.openFileResults.push(['/in/v.xlsx']);
+      await menu(app, 'Importa variabili…');
+      const dlg = await screen.findByTestId('import-tags-report');
+      expect(dlg).toHaveTextContent('Creati: 2');
+      expect(table(app).constants).toMatchObject([{ name: 'Max', type: 'Int', value: '5' }]);
+    },
+    T,
+  );
+
+  it(
+    'esporta csv: inizia col BOM e, senza estensione scelta, la aggiunge',
+    async () => {
+      const app = await setup([tag('A', 'Int', '%MW2')]);
+      app.bridge.saveFileResults.push('/out/T');
+      await menu(app, 'Esporta variabili…');
+      await waitFor(() => expect(app.bridge.files.has('/out/T.xlsx')).toBe(true));
+      app.bridge.saveFileResults.push('/out/T2.csv');
+      await menu(app, 'Esporta variabili…');
+      await waitFor(() => expect(app.bridge.files.has('/out/T2.csv')).toBe(true));
+      expect([...app.bridge.files.get('/out/T2.csv')!.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+      expect(
+        parseTagsCsv(new TextDecoder().decode(app.bridge.files.get('/out/T2.csv')!)).tags,
+      ).toHaveLength(1);
+    },
+    T,
+  );
+
+  it(
+    'un file con sole righe errate: nessuna modifica, il report elenca gli errori',
+    async () => {
+      const app = await setup([tag('A', 'Int', '%MW2')]);
+      const before = structuredClone(table(app));
+      app.bridge.files.set('/in/v.csv', csv('D;;Foo;%MW10;;True;True;True'));
+      app.bridge.openFileResults.push(['/in/v.csv']);
+      const n = past(app);
+      await menu(app, 'Importa variabili…');
+      const dlg = await screen.findByTestId('import-tags-report');
+      expect(dlg).toHaveTextContent('Riga 2: tipo di dati non valido: Foo');
+      expect(dlg).toHaveTextContent('nella tabella "Tabella delle variabili standard"');
+      expect(past(app)).toBe(n);
+      expect(table(app)).toEqual(before);
+    },
+    T,
+  );
+
+  it(
+    'su una nuova tabella senza righe valide il report mostra il nome che avrebbe avuto',
+    async () => {
+      const app = await setup();
+      app.bridge.files.set('/in/Vuota.csv', csv('D;;Foo;%MW10;;True;True;True'));
+      app.bridge.openFileResults.push(['/in/Vuota.csv']);
+      await app.user.pointer({ keys: '[MouseRight]', target: tn(ids.folder(PLC, 'tags')) });
+      await app.user.click(screen.getByRole('menuitem', { name: 'Importa variabili…' }));
+      const dlg = await screen.findByTestId('import-tags-report');
+      expect(dlg).toHaveTextContent('nella tabella "Vuota"');
+      expect(dev(app).tagTables).toHaveLength(1);
+    },
+    T,
+  );
+
+  it(
+    "un nome già in un'altra tabella non viene creato e il report lo spiega",
+    async () => {
+      const app = await setup([tag('A', 'Int', '%MW2')]);
+      act(() => {
+        app.store.getState().edit('history.addTagTable', (p) => {
+          findDevice(p, PLC)!.tagTables.push({
+            id: 'tb2',
+            name: 'Altra',
+            group: '',
+            tags: [],
+            constants: [],
+          });
+        });
+      });
+      app.bridge.files.set('/in/v.csv', csv('A;;Int;%MW8;;True;True;True'));
+      app.bridge.openFileResults.push(['/in/v.csv']);
+      await app.user.pointer({ keys: '[MouseRight]', target: tn(ids.tagTable(PLC, 'tb2')) });
+      await app.user.click(screen.getByRole('menuitem', { name: 'Importa variabili…' }));
+      const dlg = await screen.findByTestId('import-tags-report');
+      expect(dlg).toHaveTextContent(
+        'Riga 2: nome già usato nella tabella "Tabella delle variabili standard"',
+      );
+      expect(dev(app).tagTables[1]!.tags).toEqual([]);
     },
     T,
   );
