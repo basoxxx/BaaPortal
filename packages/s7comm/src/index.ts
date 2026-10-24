@@ -17,6 +17,7 @@ export * from './s7/userdata';
 export * from './s7/userdataRequests';
 export * from './s7/upload';
 export * from './s7/blockFile';
+export * from './s7/control';
 export * from './capture/captureLog';
 export * from './capture/dissect';
 export * from './capture/pcap';
