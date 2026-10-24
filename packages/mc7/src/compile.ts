@@ -13,7 +13,7 @@ import { expandCall } from './callExpand';
 import { codeEnvironment, toolsOf, type CodeEnvironment } from './codeEnv';
 import { blockChecksum } from './crc';
 import type { CodeMeta } from './decode';
-import { encodeCode, sameText, type Mc7Diagnostic } from './encode';
+import { encodeCode, sameText, type LineMapEntry, type Mc7Diagnostic } from './encode';
 import { dataLayout, generatedNames, type LayoutOffset } from './layout';
 import { absoluteLocalEnd, callBase, localDataLength } from './localData';
 import {
@@ -126,6 +126,12 @@ export interface CompileInput {
 
 export interface CompileResult {
   file?: Uint8Array;
+  /**
+   * Righe compilate: una voce per istruzione del codice MC7 (solo blocchi di codice compilati). Le
+   * reti invariate di un blocco importato si ricodificano dal testo, quindi hanno la mappa come le
+   * altre.
+   */
+  lines?: LineMapEntry[];
   diagnostics: Mc7Diagnostic[];
 }
 
@@ -602,7 +608,7 @@ function compileCode(
   if (localData > 0xffff) {
     diagnostics.push(blockError('LOCAL_DATA_TOO_LARGE', `Dati locali di ${localData} byte.`));
   }
-  return file({
+  const result = file({
     kindCode: KIND_CODE[kind],
     attr: ATTR_LINKED | (kind === 'FB' && multi.length > 0 ? ATTR_MULTI : 0),
     language: LANGUAGE_AWL,
@@ -615,6 +621,7 @@ function compileCode(
     ...(i.headerRaw ? { headerRaw: i.headerRaw } : {}),
     ...(i.footerRaw ? { footerRaw: i.footerRaw } : {}),
   });
+  return result.file ? { ...result, lines: code.lines } : result;
 }
 
 const isComplex = (t: SsbType): boolean =>

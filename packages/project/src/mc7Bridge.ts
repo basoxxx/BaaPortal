@@ -20,6 +20,7 @@ import {
   type CalleeInterface,
   type CompileInput,
   type Mc7Block,
+  type LineMapEntry,
   type Mc7Diagnostic,
   type NetworkFidelity,
   type ResolveCallee,
@@ -836,9 +837,9 @@ function codeInput(
 function finishModel(
   block: Block,
   state: FidelityState | undefined,
-  r: { file?: Uint8Array; diagnostics: Mc7Diagnostic[] },
+  r: { file?: Uint8Array; diagnostics: Mc7Diagnostic[]; lines?: LineMapEntry[] },
   diagnostics: Mc7Diagnostic[],
-): { file?: Uint8Array; diagnostics: Mc7Diagnostic[] } {
+): { file?: Uint8Array; diagnostics: Mc7Diagnostic[]; lines?: LineMapEntry[] } {
   if (block.kind === 'FB' && block.mc7 && state?.layoutChanged) {
     diagnostics.push(...instanceAccessWarnings(block));
   }
@@ -856,7 +857,9 @@ function finishModel(
       ),
     );
   }
-  return r.file ? { file: r.file, diagnostics } : { diagnostics };
+  return r.file
+    ? { file: r.file, diagnostics, ...(r.lines ? { lines: r.lines } : {}) }
+    : { diagnostics };
 }
 
 /** Un accesso assoluto all'area d'istanza: `DIX`/`DIB`/`DIW`/`DID n` o `[AR2,P#…]` nel DI. */
@@ -1662,7 +1665,7 @@ export function blockToMc7File(
   device: PlcDevice,
   cpu: CpuType | undefined,
   now: Date = new Date(),
-): { file?: Uint8Array; diagnostics: Mc7Diagnostic[] } {
+): { file?: Uint8Array; diagnostics: Mc7Diagnostic[]; lines?: LineMapEntry[] } {
   try {
     const state = block.mc7 ? fidelityState(block, device) : undefined;
     if (block.mc7 && state && !state.modified) {
@@ -1756,7 +1759,14 @@ export function compileDevice(
   cpu: CpuType | undefined,
   only?: string[],
   now: Date = new Date(),
-): { results: { blockId: string; file?: Uint8Array; diagnostics: Mc7Diagnostic[] }[] } {
+): {
+  results: {
+    blockId: string;
+    file?: Uint8Array;
+    diagnostics: Mc7Diagnostic[];
+    lines?: LineMapEntry[];
+  }[];
+} {
   const results = device.blocks
     .filter((b) => only === undefined || only.includes(b.id))
     .map((b) => ({ blockId: b.id, ...blockToMc7File(b, device, cpu, now) }));
