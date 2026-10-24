@@ -13,3 +13,5 @@ export * from './obStartInfo';
 export * from './events';
 export * from './cpu';
 export * from './backend';
+export * from './system/params';
+export * from './system/registry';

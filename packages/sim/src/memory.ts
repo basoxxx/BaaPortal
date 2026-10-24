@@ -114,7 +114,7 @@ export class SimMemory {
         break;
       }
       default:
-        throw new SimError('NON_SIMULATA_2B', `area ${area}`);
+        throw new SimError('MC7_NON_ESEGUIBILE', `area ${area}`);
     }
     if (!Number.isInteger(byteOffset) || byteOffset < 0 || byteOffset + length > arr.length)
       throw new SimError(

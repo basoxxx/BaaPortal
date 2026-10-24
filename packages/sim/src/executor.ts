@@ -7,6 +7,7 @@ import type { LoadedBlock, Program } from './program';
 import { newRegisters, stwToWord, type Registers } from './registers';
 import type { CounterBank } from './counters';
 import type { TimerBank } from './timers';
+import type { SystemServices } from './system/params';
 
 export interface TraceStep {
   block: { kind: string; number: number };
@@ -26,6 +27,8 @@ export interface ExecContext {
   timers: TimerBank;
   /** Contatori S5 della CPU. */
   counters: CounterBank;
+  /** Servizi delle funzioni di sistema (orologio, STOP, avvisi, SZL); la CPU li fornisce, le prove isolate no. */
+  sys?: SystemServices;
   maxCycleMs: number;
   cycleStart: number;
   trace?: (t: TraceStep) => void;
@@ -220,7 +223,7 @@ function withFormal(stmt: DecodedStatement): DecodedStatement {
   if (f.type === 'Timer' || f.type === 'Counter') return stmt;
   const size = FORMAL_SIZE[f.type];
   if (!size || stmt.operand?.kind !== 'local')
-    throw new SimError('NON_SIMULATA_2B', `parametro formale ${f.name} di tipo ${f.type}`);
+    throw new SimError('MC7_NON_ESEGUIBILE', `parametro formale ${f.name} di tipo ${f.type}`);
   return { ...stmt, operand: { ...stmt.operand, size } as typeof stmt.operand };
 }
 

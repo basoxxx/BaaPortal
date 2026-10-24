@@ -12,7 +12,7 @@ const ADDR_MASK = 0x7ffff;
  * `L` e `V` indicano i dati locali del blocco che contiene la chiamata. Puntatori senza area
  * (TIMER, COUNTER, BLOCK) non sono in memoria: `null`.
  */
-function pointerLocation(st: ExecState, p: Uint8Array): Location | null {
+export function pointerLocation(st: ExecState, p: Uint8Array): Location | null {
   const a = p[0]!;
   if (a < 0x80 || a > 0x87) return null;
   const bit = ((p[1]! << 16) | (p[2]! << 8) | p[3]!) & ADDR_MASK;

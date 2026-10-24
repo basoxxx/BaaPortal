@@ -14,8 +14,7 @@ export type SimErrorCode =
   | 'NUMERO_CONTATORE'
   | 'TEMPO_CICLO_SUPERATO'
   /** L'OB di un evento manca, e manca anche OB85 (manuale delle funzioni di sistema, OB85). */
-  | 'OB_NON_CARICATO'
-  | 'NON_SIMULATA_2B';
+  | 'OB_NON_CARICATO';
 
 /** Informazioni facoltative sull'errore, per i dati di avvio di OB121/OB122 e l'id diagnostico. */
 export interface SimErrorInfo {
@@ -50,5 +49,16 @@ export class SimError extends Error implements SimErrorInfo {
     super(detail ? `${code}: ${detail}` : code);
     this.name = 'SimError';
     if (info) Object.assign(this, info);
+  }
+}
+
+/**
+ * Richiesta di STOP dal programma (SFC 46 STP): interrompe l'esecuzione del ciclo in corso. Non è un
+ * errore della CPU: la fa passare in STOP con la voce `STOP_RICHIESTO`, senza OB di errore.
+ */
+export class StopRequest extends Error {
+  constructor(public readonly reason: string) {
+    super(`STOP richiesto: ${reason}`);
+    this.name = 'StopRequest';
   }
 }

@@ -38,7 +38,8 @@ export function readMem(st: ExecState, op: Operand | undefined, formal?: { type:
     return st.ctx.timers.value(timerNumber(st, op)).units;
   // Manuale AWL S7-300/400, «L C»: valore binario 0–999.
   if (isCounter(op, formal)) return st.ctx.counters.value(counterNumber(st, op));
-  if (op.kind === 'timerCounter') throw new SimError('NON_SIMULATA_2B', `${op.area}${op.number}`);
+  if (op.kind === 'timerCounter')
+    throw new SimError('MC7_NON_ESEGUIBILE', `${op.area}${op.number}`);
   const loc = resolveOperand(op, st.regs, st.mem, st.frame);
   return readBits(st.mem, loc, memSize(op)) >>> 0;
 }
@@ -95,7 +96,8 @@ const T: OpHandler = (st, stmt) => {
   }
   if (!op || op.kind === 'special' || op.kind === 'constant')
     throw new SimError('MC7_NON_ESEGUIBILE', 'T: operando non valido');
-  if (op.kind === 'timerCounter') throw new SimError('NON_SIMULATA_2B', `${op.area}${op.number}`);
+  if (op.kind === 'timerCounter')
+    throw new SimError('MC7_NON_ESEGUIBILE', `${op.area}${op.number}`);
   // Solo le scritture in memoria seguono l'MCR (non T STW).
   const value = mcrOff(st) ? 0 : st.regs.accu1;
   const size = memSize(op);

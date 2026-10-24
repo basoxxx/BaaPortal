@@ -79,7 +79,8 @@ function bitValue(st: ExecState, op: Operand | undefined, formal?: { type: strin
 
 function bitLocation(st: ExecState, op: Operand | undefined): ReturnType<typeof resolveOperand> {
   if (!op) throw new SimError('MC7_NON_ESEGUIBILE', 'operando mancante');
-  if (op.kind === 'timerCounter') throw new SimError('NON_SIMULATA_2B', `${op.area}${op.number}`);
+  if (op.kind === 'timerCounter')
+    throw new SimError('MC7_NON_ESEGUIBILE', `${op.area}${op.number}`);
   return resolveOperand(op, st.regs, st.mem, st.frame);
 }
 

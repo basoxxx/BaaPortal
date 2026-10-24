@@ -33,12 +33,12 @@ describe('copertura delle istruzioni da parte della batteria', () => {
     expect(DEFERRED_2B).toEqual(['CALL']);
   });
 
-  it('gli id rimandati danno NON_SIMULATA_2B; CALL non ha gestore perché non esiste in MC7', () => {
+  it('gli id rimandati danno MC7_NON_ESEGUIBILE; CALL non ha gestore perché non esiste in MC7', () => {
     // Quando il piano 2B aggiunge un gestore, l'id va tolto da DEFERRED_2B e coperto dalla batteria.
     expect(OPS['CALL']).toBeUndefined();
     for (const id of DEFERRED_2B.filter((x) => x !== 'CALL'))
       expect(() => OPS[id]!({} as never, { text: id } as never), id).toThrowError(
-        expect.objectContaining({ code: 'NON_SIMULATA_2B' }) as never,
+        expect.objectContaining({ code: 'MC7_NON_ESEGUIBILE' }) as never,
       );
   });
 });

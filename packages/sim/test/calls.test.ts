@@ -108,29 +108,32 @@ describe('richiami di FC', () => {
     expect(errorOf(() => runProgram(p)).code).toBe('STACK_BLOCCHI_PIENO');
   });
 
-  it('UC SFC 20 → NON_SIMULATA_2B', () => {
-    const p = buildProgram([ob('\tCALL SFC 20;')], {}, [
-      { name: 'SFC20', kind: 'SFC', number: 20, iface: emptyIface } as never,
-    ]);
-    expect(errorOf(() => runProgram(p)).code).toBe('NON_SIMULATA_2B');
+  it('UC SFC fuori dal catalogo → BLOCCO_NON_CARICATO (SW_FLT 16#3D)', () => {
+    const p = new Program();
+    const r = encodeCode(['\tUC SFC 199;']);
+    p.put({
+      kind: 'OB',
+      number: 1,
+      code: r.mc7,
+      localBytes: 0,
+      networkStarts: [0],
+    } as LoadedBlock);
+    const e = errorOf(() => runProgram(p));
+    expect(e.code).toBe('BLOCCO_NON_CARICATO');
+    expect(e.missingBlock).toBe('SFC');
   });
 
-  it('UC SFB → NON_SIMULATA_2B', () => {
+  it('UC SFB senza gestore non è un errore: BR = 0', () => {
     const p = new Program();
-    const put = (text: string) => {
-      const r = encodeCode([text]);
-      p.put({
-        kind: 'OB',
-        number: 1,
-        code: r.mc7,
-        localBytes: 0,
-        networkStarts: [0],
-      } as LoadedBlock);
-    };
-    for (const t of ['\tUC SFB 4;'] as const) {
-      put(t);
-      expect(errorOf(() => runProgram(p)).code).toBe('NON_SIMULATA_2B');
-    }
+    const r = encodeCode(['\tUC SFB 4;']);
+    p.put({
+      kind: 'OB',
+      number: 1,
+      code: r.mc7,
+      localBytes: 0,
+      networkStarts: [0],
+    } as LoadedBlock);
+    expect(runProgram(p, { regs: { stw: { br: true } } }).regs.stw.br).toBe(false);
   });
 });
 

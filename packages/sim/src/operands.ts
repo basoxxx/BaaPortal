@@ -109,7 +109,7 @@ export function resolveOperand(
       return withDb(op.area, op.byte * 8 + (op.bit ?? 0), op.db, regs, frame);
     case 'indirect': {
       if (op.area === 'T' || op.area === 'C')
-        throw new SimError('NON_SIMULATA_2B', `accesso indiretto a ${op.area}`);
+        throw new SimError('MC7_NON_ESEGUIBILE', `accesso indiretto a ${op.area}`);
       if (op.via.kind === 'register') {
         // Manuale AWL S7-300/400, indirizzamento indiretto: AR + offset (P#x.y, 16 bit).
         const off = parseOffset(op.via.offset);
@@ -130,7 +130,7 @@ export function resolveOperand(
       // Parametro formale di FC (`#PAR<n>`, mc7 §2.2.6): la posizione viene dalla lista dei puntatori.
       const idx = formalIndex(op.path[0]?.name);
       const p = frame.params?.[idx];
-      if (!p) throw new SimError('NON_SIMULATA_2B', `parametro formale #${op.path[0]?.name}`);
+      if (!p) throw new SimError('MC7_NON_ESEGUIBILE', `parametro formale #${op.path[0]?.name}`);
       return p;
     }
     default:

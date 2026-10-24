@@ -1,7 +1,8 @@
-import { findCpu } from '@baaportal/catalog';
+import { findCpu, findSystemBlock } from '@baaportal/catalog';
+import { buildSzl, type CpuBackend } from '@baaportal/s7-server';
 import { readBlockFile } from '@baaportal/mc7';
 import { diagFromError, syntheticEventId, type DiagEntry } from './diagnostics';
-import { SimError } from './errors';
+import { SimError, StopRequest } from './errors';
 import { EVENT, PRIORITY, hwEventId, syncFaultOf, type HwInterrupt } from './events';
 import { execBlock, newExecState, type ExecContext, type ExecState } from './executor';
 import { Program } from './program';
@@ -21,6 +22,8 @@ import {
 import { newRegisters } from './registers';
 import { CounterBank } from './counters';
 import { TimerBank } from './timers';
+import type { SystemServices } from './system/params';
+import { simBackend } from './backend';
 
 export type SimMode = 'STOP' | 'STARTUP' | 'RUN';
 
@@ -65,6 +68,13 @@ function nextDue(due: number, interval: number, t: number): number {
 export type SimEvent =
   | { type: 'mode'; mode: SimMode }
   | { type: 'diagnostic'; entry: DiagEntry }
+  /** Avviso (non un errore): per ora una SFC o un SFB non simulati. */
+  | {
+      type: 'warning';
+      code: 'SFC_NON_SIMULATA' | 'SFB_NON_SIMULATA';
+      block: string;
+      message: string;
+    }
   | { type: 'cycle'; result: CycleResult };
 
 export interface CycleResult {
@@ -80,6 +90,9 @@ const DEFAULT_TIMER_COUNT = 256;
 /** Numero di contatori se la CPU non è nel catalogo (CPU 315-2 PN/DP). */
 const DEFAULT_COUNTER_COUNT = 256;
 
+/** Numero massimo di DB se la CPU non è nel catalogo. */
+const DEFAULT_MAX_DB = 16000;
+
 /** Voci di diagnostica conservate (le più vecchie si perdono). */
 const MAX_DIAGNOSTICS = 100;
 
@@ -94,7 +107,19 @@ export class SimCpu {
   readonly counters: CounterBank;
 
   private readonly props: SimCpuProps;
+  /** Orologio di sistema: quello iniettato più il tempo di SFC 47 (WAIT), mai indietro. */
   private now: () => number;
+  /** Microsecondi di attesa di SFC 47 non ancora trascorsi sull'orologio iniettato. */
+  private waitedUs = 0;
+  /** Scarto dell'orologio della CPU (data e ora) fissato da SFC 0 (SET_CLK). */
+  private clockOffsetMs = 0;
+  /** Istante del primo avvio, origine di SFC 64 (TIME_TCK). */
+  private bootAt: number | undefined;
+  /** SFC e SFB non simulati già segnalati nel periodo di RUN in corso. */
+  private readonly warned = new Set<string>();
+  private backend: CpuBackend | undefined;
+  /** Servizi per le funzioni di sistema (SFC/SFB) in `ExecContext.sys`. */
+  private readonly services: SystemServices;
   private _mode: SimMode = 'STOP';
   private readonly diag: DiagEntry[] = [];
   private readonly listeners = new Set<(e: SimEvent) => void>();
@@ -114,7 +139,24 @@ export class SimCpu {
 
   constructor(o: SimCpuOptions) {
     this.props = o.props;
-    this.now = o.now ?? (() => Date.now());
+    const clock = o.now ?? (() => Date.now());
+    this.now = () => clock() + Math.floor(this.waitedUs / 1000);
+    this.services = {
+      clockMs: () => this.now() + this.clockOffsetMs,
+      setClockMs: (ms) => {
+        this.clockOffsetMs = ms - this.now();
+      },
+      tickMs: () => (((this.now() - (this.bootAt ?? 0)) % 2 ** 31) + 2 ** 31) % 2 ** 31,
+      wait: (us) => {
+        this.waitedUs += us;
+      },
+      stop: (reason) => {
+        throw new StopRequest(reason);
+      },
+      warnNotSimulated: (kind, number) => this.warnNotSimulated(kind, number),
+      szl: (id, index) => buildSzl((this.backend ??= simBackend(this)), id, index),
+      maxDb: findCpu(o.cpuTypeId)?.limits.maxDb ?? DEFAULT_MAX_DB,
+    };
     this.maxInstructions = o.maxInstructions;
     this.memory = new SimMemory(memorySizesFor(o.cpuTypeId));
     this.counters = new CounterBank(findCpu(o.cpuTypeId)?.limits.counters ?? DEFAULT_COUNTER_COUNT);
@@ -164,6 +206,8 @@ export class SimCpu {
     if (this._mode !== 'STOP') return;
     this.setMode('STARTUP');
     const t0 = this.now();
+    this.bootAt ??= t0;
+    this.warned.clear();
     this.record({ time: t0, code: 'AVVIO' });
     this.warmRestart();
     this.pending = [];
@@ -172,9 +216,10 @@ export class SimCpu {
       this.watchdog = t;
       const ctx = this.newContext(t);
       try {
-        this.runOb(ctx, 100, PRIORITY.OB100, ob100StartInfo(t));
+        this.runOb(ctx, 100, PRIORITY.OB100, ob100StartInfo(this.stamp(t)));
       } catch (e) {
-        this.fail(e);
+        if (e instanceof StopRequest) this.stop(e.reason);
+        else this.fail(e);
         return;
       }
     }
@@ -243,7 +288,7 @@ export class SimCpu {
         ob1StartInfo(
           this.firstCycle,
           { prev: this.st.last, min: this.st.min, max: this.st.max },
-          start,
+          this.stamp(start),
         ),
       );
       const end = this.now();
@@ -254,6 +299,7 @@ export class SimCpu {
           prio: PRIORITY.OB1,
         });
     } catch (e) {
+      if (e instanceof StopRequest) return this.stopRequested(e, start);
       return this.failedCycle(this.fail(e), start);
     }
     m.physOut.set(m.Q);
@@ -266,6 +312,31 @@ export class SimCpu {
     const result: CycleResult = { ran: true, ok: true, elapsedMs };
     this.emit({ type: 'cycle', result });
     return result;
+  }
+
+  /** STP dal programma: STOP con la voce `STOP_RICHIESTO`; il ciclo non è un errore. */
+  private stopRequested(e: StopRequest, start: number): CycleResult {
+    this.stop(e.reason);
+    const result: CycleResult = { ran: true, ok: true, elapsedMs: this.now() - start };
+    this.emit({ type: 'cycle', result });
+    return result;
+  }
+
+  /** Avviso «non simulata»: una voce di diagnostica e un evento, una volta per blocco e per periodo di RUN. */
+  private warnNotSimulated(kind: 'SFC' | 'SFB', number: number): void {
+    const block = `${kind}${number}`;
+    if (this.warned.has(block)) return;
+    this.warned.add(block);
+    const name = findSystemBlock({ kind, number })?.name ?? block;
+    const code = kind === 'SFC' ? 'SFC_NON_SIMULATA' : 'SFB_NON_SIMULATA';
+    const message = `${kind} ${number} (${name}) non simulata: uscite non scritte, BR = 0`;
+    this.record({ time: this.now(), code, detail: message });
+    this.emit({ type: 'warning', code, block, message });
+  }
+
+  /** Istante sull'orologio della CPU (data e ora di SET_CLK compresi), per i dati di avvio degli OB. */
+  private stamp(t: number): number {
+    return t + this.clockOffsetMs;
   }
 
   private failedCycle(entry: DiagEntry, start: number): CycleResult {
@@ -283,6 +354,7 @@ export class SimCpu {
     const errorObs = this.program.get('OB', 121) || this.program.get('OB', 122);
     return {
       mem: this.memory,
+      sys: this.services,
       regs: newRegisters(),
       program: this.program,
       now: this.now,
@@ -369,7 +441,7 @@ export class SimCpu {
     if (!this.program.get('OB', 35)) return;
     this.ob35Running = true;
     try {
-      this.runOb(ctx, 35, PRIORITY.OB35, ob35StartInfo(iv, t));
+      this.runOb(ctx, 35, PRIORITY.OB35, ob35StartInfo(iv, this.stamp(t)));
     } finally {
       this.ob35Running = false;
     }
@@ -422,7 +494,7 @@ export class SimCpu {
     if (!this.program.get('OB', 80) || this.inOb(80))
       throw new SimError('TEMPO_CICLO_SUPERATO', reason, { eventId });
     this.record({ time: t, code: 'OB_RICHIAMATO', eventId, detail: `OB80: ${reason}` });
-    this.runOb(ctx, 80, PRIORITY.ASYNC_ERROR, ob80StartInfo(fltId, errorInfo, ref, t));
+    this.runOb(ctx, 80, PRIORITY.ASYNC_ERROR, ob80StartInfo(fltId, errorInfo, ref, this.stamp(t)));
   }
 
   /** OB82 o OB86; se manca, OB85 (16#35A1); se manca anche OB85, STOP. */
@@ -432,8 +504,8 @@ export class SimCpu {
       this.record({ time: t, code: 'OB_RICHIAMATO', eventId: id, detail: `OB${ev.ob}` });
       const info =
         ev.ob === 82
-          ? ob82StartInfo(ev.address, ev.coming, t)
-          : ob86StartInfo(ev.address, ev.coming, t);
+          ? ob82StartInfo(ev.address, ev.coming, this.stamp(t))
+          : ob86StartInfo(ev.address, ev.coming, this.stamp(t));
       this.runOb(ctx, ev.ob, PRIORITY.ASYNC_ERROR, info);
       return;
     }
@@ -451,7 +523,7 @@ export class SimCpu {
       priority: PRIORITY.ASYNC_ERROR,
       ob: ev.ob,
     };
-    this.runOb(ctx, 85, PRIORITY.ASYNC_ERROR, ob85StartInfo(missing, t));
+    this.runOb(ctx, 85, PRIORITY.ASYNC_ERROR, ob85StartInfo(missing, this.stamp(t)));
   }
 
   /**
@@ -473,8 +545,8 @@ export class SimCpu {
     };
     const info =
       f.ob === 121 || !e.periphery
-        ? ob121StartInfo(f.swFlt, e.faultReg ?? 0, site, t)
-        : ob122StartInfo(f.swFlt, e.periphery, site, t);
+        ? ob121StartInfo(f.swFlt, e.faultReg ?? 0, site, this.stamp(t))
+        : ob122StartInfo(f.swFlt, e.periphery, site, this.stamp(t));
     this.record({
       ...diagFromError(t, e),
       code: 'OB_RICHIAMATO',
@@ -534,7 +606,12 @@ export class SimCpu {
 
   /** Aggiunge una voce; senza `eventId` le si dà quello sintetico del codice. */
   private record(e: Omit<DiagEntry, 'eventId'> & { eventId?: number }): DiagEntry {
-    const entry: DiagEntry = { ...e, eventId: e.eventId ?? syntheticEventId(e.code) };
+    // Il buffer di diagnostica porta l'ora dell'orologio della CPU (SET_CLK compreso).
+    const entry: DiagEntry = {
+      ...e,
+      time: this.stamp(e.time),
+      eventId: e.eventId ?? syntheticEventId(e.code),
+    };
     this.diag.push(entry);
     if (this.diag.length > MAX_DIAGNOSTICS) this.diag.shift();
     this.emit({ type: 'diagnostic', entry });
