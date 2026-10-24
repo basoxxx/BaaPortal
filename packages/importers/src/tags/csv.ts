@@ -86,7 +86,7 @@ export function parseCsv(input: string, separator: string): CsvRecord[] {
 }
 
 export function parseTagsCsv(text: string): ParsedTags {
-  const records = parseCsv(text, detectSeparator(text.replace(/^﻿/, '')));
+  const records = parseCsv(text, detectSeparator(text.replace(/^\ufeff/, '')));
   const [header, ...rows] = records;
   if (!header) return { tags: [], constants: [], errors: [] };
   return buildTagRows(header.cells, rows);
@@ -111,5 +111,5 @@ export function tagsToCsv(table: TagTable): string {
       flag(t.hmi),
     ]);
   }
-  return '﻿' + lines.map((l) => l.map((v) => quote(v, sep)).join(sep)).join('\r\n') + '\r\n';
+  return '\ufeff' + lines.map((l) => l.map((v) => quote(v, sep)).join(sep)).join('\r\n') + '\r\n';
 }

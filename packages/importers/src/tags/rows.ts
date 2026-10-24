@@ -72,6 +72,9 @@ export function columnIndex(header: readonly string[]): Map<string, number> {
   return map;
 }
 
+/** Riga con tutte le celle vuote (Excel lascia `;;;;`): non è un errore, si salta. */
+const isBlankRecord = (r: RawRecord): boolean => r.cells.every((c) => c.trim() === '');
+
 const REQUIRED = ['Name', 'Data Type', 'Logical Address'] as const;
 
 /**
@@ -102,6 +105,7 @@ export function buildTagRows(header: readonly string[], records: readonly RawRec
       errors.push({ line, code: 'RIGA_ILLEGGIBILE' });
       continue;
     }
+    if (isBlankRecord(r)) continue;
     const name = (at(r, 'Name') ?? '').trim();
     if (name === '') {
       errors.push({ line, code: 'NOME_VUOTO' });
@@ -135,4 +139,67 @@ export function buildTagRows(header: readonly string[], records: readonly RawRec
     });
   }
   return { tags, constants: [], errors };
+}
+
+const REQUIRED_CONSTANTS = ['Name', 'Data Type', 'Value'] as const;
+
+/** Come `buildTagRows`, per il foglio delle costanti utente. Codici in più: VALORE_VUOTO. */
+export function buildConstantRows(
+  header: readonly string[],
+  records: readonly RawRecord[],
+): ParsedTags {
+  const cols = columnIndex(header);
+  const missing = REQUIRED_CONSTANTS.filter((c) => !cols.has(c.toLowerCase()));
+  if (missing.length > 0) {
+    return {
+      tags: [],
+      constants: [],
+      errors: missing.map((c) => ({ line: 1, code: 'COLONNA_MANCANTE', detail: c })),
+    };
+  }
+  const at = (r: RawRecord, name: string): string | undefined => {
+    const i = cols.get(name.toLowerCase());
+    return i === undefined ? undefined : r.cells[i];
+  };
+  const constants: ConstantRow[] = [];
+  const errors: RowError[] = [];
+  const seen = new Set<string>();
+  for (const r of records) {
+    const line = r.line;
+    if (r.unreadable) {
+      errors.push({ line, code: 'RIGA_ILLEGGIBILE' });
+      continue;
+    }
+    if (isBlankRecord(r)) continue;
+    const name = (at(r, 'Name') ?? '').trim();
+    if (name === '') {
+      errors.push({ line, code: 'NOME_VUOTO' });
+      continue;
+    }
+    if (seen.has(name.toLowerCase())) {
+      errors.push({ line, code: 'NOME_DOPPIO', detail: name });
+      continue;
+    }
+    const typeText = (at(r, 'Data Type') ?? '').trim();
+    const type = parseType(typeText);
+    if (!type.ok) {
+      errors.push({ line, code: 'TIPO_NON_VALIDO', detail: typeText });
+      continue;
+    }
+    const value = (at(r, 'Value') ?? '').trim();
+    if (value === '') {
+      errors.push({ line, code: 'VALORE_VUOTO', detail: name });
+      continue;
+    }
+    seen.add(name.toLowerCase());
+    constants.push({
+      line,
+      name,
+      path: (at(r, 'Path') ?? '').trim(),
+      type: formatType(type.type),
+      value,
+      comment: at(r, 'Comment') ?? '',
+    });
+  }
+  return { tags: [], constants, errors };
 }

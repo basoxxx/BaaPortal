@@ -6,3 +6,5 @@ export { generateAwlSource } from './awlSource/generate';
 export * from './tags/columns';
 export * from './tags/csv';
 export * from './tags/rows';
+export * from './tags/xlsx';
+export * from './xlsx/ooxml';

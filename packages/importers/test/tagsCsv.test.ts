@@ -120,4 +120,64 @@ describe('tabelle variabili csv', () => {
       expect(toLogicalAddress(fromLogicalAddress(x))).toBe(x);
     }
   });
+
+  it('separatore tab', () => {
+    const p = parseTagsCsv('Name\tData Type\tLogical Address\nA\tBool\t%M0.0\n');
+    expect(p.errors).toEqual([]);
+    expect(p.tags.map((t) => t.name)).toEqual(['A']);
+  });
+
+  it('BOM su file con ","', () => {
+    const p = parseTagsCsv('\ufeffName,Data Type,Logical Address\nA,Bool,%M0.0\n');
+    expect(p.errors).toEqual([]);
+    expect(p.tags).toHaveLength(1);
+  });
+
+  it('ultima riga senza a capo finale', () => {
+    const p = parseTagsCsv('Name;Data Type;Logical Address\nA;Bool;%M0.0\nB;Int;%MW2');
+    expect(p.errors).toEqual([]);
+    expect(p.tags.map((t) => t.name)).toEqual(['A', 'B']);
+  });
+
+  it('riga vuota nel mezzo ignorata, i numeri di riga restano quelli del file', () => {
+    const p = parseTagsCsv('Name;Data Type;Logical Address\nA;Bool;%M0.0\n\nB;Int;%MW2\n');
+    expect(p.errors).toEqual([]);
+    expect(p.tags.map((t) => [t.name, t.line])).toEqual([
+      ['A', 2],
+      ['B', 4],
+    ]);
+  });
+
+  it('campo tra virgolette con ";" in importazione', () => {
+    const p = parseTagsCsv('Name;Data Type;Logical Address;Comment\nA;Bool;%M0.0;"uno;due"\n');
+    expect(p.errors).toEqual([]);
+    expect(p.tags[0]!.comment).toBe('uno;due');
+  });
+
+  it('RIGA_ILLEGGIBILE con virgolette non chiuse; le righe prima restano', () => {
+    const p = parseTagsCsv(
+      'Name;Data Type;Logical Address;Comment\nA;Bool;%M0.0;x\nB;Bool;%M0.1;"aperta\n',
+    );
+    expect(p.tags.map((t) => t.name)).toEqual(['A']);
+    expect(p.errors).toEqual([{ line: 3, code: 'RIGA_ILLEGGIBILE' }]);
+  });
+
+  it('NOME_VUOTO', () => {
+    const p = parseTagsCsv('Name;Data Type;Logical Address\n;Bool;%M0.0\n');
+    expect(p.errors).toEqual([{ line: 2, code: 'NOME_VUOTO' }]);
+  });
+
+  it('INDIRIZZO_NON_VALIDO (anche indirizzo incompatibile col tipo)', () => {
+    const p = parseTagsCsv('Name;Data Type;Logical Address\nA;Bool;%Zeta\nB;Int;%M0.0\n');
+    expect(p.errors).toEqual([
+      { line: 2, code: 'INDIRIZZO_NON_VALIDO', detail: '%Zeta' },
+      { line: 3, code: 'INDIRIZZO_NON_VALIDO', detail: '%M0.0' },
+    ]);
+  });
+
+  it('record con tutte le celle vuote (";;;") ignorato, nessun NOME_VUOTO', () => {
+    const p = parseTagsCsv('Name;Data Type;Logical Address\nA;Bool;%M0.0\n;;\n ; ;\n');
+    expect(p.errors).toEqual([]);
+    expect(p.tags).toHaveLength(1);
+  });
 });
