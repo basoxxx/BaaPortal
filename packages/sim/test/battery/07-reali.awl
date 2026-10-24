@@ -1,0 +1,62 @@
+// Virgola mobile: +R, -R, *R, /R, ABS, SQR, SQRT, EXP, LN, SIN, COS, TAN, ASIN, ACOS, ATAN.
+// Angoli in radianti (manuale AWL, «Funzioni trigonometriche»). Valori attesi arrotondati a REAL.
+// atteso: MR0=3.75, MR4=3.5, MR8=6.0, MR12=4.5, MR16=3.25, MR20=9.0, MR24=4.0
+// atteso: MR28=2.718281828, MR32=2.302585093, MR36=0.4794255386, MR40=0.8775825619
+// atteso: MR44=0.5463024898, MR48=0.5235987756, MR52=1.0471975512, MR56=0.7853981634
+// atteso: MD60=16#7F800000, ACCU1=16#7F800000, STW=16#00B0
+//@ block OB 1
+	L 1.5;
+	L 2.25;
+	+R;
+	T MD 0;
+	L 5.5;
+	L 2.0;
+	-R;
+	T MD 4;
+	L 1.5;
+	L 4.0;
+	*R;
+	T MD 8;
+	L 9.0;
+	L 2.0;
+	/R;
+	T MD 12;
+	L -3.25;
+	ABS;
+	T MD 16;
+	L 3.0;
+	SQR;
+	T MD 20;
+	L 16.0;
+	SQRT;
+	T MD 24;
+//@ network
+	L 1.0;
+	EXP;
+	T MD 28;
+	L 10.0;
+	LN;
+	T MD 32;
+	L 0.5;
+	SIN;
+	T MD 36;
+	L 0.5;
+	COS;
+	T MD 40;
+	L 0.5;
+	TAN;
+	T MD 44;
+	L 0.5;
+	ASIN;
+	T MD 48;
+	L 0.5;
+	ACOS;
+	T MD 52;
+	L 1.0;
+	ATAN;
+	T MD 56;
+//@ network
+	L 1.0;
+	L 0.0;
+	/R;
+	T MD 60;

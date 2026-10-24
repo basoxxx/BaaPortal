@@ -19,6 +19,61 @@ export const m = (name: string, type: never) => ({ name, type });
 export const EMPTY: Sections = { in: [], out: [], inOut: [], stat: [], temp: [], ret: [] };
 export const sec = (s: Partial<Sections>): Sections => ({ ...EMPTY, ...s });
 
+type Infos = AwlBlockInfo[];
+
+/** Contesto AWL dei blocchi di prova: risolve i blocchi per nome o numero e gli FB per le multi-istanze. */
+function ctxFor(specs: BlockSpec[], infos: Infos, owner: { kind: string; iface: unknown }) {
+  return {
+    owner,
+    symbol: () => undefined,
+    block: (r: { name: string } | { kind: string; number: number }) =>
+      'name' in r
+        ? infos.find((x) => x.name.toLowerCase() === r.name.toLowerCase())
+        : infos.find((x) => x.kind === r.kind && x.number === r.number),
+    resolve: (name: string) => {
+      const f = specs.find((x) => x.kind === 'FB' && `FB${x.number}` === name.toUpperCase());
+      const fs = f?.sections ?? EMPTY;
+      return f
+        ? {
+            kind: 'fb',
+            sections: { input: fs.in, output: fs.out, inOut: fs.inOut, static: fs.stat },
+          }
+        : null;
+    },
+    allSymbols: () => [],
+    allBlocks: () => infos,
+  } as unknown as AwlContext;
+}
+
+/** File di un DB di istanza dell'FB `fb` (che deve essere fra `specs`), numero `db`. */
+export function instanceDbFile(specs: BlockSpec[], db: number, fb: number): Uint8Array {
+  const spec = specs.find((x) => x.kind === 'FB' && x.number === fb);
+  if (!spec) throw new Error(`FB${fb} assente`);
+  const infos: Infos = specs.map(
+    (b) =>
+      ({
+        name: `${b.kind}${b.number}`,
+        kind: b.kind,
+        number: b.number,
+        iface: ifaceOf(b.sections ?? EMPTY),
+      }) as AwlBlockInfo,
+  );
+  const r = compileBlock({
+    kind: 'IDB',
+    number: db,
+    now: new Date(2026, 9, 20),
+    header: { author: 'T', family: 'Prove', name: 'Istanza', version: '0.1' },
+    knowHowProtected: false,
+    sections: EMPTY,
+    initials: {},
+    networks: [],
+    ctx: ctxFor(specs, infos, { kind: 'IDB', iface: ifaceOf(EMPTY) }),
+    instanceOf: { kind: 'FB', number: fb, sections: spec.sections ?? EMPTY },
+  });
+  if (!r.file) throw new Error(r.diagnostics.map((d) => d.message).join('; '));
+  return r.file;
+}
+
 export interface BlockSpec {
   kind: 'OB' | 'FB' | 'FC';
   number: number;
@@ -72,26 +127,7 @@ export function buildFiles(
   const files: Uint8Array[] = [];
   for (const b of specs) {
     const s = b.sections ?? EMPTY;
-    const ctx = {
-      owner: { kind: b.kind, iface: ifaceOf(s) },
-      symbol: () => undefined,
-      block: (r: { name: string } | { kind: string; number: number }) =>
-        'name' in r
-          ? infos.find((x) => x.name.toLowerCase() === r.name.toLowerCase())
-          : infos.find((x) => x.kind === r.kind && x.number === r.number),
-      resolve: (name: string) => {
-        const f = specs.find((x) => x.kind === 'FB' && `FB${x.number}` === name.toUpperCase());
-        const fs = f?.sections ?? EMPTY;
-        return f
-          ? {
-              kind: 'fb',
-              sections: { input: fs.in, output: fs.out, inOut: fs.inOut, static: fs.stat },
-            }
-          : null;
-      },
-      allSymbols: () => [],
-      allBlocks: () => infos,
-    } as unknown as AwlContext;
+    const ctx = ctxFor(specs, infos, { kind: b.kind, iface: ifaceOf(s) });
     const r = compileBlock({
       kind: b.kind,
       number: b.number,

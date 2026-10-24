@@ -1,0 +1,26 @@
+// FB con DB di istanza e multi-istanza: lo stato statico resta nei DB fra una chiamata e l'altra.
+// atteso: MW0=6, DB5.DBW4=6
+// atteso: DB6.DBW0=1, DB6.DBW2=2, DB6.DBW4=2, DB6.DBW6=10, DB6.DBW8=20, DB6.DBW10=20
+//@ block FB 1
+//@ in x Int
+//@ out y Int
+//@ stat cnt Int
+	L #cnt;
+	L #x;
+	+I;
+	T #cnt;
+	T #y;
+//@ block FB 2
+//@ stat i1 FB1
+//@ stat i2 FB1
+	CALL #i1 (x := 1);
+	CALL #i2 (x := 10);
+	CALL #i1 (x := 1);
+	CALL #i2 (x := 10);
+//@ idb 5 FB1
+//@ idb 6 FB2
+//@ block OB 1
+	CALL FB 1, DB 5 (x := 3, y => MW 0);
+	CALL FB 1, DB 5 (x := 3, y => MW 0);
+//@ network
+	CALL FB 2, DB 6;

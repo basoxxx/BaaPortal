@@ -1,0 +1,52 @@
+// Caricamento e trasferimento: L e T con costanti e memoria, registri di indirizzo, STW.
+// atteso: MW10=300, MD12=300, MB8=16#AB, MD16=16#41424344, MD20=16#FFFFFFFB, MB24=16#A5
+// atteso: MD26=83, MB30=16#AB
+// atteso: MW40=7, MW42=8, MB51=9, MD60=320, MD64=400
+// atteso: MD68=400, MD72=320, MD76=26, MD80=320, MD84=26, MD88=320
+// atteso: MW94=16#0136, STW=16#0136, ACCU1=16#0136, ACCU2=16#0136
+//@ block OB 1
+	L 5;
+	L 300;
+	T MW 10;
+	T MD 12;
+	L B#16#AB;
+	T MB 8;
+	L 'ABCD';
+	T MD 16;
+	L L#-5;
+	T MD 20;
+	L 2#10100101;
+	T MB 24;
+	L P#10.3;
+	T MD 26;
+	L MB 8;
+	T MB 30;
+//@ network
+	L P#40.0;
+	LAR1;
+	L 7;
+	T MW [AR1,P#0.0];
+	L 8;
+	T MW [AR1,P#2.0];
+	L P#50.0;
+	LAR2;
+	L 9;
+	T MB [AR2,P#1.0];
+	TAR1 MD 60;
+	TAR2 MD 64;
+	CAR;
+	TAR1 MD 68;
+	TAR2 MD 72;
+	LAR1 P#3.2;
+	TAR1 MD 76;
+	LAR2 MD 60;
+	TAR2 MD 80;
+	TAR1;
+	T MD 84;
+	TAR2;
+	T MD 88;
+//@ network
+	L W#16#0136;
+	T STW;
+	L STW;
+	T MW 94;

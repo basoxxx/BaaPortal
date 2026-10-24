@@ -1,0 +1,5 @@
+// LEAVE esiste solo nelle CPU a quattro accumulatori (S7-300 CPU 318 / S7-400): la CPU simulata si ferma.
+// errore: ISTRUZIONE_NON_S7300
+//@ block OB 1
+	L 1;
+	LEAVE;

@@ -1,0 +1,29 @@
+// Controllo del programma: UC, CC, BE, BEU, BEC. Il codice dopo un BEC con RLO = 0 continua con RLO = 1.
+// Un CC con RLO = 0 non chiama ma lascia RLO = 1. A fine blocco STA = 1 e OR, OS, /FC sono 0.
+// imposta: M30.0=0
+// atteso: MB31=0, MB32=3, STW=16#0006
+//@ block FC 10
+	A M 30.0;
+	BEC;
+	SET;
+	= M 31.0;
+	BEU;
+	SET;
+	= M 31.1;
+//@ block FC 11
+	SET;
+	= M 32.0;
+	BE;
+//@ block OB 1
+	UC FC 10;
+	CLR;
+	= M 31.0;
+	SET;
+	= M 30.0;
+	UC FC 10;
+//@ network
+	CLR;
+	CC FC 11;
+	= M 32.1;
+	SET;
+	CC FC 11;
