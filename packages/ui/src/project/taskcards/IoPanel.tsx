@@ -97,7 +97,6 @@ function ByteGroup({ dir }: { dir: Dir }) {
                     ? t('ioPanel.bitSym', { area, byte: b.byte, bit, symbol: sym })
                     : t('ioPanel.bitLabel', { area, byte: b.byte, bit });
                   const common = {
-                    key: bit,
                     className: 'baa-io-bit',
                     'data-on': on === 1,
                     'data-testid': `${dir === 'inputs' ? 'in' : 'out'}-bit-${b.byte}-${bit}`,
@@ -105,6 +104,7 @@ function ByteGroup({ dir }: { dir: Dir }) {
                   };
                   return dir === 'inputs' ? (
                     <button
+                      key={bit}
                       type="button"
                       {...common}
                       aria-pressed={on === 1}
@@ -119,7 +119,7 @@ function ByteGroup({ dir }: { dir: Dir }) {
                       {t(on ? 'ioPanel.on' : 'ioPanel.off')}
                     </button>
                   ) : (
-                    <span {...common} role="img" aria-label={`${label}: ${on}`}>
+                    <span key={bit} {...common} role="img" aria-label={`${label}: ${on}`}>
                       {t(on ? 'ioPanel.on' : 'ioPanel.off')}
                     </span>
                   );

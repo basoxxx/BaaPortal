@@ -42,6 +42,8 @@ export class SimController {
   private session: SimSession | undefined;
   /** Cresce a ogni spegnimento: un avvio ancora in corso, se è cambiato, si scarta. */
   private generation = 0;
+  /** `setInputs` in volo: finché ce ne sono, gli `inputs` delle notifiche (possibili copie vecchie) si ignorano. */
+  private inputsInFlight = 0;
 
   constructor(
     private readonly store: StoreApi<AppState>,
@@ -104,6 +106,7 @@ export class SimController {
     // L'API non permette di registrare gli ascoltatori prima di `start`: le notifiche del primo
     // istante (solo STOP) si perdono, la successiva arriva entro 200 ms.
     this.session = session;
+    this.inputsInFlight = 0;
     session.onNotice((n) => {
       if (n.kind !== 'status' || this.session !== session) return;
       this.store.getState().setSim({
@@ -111,7 +114,7 @@ export class SimController {
         stats: n.stats,
         diagnostics: n.diagnostics,
         warnings: n.warnings,
-        inputs: n.inputs,
+        ...(this.inputsInFlight > 0 ? {} : { inputs: n.inputs }),
         outputs: n.outputs,
       });
     });
@@ -158,10 +161,13 @@ export class SimController {
       next.set(bytes, byte);
       this.store.getState().setSim({ inputs: next });
     }
+    this.inputsInFlight++;
     try {
       await s.request({ op: 'setInputs', byte, bytes });
     } catch (e) {
       if (this.session === s) this.push('error', 'simInputsFailed', { message: errorText(e) });
+    } finally {
+      if (this.session === s) this.inputsInFlight--;
     }
   }
 

@@ -423,4 +423,62 @@ describe('comandi online sul simulatore', () => {
     const sent = s.workers.flatMap((w) => w.sent.map((m) => m.req));
     expect(sent).toContainEqual({ op: 'interrupt', ob: 82, address: 256 });
   });
+
+  it('setInputs in volo: una notifica vecchia non annulla il clic; dopo la risposta si riapplica', async () => {
+    await initI18n('it');
+    const s = setup();
+    await on(s);
+    const w = s.workers[0]!;
+    const real = w.postMessage.bind(w);
+    let held: SimWireRequest | undefined;
+    w.postMessage = (m) => {
+      if (m.req.op === 'setInputs') held = m;
+      else real(m);
+    };
+    s.store.getState().setSim({ inputs: new Uint8Array(4) });
+    const pending = s.controller.setInputs(1, Uint8Array.of(5));
+    expect(s.store.getState().sim.inputs[1]).toBe(5);
+    const status = (inputs: Uint8Array) =>
+      w.onmessage?.({
+        data: {
+          type: 'notice',
+          notice: {
+            kind: 'status',
+            mode: 'STOP',
+            stats: { last: 0, min: 0, max: 0, cycles: 0 },
+            diagnostics: [],
+            warnings: [],
+            inputs,
+            outputs: new Uint8Array(4),
+          },
+        },
+      } as never);
+    status(new Uint8Array(4)); // copia precedente al clic
+    expect(s.store.getState().sim.inputs[1]).toBe(5);
+    w.onmessage?.({ data: { type: 'response', id: held!.id, ok: true } } as never);
+    await pending;
+    status(Uint8Array.of(0, 5, 0, 0));
+    status(new Uint8Array(4));
+    expect(s.store.getState().sim.inputs[1]).toBe(0); // di nuovo applicate
+  });
+
+  it('errori di setInputs e interrupt sono segnalati', async () => {
+    await initI18n('it');
+    const s = setup();
+    await on(s);
+    s.store.getState().setSim({ inputs: new Uint8Array(4) });
+    await s.controller.setInputs(100000, Uint8Array.of(1));
+    expect(s.store.getState().messages.at(-1)!.textKey).toBe('messages.simInputsFailed');
+    await s.controller.interrupt(82, 70000);
+    expect(s.store.getState().messages.at(-1)!.textKey).toBe('messages.simInterruptFailed');
+  });
+
+  it('spegnere la simulazione azzera i byte aggiunti a mano', async () => {
+    await initI18n('it');
+    const s = setup();
+    await on(s);
+    s.store.getState().setSim({ ioExtra: { inputs: [3], outputs: [4] } });
+    await commands['online.simulation'].run(s.ctx);
+    expect(s.store.getState().sim.ioExtra).toEqual({ inputs: [], outputs: [] });
+  });
 });
