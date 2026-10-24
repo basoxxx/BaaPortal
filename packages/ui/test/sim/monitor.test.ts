@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { findCpu } from '@baaportal/catalog';
 import {
   createCodeBlock,
@@ -16,7 +16,6 @@ import { monitorLinesByNetwork } from '../../src/editors/awl/monitorExtension';
 import { initI18n } from '../../src/i18n';
 import { FakeBridge } from '../fakeBridge';
 import { fakeWorker } from './simFixtures';
-import { vi } from 'vitest';
 
 const DEV = 'dev1';
 
@@ -35,7 +34,7 @@ function setup() {
   // il dispositivo nuovo ha già l'OB1 «Main»
   const ob = dev.blocks.find((b) => b.kind === 'OB' && b.number === 1) as CodeBlock;
   // riga 0: commento, 1: L, 2: T; la rete 2 resta vuota
-  ob.networks[0]!.source = '// avvio\nL 42\nT MW 10\nBE';
+  ob.networks[0]!.source = '// avvio\nL 42\nL 17\nBE';
   const fc = createCodeBlock({ kind: 'FC', number: 5, name: 'FC5', language: 'AWL' });
   fc.networks[0]!.source = 'L 7\nT MW 20';
   dev.blocks.push(fc);
@@ -62,7 +61,7 @@ function setup() {
   const ctx: CommandContext = { store, bridge: new FakeBridge(), service: {} as never };
   const ops = () => workers.flatMap((w) => w.sent.map((m) => m.req));
   const monitorReqs = () => ops().filter((r) => r.op === 'monitor');
-  return { store, ctx, ops, monitorReqs, ob, fc };
+  return { store, ctx, ops, monitorReqs, ob, fc, workers };
 }
 
 const open = (s: ReturnType<typeof setup>, blockId: string) =>
@@ -111,6 +110,8 @@ describe('osservazione del programma', () => {
     const cells = lines.get(0)!.cells;
     expect(cells.has(0)).toBe(false); // il commento non ha istruzioni
     expect(cells.get(1)!.accu1).toBe(42);
+    expect(cells.get(2)!.accu1).toBe(17); // una riga sfasata di una non passerebbe
+    expect(cells.get(2)!.accu2).toBe(42);
     expect(cells.get(3)).not.toBeNull(); // BE
   });
 
@@ -184,5 +185,102 @@ describe('osservazione del programma', () => {
     await commands['online.simulation'].run(s.ctx);
     expect(st(s).sim.monitor).toBeNull();
     expect(st(s).sim.loaded).toEqual({});
+  });
+
+  it("riquadri divisi: «Osserva» prende il blocco del riquadro con il fuoco; l'altro riquadro non lo ferma", async () => {
+    await initI18n('it');
+    const s = setup();
+    await commands['online.simulation'].run(s.ctx);
+    open(s, s.ob.id);
+    st(s).setSplit('vertical');
+    st(s).focusPane(1);
+    open(s, s.fc.id);
+    expect(st(s).workArea.panes).toEqual([`block:${DEV}:${s.ob.id}`, `block:${DEV}:${s.fc.id}`]);
+    await commands['online.download'].run(s.ctx);
+    await commands['online.monitor'].run(s.ctx);
+    expect(st(s).sim.monitor?.blockId).toBe(s.fc.id);
+    await vi.waitFor(() => expect(st(s).sim.monitor?.reason).toBe('ok'));
+    await vi.waitFor(() =>
+      expect(s.monitorReqs().at(-1)).toEqual({ op: 'monitor', block: { kind: 'FC', number: 5 } }),
+    );
+    // un altro blocco nell'altro riquadro: l'osservazione continua
+    st(s).focusPane(0);
+    open(s, s.ob.id);
+    expect(st(s).sim.monitor?.blockId).toBe(s.fc.id);
+    // non più visibile in nessun riquadro: si ferma
+    st(s).closeAllEditors();
+    expect(st(s).sim.monitor).toBeNull();
+  });
+
+  it('una richiesta rifiutata si ripete e la sua notifica non passa', async () => {
+    await initI18n('it');
+    const s = setup();
+    await commands['online.simulation'].run(s.ctx);
+    open(s, s.ob.id);
+    await commands['online.download'].run(s.ctx);
+    const real = SimSession.prototype.request;
+    let rejected = 0;
+    const spy = vi.spyOn(SimSession.prototype, 'request').mockImplementation(function (
+      this: SimSession,
+      req,
+    ) {
+      if (req.op === 'monitor' && req.block && rejected++ === 0)
+        return Promise.reject(new Error('no'));
+      return real.call(this, req);
+    });
+    try {
+      await commands['online.monitor'].run(s.ctx);
+      await vi.waitFor(() => expect(rejected).toBeGreaterThanOrEqual(2)); // ritentata
+      await vi.waitFor(() => expect(st(s).sim.monitorSteps).not.toBeNull());
+      expect(st(s).messages.filter((m) => m.textKey === 'messages.simMonitorFailed')).toHaveLength(
+        1,
+      );
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('una notifica di un blocco non più osservato si scarta', async () => {
+    await initI18n('it');
+    const s = setup();
+    await commands['online.simulation'].run(s.ctx);
+    open(s, s.ob.id);
+    await commands['online.download'].run(s.ctx);
+    await commands['online.monitor'].run(s.ctx);
+    await vi.waitFor(() => expect(st(s).sim.monitorSteps).not.toBeNull());
+    const late = (kind: 'OB' | 'FC', number: number) =>
+      s.workers[0]!.onmessage!({
+        data: {
+          type: 'notice',
+          notice: {
+            kind: 'monitor',
+            block: { kind, number },
+            steps: [
+              {
+                offset: 0,
+                rlo: true,
+                sta: true,
+                stw: 0,
+                accu1: 99,
+                accu2: 0,
+                ar1: 0,
+                db: 0,
+                di: 0,
+              },
+            ],
+          },
+        },
+      });
+    // spento: arriva una notifica in ritardo
+    await commands['online.monitor'].run(s.ctx);
+    expect(st(s).sim.monitorSteps).toBeNull();
+    late('OB', 1);
+    expect(st(s).sim.monitorSteps).toBeNull();
+    // acceso su OB1, ma la notifica è di un altro blocco
+    await commands['online.monitor'].run(s.ctx);
+    await vi.waitFor(() => expect(st(s).sim.monitorSteps).not.toBeNull());
+    st(s).setSim({ monitorSteps: null });
+    late('FC', 5);
+    expect(st(s).sim.monitorSteps).toBeNull();
   });
 });

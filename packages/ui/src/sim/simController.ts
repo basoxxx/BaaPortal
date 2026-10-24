@@ -8,7 +8,7 @@ import { targetPlcId } from '../project/navigation/treeIds';
 import { getProgress } from '../project/progress';
 import { SIM_OFF, type AppState } from '../state/store';
 import { downloadOrder } from './downloadOrder';
-import { activeCodeBlock, monitorReasonOf, monitorStillShown } from './monitorStatus';
+import { activeCodeBlock, codeBlockOf, monitorReasonOf, monitorStillShown } from './monitorStatus';
 import { SimSession, type SimSessionOptions } from './session';
 
 export interface SimCtx {
@@ -47,6 +47,8 @@ export class SimController {
   private inputsInFlight = 0;
   /** Il blocco che il worker osserva adesso (`FC5`…), o niente. */
   private sentMonitor: string | undefined;
+  /** Il blocco la cui ultima richiesta di osservazione è stata rifiutata (segnalato una volta). */
+  private failedMonitor: string | undefined;
   /** Ciò da cui dipende il motivo di indisponibilità, per non ricalcolare l'impronta a ogni notifica. */
   private reasonInputs: unknown[] = [];
 
@@ -264,7 +266,7 @@ export class SimController {
         }
       }
       if (m.reason === 'ok') {
-        const a = activeCodeBlock(st);
+        const a = codeBlockOf(st, m.deviceId, m.blockId);
         if (a) want = { kind: a.kind, number: a.number };
       }
     } else this.reasonInputs = [];
@@ -273,9 +275,20 @@ export class SimController {
     if (!s || key === this.sentMonitor) return;
     this.sentMonitor = key;
     if (!want && st.sim.monitorSteps) st.setSim({ monitorSteps: null });
-    s.request({ op: 'monitor', ...(want ? { block: want } : {}) }).catch((e: unknown) => {
-      if (this.session === s) this.push('error', 'simMonitorFailed', { message: errorText(e) });
-    });
+    const req = s.request({ op: 'monitor', ...(want ? { block: want } : {}) });
+    const done = () => {
+      if (this.failedMonitor === key) this.failedMonitor = undefined;
+    };
+    const fail = (e: unknown) => {
+      if (this.session !== s) return;
+      // La richiesta non è arrivata: alla prossima occasione si riprova.
+      if (this.sentMonitor === key) this.sentMonitor = undefined;
+      // Il messaggio una sola volta per blocco: il nuovo tentativo può ripetersi a ogni notifica.
+      if (this.failedMonitor === key) return;
+      this.failedMonitor = key;
+      this.push('error', 'simMonitorFailed', { message: errorText(e) });
+    };
+    req.then(done, fail);
   }
 
   /** "Carica nel dispositivo" sul simulatore. */

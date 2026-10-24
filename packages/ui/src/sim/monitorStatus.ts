@@ -9,31 +9,39 @@ export interface ActiveBlock extends MonitorRequest {
   blockId: string;
 }
 
-/** Il blocco di codice dell'editor attivo (di uno dei riquadri visibili), se è del PLC simulato. */
-export function activeCodeBlock(s: AppState): ActiveBlock | undefined {
+/** I blocchi di codice degli editor attivi dei riquadri visibili, prima quello del riquadro con il fuoco. */
+export function visibleCodeBlocks(s: AppState): ActiveBlock[] {
   const { sim, doc, workArea: wa } = s;
-  if (sim.phase !== 'on' || !sim.deviceId || !doc) return undefined;
-  const shown = wa.split === 'none' ? [wa.panes[0]] : wa.panes;
-  for (const key of shown) {
+  if (sim.phase !== 'on' || !sim.deviceId || !doc) return [];
+  const order: (0 | 1)[] = wa.split === 'none' ? [0] : wa.focusedPane === 0 ? [0, 1] : [1, 0];
+  const out: ActiveBlock[] = [];
+  for (const i of order) {
+    const key = wa.panes[i];
     const ed = key ? wa.editors.find((e) => e.key === key) : undefined;
     if (!ed || ed.kind !== 'block' || ed.deviceId !== sim.deviceId) continue;
-    const found = blockOf(s, ed.deviceId, ed.objectId);
-    if (found) return found;
+    const found = codeBlockOf(s, ed.deviceId, ed.objectId);
+    if (found) out.push(found);
   }
-  return undefined;
+  return out;
 }
 
-function blockOf(s: AppState, deviceId: string, blockId: string): ActiveBlock | undefined {
+/** Il blocco di codice del riquadro con il fuoco (altrimenti del primo riquadro visibile che ne ha uno). */
+export const activeCodeBlock = (s: AppState): ActiveBlock | undefined => visibleCodeBlocks(s)[0];
+
+export function codeBlockOf(
+  s: AppState,
+  deviceId: string,
+  blockId: string,
+): ActiveBlock | undefined {
   const dev = s.doc && findDevice(s.doc.project, deviceId);
   const b = dev?.blocks.find((x) => x.id === blockId);
   if (!b || (b.kind !== 'OB' && b.kind !== 'FB' && b.kind !== 'FC')) return undefined;
   return { deviceId, blockId, kind: b.kind, number: b.number };
 }
 
-/** L'editor del blocco osservato è ancora visibile (cambiare blocco o chiuderlo ferma l'osservazione). */
+/** L'editor del blocco osservato è ancora visibile in un riquadro (cambiare blocco o chiuderlo ferma l'osservazione). */
 export function monitorStillShown(s: AppState, deviceId: string, blockId: string): boolean {
-  const a = activeCodeBlock(s);
-  return a?.deviceId === deviceId && a.blockId === blockId;
+  return visibleCodeBlocks(s).some((a) => a.deviceId === deviceId && a.blockId === blockId);
 }
 
 /**

@@ -90,4 +90,25 @@ describe("osservazione nell'editor del blocco", () => {
     },
     T,
   );
+
+  it(
+    "una bozza già presente all'accensione sospende subito l'osservazione",
+    async () => {
+      const { app, f } = await setup();
+      const deviceId = dev(app).id;
+      act(() => app.store.getState().setSim({ monitor: null, monitorSteps: null }));
+      const view = EditorView.findFromDOM(document.querySelector('.cm-editor') as HTMLElement)!;
+      act(() => view.contentDOM.focus());
+      act(() => view.dispatch({ changes: { from: 0, insert: '// ' } }));
+      act(() =>
+        app.store.getState().setSim({
+          monitor: { deviceId, blockId: f.id, reason: 'ok', edited: false },
+          monitorSteps: [step(0, 42)],
+        }),
+      );
+      expect(app.store.getState().sim.monitor?.edited).toBe(true);
+      expect(screen.getByRole('alert').textContent).toContain('in modifica');
+    },
+    T,
+  );
 });

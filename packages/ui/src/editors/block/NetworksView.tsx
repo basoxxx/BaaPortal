@@ -70,12 +70,17 @@ export function NetworksView({ deviceId, blockId }: Props) {
   );
   const drafts = useRef(new Map<string, Draft>());
   /** Il testo non confermato sospende l'osservazione finché c'è (poi vale il confronto delle impronte). */
-  const markEdited = () => {
+  const markEdited = useCallback(() => {
     const m = store.getState().sim.monitor;
     const edited = drafts.current.size > 0;
     if (m && m.blockId === blockId && m.deviceId === deviceId && m.edited !== edited)
       store.getState().setSim({ monitor: { ...m, edited } });
-  };
+  }, [store, blockId, deviceId]);
+  // Se all'accensione c'è già una bozza, l'osservazione parte sospesa.
+  const monitored = mon !== null;
+  useEffect(() => {
+    if (monitored) markEdited();
+  }, [monitored, markEdited]);
   const handles = useRef(new Map<string, AwlEditorHandle>());
   // Le diagnostiche di ogni segmento: un segmento che non cambia tiene lo stesso array, e il suo editor non ricalcola.
   // Chiavi per id del segmento: se un segmento viene inserito o tolto, i problemi restano ai loro segmenti.
