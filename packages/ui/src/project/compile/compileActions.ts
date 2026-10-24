@@ -120,7 +120,13 @@ function compileFailed(store: StoreApi<AppState>, e: unknown): void {
 }
 
 /** Cede il turno all'interfaccia, così Interrompi e la barra di avanzamento rispondono. */
-const yieldToUi = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+let lastYield = 0;
+const YIELD_MS = 16;
+async function yieldToUi(): Promise<void> {
+  if (performance.now() - lastYield < YIELD_MS) return;
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  lastYield = performance.now();
+}
 
 /**
  * Compila i blocchi del PLC: `changes` quelli cambiati dall'ultima compilazione riuscita della
@@ -144,6 +150,14 @@ export async function compileProgram(
   if (!dev) return;
   store.getState().beginCompile();
   showCompileTab(store);
+  // Se durante la compilazione si chiude il progetto o ne si apre un altro, l'esito si scarta.
+  const session = store.getState().docLoadId;
+  const sameSession = () => store.getState().docLoadId === session;
+  lastYield = performance.now();
+  const rows: CompileRow[] = [];
+  const compiled: Record<string, { hash: string; file: Uint8Array; diagnostics: Mc7Diagnostic[] }> =
+    {};
+  const failed: string[] = [];
   try {
     const known = store.getState().compile.hashes;
     const context = contextHashOf(dev);
@@ -152,12 +166,6 @@ export async function compileProgram(
     );
     const cpu = findCpu(dev.cpu.typeId);
     const now = new Date();
-    const rows: CompileRow[] = [];
-    const compiled: Record<
-      string,
-      { hash: string; file: Uint8Array; diagnostics: Mc7Diagnostic[] }
-    > = {};
-    const failed: string[] = [];
     const outcome = await runWithProgress('status.compiling', todo.length, async (step, signal) => {
       for (const b of todo) {
         if (signal.aborted) throw new Interrupted();
@@ -171,9 +179,10 @@ export async function compileProgram(
         } else failed.push(b.id);
         step();
       }
-      store.getState().finishCompile({ rows, summary: summaryOf(rows), compiled, failed });
+      if (sameSession())
+        store.getState().finishCompile({ rows, summary: summaryOf(rows), compiled, failed });
     });
-    if (outcome === 'interrotto') {
+    if (outcome === 'interrotto' && sameSession()) {
       store.getState().finishCompile({
         rows,
         summary: summaryOf(rows),
@@ -184,6 +193,9 @@ export async function compileProgram(
       store.getState().pushMessage({ severity: 'warning', textKey: 'messages.compileInterrupted' });
     }
   } catch (e) {
+    // Un'eccezione a metà: si conservano gli esiti già raccolti, poi si mostra l'errore.
+    if (sameSession() && rows.length > 0)
+      store.getState().finishCompile({ rows, summary: summaryOf(rows), compiled, failed });
     compileFailed(store, e);
   }
 }

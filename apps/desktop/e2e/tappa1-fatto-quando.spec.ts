@@ -20,6 +20,7 @@ import {
 // senza errori, si salva, si chiude, si riapre dai recenti e si ricompila senza errori.
 test.setTimeout(90_000);
 
+const norm = (p: string) => p.replaceAll('\\', '/');
 let tmp: string;
 test.beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), 'baa-t1-'));
@@ -98,7 +99,9 @@ test('Tappa 1: crea, compila, salva, chiude, riapre dai recenti e ricompila', as
   await page.getByTestId('portal-start').click();
   await page.getByTestId('action-open').click();
   await page.getByTestId('selection-pane').getByRole('row').nth(1).dblclick();
-  await expect.poll(() => mainTitle(app)).toBe(`BaaPortal - ${file}`);
+  await expect
+    .poll(() => mainTitle(app).then((t) => norm(t ?? '')))
+    .toBe(`BaaPortal - ${norm(file)}`);
   await page.getByTestId('link-project-view').click();
 
   for (const n of expected) await expect(treeNode(page, n)).toBeVisible();
@@ -112,5 +115,4 @@ test('Tappa 1: crea, compila, salva, chiude, riapre dai recenti e ricompila', as
     'Compilazione terminata: 5 blocchi, 0 errori, 0 avvisi',
     { timeout: 30_000 },
   );
-  await app.close();
 });

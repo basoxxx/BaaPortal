@@ -1,6 +1,7 @@
 import { act, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { createCodeBlock, findDevice, type CodeBlock } from '@baaportal/project';
+import { commands } from '../src/commands/commands';
 import { getProgress } from '../src/project/progress';
 import { renderApp } from './renderApp';
 
@@ -99,6 +100,89 @@ describe('statusBar', () => {
       const app = await setup();
       await app.user.keyboard('{Control>}b{/Control}');
       await waitFor(() => expect(app.store.getState().compile.summary?.blocks).toBe(5));
+    },
+    T,
+  );
+
+  it(
+    'durante la compilazione i comandi di compilazione sono disattivati e Ctrl+B non fa nulla',
+    async () => {
+      const app = await setup();
+      let enabled: boolean[] = [];
+      let starts = 0;
+      hook.onBlock = (n) => {
+        if (n === 1) {
+          const s = app.store.getState();
+          enabled = [
+            commands['edit.compile'].isEnabled(s),
+            commands['edit.compileFull'].isEnabled(s),
+          ];
+          const before = hook.n;
+          window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', ctrlKey: true }));
+          starts = hook.n - before;
+        }
+      };
+      act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', ctrlKey: true })));
+      await waitFor(() => expect(app.store.getState().compile.summary).not.toBeNull());
+      expect(enabled).toEqual([false, false]);
+      expect(starts).toBe(0);
+      expect(app.store.getState().compile.summary?.blocks).toBe(5);
+      await waitFor(() => expect(getProgress()).toBeNull());
+      expect(commands['edit.compile'].isEnabled(app.store.getState())).toBe(true);
+    },
+    T,
+  );
+
+  it(
+    'se il progetto si chiude durante la compilazione, l esito si scarta',
+    async () => {
+      const app = await setup();
+      hook.onBlock = (n) => {
+        if (n === 2) act(() => app.store.getState().setDoc(null));
+      };
+      act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', ctrlKey: true })));
+      await waitFor(() => expect(getProgress()).toBeNull());
+      const c = app.store.getState().compile;
+      expect(c.summary).toBeNull();
+      expect(c.rows).toEqual([]);
+      expect(Object.keys(c.hashes)).toHaveLength(0);
+    },
+    T,
+  );
+
+  it(
+    'se il compilatore lancia a metà, restano gli esiti raccolti e compare l errore',
+    async () => {
+      const app = await setup();
+      hook.onBlock = (n) => {
+        if (n === 3) throw new Error('boom');
+      };
+      act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', ctrlKey: true })));
+      await waitFor(() => expect(getProgress()).toBeNull());
+      const st = app.store.getState();
+      expect(st.compile.rows).toHaveLength(2);
+      expect(Object.keys(st.compile.hashes)).toHaveLength(2);
+      expect(st.messages.some((m) => m.textKey === 'messages.compileFailed')).toBe(true);
+    },
+    T,
+  );
+
+  it(
+    'cede il turno all interfaccia solo dopo 16 ms (orologio simulato)',
+    async () => {
+      const app = await setup();
+      let t = 1000;
+      vi.spyOn(performance, 'now').mockImplementation(() => t);
+      const timeouts = vi.spyOn(globalThis, 'setTimeout');
+      hook.onBlock = () => {
+        t += 10; // 10 ms per blocco: si cede ogni due blocchi
+      };
+      act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', ctrlKey: true })));
+      await waitFor(() => expect(app.store.getState().compile.summary).not.toBeNull());
+      const yields = timeouts.mock.calls.filter((c) => c[1] === 0).length;
+      vi.restoreAllMocks();
+      expect(yields).toBeGreaterThanOrEqual(2);
+      expect(yields).toBeLessThanOrEqual(3);
     },
     T,
   );

@@ -53,6 +53,7 @@ import {
 import { exportTagTable, importTagTable } from './tagTableIo';
 import { RenameInput } from './RenameInput';
 import { buildTree, type TreeNode } from './treeModel';
+import { getProgress } from '../progress';
 import { parseNodeId } from './treeIds';
 
 const TARGET_ID = 'tree';
@@ -321,11 +322,13 @@ export function ProjectTree() {
           id: 'compileChanges',
           label: t('objects.compileChanges'),
           separator: true,
+          disabled: !!getProgress(),
           run: () => compileProgram(ctx, parsed.dev, 'changes'),
         },
         {
           id: 'compileFull',
           label: t('objects.compileFull'),
+          disabled: !!getProgress(),
           run: () => compileProgram(ctx, parsed.dev, 'full'),
         },
       );
@@ -344,7 +347,7 @@ export function ProjectTree() {
           id: 'compileBlock',
           label: t('objects.compile'),
           separator: true,
-          disabled: !blocks,
+          disabled: !blocks || !!getProgress(),
           run: () => blocks && compileProgram(ctx, blocks.deviceId, 'full', blocks.ids),
         },
         {

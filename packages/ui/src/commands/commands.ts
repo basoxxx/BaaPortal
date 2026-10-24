@@ -3,6 +3,7 @@ import type { BaaBridge } from '../bridge';
 import type { IconName } from '../icons';
 import type { ProjectService } from '../services/projectService';
 import type { AppState, EditAction, PanelName } from '../state/store';
+import { getProgress } from '../project/progress';
 import { compileProgram } from '../project/compile/compileActions';
 import { openReference } from '../project/reference/referenceStore';
 import { requestFind } from '../search/findActions';
@@ -208,14 +209,14 @@ const list: Command[] = [
   def('edit.compile', {
     icon: 'compile',
     shortcut: 'Mod+B',
-    isEnabled: hasPlc,
+    isEnabled: (s) => hasPlc(s) && !getProgress(),
     run: ({ store, bridge }) => {
       const deviceId = targetPlcId(store.getState());
       if (deviceId) compileProgram({ store, bridge }, deviceId, 'changes');
     },
   }),
   def('edit.compileFull', {
-    isEnabled: hasPlc,
+    isEnabled: (s) => hasPlc(s) && !getProgress(),
     run: ({ store, bridge }) => {
       const deviceId = targetPlcId(store.getState());
       if (deviceId) compileProgram({ store, bridge }, deviceId, 'full');
