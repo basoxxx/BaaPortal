@@ -23,7 +23,14 @@ export interface ExecContext {
   maxCycleMs: number;
   cycleStart: number;
   trace?: (t: TraceStep) => void;
+  /** Istruzioni eseguite dal ciclo (contatore condiviso fra i blocchi). */
+  instructions?: number;
+  /** Chiamato ogni `TICK_EVERY` istruzioni: controllo del tempo di ciclo, merker di clock. */
+  onTick?: () => void;
 }
+
+/** Ogni quante istruzioni si controlla il tempo di ciclo (Global Constraints, piano 2A). */
+export const TICK_EVERY = 1024;
 
 /** Elemento dello stack di annidamento (manuale AWL, «Parola di stato»): catena salvata e funzione. */
 export interface NestEntry {
@@ -156,6 +163,8 @@ export function execBlock(st: ExecState): void {
   try {
     while (at < code.length) {
       st.offset = at;
+      if (ctx.onTick && ((ctx.instructions = (ctx.instructions ?? 0) + 1) & (TICK_EVERY - 1)) === 0)
+        ctx.onTick();
       const d = decodeAt(block, at);
       if (!('stmt' in d)) throw new SimError('MC7_NON_ESEGUIBILE', `byte grezzi a ${at}`);
       const handler = OPS[d.stmt.id];

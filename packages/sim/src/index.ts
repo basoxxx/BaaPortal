@@ -6,3 +6,6 @@ export * from './program';
 export * from './executor';
 export * from './ops';
 export * from './calls';
+export * from './diagnostics';
+export * from './obStartInfo';
+export * from './cpu';
