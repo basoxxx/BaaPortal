@@ -42,10 +42,10 @@ export interface CycleResult {
 const TIMER_COUNT = 2048;
 const COUNTER_COUNT = 2048;
 
-/** Periodo in ms dei bit 0..7 del merker di clock (manuale CPU 31x: 10, 5, 2.5, 2, 1.25, 1, 0.625, 0.5 Hz). */
 /** Voci di diagnostica conservate (le più vecchie si perdono). */
 const MAX_DIAGNOSTICS = 100;
 
+/** Periodo in ms dei bit 0..7 del merker di clock (manuale CPU 31x: 10, 5, 2.5, 2, 1.25, 1, 0.625, 0.5 Hz). */
 const CLOCK_PERIODS_MS = [100, 200, 400, 500, 800, 1000, 1600, 2000];
 
 export class SimCpu {
