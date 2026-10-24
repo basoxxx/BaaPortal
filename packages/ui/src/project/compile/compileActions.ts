@@ -3,7 +3,6 @@ import { findCpu } from '@baaportal/catalog';
 import {
   applyImport,
   blockToMc7File,
-  compileDevice,
   findDevice,
   interfaceHashOf,
   planImport,
@@ -19,6 +18,7 @@ import { flushPendingEdits } from '../../flushPendingEdits';
 import { t } from '../../i18n';
 import type { AppState, CompileRow, CompileSummary } from '../../state/store';
 import { ids, parseNodeId } from '../navigation/treeIds';
+import { getProgress, Interrupted, runWithProgress } from '../progress';
 
 export interface CompileCtx {
   store: StoreApi<AppState>;
@@ -119,18 +119,24 @@ function compileFailed(store: StoreApi<AppState>, e: unknown): void {
   });
 }
 
+/** Cede il turno all'interfaccia, così Interrompi e la barra di avanzamento rispondono. */
+const yieldToUi = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
 /**
  * Compila i blocchi del PLC: `changes` quelli cambiati dall'ultima compilazione riuscita della
  * sessione, `full` tutti; con `only` solo quei blocchi, sempre. La scheda Compila si svuota
  * all'inizio; un'eccezione del compilatore lascia il progetto com'è e finisce in Informazioni.
+ * Un passo per blocco, con avanzamento nella barra di stato; Interrompi ferma tra un blocco e
+ * l'altro: i blocchi già compilati restano compilati, gli altri da compilare.
  */
-export function compileProgram(
+export async function compileProgram(
   ctx: CompileCtx,
   deviceId: string,
   mode: CompileMode,
   only?: string[],
-): void {
+): Promise<void> {
   const { store } = ctx;
+  if (getProgress()) return; // un'altra operazione lunga è in corso
   // Le bozze negli editor (codice dei segmenti) contano: si confermano prima.
   flushPendingEdits();
   const doc = store.getState().doc;
@@ -141,28 +147,42 @@ export function compileProgram(
   try {
     const known = store.getState().compile.hashes;
     const context = contextHashOf(dev);
-    const todo = dev.blocks
-      .filter((b) =>
-        only ? only.includes(b.id) : mode === 'full' || known[b.id] !== hashOf(b, context),
-      )
-      .map((b) => b.id);
-    const { results } = compileDevice(dev, findCpu(dev.cpu.typeId), todo);
+    const todo = dev.blocks.filter((b) =>
+      only ? only.includes(b.id) : mode === 'full' || known[b.id] !== hashOf(b, context),
+    );
+    const cpu = findCpu(dev.cpu.typeId);
+    const now = new Date();
     const rows: CompileRow[] = [];
     const compiled: Record<
       string,
       { hash: string; file: Uint8Array; diagnostics: Mc7Diagnostic[] }
     > = {};
     const failed: string[] = [];
-    for (const r of results) {
-      const b = dev.blocks.find((x) => x.id === r.blockId);
-      if (!b) continue;
-      const row = rowOf(deviceId, b, r.diagnostics, r.file !== undefined);
-      rows.push(row);
-      if (row.status !== 'error' && r.file) {
-        compiled[b.id] = { hash: hashOf(b, context), file: r.file, diagnostics: r.diagnostics };
-      } else failed.push(b.id);
+    const outcome = await runWithProgress('status.compiling', todo.length, async (step, signal) => {
+      for (const b of todo) {
+        if (signal.aborted) throw new Interrupted();
+        await yieldToUi();
+        if (signal.aborted) throw new Interrupted();
+        const r = blockToMc7File(b, dev, cpu, now);
+        const row = rowOf(deviceId, b, r.diagnostics, r.file !== undefined);
+        rows.push(row);
+        if (row.status !== 'error' && r.file) {
+          compiled[b.id] = { hash: hashOf(b, context), file: r.file, diagnostics: r.diagnostics };
+        } else failed.push(b.id);
+        step();
+      }
+      store.getState().finishCompile({ rows, summary: summaryOf(rows), compiled, failed });
+    });
+    if (outcome === 'interrotto') {
+      store.getState().finishCompile({
+        rows,
+        summary: summaryOf(rows),
+        compiled,
+        failed,
+        interrupted: true,
+      });
+      store.getState().pushMessage({ severity: 'warning', textKey: 'messages.compileInterrupted' });
     }
-    store.getState().finishCompile({ rows, summary: summaryOf(rows), compiled, failed });
   } catch (e) {
     compileFailed(store, e);
   }

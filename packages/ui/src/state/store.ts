@@ -92,6 +92,8 @@ export interface CompileState {
   files: Record<string, Uint8Array>;
   /** Diagnostiche (avvisi) dell'ultima compilazione riuscita di ogni blocco. */
   diagnostics: Record<string, Mc7Diagnostic[]>;
+  /** L'ultima compilazione è stata interrotta da Interrompi. */
+  interrupted: boolean;
 }
 /** Richiesta all'editor di un blocco di portare il cursore a rete e riga (da 1); `n` la rende ripetibile. */
 export interface CompileReveal {
@@ -177,6 +179,7 @@ export interface AppState {
     summary: CompileSummary;
     compiled: Record<string, { hash: string; file: Uint8Array; diagnostics: Mc7Diagnostic[] }>;
     failed: string[];
+    interrupted?: boolean;
   }): void;
   /** Apre l'editor del blocco e chiede di portare il cursore a rete e riga. */
   openBlockAt(t: Omit<CompileReveal, 'n'>): void;
@@ -209,6 +212,7 @@ const emptyCompile = (): CompileState => ({
   hashes: {},
   files: {},
   diagnostics: {},
+  interrupted: false,
 });
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -353,8 +357,9 @@ export function createAppStore(now: () => Date = () => new Date()): StoreApi<App
     },
     clearReveal: (n) => set((s) => (s.reveal?.n === n ? { reveal: null } : s)),
     setInfoSubTab: (infoSubTab) => set({ infoSubTab }),
-    beginCompile: () => set((s) => ({ compile: { ...s.compile, rows: [], summary: null } })),
-    finishCompile: ({ rows, summary, compiled }) =>
+    beginCompile: () =>
+      set((s) => ({ compile: { ...s.compile, rows: [], summary: null, interrupted: false } })),
+    finishCompile: ({ rows, summary, compiled, interrupted }) =>
       set((s) => {
         const hashes = { ...s.compile.hashes };
         const files = { ...s.compile.files };
@@ -364,7 +369,9 @@ export function createAppStore(now: () => Date = () => new Date()): StoreApi<App
           files[id] = c.file;
           diagnostics[id] = c.diagnostics;
         }
-        return { compile: { rows, summary, hashes, files, diagnostics } };
+        return {
+          compile: { rows, summary, hashes, files, diagnostics, interrupted: interrupted ?? false },
+        };
       }),
     openBlockAt: (t) => {
       if (!get().doc) return;

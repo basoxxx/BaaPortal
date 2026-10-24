@@ -40,6 +40,11 @@
       "cancel": "Annulla"
     }
   },
+  "status": {
+    "compiling": "Compilazione in corso…",
+    "cancel": "Interrompi",
+    "progress": "Avanzamento"
+  },
   "messages": {
     "replaced": "Sostituiti {{replaced}} testi, saltati {{skipped}}.",
     "detachBlocked": "Impossibile aprire la finestra separata: l'editor resta nell'area di lavoro.",
@@ -63,6 +68,7 @@
     "fileDialogFailed": "Impossibile aprire la finestra di scelta dei file: {{message}}",
     "sourceReplaceChanged": "Sorgente \"{{name}}\": mentre si confermava il progetto è cambiato e gli oggetti da sostituire non sono più quelli elencati. Nessuna modifica: ripetere \"Genera blocchi dalla sorgente\".",
     "actionFailed": "Operazione non riuscita: {{message}}",
+    "compileInterrupted": "Compilazione interrotta: i blocchi già compilati restano compilati.",
     "compileFailed": "Compilazione non riuscita: {{message}}",
     "blockExported": "Blocco \"{{name}}\" esportato in {{path}}.",
     "blockExportFailed": "Impossibile esportare il blocco \"{{name}}\": {{message}}",
@@ -776,6 +782,7 @@
     }
   },
   "compile": {
+    "interrupted": "Compilazione interrotta",
     "filterBlk": "Blocco MC7 (*.blk)",
     "filterImport": "Blocchi MC7 e raccolte del kit (*.blk, *.zip)",
     "replaceTitle": "Sostituisci blocchi",

@@ -124,7 +124,12 @@ export function CompileMessages() {
           );
         })}
       </ul>
-      {compile.summary ? (
+      {compile.interrupted ? (
+        <p className="baa-compile-summary" data-testid="compile-interrupted">
+          {t('compile.interrupted')}
+        </p>
+      ) : null}
+      {compile.summary && !compile.interrupted ? (
         <p className="baa-compile-summary" data-testid="compile-summary">
           {t('compile.summary', { ...compile.summary })}
         </p>

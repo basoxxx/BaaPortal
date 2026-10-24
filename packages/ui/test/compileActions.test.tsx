@@ -16,6 +16,7 @@ import {
 } from '@baaportal/project';
 import { findCpu } from '@baaportal/catalog';
 import { cell } from './blockFixtures';
+import { getProgress } from '../src/project/progress';
 import { renameNode } from '../src/project/navigation/objectCommands';
 import { ids } from '../src/project/navigation/treeIds';
 import { renderApp, type RenderedApp } from './renderApp';
@@ -62,6 +63,8 @@ const rowOf = (name: string) => rows().find((r) => r.getAttribute('data-block') 
 async function menu(app: RenderedApp, nodeId: string, item: string) {
   await app.user.pointer({ keys: '[MouseRight]', target: tn(nodeId) });
   await app.user.click(screen.getByRole('menuitem', { name: item }));
+  // La compilazione procede a passi (uno per blocco): si attende la fine.
+  await waitFor(() => expect(getProgress()).toBeNull());
 }
 
 async function showTab() {

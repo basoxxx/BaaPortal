@@ -867,3 +867,16 @@
 .baa-find-hit.is-readonly {
   color: var(--baa-disabled);
 }
+
+.baa-status-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.baa-status-progress progress {
+  width: 160px;
+  height: 10px;
+}
+.baa-status-progress button {
+  line-height: 16px;
+}

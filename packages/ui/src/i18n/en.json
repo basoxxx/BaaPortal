@@ -40,6 +40,11 @@
       "cancel": "Cancel"
     }
   },
+  "status": {
+    "compiling": "Compiling…",
+    "cancel": "Stop",
+    "progress": "Progress"
+  },
   "messages": {
     "replaced": "Replaced {{replaced}} texts, skipped {{skipped}}.",
     "detachBlocked": "The separate window could not be opened: the editor stays in the work area.",
@@ -63,6 +68,7 @@
     "fileDialogFailed": "The file selection window could not be opened: {{message}}",
     "sourceReplaceChanged": "Source \"{{name}}\": the project changed while confirming and the objects to replace are no longer the ones listed. Nothing was changed: run \"Generate blocks from source\" again.",
     "actionFailed": "The operation failed: {{message}}",
+    "compileInterrupted": "Compilation stopped: the blocks already compiled stay compiled.",
     "compileFailed": "Compilation failed: {{message}}",
     "blockExported": "Block \"{{name}}\" exported to {{path}}.",
     "blockExportFailed": "Cannot export block \"{{name}}\": {{message}}",
@@ -776,6 +782,7 @@
     }
   },
   "compile": {
+    "interrupted": "Compilation stopped",
     "filterBlk": "MC7 block (*.blk)",
     "filterImport": "MC7 blocks and kit archives (*.blk, *.zip)",
     "replaceTitle": "Replace blocks",

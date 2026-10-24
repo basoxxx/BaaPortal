@@ -207,6 +207,7 @@ const list: Command[] = [
   editCommand('edit.selectAll', 'selectAll', 'Mod+A'),
   def('edit.compile', {
     icon: 'compile',
+    shortcut: 'Mod+B',
     isEnabled: hasPlc,
     run: ({ store, bridge }) => {
       const deviceId = targetPlcId(store.getState());
