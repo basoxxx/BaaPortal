@@ -102,8 +102,9 @@ const creatDb: SystemHandler = (call) => {
   let n = lo;
   while (n <= up && dbs.has(n)) n++;
   if (n > up) return call.ret(NO_FREE_DB);
-  dbs.set(n, { data: new Uint8Array(count), initial: new Uint8Array(count), retentive: false });
+  // Prima l'uscita (può fallire se il puntatore è fuori area), poi il DB: nessun DB orfano.
   call.param('DB_NUMBER').write('W', n);
+  dbs.set(n, { data: new Uint8Array(count), initial: new Uint8Array(count), retentive: false });
   call.ret(0);
 };
 
@@ -150,16 +151,14 @@ const SSL_BAD_INDEX = 0x8083;
  */
 const rdsysst: SystemHandler = (call: SystemCall) => {
   const busy = call.param('BUSY');
+  // Sincrona: BUSY = 0 subito, qualunque sia l'esito.
+  busy.write('X', 0);
   // ⚠️ Con REQ = 0 non si fa niente.
-  if (!call.param('REQ').read('X')) {
-    busy.write('X', 0);
-    return call.ret(0);
-  }
+  if (!call.param('REQ').read('X')) return call.ret(0);
   const id = call.param('SSL_ID').read('W');
   const index = call.param('INDEX').read('W');
   const list = call.services.szl(id, index);
   if (!list) {
-    busy.write('X', 0);
     return call.ret(szlIdList().includes(id) ? SSL_BAD_INDEX : SSL_UNKNOWN_ID);
   }
   const header = call.param('SSL_HEADER').bytes(4);
@@ -170,7 +169,6 @@ const rdsysst: SystemHandler = (call: SystemCall) => {
   header.set([list.recordLength >> 8, list.recordLength & 255, count >> 8, count & 255]);
   const n = Math.min(out.length, data.length);
   out.set(data.subarray(0, n));
-  busy.write('X', 0);
   call.ret(n < data.length ? SSL_TRUNCATED : 0);
 };
 

@@ -423,3 +423,118 @@ describe('SFC o SFB non simulati', () => {
     expect(cpu.diagnostics.at(-1)).toMatchObject({ code: 'BLOCCO_NON_CARICATO', eventId: 0x253d });
   });
 });
+
+describe('giro 1: effetti parziali e aree ANY', () => {
+  const blkmovRaw = (): Uint8Array => rawSfc(20, [M(200), M(100), M(210)]);
+
+  function run(code: Uint8Array | LoadedBlock, setup: (m: Uint8Array, cpu: SimCpu) => void) {
+    const { cpu, clock } = makeCpu();
+    cpu.program.put('kind' in code ? code : ob1Raw(code));
+    cpu.run();
+    setup(cpu.memory.M, cpu);
+    cpu.cycle();
+    return { cpu, clock, m: cpu.memory.M };
+  }
+
+  it('CREAT_DB con DB_NUMBER fuori area: STOP e nessun DB orfano', () => {
+    const { cpu } = run(rawSfc(22, [M(0), M(2), M(4), M(6), M(65000)]), (m) => {
+      m.set([0, 10, 0, 20, 0, 8], 0);
+    });
+    expect(cpu.mode).toBe('STOP');
+    expect(cpu.memory.dbs.size).toBe(0);
+  });
+
+  it('RDSYSST: BUSY = 0 anche se DR non è valido', () => {
+    const { m } = run(rawSfc(51, [M(0, 0), M(2), M(4), M(6), M(8, 0), M(10), M(20)]), (m) => {
+      m[0] = 1;
+      m.set(w16(0x0011), 2);
+      m[8] = 1;
+      m.set(any(0x02, 10, 9, ptr(0x84, 0)), 20);
+    });
+    expect(m[8]! & 1).toBe(0);
+    expect((m[6]! << 8) | m[7]!).toBe(0x863a);
+  });
+
+  it('RDSYSST con REQ = 0: BUSY = 0, RET_VAL 0, niente scritto', () => {
+    const { m } = run(rawSfc(51, [M(0, 0), M(2), M(4), M(6), M(8, 0), M(10), M(20)]), (m) => {
+      m[0] = 0;
+      m[8] = 1;
+      m.set(w16(0x0011), 2);
+      m.set(any(0x02, 40, 0, M(100)), 20);
+      m.fill(0xee, 10, 14);
+    });
+    expect(m[8]! & 1).toBe(0);
+    expect((m[6]! << 8) | m[7]!).toBe(0);
+    expect(bytes(m, 10, 4)).toEqual([0xee, 0xee, 0xee, 0xee]);
+    expect(bytes(m, 100, 4)).toEqual([0, 0, 0, 0]);
+  });
+
+  it('BLKMOV verso l’area L del chiamante (ANY con area 16#86)', () => {
+    const ob = ob1Raw(blkmovRaw(), '\tL LD 4;\n\tT MD 40;');
+    const { m } = run(ob, (m) => {
+      m.set([1, 2, 3, 4], 10);
+      m.set(any(0x02, 4, 0, M(10)), 200);
+      m.set(any(0x02, 4, 0, ptr(0x86, 4)), 210);
+    });
+    expect(bytes(m, 40, 4)).toEqual([1, 2, 3, 4]);
+    expect((m[100]! << 8) | m[101]!).toBe(0);
+  });
+
+  it('BLKMOV verso V in un OB (nessun chiamante): finestra vuota → 16#8223', () => {
+    const { m } = run(blkmovRaw(), (m) => {
+      m.set([1, 2, 3, 4], 10);
+      m.set(any(0x02, 4, 0, M(10)), 200);
+      m.set(any(0x02, 4, 0, ptr(0x87, 0)), 210);
+    });
+    expect((m[100]! << 8) | m[101]!).toBe(0x8223);
+  });
+
+  it('BLKMOV da M a un DB di istanza (ANY con area 16#85)', () => {
+    const { cpu } = run(blkmovRaw(), (m, c) => {
+      c.memory.dbs.set(3, {
+        data: new Uint8Array(8),
+        initial: new Uint8Array(8),
+        retentive: false,
+      });
+      m.set([9, 8, 7, 6], 10);
+      m.set(any(0x02, 4, 0, M(10)), 200);
+      m.set(any(0x02, 4, 3, ptr(0x85, 2)), 210);
+    });
+    expect(bytes(cpu.memory.dbs.get(3)!.data, 0, 8)).toEqual([0, 0, 9, 8, 7, 6, 0, 0]);
+  });
+
+  it('ANY di BOOL con ripetizioni non multiple di 8 → 16#8128, nessuna scrittura', () => {
+    const { m } = run(blkmovRaw(), (m) => {
+      m.set(any(0x01, 4, 0, M(10)), 200);
+      m.set(any(0x02, 4, 0, M(30)), 210);
+    });
+    expect((m[100]! << 8) | m[101]!).toBe(0x8128);
+    expect(bytes(m, 30, 4)).toEqual([0, 0, 0, 0]);
+  });
+
+  it('STP da OB100: la CPU resta in STOP, OB1 non gira', () => {
+    const program = buildProgram(
+      [{ kind: 'OB', number: 100, networks: ['\tCALL SFC 46;'] }, ob1('\tSET;\n\t= M 0.0;')],
+      {},
+      SFCS,
+    );
+    const { cpu } = makeCpu(program);
+    cpu.run();
+    expect(cpu.mode).toBe('STOP');
+    expect(cpu.diagnostics.filter((d) => d.code === 'STOP_RICHIESTO')).toHaveLength(1);
+    expect(cpu.cycle().ran).toBe(false);
+    expect(cpu.memory.M[0]).toBe(0);
+  });
+
+  it('TIME_TCK conta dal primo RUN, non dal riavvio', () => {
+    const { cpu, clock } = makeCpu(compile('\tCALL SFC 64 (RET_VAL := MD 40);'));
+    clock.t = 1000;
+    cpu.run();
+    cpu.stop();
+    clock.t = 5000;
+    cpu.run();
+    clock.t = 6000;
+    cpu.cycle();
+    expect(new DataView(cpu.memory.M.buffer).getUint32(40)).toBe(5000);
+  });
+});
