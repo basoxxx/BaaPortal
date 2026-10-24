@@ -6,8 +6,8 @@ Per ogni voce si indica che cosa succede oggi. "Errore chiaro" vuol dire che Baa
 
 ## Mancanze aperte
 
-- **1D-bis: scrittura e comandi al PLC.** Non ci sono: niente scrittura di variabili, carica nel dispositivo o RUN/STOP. BaaPortal verso la CPU fa solo letture. È segnato nel piano generale e va affrontato a parte.
-- **Prove di conformità su una CPU reale.** I blocchi compilati da BaaPortal non sono mai stati caricati né eseguiti su una CPU. Serve una S7-300 non in produzione, che oggi non c'è. Il simulatore della tappa 2 controllerà la coerenza interna, ma non sostituisce questa verifica (spec §10).
+- **Prove di conformità su una CPU reale.** Ora esistono i mezzi (carica nel dispositivo ed esecuzione, piano 1D-bis), ma le prove restano **in sospeso**: non c'è una S7-300 non in produzione. Le farà l'amico dell'utente a prodotto finito. I blocchi compilati da BaaPortal non sono mai stati caricati né eseguiti su una CPU. Il simulatore della tappa 2 controllerà la coerenza interna, ma non sostituisce questa verifica (spec §10). Il punto di decisione della spec §11 resta aperto.
+- **Provenienza 1D-bis.** Scrittura di variabili, carica nel dispositivo e STOP/avvio esistono e sono verificati contro il finto PLC e contro i byte delle catture pubbliche (`cisa/snap7.pcap` per scrittura, stop e avvio a freddo; la cattura del download di un blocco). Il giro completo «la CPU accetta ed esegue un blocco compilato da BaaPortal» non è mai stato provato su una CPU reale (spec §10). Il riavvio a caldo è verificato solo in parte. Restano per la tappa 3 (R1, R3): `_DELE`, `_GARB`, `_MODU` (copia RAM→ROM), MRES, forzatura, impostazione dell'orologio, riavvio a freddo e a caldo, e l'interfaccia online dell'app.
 
 ## Compilatore MC7 (piano 1E)
 
@@ -67,4 +67,4 @@ Per ogni voce si indica che cosa succede oggi. "Errore chiaro" vuol dire che Baa
 
 - Controlli a mano del piano 1B (Windows e Mac) e del piano 1C. Le liste sono nei piani.
 - Facoltativo: l'amico lancia il kit di raccolta e manda lo zip, che va in `fixtures-private/kit/` e mai nel repository.
-- Una CPU S7-300 non in produzione per le prove di conformità.
+- Una CPU S7-300 non in produzione per le prove di conformità (le farà l'amico dell'utente a prodotto finito).
