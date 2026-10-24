@@ -15,6 +15,9 @@ export interface WatchItem {
 /** Valore grezzo (big-endian, come in memoria; per `X` un byte 0/1) oppure il motivo dell'errore. */
 export type WatchValue = { bytes: Uint8Array } | { error: string };
 
+/** Voci al più per richiesta `watch` o `write`: la notifica porta al più 4 byte per voce. */
+export const MAX_WATCH_ITEMS = 1000;
+
 export interface WriteItemReq extends WatchItem {
   /** Byte da scrivere (dimensione dell'operando; per `X` conta se il byte è diverso da 0). */
   data: Uint8Array;

@@ -1,13 +1,14 @@
 import { parseBlockFile, type S7WriteClient } from '@baaportal/s7comm';
 import { SimCpu, connectToSim, type MonitorRequest } from '@baaportal/sim';
-import type {
-  SimNotice,
-  SimRequest,
-  SimWarning,
-  WatchItem,
-  WatchValue,
-  WriteItemReq,
-  WriteResult,
+import {
+  MAX_WATCH_ITEMS,
+  type SimNotice,
+  type SimRequest,
+  type SimWarning,
+  type WatchItem,
+  type WatchValue,
+  type WriteItemReq,
+  type WriteResult,
 } from './protocol';
 
 /** Ambiente dell'ospite: tutto ciò che tocca il mondo esterno è iniettato (nessun globale del Worker). */
@@ -26,8 +27,7 @@ export const SLICE_MS = 10;
 /** Tetto di cicli per fetta, nel caso l'orologio non avanzi. */
 const MAX_CYCLES_PER_SLICE = 5000;
 const MAX_WARNINGS = 100;
-/** Voci al più per richiesta `watch` o `write`: la notifica porta al più 4 byte per voce. */
-export const MAX_WATCH_ITEMS = 1000;
+export { MAX_WATCH_ITEMS };
 
 const SIZE_BYTES = { X: 1, B: 1, W: 2, D: 4 } as const;
 
@@ -321,10 +321,16 @@ export class SimHost {
     if (typeof loc === 'string') return { error: loc };
     if (it.data.length !== loc.len)
       return { error: `servono ${loc.len} byte, ne arrivano ${it.data.length}` };
-    if (it.size === 'X') {
-      const mask = 1 << it.bit!;
-      loc.buf[loc.at] = it.data[0] ? loc.buf[loc.at]! | mask : loc.buf[loc.at]! & ~mask;
-    } else loc.buf.set(it.data, loc.at);
+    const put = (buf: Uint8Array) => {
+      if (it.size === 'X') {
+        const mask = 1 << it.bit!;
+        buf[loc.at] = it.data[0] ? buf[loc.at]! | mask : buf[loc.at]! & ~mask;
+      } else buf.set(it.data, loc.at);
+    };
+    put(loc.buf);
+    // Come l'accesso diretto di writeBits: una scrittura su PQ aggiorna anche la PIQ (Q) se
+    // l'indirizzo vi cade, altrimenti la copia di fine ciclo (physOut = Q) la cancellerebbe.
+    if (it.area === 'PQ' && loc.at + loc.len <= cpu.memory.Q.length) put(cpu.memory.Q);
     return { ok: true };
   }
 

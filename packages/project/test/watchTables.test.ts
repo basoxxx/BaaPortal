@@ -102,6 +102,18 @@ describe('tabelle di controllo nel file (formato 4)', () => {
     expect(() => readBaap(zipSync(g))).toThrow(/INVALID_SCHEMA/);
   });
 
+  it('watchTables che non è un elenco in un device.json del formato 4 è INVALID_SCHEMA', () => {
+    const p = withTable();
+    const d = p.devices[0]!;
+    for (const bad of [{}, 'w1', null, [1]]) {
+      const f = files(p);
+      const dev = json(f, `plc/${d.id}/device.json`);
+      dev.watchTables = bad;
+      put(f, `plc/${d.id}/device.json`, dev);
+      expect(() => readBaap(zipSync(f))).toThrow(/INVALID_SCHEMA/);
+    }
+  });
+
   it('un id di riga ripetuto nel dispositivo è INVALID_SCHEMA', () => {
     const p = withTable();
     p.devices[0]!.watchTables[1]!.rows.push(createWatchRow('MW0', 'DEC', () => 'w2'));

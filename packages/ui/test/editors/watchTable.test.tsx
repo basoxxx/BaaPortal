@@ -222,4 +222,23 @@ describe('editor della tabella di controllo', () => {
     expect(rows.map((r) => r.id)).toEqual(['r1']);
     expect(past(app)).toBe(before + 1);
   });
+
+  it('dopo «Comanda» lo stato dell osservazione resta visibile; cambiare formato toglie l errore', async () => {
+    const app = await open();
+    simOn(app);
+    vi.spyOn(SimController.prototype, 'toggleWatch').mockImplementation(() => {});
+    vi.spyOn(SimController.prototype, 'commandWatch').mockResolvedValue({
+      written: 0,
+      errors: { r1: { key: 'SYNTAX' } },
+    });
+    await app.user.click(screen.getByRole('button', { name: 'Comanda' }));
+    await waitFor(() => expect(cell('r1', 'modify')).toHaveClass('is-error'));
+    expect(screen.getByTestId('watch-bar')).toHaveTextContent('Osservazione spenta.');
+    expect(screen.getByTestId('watch-bar')).toHaveTextContent('Comando eseguito');
+    await app.user.click(screen.getByRole('button', { name: 'Osserva tutto' }));
+    expect(screen.getByTestId('watch-bar')).not.toHaveTextContent('Comando eseguito');
+    await app.user.dblClick(cell('r1', 'format'));
+    await app.user.keyboard('{Control>}a{/Control}hex{Enter}');
+    expect(cell('r1', 'modify')).not.toHaveClass('is-error');
+  });
 });

@@ -1078,7 +1078,9 @@
       "TC_WRITE": "The simulator does not allow writing timers and counters.",
       "BOOL": "Allowed values: TRUE, FALSE, 1 or 0.",
       "SYNTAX": "Value not valid for the format.",
-      "RANGE": "Value out of range ({{min}} … {{max}})."
+      "RANGE": "Value out of range ({{min}} … {{max}}).",
+      "S5_RESOLUTION": "Time not representable: minimum resolution 10 ms (100 ms above 9.99 s, 1 s above 99.9 s, 10 s above 999 s).",
+      "TOO_MANY": "Too many rows to monitor: the simulator accepts at most 1000."
     }
   }
 }

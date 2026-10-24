@@ -5,6 +5,7 @@ import {
   formatValue,
   parseCommand,
   planCommand,
+  resolveRows,
   statusOf,
   watchPlan,
   type RowInfo,
@@ -118,7 +119,8 @@ describe('validazione del valore di comando', () => {
     expect(ok('S5T#0MS', 'S5TIME', 'W')).toBe('0000');
     expect(ok('S5T#2H46M30S', 'S5TIME', 'W')).toBe('3999');
     expect(ok('S5T#2H46M40S', 'S5TIME', 'W')).toBe('!RANGE');
-    expect(ok('S5T#5MS', 'S5TIME', 'W')).toBe('!RANGE'); // non multiplo di 10 ms
+    expect(ok('S5T#5MS', 'S5TIME', 'W')).toBe('!S5_RESOLUTION'); // sotto i 10 ms
+    expect(ok('S5T#10S10MS', 'S5TIME', 'W')).toBe('!S5_RESOLUTION'); // 1001 x 10 ms, non multiplo di 100 ms
     expect(ok('S5T#1S2H', 'S5TIME', 'W')).toBe('!SYNTAX'); // fuori ordine
     expect(ok('1S', 'S5TIME', 'W')).toBe('!SYNTAX');
   });
@@ -190,6 +192,25 @@ describe('piano di osservazione e di comando', () => {
       e: 'row.UNKNOWN',
       f: 'TC_WRITE',
     });
+  });
+
+  it('oltre 1000 righe osservabili le successive hanno un errore e la richiesta resta nel limite', () => {
+    const many = Array.from({ length: 1003 }, (_, i) =>
+      createWatchRow('MB0', 'HEX', () => `m${i}`),
+    );
+    const resolve = () => ({
+      ok: true as const,
+      target: { area: 'M' as const, byte: 0, size: 'B' as const },
+      format: 'HEX' as const,
+      sign: 'any' as const,
+    });
+    const infos = resolveRows(resolve, many);
+    const plan = watchPlan(many, (r) => infos.get(r.id)!);
+    expect(plan.items).toHaveLength(1000);
+    const last = infos.get('m1002')!;
+    expect(last.ok).toBe(false);
+    expect(!last.ok && last.error.key).toBe('TOO_MANY');
+    expect(infos.get('m999')!.ok).toBe(true);
   });
 
   it('stato: errore di riga, valore del simulatore, errore del simulatore', () => {

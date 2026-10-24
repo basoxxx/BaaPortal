@@ -1,6 +1,11 @@
 // Tabelle di controllo: risoluzione delle righe, formati di visualizzazione e validazione dei valori di comando.
 import type { WatchFormat, WatchResolution, WatchRow, WatchTarget } from '@baaportal/project';
-import type { WatchItem, WatchValue, WriteItemReq } from '../../sim/protocol';
+import {
+  MAX_WATCH_ITEMS,
+  type WatchItem,
+  type WatchValue,
+  type WriteItemReq,
+} from '../../sim/protocol';
 
 type Size = WatchTarget['size'];
 type Sign = 'signed' | 'unsigned' | 'any';
@@ -259,6 +264,8 @@ export function parseCommand(
       const m = /^S5T#(.*)$/i.exec(s);
       const ms = m ? parseDuration(m[1]!) : null;
       if (ms === null) return fail('SYNTAX');
+      // Risoluzione minima 10 ms; sopra 9,99 s solo multipli di 100 ms, sopra 99,9 s di 1 s...
+      if (ms > 9_990_000) return fail('RANGE', { min: 'S5T#0MS', max: 'S5T#2H46M30S' });
       for (const [base, unit] of BCD_BASE_MS.entries()) {
         if (ms % unit === 0 && ms / unit <= 999) {
           const digits = String(ms / unit).padStart(3, '0');
@@ -267,7 +274,7 @@ export function parseCommand(
           return { ok: true, data: b };
         }
       }
-      return fail('RANGE', { min: 'S5T#0MS', max: 'S5T#2H46M30S' });
+      return fail('S5_RESOLUTION');
     }
     case 'TIME': {
       const m = /^T#([+-]?)(.*)$/i.exec(s);
@@ -306,6 +313,27 @@ export function resolveRow(resolve: (text: string) => WatchResolution, row: Watc
   return formatsFor(r.target.size).includes(row.format)
     ? base
     : { ...base, formatError: err('FORMAT', { format: row.format }) };
+}
+
+/**
+ * Risolve le righe. Oltre MAX_WATCH_ITEMS righe osservabili le successive hanno un errore
+ * (`TOO_MANY`): la richiesta al simulatore non supera mai il suo limite, e non si ritenta.
+ */
+export function resolveRows(
+  resolve: (text: string) => WatchResolution,
+  rows: readonly WatchRow[],
+): Map<string, RowInfo> {
+  const out = new Map<string, RowInfo>();
+  let observable = 0;
+  for (const row of rows) {
+    let info = resolveRow(resolve, row);
+    if (info.ok && !info.formatError) {
+      if (observable >= MAX_WATCH_ITEMS) info = { ok: false, error: err('TOO_MANY') };
+      else observable++;
+    }
+    out.set(row.id, info);
+  }
+  return out;
 }
 
 /** Le righe osservabili (operando risolto e formato adatto) e le richieste `watch` corrispondenti. */

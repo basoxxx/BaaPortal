@@ -24,7 +24,7 @@ import {
   WATCH_FORMATS,
   addressText,
   parseCommand,
-  resolveRow,
+  resolveRows,
   statusOf,
   type RowInfo,
   type WatchRowError,
@@ -67,7 +67,7 @@ export function WatchTableView({ editor }: { editor: EditorRef }) {
   const infos = useMemo(() => {
     if (!device || !table) return new Map<string, RowInfo>();
     const resolve = watchResolverFor(device, findCpu(device.cpu.typeId));
-    return new Map(table.rows.map((r) => [r.id, resolveRow(resolve, r)]));
+    return resolveRows(resolve, table.rows);
   }, [device, table]);
 
   // Una riga nuova solo se qualcosa è cambiato: la griglia non ridisegna le righe uguali.
@@ -168,7 +168,8 @@ export function WatchTableView({ editor }: { editor: EditorRef }) {
   const onCommit = useCallback<DataGridProps<ViewRow>['onCommit']>(
     (key, columnId, value) => {
       if (typeof value === 'boolean') return;
-      if (columnId === 'modify')
+      // L'errore dell'ultimo «Comanda» vale per il vecchio contenuto della riga.
+      if (columnId === 'modify' || columnId === 'operand' || columnId === 'format')
         setCommandErrors((e) => {
           if (!(key in e)) return e;
           const rest = { ...e };
@@ -271,18 +272,20 @@ export function WatchTableView({ editor }: { editor: EditorRef }) {
         data-testid="watch-bar"
       >
         <span className="baa-watch-msg">
-          {!simOn
-            ? t('watch.simOff')
-            : lastWritten !== null
-              ? t('watch.commanded', { count: lastWritten, failed })
-              : t(watching ? 'watch.on' : 'watch.off')}
+          {!simOn ? t('watch.simOff') : t(watching ? 'watch.on' : 'watch.off')}
+          {simOn && lastWritten !== null
+            ? ` ${t('watch.commanded', { count: lastWritten, failed })}`
+            : ''}
         </span>
         <button
           type="button"
           className="baa-panel-btn"
           aria-pressed={watching}
           disabled={!simOn}
-          onClick={() => controller.toggleWatch(deviceId, tableId)}
+          onClick={() => {
+            setLastWritten(null);
+            controller.toggleWatch(deviceId, tableId);
+          }}
         >
           {t('watch.watchAll')}
         </button>

@@ -43,6 +43,8 @@ function setup() {
   row('r-range', 'MB20', 'DEC', '300');
   row('r-timer', 'T 1', 'S5TIME');
   row('r-tw', 'T 2', 'S5TIME', 'S5T#1S');
+  const t2 = addWatchTable(dev, 'Seconda', () => 'wt2');
+  t2.rows.push(createWatchRow('MB5', 'HEX', () => 'q1'));
   project.devices.push(dev);
   store
     .getState()
@@ -176,5 +178,40 @@ describe('tabelle di controllo sul simulatore', () => {
     ctl(s).toggleWatch(DEV, 'wt1');
     expect(st(s).sim.watch).toBeNull();
     expect(table(s).rows).toHaveLength(6);
+  });
+
+  it('passando da una tabella all altra le notifiche della vecchia non si applicano', async () => {
+    await initI18n('it');
+    const s = setup();
+    await commands['online.simulation'].run(s.ctx);
+    open(s);
+    ctl(s).toggleWatch(DEV, 'wt1');
+    await vi.waitFor(() => expect(st(s).sim.watchValues).not.toBeNull());
+    st(s).openEditor({ kind: 'watchTable', deviceId: DEV, objectId: 'wt2' });
+    expect(st(s).sim.watch).toBeNull(); // la prima non è più visibile
+    expect(st(s).sim.watchValues).toBeNull();
+    ctl(s).toggleWatch(DEV, 'wt2');
+    await vi.waitFor(() => expect(Object.keys(st(s).sim.watchValues ?? {})).toEqual(['q1']));
+    await new Promise((r) => setTimeout(r, 450)); // altre notifiche: mai righe della prima
+    expect(Object.keys(st(s).sim.watchValues!)).toEqual(['q1']);
+  });
+
+  it('cambiata la voce di una riga (MW10 → MD10) il vecchio valore sparisce subito', async () => {
+    await initI18n('it');
+    const s = setup();
+    await commands['online.simulation'].run(s.ctx);
+    open(s);
+    ctl(s).toggleWatch(DEV, 'wt1');
+    await vi.waitFor(() => expect(st(s).sim.watchValues?.['r-mw']).toBeDefined());
+    expect(st(s).sim.watchValues!['r-mw']).toEqual({ bytes: Uint8Array.of(0, 0) });
+    st(s).edit('history.editCell', (p) => {
+      findDevice(p, DEV)!.watchTables[0]!.rows[0]!.operand = 'MD10';
+    });
+    // sincrono: nessun valore a 2 byte per una voce a 4
+    expect(st(s).sim.watchValues?.['r-mw']).toBeUndefined();
+    expect(st(s).sim.watchValues?.['r-bit']).toBeDefined(); // le altre righe restano
+    await vi.waitFor(() =>
+      expect(st(s).sim.watchValues?.['r-mw']).toEqual({ bytes: Uint8Array.of(0, 0, 0, 0) }),
+    );
   });
 });

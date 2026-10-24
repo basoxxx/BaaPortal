@@ -1078,7 +1078,9 @@
       "TC_WRITE": "Il simulatore non permette di scrivere temporizzatori e contatori.",
       "BOOL": "Valore ammesso: TRUE, FALSE, 1 o 0.",
       "SYNTAX": "Valore non valido per il formato.",
-      "RANGE": "Valore fuori dai limiti ({{min}} … {{max}})."
+      "RANGE": "Valore fuori dai limiti ({{min}} … {{max}}).",
+      "S5_RESOLUTION": "Tempo non rappresentabile: risoluzione minima 10 ms (100 ms oltre 9,99 s, 1 s oltre 99,9 s, 10 s oltre 999 s).",
+      "TOO_MANY": "Troppe righe da osservare: il simulatore ne accetta al più 1000."
     }
   }
 }

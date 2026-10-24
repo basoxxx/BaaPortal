@@ -13,7 +13,12 @@ import { t } from '../i18n';
 import { compileProgram, contextHashOf, hashOf } from '../project/compile/compileActions';
 import { targetPlcId } from '../project/navigation/treeIds';
 import { getProgress } from '../project/progress';
-import { planCommand, resolveRow, watchPlan, type WatchRowError } from '../editors/watch/watchRows';
+import {
+  planCommand,
+  resolveRows,
+  watchPlan,
+  type WatchRowError,
+} from '../editors/watch/watchRows';
 import { SIM_OFF, type AppState } from '../state/store';
 import { downloadOrder } from './downloadOrder';
 import { activeCodeBlock, codeBlockOf, monitorReasonOf, monitorStillShown } from './monitorStatus';
@@ -65,6 +70,8 @@ export class SimController {
   private sentWatch: string | undefined;
   /** Righe a cui corrispondono, per posizione, le voci osservate. */
   private watchRowIds: string[] = [];
+  /** La voce (testo JSON) mandata per ciascuna riga: i valori di una voce cambiata non valgono più. */
+  private watchItemOfRow = new Map<string, string>();
   /** Richieste `watch` in volo: finché ce ne sono, le notifiche (di voci vecchie) si scartano. */
   private watchInFlight = 0;
   /** Le voci la cui ultima richiesta è stata rifiutata (segnalato una volta). */
@@ -141,6 +148,7 @@ export class SimController {
     this.inputsInFlight = 0;
     this.sentMonitor = undefined;
     this.sentWatch = undefined;
+    this.watchItemOfRow = new Map();
     this.watchInFlight = 0;
     this.failedWatch = undefined;
     session.onNotice((n) => {
@@ -348,7 +356,8 @@ export class SimController {
     const cached = this.watchPlanFor;
     if (cached && cached.dev === dev && cached.table === table) return cached;
     const resolve = watchResolverFor(dev, findCpu(dev.cpu.typeId));
-    const plan = watchPlan(table.rows, (row) => resolveRow(resolve, row));
+    const infos = resolveRows(resolve, table.rows);
+    const plan = watchPlan(table.rows, (row) => infos.get(row.id)!);
     this.watchPlanFor = { dev, table, ...plan };
     return this.watchPlanFor;
   }
@@ -373,7 +382,18 @@ export class SimController {
     if (plan) this.watchRowIds = plan.rowIds;
     if (key === this.sentWatch) return;
     this.sentWatch = key;
-    if (!plan && st.sim.watchValues) st.setSim({ watchValues: null });
+    // Cambiata la voce di una riga (MW10 → MD10) il suo vecchio valore ha un'altra lunghezza: si toglie.
+    const nextItems = new Map(plan?.rowIds.map((id, i) => [id, JSON.stringify(plan.items[i])]));
+    const old = st.sim.watchValues;
+    if (old) {
+      const kept = Object.fromEntries(
+        Object.entries(old).filter(
+          ([id]) => nextItems.has(id) && nextItems.get(id) === this.watchItemOfRow.get(id),
+        ),
+      );
+      st.setSim({ watchValues: Object.keys(kept).length > 0 ? kept : null });
+    }
+    this.watchItemOfRow = nextItems;
     this.watchInFlight++;
     s.request({ op: 'watch', items: plan?.items ?? [] }).then(
       () => {
@@ -408,7 +428,8 @@ export class SimController {
     const table = dev && findWatchTable(dev, tableId);
     if (!s || !dev || !table || st.sim.deviceId !== deviceId) return null;
     const resolve = watchResolverFor(dev, findCpu(dev.cpu.typeId));
-    const plan = planCommand(table.rows, (row) => resolveRow(resolve, row));
+    const infos = resolveRows(resolve, table.rows);
+    const plan = planCommand(table.rows, (row) => infos.get(row.id)!);
     const errors = { ...plan.errors };
     let written = 0;
     if (plan.writes.length > 0) {

@@ -163,6 +163,40 @@ describe('SimHost', () => {
     await f.host.handle({ op: 'stop' });
   });
 
+  it('write su PQ in RUN: dura oltre il ciclo (aggiorna anche Q); PI resta; fuori da Q basta physOut', async () => {
+    const f = fake();
+    await start(f.host);
+    await f.host.handle({ op: 'download', files: [ob1(['\tNOP 0;'])] });
+    await f.host.handle({ op: 'mode', to: 'RUN' });
+    await f.advance(100);
+    const r = await f.host.handle({
+      op: 'write',
+      items: [
+        { area: 'PQ', byte: 4, size: 'W', data: Uint8Array.of(0xff, 0xff) },
+        { area: 'PQ', byte: 6, bit: 3, size: 'X', data: Uint8Array.of(1) },
+        { area: 'PI', byte: 2, size: 'B', data: Uint8Array.of(0x5a) },
+      ],
+    });
+    expect(r).toEqual([{ ok: true }, { ok: true }, { ok: true }]);
+    await f.advance(500); // diversi cicli
+    const read = async (item: object) => {
+      await f.host.handle({ op: 'watch', items: [item as never] });
+      await f.advance(250);
+      return f.of('watch').at(-1)!.values[0]!;
+    };
+    expect(await read({ area: 'PQ', byte: 4, size: 'W' })).toEqual({
+      bytes: Uint8Array.of(255, 255),
+    });
+    expect(await read({ area: 'Q', byte: 4, size: 'W' })).toEqual({
+      bytes: Uint8Array.of(255, 255),
+    });
+    expect(await read({ area: 'PQ', byte: 6, bit: 3, size: 'X' })).toEqual({
+      bytes: Uint8Array.of(1),
+    });
+    expect(await read({ area: 'PI', byte: 2, size: 'B' })).toEqual({ bytes: Uint8Array.of(0x5a) });
+    await f.host.handle({ op: 'stop' });
+  });
+
   it('write: scrive M e PQ, segnala per elemento gli errori', async () => {
     const f = fake();
     await start(f.host);
