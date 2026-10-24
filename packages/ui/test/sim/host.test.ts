@@ -271,6 +271,24 @@ describe('SimHost', () => {
     await f.host.handle({ op: 'stop' });
   });
 
+  it('interrupt con indirizzo del modulo: OB82 lo riceve nei dati di avvio; indirizzo non valido rifiutato', async () => {
+    const f = fake();
+    await start(f.host);
+    await f.host.handle({
+      op: 'download',
+      files: [ob1(['\tNOP 0;']), ob1(['\tL LW 6;\n\tT QW 0;'], 82)],
+    });
+    await f.host.handle({ op: 'mode', to: 'RUN' });
+    await f.advance(300);
+    await f.host.handle({ op: 'interrupt', ob: 82, address: 0x0104 });
+    await f.advance(300);
+    const out = f.of('status').at(-1)!.outputs;
+    expect([out[0], out[1]]).toEqual([0x01, 0x04]);
+    for (const address of [-1, 1.5, 0x10000])
+      await expect(f.host.handle({ op: 'interrupt', ob: 86, address })).rejects.toThrow();
+    await f.host.handle({ op: 'stop' });
+  });
+
   it('stop: ultimo status in STOP prima di spegnersi', async () => {
     const f = fake();
     await start(f.host);

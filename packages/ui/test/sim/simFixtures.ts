@@ -13,8 +13,8 @@ export const PROPS: SimCpuProps = {
   cyclicInterruptMs: 0,
 };
 
-/** Compila un OB1 senza interfaccia dalle reti AWL date. */
-export function ob1(networks: string[]): Uint8Array {
+/** Compila un OB (di default OB1) senza interfaccia dalle reti AWL date. */
+export function ob1(networks: string[], number = 1): Uint8Array {
   const iface = {
     input: [],
     output: [],
@@ -33,7 +33,7 @@ export function ob1(networks: string[]): Uint8Array {
   } as unknown as AwlContext;
   const r = compileBlock({
     kind: 'OB',
-    number: 1,
+    number,
     now: new Date(2026, 9, 20),
     header: { author: 'T', family: 'Prove', name: 'Ciclo', version: '0.1' },
     knowHowProtected: false,

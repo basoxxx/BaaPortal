@@ -28,7 +28,8 @@ export type SimRequest =
   | { op: 'mode'; to: 'RUN' | 'STOP' }
   | { op: 'mres' }
   | { op: 'setInputs'; byte: number; bytes: Uint8Array }
-  | { op: 'interrupt'; ob: 82 | 86 }
+  /** Allarme di diagnostica (OB82) o guasto (OB86); `address` è l'indirizzo logico di base del modulo. */
+  | { op: 'interrupt'; ob: 82 | 86; address?: number }
   | { op: 'monitor'; block?: MonitorRequest }
   | { op: 'watch'; items: WatchItem[] }
   | { op: 'write'; items: WriteItemReq[] }

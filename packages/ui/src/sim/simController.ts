@@ -145,6 +145,37 @@ export class SimController {
     }
   }
 
+  /**
+   * Scrive ingressi fisici (`physIn`) dal byte dato. L'immagine locale si aggiorna subito, così
+   * clic ravvicinati partono dal valore giusto senza aspettare la prossima notifica.
+   */
+  async setInputs(byte: number, bytes: Uint8Array): Promise<void> {
+    const s = this.session;
+    if (!s) return;
+    const cur = this.store.getState().sim.inputs;
+    if (byte >= 0 && byte + bytes.length <= cur.length) {
+      const next = cur.slice();
+      next.set(bytes, byte);
+      this.store.getState().setSim({ inputs: next });
+    }
+    try {
+      await s.request({ op: 'setInputs', byte, bytes });
+    } catch (e) {
+      if (this.session === s) this.push('error', 'simInputsFailed', { message: errorText(e) });
+    }
+  }
+
+  /** «Simula guasto»: allarme di diagnostica (OB82) o guasto del rack (OB86) del modulo `address`. */
+  async interrupt(ob: 82 | 86, address: number): Promise<void> {
+    const s = this.session;
+    if (!s) return;
+    try {
+      await s.request({ op: 'interrupt', ob, address });
+    } catch (e) {
+      if (this.session === s) this.push('error', 'simInterruptFailed', { message: errorText(e) });
+    }
+  }
+
   /** Cancellazione totale (MRES): solo in STOP, dopo conferma. Il worker la rifiuta fuori da STOP. */
   async memoryReset(ctx: SimCtx): Promise<void> {
     const s = this.session;

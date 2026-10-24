@@ -923,3 +923,41 @@
 .baa-cpu-diag li[data-error='true'] {
   color: var(--baa-error, #c42b1c);
 }
+
+/* Pannello I/O del simulatore */
+.baa-io-bytes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 6px;
+}
+.baa-io-byte {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.baa-io-bits {
+  display: flex;
+  gap: 2px;
+}
+.baa-io-bit {
+  min-width: 22px;
+  text-align: center;
+  border: 1px solid var(--baa-border, #999);
+}
+.baa-io-bit[data-on='true'] {
+  background: #2e9e44;
+  color: #fff;
+}
+.baa-io-add,
+.baa-io-fault {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+}
+.baa-io-panel [role='alert'] {
+  color: var(--baa-error, #c42b1c);
+  padding: 0 6px;
+}

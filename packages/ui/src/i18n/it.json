@@ -97,7 +97,9 @@
     "tagsExported": "Tabella \"{{name}}\" esportata in \"{{path}}\".",
     "tagsExportFailed": "Impossibile esportare la tabella \"{{name}}\": {{message}}",
     "archived": "Progetto \"{{name}}\" archiviato in \"{{path}}\".",
-    "simMresFailed": "Cancellazione totale non riuscita: {{message}}"
+    "simMresFailed": "Cancellazione totale non riuscita: {{message}}",
+    "simInputsFailed": "Il simulatore non ha accettato gli ingressi: {{message}}",
+    "simInterruptFailed": "Il simulatore non ha accettato l'allarme: {{message}}"
   },
   "commands": {
     "project.new": "Nuovo…",
@@ -389,7 +391,8 @@
       },
       "test": {
         "cpuPanel": "Pannello di comando CPU",
-        "callStack": "Stack di chiamata"
+        "callStack": "Stack di chiamata",
+        "ioPanel": "Pannello I/O del simulatore"
       },
       "tasks": {
         "findReplace": "Trova e sostituisci"
@@ -995,5 +998,31 @@
     },
     "ledOn": "acceso",
     "ledOff": "spento"
+  },
+  "ioPanel": {
+    "inputs": "Ingressi",
+    "outputs": "Uscite",
+    "noBytes": "Nessun byte: aggiungine uno con «+ byte».",
+    "byteLabel": "Byte {{byte}}",
+    "bitLabel": "{{area}} {{byte}}.{{bit}}",
+    "bitSym": "{{area}} {{byte}}.{{bit}} ({{symbol}})",
+    "on": "1",
+    "off": "0",
+    "byteInput": "Numero del byte",
+    "addByte": "+ byte",
+    "byteInvalid": "Byte non valido o fuori area.",
+    "analog": "Parola di periferia (PIW)",
+    "piwAddress": "Indirizzo",
+    "piwValue": "Valore (INT)",
+    "piwWrite": "Scrivi",
+    "piwBadAddress": "Indirizzo non valido: usa per esempio PIW 256.",
+    "piwOutOfArea": "Indirizzo fuori dall'area degli ingressi.",
+    "piwBadValue": "Valore non valido: intero da -32768 a 32767.",
+    "fault": "Simula guasto",
+    "moduleAddress": "Indirizzo del modulo",
+    "ob82": "Allarme di diagnostica (OB82)",
+    "ob86": "Guasto del rack (OB86)",
+    "addressBad": "Indirizzo non valido: intero da 0 a 65535.",
+    "needRun": "La CPU deve essere in RUN."
   }
 }

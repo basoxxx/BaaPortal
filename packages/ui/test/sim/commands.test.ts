@@ -410,4 +410,17 @@ describe('comandi online sul simulatore', () => {
       true,
     );
   });
+
+  it('setInputs e interrupt vanno al worker; gli ingressi locali si aggiornano subito', async () => {
+    await initI18n('it');
+    const s = setup();
+    await on(s);
+    s.store.getState().setSim({ inputs: new Uint8Array(4) });
+    await s.controller.setInputs(1, Uint8Array.of(5));
+    await s.controller.interrupt(82, 256);
+    expect(s.ops()).toEqual(expect.arrayContaining(['setInputs', 'interrupt']));
+    expect(s.store.getState().sim.inputs[1]).toBe(5);
+    const sent = s.workers.flatMap((w) => w.sent.map((m) => m.req));
+    expect(sent).toContainEqual({ op: 'interrupt', ob: 82, address: 256 });
+  });
 });

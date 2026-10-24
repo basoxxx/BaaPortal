@@ -85,7 +85,12 @@ export class SimHost {
         return undefined;
       }
       case 'interrupt':
-        cpu.raiseInterrupt(req.ob);
+        if (
+          req.address !== undefined &&
+          !(Number.isInteger(req.address) && req.address >= 0 && req.address <= 0xffff)
+        )
+          throw new RangeError(`indirizzo del modulo non valido: ${req.address}`);
+        cpu.raiseInterrupt(req.ob, req.address === undefined ? {} : { address: req.address });
         return undefined;
       case 'monitor':
         this.monitorReq = req.block;

@@ -97,7 +97,9 @@
     "tagsExported": "Table \"{{name}}\" exported to \"{{path}}\".",
     "tagsExportFailed": "Cannot export table \"{{name}}\": {{message}}",
     "archived": "Project \"{{name}}\" archived to \"{{path}}\".",
-    "simMresFailed": "Memory reset failed: {{message}}"
+    "simMresFailed": "Memory reset failed: {{message}}",
+    "simInputsFailed": "The simulator did not accept the inputs: {{message}}",
+    "simInterruptFailed": "The simulator did not accept the interrupt: {{message}}"
   },
   "commands": {
     "project.new": "New…",
@@ -389,7 +391,8 @@
       },
       "test": {
         "cpuPanel": "CPU operator panel",
-        "callStack": "Call stack"
+        "callStack": "Call stack",
+        "ioPanel": "Simulator I/O panel"
       },
       "tasks": {
         "findReplace": "Find and replace"
@@ -995,5 +998,31 @@
     },
     "ledOn": "on",
     "ledOff": "off"
+  },
+  "ioPanel": {
+    "inputs": "Inputs",
+    "outputs": "Outputs",
+    "noBytes": "No bytes: add one with \"+ byte\".",
+    "byteLabel": "Byte {{byte}}",
+    "bitLabel": "{{area}} {{byte}}.{{bit}}",
+    "bitSym": "{{area}} {{byte}}.{{bit}} ({{symbol}})",
+    "on": "1",
+    "off": "0",
+    "byteInput": "Byte number",
+    "addByte": "+ byte",
+    "byteInvalid": "Invalid byte or outside the area.",
+    "analog": "Peripheral word (PIW)",
+    "piwAddress": "Address",
+    "piwValue": "Value (INT)",
+    "piwWrite": "Write",
+    "piwBadAddress": "Invalid address: use for example PIW 256.",
+    "piwOutOfArea": "Address outside the input area.",
+    "piwBadValue": "Invalid value: integer from -32768 to 32767.",
+    "fault": "Simulate fault",
+    "moduleAddress": "Module address",
+    "ob82": "Diagnostic interrupt (OB82)",
+    "ob86": "Rack failure (OB86)",
+    "addressBad": "Invalid address: integer from 0 to 65535.",
+    "needRun": "The CPU must be in RUN."
   }
 }

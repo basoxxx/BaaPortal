@@ -25,7 +25,7 @@ describe('pannello di comando CPU', () => {
   it('senza simulazione invita ad avviarla', async () => {
     const app = await renderApp({ view: 'project', withProject: true, withPlc: true });
     act(() => app.store.getState().setTaskCard('test'));
-    expect(screen.getAllByText('Avvia la simulazione per usare il pannello')).toHaveLength(2);
+    expect(screen.getAllByText('Avvia la simulazione per usare il pannello')).toHaveLength(3);
   });
 
   it('LED e pulsanti in STOP; tempi di ciclo', async () => {

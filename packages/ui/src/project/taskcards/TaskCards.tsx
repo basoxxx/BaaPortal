@@ -4,11 +4,12 @@ import { useAppStore, useServices } from '../../state/AppContext';
 import type { TaskCardId } from '../../state/store';
 import { CallStack } from './CallStack';
 import { CpuPanel } from './CpuPanel';
+import { IoPanel } from './IoPanel';
 import { FindReplace } from './FindReplace';
 
 const SECTIONS: Record<TaskCardId, string[]> = {
   instructions: ['favorites', 'basic', 'advanced', 'communication', 'optional'],
-  test: ['cpuPanel', 'callStack'],
+  test: ['cpuPanel', 'callStack', 'ioPanel'],
   tasks: ['findReplace'],
   libraries: ['projectLibrary', 'globalLibraries'],
 };
@@ -40,6 +41,10 @@ function Section({ card, id }: { card: TaskCardId; id: string }) {
       ) : open && id === 'callStack' ? (
         <div id={`tc-${card}-${id}`}>
           <CallStack />
+        </div>
+      ) : open && id === 'ioPanel' ? (
+        <div id={`tc-${card}-${id}`}>
+          <IoPanel />
         </div>
       ) : open ? (
         <p id={`tc-${card}-${id}`} className="baa-placeholder">

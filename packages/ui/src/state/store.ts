@@ -128,6 +128,8 @@ export interface SimUiState {
   outputs: Uint8Array;
   /** Un «Carica nel dispositivo» è in corso su questa sessione. */
   downloading: boolean;
+  /** Byte aggiunti a mano nel pannello I/O («+ byte»): solo per questa simulazione, non nel progetto. */
+  ioExtra: { inputs: number[]; outputs: number[] };
 }
 
 export const SIM_OFF: SimUiState = {
@@ -140,6 +142,7 @@ export const SIM_OFF: SimUiState = {
   inputs: new Uint8Array(0),
   outputs: new Uint8Array(0),
   downloading: false,
+  ioExtra: { inputs: [], outputs: [] },
 };
 
 export interface AppState {
