@@ -64,7 +64,7 @@ Regole:
 - Importazione: rileva da sola il separatore (`;`, `,`, tabulazione) dalla riga d'intestazione; accetta BOM e CRLF/LF; campi tra virgolette con separatori e a capo; ignora righe vuote; colonne riconosciute per **nome** (ordine libero, maiuscole/minuscole indifferenti); colonne in più (es. `Typeobject ID`, `Version ID`) ignorate. `hmi` = `Hmi Accessible`. Una riga non valida finisce in `errors` con il suo numero di riga e **non** blocca le altre.
 - `line` = numero di riga nel file (1 = intestazione), per i messaggi.
 
-- [ ] **Step 1: Scrivi i test che falliscono** (`tagsCsv.test.ts`)
+- [x] **Step 1: Scrivi i test che falliscono** (`tagsCsv.test.ts`)
   - `it('tagsToCsv: BOM, intestazione TAG_COLUMNS, separatore ";", CRLF, indirizzo %MW10')`
   - `it('roundtrip tagsToCsv → parseTagsCsv su BOOL/INT/REAL/WORD con commenti contenenti ";" e virgolette')`
   - `it('csv di Excel con "," e LF, colonne in ordine diverso e "Typeobject ID" in più → letto giusto')`
@@ -73,10 +73,10 @@ Regole:
   - `it('intestazione senza "Logical Address" → errors [{line:1, code:"COLONNA_MANCANTE"}], nessun tag')`
   - `it('nomi doppi nel file → secondo in errors con NOME_DOPPIO')`
   - `it('fromLogicalAddress accetta "%M0.1" e "M0.1"; toLogicalAddress(fromLogicalAddress(x)) === x')`
-- [ ] **Step 2: Esegui e verifica che falliscano** — `npx vitest run --project importers`, atteso FAIL.
-- [ ] **Step 3: Implementa** `columns.ts`, `csv.ts`, `rows.ts`; riesporta.
-- [ ] **Step 4: Test, typecheck, lint, formato** — `npx vitest run --project importers && npm run typecheck && npm run lint && npm run format:check`, atteso PASS.
-- [ ] **Step 5: Commit** — `feat(importers): tabelle variabili in csv`
+- [x] **Step 2: Esegui e verifica che falliscano** — `npx vitest run --project importers`, atteso FAIL.
+- [x] **Step 3: Implementa** `columns.ts`, `csv.ts`, `rows.ts`; riesporta.
+- [x] **Step 4: Test, typecheck, lint, formato** — `npx vitest run --project importers && npm run typecheck && npm run lint && npm run format:check`, atteso PASS.
+- [x] **Step 5: Commit** — `feat(importers): tabelle variabili in csv`
 
 ---
 
@@ -104,13 +104,13 @@ Regole:
 - Lettura: stringhe condivise (`xl/sharedStrings.xml`, compreso testo ricco `<r><t>`), stringhe in linea, numeri (resi come testo senza `.0` finale per gli interi), booleani (`t="b"` → `True`/`False`), celle saltate (riferimento `r="C5"` → colonne vuote in mezzo), fogli trovati tramite `workbook.xml` + relazioni, non per nome di file. Un parser XML minimo dentro `ooxml.ts` (niente DOMParser: il pacchetto gira in node); entità `&amp; &lt; &gt; &quot; &apos;` e `&#…;`.
 - `parseTagsXlsx` riusa le stesse regole di riga del Task 1 (nessuna logica copiata): `ooxml` dà righe di testo, `rows.ts` le valida.
 
-- [ ] **Step 1: Scrivi i test che falliscono**
+- [x] **Step 1: Scrivi i test che falliscono**
   - `ooxml.test.ts`: `it('writeXlsx → readXlsx roundtrip con <, &, accenti, a capo')`; `it('legge sharedStrings con testo ricco e celle numeriche 10 / 2.5 / booleane')`; `it('celle saltate (A1, C1) → riga ["x","","z"]')`; `it('byte non zip → XlsxFormatError NON_ZIP; zip senza workbook → NON_XLSX')`. Il caso con stringhe condivise si costruisce nel test con `fflate.zipSync` e XML scritto a mano.
   - `tagsXlsx.test.ts`: `it('tagsToXlsx → parseTagsXlsx roundtrip variabili e costanti')`; `it('foglio "Constants" accettato come "User Constants"')`; `it('riga con indirizzo non valido → errore per riga, altre importate')`.
-- [ ] **Step 2: Esegui e verifica che falliscano** — `npx vitest run --project importers`.
-- [ ] **Step 3: Implementa** `ooxml.ts` e `xlsx.ts`.
-- [ ] **Step 4: Test, typecheck, lint, formato** — come Task 1.
-- [ ] **Step 5: Commit** — `feat(importers): tabelle variabili in xlsx (OOXML minimo su fflate)`
+- [x] **Step 2: Esegui e verifica che falliscano** — `npx vitest run --project importers`.
+- [x] **Step 3: Implementa** `ooxml.ts` e `xlsx.ts`.
+- [x] **Step 4: Test, typecheck, lint, formato** — come Task 1.
+- [x] **Step 5: Commit** — `feat(importers): tabelle variabili in xlsx (OOXML minimo su fflate)`
 
 ---
 
@@ -137,16 +137,16 @@ Regole:
 - L'importazione è **un solo** `store.edit('edit.importTags', …)`. Alla fine si apre `ImportTagsReport` con creati / aggiornati / scartati (riga + motivo tradotto) e un messaggio in *Informazioni*.
 - Errore di formato (`XlsxFormatError`, testo illeggibile) → messaggio chiaro, progetto invariato.
 
-- [ ] **Step 1: Scrivi i test che falliscono** (`tagTableIo.test.tsx`, con `renderApp()` e `FakeBridge`)
+- [x] **Step 1: Scrivi i test che falliscono** (`tagTableIo.test.tsx`, con `renderApp()` e `FakeBridge`)
   - `it('applyTagImport: nome esistente aggiornato con stesso id, nome nuovo creato, riga errata in skipped')`
   - `it('importa csv da menu contestuale → tag nella tabella; un Ctrl+Z ripristina la tabella identica')`
   - `it('esporta xlsx → i byte scritti su FakeBridge si rileggono con parseTagsXlsx uguali alla tabella')`
   - `it('importa un file non xlsx con estensione .xlsx → messaggio d\'errore, progetto invariato')`
   - `it('il riepilogo mostra 2 creati, 1 aggiornato, 1 scartato con motivo')`
-- [ ] **Step 2: Esegui e verifica che falliscano** — `npx vitest run --project ui -t "tagTableIo|applyTagImport"`.
-- [ ] **Step 3: Implementa** comandi, azioni, dialogo, testi.
-- [ ] **Step 4: Test, typecheck, lint, formato** — `npx vitest run --project ui && npm run typecheck && npm run lint && npm run format:check`.
-- [ ] **Step 5: Commit** — `feat(ui): importa ed esporta tabelle variabili in xlsx e csv`
+- [x] **Step 2: Esegui e verifica che falliscano** — `npx vitest run --project ui -t "tagTableIo|applyTagImport"`.
+- [x] **Step 3: Implementa** comandi, azioni, dialogo, testi.
+- [x] **Step 4: Test, typecheck, lint, formato** — `npx vitest run --project ui && npm run typecheck && npm run lint && npm run format:check`.
+- [x] **Step 5: Commit** — `feat(ui): importa ed esporta tabelle variabili in xlsx e csv`
 
 ---
 
@@ -173,13 +173,13 @@ Regole:
 - **Archivia** (Progetto → Archivia…): richiede un progetto aperto. Se ci sono modifiche non salvate, chiede di salvare prima (stessa domanda della chiusura). Propone `<nome progetto>_<AAAAMMGG_hhmm>.baapz`. Il file si scrive in modo atomico.
 - **Ritira archivio** (Progetto → Ritira archivio…): sceglie un `.baapz`, poi la cartella di destinazione. Se `<cartella>/<projectFileName>` esiste già, chiede conferma prima di sovrascrivere; senza conferma non scrive niente. Scrive il `.baap` in modo atomico e lo apre come "Apri progetto" (progetti recenti compresi). Un errore lascia la cartella invariata.
 
-- [ ] **Step 1: Scrivi i test che falliscono**
+- [x] **Step 1: Scrivi i test che falliscono**
   - `baapzFile.test.ts`: `it('writeBaapz → readBaapz: manifesto e progetto identico a readBaap(writeBaap(p))')`; `it('formatVersion 2 → VERSIONE_FUTURA')`; `it('zip senza manifest.json → MANIFESTO_MANCANTE')`; `it('baap interno rotto → PROGETTO_ILLEGGIBILE con detail = codice originale')`.
   - `archive.test.tsx`: `it('Archivia scrive un .baapz col nome proposto <nome>_<data>.baapz')`; `it('Ritira su file esistente: annulla la conferma → nessuna scrittura')`; `it('Ritira apre il progetto e lo aggiunge ai recenti')`; `it('archivio rotto → messaggio con codice, nessun file scritto')`.
-- [ ] **Step 2: Esegui e verifica che falliscano** — `npx vitest run --project project --project ui -t "baapz|Archivia|Ritira"`.
-- [ ] **Step 3: Implementa** `baapzFile.ts` e i due comandi.
-- [ ] **Step 4: Test, typecheck, lint, formato**
-- [ ] **Step 5: Commit** — `feat(project,ui): archivia e ritira archivio (.baapz)`
+- [x] **Step 2: Esegui e verifica che falliscano** — `npx vitest run --project project --project ui -t "baapz|Archivia|Ritira"`.
+- [x] **Step 3: Implementa** `baapzFile.ts` e i due comandi.
+- [x] **Step 4: Test, typecheck, lint, formato**
+- [x] **Step 5: Commit** — `feat(project,ui): archivia e ritira archivio (.baapz)`
 
 ---
 
@@ -208,17 +208,17 @@ Regole:
 - Doppio clic su un oggetto del riferimento: per ora nessun editor. Si mostra un messaggio "solo copia" e il fatto va nei limiti noti (Task 10).
 - Gli id dei nodi del riferimento sono qualificati con `key`, così non collidono con quelli del progetto aperto.
 
-- [ ] **Step 1: Scrivi i test che falliscono** (`referenceProjects.test.tsx`)
+- [x] **Step 1: Scrivi i test che falliscono** (`referenceProjects.test.tsx`)
   - `it('apri riferimento → albero nel pannello con nome e percorso; chiudi → sparisce')`
   - `it('rinomina/elimina/incolla disattivati sui nodi del riferimento')`
   - `it('copia FC1 dal riferimento e incolla nel progetto → FC compare; un Ctrl+Z lo toglie; riferimento invariato')`
   - `it('incolla FC1 in un progetto che ha già FC1 → stesso esito di pasteObjects (rinumera/rinomina)')`
   - `it('riferimento = stesso file del progetto aperto → si apre, modifiche al progetto non toccano il riferimento')`
   - `it('file non .baap valido → messaggio con codice BaapFormatError, nessun riferimento aggiunto')`
-- [ ] **Step 2: Esegui e verifica che falliscano** — `npx vitest run --project ui -t "riferimento|reference"`.
-- [ ] **Step 3: Implementa** store, albero, comandi e copia tra documenti.
-- [ ] **Step 4: Test, typecheck, lint, formato**
-- [ ] **Step 5: Commit** — `feat(ui): progetti di riferimento in sola lettura, con copia nel progetto`
+- [x] **Step 2: Esegui e verifica che falliscano** — `npx vitest run --project ui -t "riferimento|reference"`.
+- [x] **Step 3: Implementa** store, albero, comandi e copia tra documenti.
+- [x] **Step 4: Test, typecheck, lint, formato**
+- [x] **Step 5: Commit** — `feat(ui): progetti di riferimento in sola lettura, con copia nel progetto`
 
 ---
 
@@ -249,13 +249,13 @@ Regole:
 - Blocchi protetti know-how e reti "MC7 grezzo": i risultati compaiono con `editable:false` e `reason`. `replaceInProject` non li tocca mai e li conta in `skipped`. Dei blocchi protetti si cerca solo nell'interfaccia e nel titolo, mai nel codice (spec §6).
 - `replaceInProject` è pura e restituisce un progetto nuovo. Il chiamante (Task 7) la avvolge in un solo `store.edit`.
 
-- [ ] **Step 1: Scrivi i test che falliscono**
+- [x] **Step 1: Scrivi i test che falliscono**
   - `findInProject.test.ts`: `it('trova "MW10" in due reti di due blocchi e in un commento di variabile')`; `it('mnemonica de: cerca "U M0.0" trova la riga salvata come "A M0.0"')`; `it('letterale "(.*)" non è regex')`; `it('wholeWord: "M1" non trova "M10"')`; `it('regex non valida → {error:"REGEX_NON_VALIDA"}')`; `it('rete MC7 grezzo → hit editable:false reason MC7_GREZZO')`; `it('blocco protetto → nessun hit nel codice, hit nel titolo editable:false')`; `it('scope object limita ai soli risultati di quel blocco')`.
   - `replaceInProject.test.ts`: `it('sostituisci tutto "MW10"→"MW12" in 3 blocchi: replaced 3, testo salvato in internazionale')`; `it('mnemonica de: sostituisci "U"→"UN" come parola intera produce "AN" salvato')`; `it('hit protetti/grezzi contati in skipped, blocchi invariati')`; `it('only=[un hit] sostituisce solo quello')`; `it('il progetto di partenza non è mutato')`.
-- [ ] **Step 2: Esegui e verifica che falliscano** — `npx vitest run --project ui test/search`.
-- [ ] **Step 3: Implementa** i tre file.
-- [ ] **Step 4: Test, typecheck, lint, formato**
-- [ ] **Step 5: Commit** — `feat(ui): motore di ricerca e sostituzione nel progetto`
+- [x] **Step 2: Esegui e verifica che falliscano** — `npx vitest run --project ui test/search`.
+- [x] **Step 3: Implementa** i tre file.
+- [x] **Step 4: Test, typecheck, lint, formato**
+- [x] **Step 5: Commit** — `feat(ui): motore di ricerca e sostituzione nel progetto`
 
 ---
 
@@ -276,7 +276,7 @@ Regole:
 - La casella *Ricerca* della barra degli strumenti: Invio apre la task card con quel testo e cerca in tutto il progetto. Ctrl+F apre la task card e mette il fuoco su "Trova", con dentro il testo selezionato nell'editor attivo se c'è.
 - Dopo una modifica al progetto i risultati diventano vecchi: si mostra "Risultati non aggiornati, ripeti la ricerca" e si disattiva *Sostituisci*, così nessuna sostituzione parte da offset vecchi.
 
-- [ ] **Step 1: Scrivi i test che falliscono** (`findReplace.test.tsx`, `renderApp()`)
+- [x] **Step 1: Scrivi i test che falliscono** (`findReplace.test.tsx`, `renderApp()`)
   - `it('Ctrl+F apre la task card col fuoco su Trova')`
   - `it('cerca "MW10" in tutto il progetto → 3 risultati raggruppati per blocco')`
   - `it('clic su un risultato apre il blocco con la selezione sul testo')`
@@ -284,10 +284,10 @@ Regole:
   - `it('casella Ricerca della barra + Invio apre la task card e cerca')`
   - `it('dopo una modifica i risultati sono segnati non aggiornati e Sostituisci è disattivato')`
   - `it('regex non valida → messaggio sotto il campo, nessuna eccezione')`
-- [ ] **Step 2: Esegui e verifica che falliscano** — `npx vitest run --project ui -t "Trova|findReplace"`.
-- [ ] **Step 3: Implementa** pannello, collegamenti e scorciatoie.
-- [ ] **Step 4: Test, typecheck, lint, formato**
-- [ ] **Step 5: Commit** — `feat(ui): trova e sostituisci nella task card e nella barra degli strumenti`
+- [x] **Step 2: Esegui e verifica che falliscano** — `npx vitest run --project ui -t "Trova|findReplace"`.
+- [x] **Step 3: Implementa** pannello, collegamenti e scorciatoie.
+- [x] **Step 4: Test, typecheck, lint, formato**
+- [x] **Step 5: Commit** — `feat(ui): trova e sostituisci nella task card e nella barra degli strumenti`
 
 ---
 
@@ -319,13 +319,13 @@ Regole:
 - Il selettore della mnemonica nell'intestazione dell'editor di blocco sparisce: la mnemonica si sceglie solo dalle Impostazioni (1C R2). Il selettore di lingua della Vista portale resta e scrive nelle stesse impostazioni.
 - Il localStorage è illeggibile o contiene JSON rotto → valgono i valori predefiniti, senza errori a video. Va gestito con try/catch come le altre chiavi.
 
-- [ ] **Step 1: Scrivi i test che falliscono**
+- [x] **Step 1: Scrivi i test che falliscono**
   - `settings.test.ts`: `it('nessuna chiave → DEFAULT_SETTINGS')`; `it('migra baa.lang=en e baa.mnemonic=int nella chiave nuova')`; `it('JSON rotto → default')`; `it('campo non valido (fontSize 99) → default solo per quel campo')`.
   - `settingsDialog.test.tsx`: `it('Opzioni → Impostazioni apre il dialogo con le tre sezioni')`; `it('lingua en + OK → menu in inglese subito')`; `it('mnemonica int + OK → l\'editor AWL mostra "A" invece di "U"')`; `it('Annulla non cambia niente')`; `it('recupero 0 → nessun salvataggio di recupero dopo 2 intervalli')`; `it('cambiare impostazioni non segna il progetto modificato')`; `it('l\'intestazione dell\'editor di blocco non ha più il selettore di mnemonica')`.
-- [ ] **Step 2: Esegui e verifica che falliscano** — `npx vitest run --project ui -t "settings|Impostazioni"`.
-- [ ] **Step 3: Implementa** impostazioni, dialogo e collegamenti; adegua i test esistenti del selettore di mnemonica e della lingua al nuovo percorso, senza togliere asserzioni.
-- [ ] **Step 4: Test, typecheck, lint, formato**
-- [ ] **Step 5: Commit** — `feat(ui): Opzioni → Impostazioni (lingua, aspetto, comportamento editor)`
+- [x] **Step 2: Esegui e verifica che falliscano** — `npx vitest run --project ui -t "settings|Impostazioni"`.
+- [x] **Step 3: Implementa** impostazioni, dialogo e collegamenti; adegua i test esistenti del selettore di mnemonica e della lingua al nuovo percorso, senza togliere asserzioni.
+- [x] **Step 4: Test, typecheck, lint, formato**
+- [x] **Step 5: Commit** — `feat(ui): Opzioni → Impostazioni (lingua, aspetto, comportamento editor)`
 
 ---
 
@@ -350,11 +350,11 @@ Regole:
 - **E2E "Fatto quando" (spec §9 Tappa 1).** Nell'app impacchettata, usando solo l'interfaccia: crea un progetto, aggiunge una CPU S7-300, OB1, un FB con il suo DB di istanza, un FC, un DB globale e una tabella delle variabili con 3 variabili. Poi compila tutto senza errori, salva, chiude, riapre dai recenti, verifica che ci siano tutti gli oggetti e ricompila senza errori. Il test di andata e ritorno dell'MC7 esiste già (piani 1E/1D-bis) e non si ripete.
 - **E2E 1F:** esporta e reimporta una tabella in csv e in xlsx, archivia e ritira, apre un progetto di riferimento e ne copia un FC, fa un trova e sostituisci con Ctrl+Z, cambia lingua e mnemonica dalle Impostazioni.
 
-- [ ] **Step 1: Scrivi i test che falliscono** — `statusBar.test.tsx`: `it('durante la compilazione di 5 blocchi la barra mostra 0/5 … 5/5 e Interrompi')`; `it('Interrompi dopo 2 blocchi → 2 compilati, 3 da compilare, messaggio "Compilazione interrotta"')`; `it('Ctrl+B avvia la compilazione')`. I due spec e2e coprono i flussi descritti sopra.
-- [ ] **Step 2: Esegui e verifica che falliscano** — `npx vitest run --project ui -t "statusBar|Ctrl+B"`; `npm run e2e`.
-- [ ] **Step 3: Implementa** avanzamento, interruzione e scorciatoia; sistema ciò che gli e2e trovano rotto.
-- [ ] **Step 4: Test completi** — `npm test && npm run e2e && npm run typecheck && npm run lint && npm run format:check`.
-- [ ] **Step 5: Commit** — `feat(ui): avanzamento e interruzione nella barra di stato, Ctrl+B; e2e "Fatto quando" della tappa 1`
+- [x] **Step 1: Scrivi i test che falliscono** — `statusBar.test.tsx`: `it('durante la compilazione di 5 blocchi la barra mostra 0/5 … 5/5 e Interrompi')`; `it('Interrompi dopo 2 blocchi → 2 compilati, 3 da compilare, messaggio "Compilazione interrotta"')`; `it('Ctrl+B avvia la compilazione')`. I due spec e2e coprono i flussi descritti sopra.
+- [x] **Step 2: Esegui e verifica che falliscano** — `npx vitest run --project ui -t "statusBar|Ctrl+B"`; `npm run e2e`.
+- [x] **Step 3: Implementa** avanzamento, interruzione e scorciatoia; sistema ciò che gli e2e trovano rotto.
+- [x] **Step 4: Test completi** — `npm test && npm run e2e && npm run typecheck && npm run lint && npm run format:check`.
+- [x] **Step 5: Commit** — `feat(ui): avanzamento e interruzione nella barra di stato, Ctrl+B; e2e "Fatto quando" della tappa 1`
 
 ---
 
@@ -373,9 +373,9 @@ Regole:
 - **Collaudo:** `npm test && for i in 1 2 3; do npm run e2e || break; done && npm run typecheck && npm run lint && npm run format:check`, verde 3 volte su 3. Con `S7_CAPTURES_DIR` sulla cache delle catture, così girano anche i test delle catture.
 - **Lista di controllo manuale** (Windows e macOS), da aggiungere in fondo a questo piano: l'xlsx esportato si apre in Excel e in LibreOffice senza avvisi di riparazione; un xlsx esportato da TIA Portal, se l'utente ne ha uno, si importa; Archivia e Ritira con un percorso con lettere accentate e spazi; la scala dell'interfaccia a 125% non taglia i pannelli.
 
-- [ ] **Step 1: Aggiorna limiti noti, piano generale, versione, caselle e lista di controllo**
-- [ ] **Step 2: Esegui il collaudo tre volte**
-- [ ] **Step 3: Commit** — `docs: 1F chiuso; tappa 1 aperta solo per la conformità su CPU reale; versione 0.5.0`
+- [x] **Step 1: Aggiorna limiti noti, piano generale, versione, caselle e lista di controllo**
+- [x] **Step 2: Esegui il collaudo tre volte**
+- [x] **Step 3: Commit** — `docs: 1F chiuso; tappa 1 aperta solo per la conformità su CPU reale; versione 0.5.0`
 
 ---
 
@@ -392,3 +392,12 @@ Regole:
 - **R9. Impostazioni nel localStorage (`baa.settings.v1`)**, con migrazione delle chiavi esistenti. Non serve un file nel processo principale: nessuna impostazione serve al processo principale. *Se fosse sbagliato:* si sposta in `userData/settings.json` dietro `loadSettings`/`saveSettings`.
 - **R10. Le scelte dell'Aspetto sono solo la scala.** Il tema resta quello chiaro di TIA (spec §8.6); un tema scuro non è richiesto. *Se fosse sbagliato:* si aggiunge una voce.
 - **R11. La tappa 1 resta formalmente aperta** dopo la 1F, solo per la conformità su CPU reale. Lo dice la spec §6, e lo si dichiara invece di nasconderlo. *Se fosse sbagliato:* niente, è un limite dichiarato.
+
+---
+
+## Lista di controllo manuale (Windows e macOS)
+
+- [ ] L'xlsx esportato si apre in Excel e in LibreOffice senza avvisi di riparazione.
+- [ ] Un xlsx esportato da TIA Portal, se l'utente ne ha uno, si importa.
+- [ ] Archivia e Ritira archivio funzionano con un percorso con lettere accentate e spazi.
+- [ ] La scala dell'interfaccia a 125% non taglia i pannelli (anche nelle finestre staccate).
