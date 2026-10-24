@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  S7Client,
+  S7Connection,
   decodeEndUploadResponse,
   decodeReadResponse,
   decodeSetup,
@@ -8,6 +10,11 @@ import {
   decodeUserdata,
   decodeWriteResponse,
   encodeEndUpload,
+  encodeInsertBlock,
+  encodeRequestDownload,
+  memoryTransportPair,
+  sliceBlockForDownload,
+  type TransportFactory,
   encodePlcStop,
   encodeWarmRestart,
   encodeWriteRequest,
@@ -25,7 +32,7 @@ import {
   reqReadSzl,
   type ReadItem,
 } from '@baaportal/s7comm';
-import { FakeCpu, userdataFunction } from '../src';
+import { FakeCpu, serve, userdataFunction } from '../src';
 import { NOTHING, TestPeer, blockFile, seq, sleep } from './helpers';
 
 const read = (count: number, area: ReadItem['area'] = 'M'): Uint8Array =>
@@ -551,6 +558,151 @@ describe('write var e stop/avvio (allowlist)', () => {
     ]);
     const r = await p.job(modu);
     expect(r).toMatchObject({ rosctr: 2, errorClass: 0xd2, errorCode: 0x41 });
+    expect(cpu.snapshot()).toBe(before);
+  });
+});
+
+describe('download di un blocco (ruoli invertiti: il finto PLC manda i job 0x1B/0x1C)', () => {
+  const transportFor =
+    (cpu: FakeCpu): TransportFactory =>
+    async () => {
+      const [a, b] = memoryTransportPair();
+      serve(cpu, b);
+      return a;
+    };
+
+  const openWrite = (cpu: FakeCpu): Promise<S7Connection> =>
+    S7Connection.open({
+      host: 'finto',
+      transport: transportFor(cpu),
+      timeoutMs: 2000,
+      mode: 'online-write',
+    });
+
+  /** Il lato PG del download: 0x1A, fette su richiesta, 0x1C. Non manda l'_INSE. */
+  async function download(
+    conn: S7Connection,
+    file: Uint8Array,
+    declared: { load?: number; mc7?: number } = {},
+  ): Promise<void> {
+    const parsed = parseBlockFile(file);
+    const slices = sliceBlockForDownload(file, 240);
+    let i = 0;
+    await conn.runDownload(
+      encodeRequestDownload(
+        parsed.header.type!,
+        parsed.header.number,
+        'P',
+        declared.load ?? file.length,
+        declared.mc7 ?? parsed.header.mc7Length,
+      ),
+      () => {
+        const chunk = slices[i]!;
+        i++;
+        return { eos: i < slices.length, chunk };
+      },
+      () => undefined,
+    );
+  }
+
+  it('download di un blocco costruito con buildBlockFile: dopo _INSE compare in list-blocks e si rilegge in upload identico', async () => {
+    const cpu = new FakeCpu();
+    const file = blockFile('DB', 5, seq(700, 9), 5);
+    const conn = await openWrite(cpu);
+    await download(conn, file);
+    // fino all'_INSE il blocco non esiste
+    expect(cpu.blockList('DB')).toEqual([]);
+    const r = await conn.request(encodeInsertBlock('DB', 5, 'P'), NOTHING, 1);
+    expect(r).toMatchObject({ rosctr: 3, errorClass: 0, errorCode: 0 });
+    expect(r.param[0]).toBe(0x28);
+    expect(cpu.blockList('DB').map((b) => b.number)).toEqual([5]);
+    expect(cpu.block('DB', 5)!.file).toEqual(file);
+    await conn.close();
+
+    const c = await S7Client.connect({
+      host: 'finto',
+      transport: transportFor(cpu),
+      timeoutMs: 2000,
+    });
+    try {
+      expect((await c.listBlocks('DB')).map((e) => e.number)).toEqual([5]);
+      expect(await c.upload('DB', 5)).toEqual(file);
+    } finally {
+      await c.close();
+    }
+  });
+
+  it('download senza _INSE finale → il blocco NON compare (stato invariato)', async () => {
+    const cpu = new FakeCpu();
+    cpu.addDb(1, seq(20));
+    const before = cpu.snapshot();
+    const conn = await openWrite(cpu);
+    await download(conn, blockFile('DB', 5, seq(700, 9), 5));
+    await conn.close();
+    await sleep(10);
+    expect(cpu.blockList('DB').map((b) => b.number)).toEqual([1]);
+    expect(cpu.block('DB', 5)).toBeUndefined();
+    expect(cpu.snapshot()).toBe(before);
+    expect(cpu.connections).toBe(0);
+  });
+
+  it('lunghezza dichiarata ≠ byte ricomposti → errore, blocco non inserito', async () => {
+    for (const declared of [{ load: 999 }, { mc7: 5 }]) {
+      const cpu = new FakeCpu();
+      const before = cpu.snapshot();
+      const conn = await openWrite(cpu);
+      await download(conn, blockFile('DB', 5, seq(700, 9), 5), declared);
+      const r = await conn.request(encodeInsertBlock('DB', 5, 'P'), NOTHING, 1);
+      expect(r.rosctr).toBe(2);
+      expect(r.errorClass).not.toBe(0);
+      expect(cpu.block('DB', 5)).toBeUndefined();
+      expect(cpu.snapshot()).toBe(before);
+      await conn.close();
+    }
+  });
+
+  it('secondo download in parallelo → errore "nessun download possibile"', async () => {
+    const cpu = new FakeCpu();
+    const p = await new TestPeer(cpu).open();
+    const req = encodeRequestDownload('DB', 5, 'P', 100, 10);
+    await p.job(req);
+    // l'ack 0x1A è seguito dal primo job 0x1B del finto PLC
+    expect(p.pdus.at(-2)).toMatchObject({ rosctr: 3 });
+    expect(p.pdus.at(-1)).toMatchObject({ rosctr: 1 });
+    expect(p.pdus.at(-1)!.param[0]).toBe(0x1b);
+    const r = await p.job(req);
+    expect(r).toMatchObject({ rosctr: 2, errorClass: 0x83, errorCode: 0x04 });
+    expect(cpu.block('DB', 5)).toBeUndefined();
+  });
+
+  it('con protezione 2 il request download risponde 0xD241 e non parte nessun job', async () => {
+    const cpu = new FakeCpu({ protectionLevel: 2 });
+    const p = await new TestPeer(cpu).open();
+    const r = await p.job(encodeRequestDownload('DB', 5, 'P', 100, 10));
+    expect(r).toMatchObject({ rosctr: 2, errorClass: 0xd2, errorCode: 0x41 });
+    expect(p.pdus.some((x) => x.rosctr === 1)).toBe(false);
+  });
+
+  it('_INSE senza download in corso resta un servizio non ammesso; un ack-data spurio è ignorato', async () => {
+    const cpu = new FakeCpu();
+    const p = await new TestPeer(cpu).open();
+    const before = cpu.snapshot();
+    const r = await p.job(encodeInsertBlock('DB', 5, 'P'));
+    expect(r).toMatchObject({ rosctr: 2, errorClass: 0xd2, errorCode: 0x41 });
+    const n = p.pdus.length;
+    await p.send({ rosctr: 3, param: Uint8Array.of(0x1b, 0), data: new Uint8Array(4), pduRef: 9 });
+    expect(p.pdus.length).toBe(n);
+    expect(cpu.snapshot()).toBe(before);
+  });
+
+  it('connessione caduta a metà download → nessun blocco e la CPU si libera', async () => {
+    const cpu = new FakeCpu();
+    const before = cpu.snapshot();
+    const p = await new TestPeer(cpu).open();
+    await p.job(encodeRequestDownload('DB', 5, 'P', 100, 10));
+    p.close();
+    await sleep(10);
+    expect(cpu.connections).toBe(0);
     expect(cpu.snapshot()).toBe(before);
   });
 });

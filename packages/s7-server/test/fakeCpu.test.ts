@@ -374,7 +374,13 @@ describe('lo stato non cambia da rete per le funzioni non ammesse', () => {
     // PDU costruite a mano; write var e stop sono funzioni ammesse (session.test.ts)
     const garb = Uint8Array.of(0x28, 0, 0, 0, 0, 0, 0, 0xfd, 0, 0, 5, 0x5f, 0x47, 0x41, 0x52, 0x42);
     expect(await p.job(garb)).toMatchObject({ rosctr: 2, errorClass: 0xd2, errorCode: 0x41 });
-    for (const fn of [0x1a, 0x1b, 0x1c]) {
+    // 0x1A è ammesso (download, session.test.ts): troncato è una richiesta malformata
+    expect(await p.job(Uint8Array.of(0x1a, 0, 1, 0, 0, 0, 0, 0))).toMatchObject({
+      rosctr: 2,
+      errorClass: 0x85,
+      errorCode: 0x00,
+    });
+    for (const fn of [0x1b, 0x1c]) {
       expect(await p.job(Uint8Array.of(fn, 0, 1, 0, 0, 0, 0, 0))).toMatchObject({
         rosctr: 2,
         errorClass: 0xd2,

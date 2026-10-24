@@ -104,8 +104,8 @@ function int(name: string, v: number, min: number, max: number): number {
 
 /**
  * Finto S7-300 (CPU 315-2 PN/DP). Lo stato cambia solo con i metodi di questa classe. Da rete
- * cambia soltanto per le funzioni di scrittura ammesse (write var, stop, warm restart: i metodi
- * `apply*`), mai per le altre: la sessione risponde con un errore a tutto il resto. Gli stessi dati vengono da `serve`/`listen`.
+ * cambia soltanto per le funzioni di scrittura ammesse (write var, stop, warm restart, download di
+ * un blocco con _INSE: i metodi `apply*`), mai per le altre: la sessione risponde con un errore a tutto il resto. Gli stessi dati vengono da `serve`/`listen`.
  */
 export class FakeCpu {
   readonly config: CpuConfig;
@@ -364,6 +364,16 @@ export class FakeCpu {
       },
     };
     return encodeBlockInfo(info);
+  }
+
+  /** @internal Blocco ricomposto da un download di rete: dentro solo dopo l'_INSE. Solo dalla sessione. */
+  applyDownloadedBlock(type: BlockType, number: number, file: Uint8Array): void {
+    const copy = file.slice();
+    const parsed = parseBlockFile(copy);
+    if (parsed.header.type !== type || parsed.header.number !== number) {
+      throw new RangeError(`il file non è ${type}${number}`);
+    }
+    this.blockMap.set(`${type}:${number}`, { type, number, file: copy, parsed });
   }
 
   /** @internal Write var: un return code per item (0xFF ok, 0x0A DB mancante, 0x05 fuori campo). Solo dal gestore 0x05. */
