@@ -4,7 +4,7 @@ import type { SimMemory } from './memory';
 import type { FrameView } from './operands';
 import { OPS } from './ops';
 import type { LoadedBlock, Program } from './program';
-import { stwToWord, type Registers } from './registers';
+import { newRegisters, stwToWord, type Registers } from './registers';
 import type { CounterBank } from './counters';
 import type { TimerBank } from './timers';
 
@@ -54,8 +54,43 @@ export interface ExecContext {
 /** Istruzioni che scrivono il loro operando: un DB non aperto vi conta come errore in scrittura. */
 const WRITES = new Set(['T', '=', 'S', 'R', 'TAR1', 'TAR2']);
 
-function saveRegs(r: Registers): Registers {
-  return { ...r, stw: { ...r.stw } };
+/**
+ * Stato del blocco salvato prima di un'istruzione, per ripristinarlo se OB121/OB122 la sostituisce.
+ * La finestra L (frame) non cambia dentro un'istruzione: un richiamo ne crea una nuova per il
+ * richiamato e lascia intatta quella del blocco, quindi non serve salvarla.
+ */
+interface Saved {
+  regs: Registers;
+  nest: number;
+  mcrActive: boolean;
+  mcrDepth: number;
+}
+
+function newSaved(): Saved {
+  return { regs: newRegisters(), nest: 0, mcrActive: false, mcrDepth: 0 };
+}
+
+/** Copia sul posto (un solo oggetto per blocco in esecuzione). */
+function save(st: ExecState, s: Saved): void {
+  const stw = Object.assign(s.regs.stw, st.regs.stw);
+  Object.assign(s.regs, st.regs);
+  s.regs.stw = stw;
+  s.nest = st.nest.length;
+  s.mcrActive = st.mcr.active;
+  s.mcrDepth = st.mcr.stack.length;
+}
+
+/**
+ * Ripristina registri, stack di annidamento e MCR. Gli stack si accorciano soltanto: un'istruzione che
+ * fallisce può avere aggiunto un elemento (`A(`, `MCR(`), non toglierlo e poi fallire.
+ */
+function restore(st: ExecState, s: Saved): void {
+  const stw = { ...s.regs.stw };
+  Object.assign(st.regs, s.regs);
+  st.regs.stw = stw;
+  st.nest.length = Math.min(st.nest.length, s.nest);
+  st.mcr.active = s.mcrActive;
+  st.mcr.stack.length = Math.min(st.mcr.stack.length, s.mcrDepth);
 }
 
 /** Ogni quante istruzioni si controlla il tempo di ciclo (Global Constraints, piano 2A). */
@@ -190,6 +225,24 @@ function withFormal(stmt: DecodedStatement): DecodedStatement {
 }
 
 /**
+ * Chiede a `ctx.onError` di gestire l'errore. Un errore nuovo lanciato dal gestore (per esempio
+ * STACK_L_PIENO se OB121 non entra nello stack L) prende la posizione dell'istruzione che ha sbagliato:
+ * così i chiamanti non lo riattribuiscono a sé e non richiamano il gestore una seconda volta.
+ */
+function handled(ctx: ExecContext, e: SimError, st: ExecState): boolean {
+  try {
+    return ctx.onError?.(e, st) ?? false;
+  } catch (e2) {
+    if (e2 instanceof SimError && e2.offset === undefined) {
+      e2.block = e.block;
+      e2.offset = e.offset;
+      e2.network = e.network;
+    }
+    throw e2;
+  }
+}
+
+/**
  * Esegue il codice del blocco dall'inizio fino a `BE` o alla fine; gli errori portano blocco e offset.
  * Un errore di un'istruzione passa a `ctx.onError`, che può gestirlo al posto dell'istruzione.
  */
@@ -197,11 +250,12 @@ export function execBlock(st: ExecState): void {
   const { block, ctx } = st;
   const code = block.code;
   const max = ctx.maxInstructions ?? MAX_INSTRUCTIONS;
+  const scratch = ctx.onError ? newSaved() : undefined;
   let at = 0;
   while (at < code.length) {
     st.offset = at;
     let d: Decoded | undefined;
-    let saved: Registers | undefined;
+    let saved = false;
     try {
       const n = (ctx.instructions = (ctx.instructions ?? 0) + 1);
       if (n > max) {
@@ -215,7 +269,10 @@ export function execBlock(st: ExecState): void {
       const handler = OPS[d.stmt.id];
       if (!handler)
         throw new SimError('MC7_NON_ESEGUIBILE', `operazione non implementata: ${d.stmt.id}`);
-      if (ctx.onError) saved = saveRegs(st.regs);
+      if (scratch) {
+        save(st, scratch);
+        saved = true;
+      }
       const r = handler(st, withFormal(d.stmt));
       ctx.trace?.({
         block: { kind: block.kind, number: block.number },
@@ -242,8 +299,8 @@ export function execBlock(st: ExecState): void {
       e.network = networkOf(block, at);
       if (d && 'stmt' in d && e.access === undefined && WRITES.has(d.stmt.id)) e.access = 'write';
       // `saved` c'è solo se l'errore viene dall'istruzione (non dal tick): solo allora la si salta.
-      if (!saved || !d || !ctx.onError?.(e, st)) throw e;
-      Object.assign(st.regs, saved);
+      if (!saved || !scratch || !d || !handled(ctx, e, st)) throw e;
+      restore(st, scratch);
       at += d.length;
     }
   }

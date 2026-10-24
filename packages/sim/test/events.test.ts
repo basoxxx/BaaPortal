@@ -1,7 +1,7 @@
 import { decodeInstruction } from '@baaportal/mc7';
 import { describe, expect, it } from 'vitest';
 import { SimCpu, simBackend, type DiagEntry, type SimCpuOptions } from '../src';
-import { buildProgram, type BlockSpec } from './programHelpers';
+import { buildProgram, el, m, sec, type BlockSpec } from './programHelpers';
 
 const PROPS: SimCpuOptions['props'] = {
   maxCycleMs: 150,
@@ -223,6 +223,46 @@ describe('OB121 e OB122', () => {
   });
 });
 
+describe('OB121 e OB122: posizione e registri', () => {
+  it('OB121 che non entra nello stack L: STOP con la posizione dell’FC, gestore richiamato una volta', () => {
+    const { cpu } = makeCpu([
+      ob(1, '\tCALL FC 2;'),
+      { kind: 'FC', number: 2, networks: ['\tNOP 0;\n\tL MW 4000;'] },
+      ob(121, copyStartInfo(100, 120)),
+    ]);
+    const fc2 = cpu.program.get('FC', 2)!;
+    const ob1Local = cpu.program.get('OB', 1)!.localBytes;
+    // L'FC riempie lo stack L della classe: OB121 (20 byte di dati di avvio) non ci sta sopra.
+    cpu.program.put({ ...fc2, localBytes: cpu.memory.L.length - ob1Local - 4 });
+    cpu.run();
+    const r = cpu.cycle();
+    expect(cpu.mode).toBe('STOP');
+    expect(r.error).toMatchObject({
+      code: 'STACK_L_PIENO',
+      block: 'FC2',
+      offset: offsetOf(cpu, 'FC', 2, 1),
+    });
+    expect(called(cpu)).toHaveLength(1);
+    expect(mw(cpu, 120)).toBe(0);
+  });
+
+  it('accesso indiretto fallito `L MW [MD 50]` con OB121: AR1 e accumulatori ripristinati', () => {
+    const { cpu } = makeCpu([
+      ob(
+        1,
+        '\tL P#4000.0;\n\tT MD 50;\n\tL P#1.0;\n\tLAR1;\n\tL 3;\n\tL 7;\n\tL MW [MD 50];\n\t+I;\n\tT MW 10;\n\tTAR1;\n\tT MD 54;',
+      ),
+      ob(121, copyStartInfo(100, 120) + '\n\tL P#9.0;\n\tLAR1;\n\tL 99;\n\tL 98;'),
+    ]);
+    cpu.run();
+    expect(cpu.cycle().ok).toBe(true);
+    expect(mw(cpu, 120)).toBe(1);
+    expect(cpu.memory.M[101]).toBe(0x22);
+    expect(mw(cpu, 10)).toBe(10);
+    expect(mb(cpu, 54, 4)).toEqual([0, 0, 0, 8]); // AR1 = P#1.0
+  });
+});
+
 /** Ciclo lungo: `n` giri di LOOP (3 istruzioni ciascuno), poi scrive MW 10 = 1. */
 const longOb1 = (n: number): BlockSpec =>
   ob(1, `\tL ${n};\nx: T MW 50;\n\tL MW 50;\n\tLOOP x;\n\tL 1;\n\tT MW 10;`);
@@ -285,6 +325,8 @@ describe('OB80', () => {
     expect(cpu.mode).toBe('RUN');
     expect(mw(cpu, 120)).toBe(1);
     expect(mw(cpu, 106)).toBe(200); // OB80_ERROR_INFO: tempo del ciclo
+    // L'OB coinvolto è OB1 (evento 16#1103, priorità 1), anche se a fine ciclo ha già finito.
+    expect(mb(cpu, 100, 12)).toEqual([0x35, 0x01, 26, 80, 0, 0, 0, 200, 0x11, 0x03, 1, 1]);
   });
 
   it('senza OB80 lo sforamento porta in STOP come prima', () => {
@@ -339,6 +381,73 @@ describe('OB35', () => {
     expect(mw(cpu, 32)).toBe(1); // l'OB35 ha girato dentro l'OB1, dopo `T MW 30`
     expect(mw(cpu, 10)).toBe(10);
     expect(cpu.memory.M[40]! & 1).toBe(1);
+  });
+
+  it('stack L per classe di priorità: OB35 non tocca gli L dell’OB1', () => {
+    const temps = sec({ temp: [m('a', el('Int'))] });
+    const { cpu, clock } = makeCpu([
+      {
+        kind: 'OB',
+        number: 1,
+        sections: temps,
+        networks: [
+          `\tL 1234;\n\tT LW 20;\n${nops(1100)}\tL LW 20;\n\tT MW 60;\n\tL LB 0;\n\tT MB 62;\n\tL LB 3;\n\tT MB 63;`,
+        ],
+      },
+      {
+        kind: 'OB',
+        number: 35,
+        sections: temps,
+        networks: [
+          '\tL 999;\n\tT LW 20;\n\tL LB 3;\n\tT MB 64;\n\tL MW 20;\n\tL 1;\n\t+I;\n\tT MW 20;',
+        ],
+      },
+    ]);
+    cpu.run();
+    clock.t = 95;
+    clock.step = 10;
+    expect(cpu.cycle().ok).toBe(true);
+    expect(mw(cpu, 20)).toBe(1); // OB35 ha girato al tick, dentro l'OB1
+    expect(cpu.memory.M[64]).toBe(35);
+    expect(mw(cpu, 60)).toBe(1234);
+    expect(mb(cpu, 62, 2)).toEqual([0x11, 1]); // dati di avvio dell'OB1 intatti
+  });
+
+  it('OB35 interrompe un FC: registri e L dell’FC intatti', () => {
+    const { cpu, clock } = makeCpu([
+      ob(1, '\tL 5;\n\tCALL FC 2;\n\tT MW 36;'),
+      {
+        kind: 'FC',
+        number: 2,
+        sections: sec({ temp: [m('a', el('Int'))] }),
+        networks: [
+          `\tL 0;\n\tT MW 30;\n\tL 77;\n\tT LW 0;\n\tL 3;\n\tL 7;\n${nops(1100)}\t+I;\n\tT MW 10;\n\tL LW 0;\n\tT MW 34;\n\tL MW 30;\n\tT MW 32;`,
+        ],
+      },
+      ob(35, '\tL 1;\n\tT MW 30;\n\tL 99;\n\tL 98;\n\tL MW 20;\n\tL 1;\n\t+I;\n\tT MW 20;'),
+    ]);
+    cpu.run();
+    clock.t = 95;
+    clock.step = 10;
+    expect(cpu.cycle().ok).toBe(true);
+    expect(mw(cpu, 20)).toBe(1);
+    expect(mw(cpu, 32)).toBe(1); // dentro l'FC
+    expect(mw(cpu, 10)).toBe(10);
+    expect(mw(cpu, 34)).toBe(77);
+  });
+
+  it('OB121 dentro OB35: priorità 12, blocco OB35, poi OB35 prosegue', () => {
+    const { cpu, clock } = makeCpu([
+      ob(1, '\tNOP 0;'),
+      ob(35, '\tL MW 4000;\n\tL 1;\n\tT MW 24;'),
+      ob(121, copyStartInfo(100, 120)),
+    ]);
+    cpu.run();
+    clock.t = 100;
+    expect(cpu.cycle().ok).toBe(true);
+    expect(mw(cpu, 24)).toBe(1);
+    expect(mw(cpu, 120)).toBe(1);
+    expect(mb(cpu, 100, 10)).toEqual([0x25, 0x22, 12, 121, 0x88, 0, 0, 0, 0, 35]);
   });
 
   it('OB35 lento → OB80 16#3502', () => {

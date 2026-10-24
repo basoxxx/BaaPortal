@@ -249,7 +249,10 @@ export class SimCpu {
       const end = this.now();
       elapsedMs = end - start;
       if (end - this.watchdog > this.props.maxCycleMs)
-        this.cycleOverrun(ctx, `oltre ${this.props.maxCycleMs} ms`, elapsedMs, end);
+        this.cycleOverrun(ctx, `oltre ${this.props.maxCycleMs} ms`, elapsedMs, end, {
+          ob: 1,
+          prio: PRIORITY.OB1,
+        });
     } catch (e) {
       return this.failedCycle(this.fail(e), start);
     }
@@ -391,11 +394,18 @@ export class SimCpu {
    * Tempo di ciclo superato (orologio o limite di istruzioni). Il primo sforamento del ciclo richiama
    * OB80 e il ciclo continua con il controllo azzerato; il secondo, o senza OB80, o in AVVIO, è STOP.
    */
-  private cycleOverrun(ctx: ExecContext, reason: string, cycleMs: number, t: number): void {
+  private cycleOverrun(
+    ctx: ExecContext,
+    reason: string,
+    cycleMs: number,
+    t: number,
+    // A fine ciclo nessun OB è in corso: l'OB coinvolto è OB1, che ha appena finito.
+    interrupted: RunningOb | undefined = this.running.at(-1),
+  ): void {
     if (this._mode !== 'RUN' || this.overrun) throw new SimError('TEMPO_CICLO_SUPERATO', reason);
     this.overrun = true;
     ctx.instructions = 0;
-    this.timeError(ctx, 0x01, EVENT.CYCLE_TIME, cycleMs, obRef(this.running.at(-1)), t, reason);
+    this.timeError(ctx, 0x01, EVENT.CYCLE_TIME, cycleMs, obRef(interrupted), t, reason);
     this.watchdog = this.now();
   }
 
