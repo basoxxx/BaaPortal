@@ -102,7 +102,7 @@ export class S7Client {
   }
 
   static async connect(o: ConnectOptions): Promise<S7Client> {
-    return new S7Client(await S7Connection.open(o));
+    return new S7Client(await S7Connection.open({ ...o, mode: 'read-only' }));
   }
 
   get pduLength(): number {

@@ -1,11 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { FakeCpu, serve } from '@baaportal/s7-server';
 import {
   S7Client,
+  S7Connection,
   S7Error,
   S7WriteClient,
   buildBlockFile,
   memoryTransportPair,
+  type Transport,
   type TransportFactory,
 } from '../src';
 
@@ -40,7 +42,74 @@ async function rig(cpu: FakeCpu): Promise<S7WriteClient> {
   return S7WriteClient.connect({ host: 'finto', transport, timeoutMs: 3000 });
 }
 
+/**
+ * Il finto PLC non sa rispondere a `_INSE` con un codice di parametro diverso da 0: lo si forza
+ * qui sul filo, riscrivendo l'ack-data 20 byte con param `28` in `28 <code>` (TPKT 20 -> 21,
+ * lunghezza param 1 -> 2). L'header resta senza errore, come su una CPU che rifiuta nel param.
+ */
+function insParamCodeRig(cpu: FakeCpu, code: number): Promise<S7WriteClient> {
+  const transport: TransportFactory = async () => {
+    const [a, b] = memoryTransportPair();
+    serve(cpu, b);
+    const wrapped: Transport = {
+      send: (bytes) => a.send(bytes),
+      close: () => a.close(),
+      onClose: (cb) => a.onClose(cb),
+      onData: (cb) =>
+        a.onData((chunk) => {
+          const isInse =
+            chunk.length === 20 && chunk[0] === 3 && chunk[8] === 3 && chunk[19] === 0x28;
+          if (!isInse) return cb(chunk);
+          const out = new Uint8Array(21);
+          out.set(chunk);
+          out[3] = 21;
+          out[14] = 2;
+          out[20] = code;
+          cb(out);
+        }),
+    };
+    return wrapped;
+  };
+  return S7WriteClient.connect({ host: 'finto', transport, timeoutMs: 3000 });
+}
+
 describe('S7WriteClient contro il finto PLC', () => {
+  it('downloadBlock: un codice di param diverso da ok in risposta a _INSE lancia CPU_ERROR', async () => {
+    const c = await insParamCodeRig(new FakeCpu(), 0x02);
+    const e: unknown = await c
+      .downloadBlock(
+        blockFile(
+          7,
+          Uint8Array.from({ length: 40 }, (_, i) => i),
+        ),
+      )
+      .catch((x: unknown) => x);
+    expect(e).toBeInstanceOf(S7Error);
+    expect(e).toMatchObject({ code: 'CPU_ERROR', detail: { returnCode: 0x02 } });
+    await c.close();
+  });
+
+  it('plain S7Client apre sempre la connessione read-only, anche con mode online-write', async () => {
+    const open = vi.spyOn(S7Connection, 'open');
+    try {
+      const transport: TransportFactory = async () => {
+        const [a, b] = memoryTransportPair();
+        serve(new FakeCpu(), b);
+        return a;
+      };
+      const c = await S7Client.connect({ host: 'finto', transport, mode: 'online-write' });
+      expect(open).toHaveBeenCalledTimes(1);
+      expect(open.mock.calls[0]![0].mode).toBe('read-only');
+      await c.close();
+      // S7WriteClient (sottoclasse) apre invece online-write
+      const w = await rig(new FakeCpu());
+      expect(open.mock.calls[1]![0].mode).toBe('online-write');
+      await w.close();
+    } finally {
+      open.mockRestore();
+    }
+  });
+
   it('writeArea di 1000 byte su un DB poi readArea rilegge identico', async () => {
     const cpu = new FakeCpu();
     cpu.addDb(1, new Uint8Array(1200));

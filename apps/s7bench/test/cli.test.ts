@@ -5,7 +5,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildBlockFile, jsonlToFrames, readKitZip } from '@baaportal/s7comm';
-import { COMMAND_NAMES } from '../src/commands';
+import { COMMANDS, COMMAND_NAMES } from '../src/commands';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appDir = resolve(here, '..');
@@ -375,6 +375,35 @@ describe('s7bench: comandi di scrittura', () => {
     const bad = join(tmp, 'cattivo.blk');
     writeFileSync(bad, 'non un blocco');
     expect((await wnet('carica-nel-dispositivo', bad, ...OK)).code).toBe(3);
+  });
+
+  it('OGNI comando con writes:true esce con 2 senza --conferma/--non-in-produzione e non scrive', async () => {
+    const blk = join(tmp, 'gate-FC7.blk');
+    writeFileSync(blk, FC7);
+    // argomenti validi per ciascun comando; un comando writes nuovo senza voce qui fa fallire il test
+    const validArgs: Record<string, string[]> = {
+      scrivi: ['M', '0', '20', 'abcd'],
+      'carica-nel-dispositivo': [blk],
+      stop: [],
+      avvia: [],
+    };
+    const writers = COMMANDS.filter((c) => c.writes);
+    expect(writers.length).toBeGreaterThan(0);
+    for (const c of writers) {
+      expect(validArgs[c.name], `argomenti di prova mancanti per ${c.name}`).toBeDefined();
+    }
+    const before = await wnet('leggi', 'M', '0', '20', '2');
+    const blocksBefore = await wnet('blocchi', 'FC');
+    for (const c of writers) {
+      const args = validArgs[c.name]!;
+      expect((await wnet(c.name, ...args)).code, c.name).toBe(2);
+      for (const flag of ['--conferma', '--non-in-produzione']) {
+        expect((await wnet(c.name, ...args, flag)).code, `${c.name} ${flag}`).toBe(2);
+      }
+    }
+    expect((await wnet('leggi', 'M', '0', '20', '2')).stdout).toBe(before.stdout);
+    expect((await wnet('blocchi', 'FC')).stdout).toBe(blocksBefore.stdout);
+    expect((await wnet('info')).stdout).toMatch(/RUN/);
   });
 
   it('host irraggiungibile → codice 1 CONNECT_REFUSED', async () => {

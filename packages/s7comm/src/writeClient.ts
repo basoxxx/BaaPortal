@@ -119,7 +119,14 @@ export class S7WriteClient extends S7Client {
     if (pdu.rosctr !== 3) {
       throw new S7Error('PROTOCOL', `risposta a _INSE con ROSCTR ${pdu.rosctr}`);
     }
-    decodeControlResponse(pdu.param);
+    const r = decodeControlResponse(pdu.param);
+    if (r.code !== 0) {
+      throw new S7Error(
+        'CPU_ERROR',
+        `_INSE ${type}${header.number} non eseguito dalla CPU: ${r.name} (0x${r.code.toString(16).padStart(2, '0')})`,
+        { returnCode: r.code },
+      );
+    }
   }
 
   // ---- controllo ---------------------------------------------------------------------------
