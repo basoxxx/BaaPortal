@@ -14,8 +14,6 @@ export interface S5Timer {
   base: TimerBase;
   /** Ultimo RLO visto da un'istruzione di avvio (memoria del fronte). */
   edge: boolean;
-  /** FR ha riabilitato l'avvio: il prossimo avvio parte anche senza un nuovo fronte. */
-  enabled: boolean;
   /** Tipo dell'ultimo avvio: decide che cosa succede alla scadenza. */
   kind: TimerKind;
   /** Memoria del fronte di FR. */
@@ -34,7 +32,6 @@ function idle(): S5Timer {
     preset: 0,
     base: 10,
     edge: false,
-    enabled: false,
     kind: 'SP',
     frEdge: false,
     frozen: 0,
@@ -129,15 +126,14 @@ export class TimerBank {
   startOp(n: number, kind: TimerKind, rlo: boolean, s5time: number): void {
     const t = this.get(n);
     this.settle(t);
-    const risen = rlo && (!t.edge || t.enabled);
-    const fallen = !rlo && (t.edge || t.enabled);
+    const risen = rlo && !t.edge;
+    const fallen = !rlo && t.edge;
     t.edge = rlo;
     switch (kind) {
       case 'SP':
         if (risen) {
           this.start(t, kind, s5time);
           t.q = true;
-          t.enabled = false;
         } else if (!rlo && t.running) {
           // Impulso: con RLO = 0 si ferma e Q torna a 0.
           this.stop(t);
@@ -149,14 +145,12 @@ export class TimerBank {
           // Impulso prolungato: un nuovo fronte durante l'impulso lo riavvia.
           this.start(t, kind, s5time);
           t.q = true;
-          t.enabled = false;
         }
         break;
       case 'SD':
         if (risen) {
           this.start(t, kind, s5time);
           t.q = false;
-          t.enabled = false;
         } else if (!rlo) {
           if (t.running) this.stop(t);
           t.q = false;
@@ -168,7 +162,6 @@ export class TimerBank {
           const q = t.q;
           this.start(t, kind, s5time);
           t.q = q;
-          t.enabled = false;
         }
         break;
       case 'SF':
@@ -179,16 +172,19 @@ export class TimerBank {
         } else if (fallen) {
           this.start(t, kind, s5time);
           t.q = true;
-          t.enabled = false;
         } else t.q = t.running;
         break;
     }
   }
 
-  /** `FR`: sul fronte di salita dell'RLO riabilita l'avvio senza un nuovo fronte. */
+  /**
+   * `FR`: sul fronte di salita dell'RLO cancella la memoria del fronte di avvio, così un RLO a 1
+   * riavvia SP, SE, SD, SS senza un nuovo fronte. Per SF, che parte sul fronte di discesa, non
+   * cambia niente (con RLO = 0 non riparte).
+   */
   enable(n: number, rlo: boolean): void {
     const t = this.get(n);
-    if (rlo && !t.frEdge) t.enabled = true;
+    if (rlo && !t.frEdge) t.edge = false;
     t.frEdge = rlo;
   }
 
@@ -199,6 +195,8 @@ export class TimerBank {
     t.running = false;
     t.frozen = 0;
     t.q = false;
+    t.base = 10;
+    t.preset = 0;
   }
 
   /** Riporta a riposo i temporizzatori da `from` in su (avvio a caldo, cancellazione totale). */

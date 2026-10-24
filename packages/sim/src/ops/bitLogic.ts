@@ -31,7 +31,7 @@ export function checkBit(st: ExecState, fn: ChainFn, v: boolean, sta: boolean): 
 }
 
 /** Valore di un operando a bit: bit di memoria o condizione di stato (`A ==0`, `A OV`, ...). */
-function bitValue(st: ExecState, op: Operand | undefined): boolean {
+function bitValue(st: ExecState, op: Operand | undefined, formal?: { type: string }): boolean {
   if (!op) throw new SimError('MC7_NON_ESEGUIBILE', 'operando mancante');
   const s = st.regs.stw;
   switch (op.kind) {
@@ -68,6 +68,7 @@ function bitValue(st: ExecState, op: Operand | undefined): boolean {
       return readBits(st.mem, resolveOperand(op, st.regs, st.mem, st.frame), 'X') === 1;
     case 'address':
     case 'local':
+      if (formal?.type === 'Timer') return st.ctx.timers.q(timerNumber(st, op));
       return readBits(st.mem, resolveOperand(op, st.regs, st.mem, st.frame), 'X') === 1;
     default:
       throw new SimError('MC7_NON_ESEGUIBILE', `operando ${op.kind}`);
@@ -87,7 +88,7 @@ export function mcrOff(st: ExecState): boolean {
 
 function interrogation(fn: ChainFn, negate: boolean): OpHandler {
   return (st, stmt) => {
-    const b = bitValue(st, stmt.operand);
+    const b = bitValue(st, stmt.operand, stmt.formal);
     checkBit(st, fn, negate ? !b : b, b);
   };
 }
@@ -150,14 +151,15 @@ function edge(rising: boolean): OpHandler {
   };
 }
 
-function isTimerOperand(op: Operand | undefined): boolean {
+function isTimerOperand(op: Operand | undefined, formal?: { type: string }): boolean {
+  if (op?.kind === 'local') return formal?.type === 'Timer';
   return (op?.kind === 'timerCounter' || op?.kind === 'indirect') && op.area === 'T';
 }
 
 function setReset(value: 0 | 1): OpHandler {
   return (st, stmt) => {
     const s = st.regs.stw;
-    if (value === 0 && isTimerOperand(stmt.operand)) {
+    if (value === 0 && isTimerOperand(stmt.operand, stmt.formal)) {
       // Manuale AWL S7-300/400, «R» su temporizzatore: con RLO = 1 azzera tempo e Q.
       st.ctx.timers.resetOp(timerNumber(st, stmt.operand), s.rlo);
       s.sta = s.rlo;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SimCpu, SimError, SimMemory, TimerBank, memorySizesFor, decodeS5Time } from '../src';
 import { runAwl, type RunResult } from './helpers';
+import { buildProgram, m, runProgram, sec, word, type BlockSpec } from './programHelpers';
 
 /** Orologio a mano, memoria e banco condivisi fra le scansioni. */
 function rig(limit = 256) {
@@ -159,7 +160,7 @@ describe('temporizzatori S5: avvio e scadenza', () => {
     const { clock, mem, scan } = rig();
     scan(run('SD', 'W#16#3999'), { in: 1 });
     clock.t = 9_989_999;
-    scan(run('SD'.replace('SD', 'SD'), 'W#16#3999'));
+    scan(run('SD', 'W#16#3999'));
     expect(q(mem)).toBe(0);
     clock.t = 9_990_000;
     scan(run('SD', 'W#16#3999'));
@@ -261,5 +262,99 @@ describe('temporizzatori S5: CPU', () => {
     cpu.stop();
     cpu.memoryReset();
     expect([0, 1].map((n) => cpu.timers.q(n))).toEqual([false, false]);
+  });
+});
+
+describe('temporizzatori S5: casi limite e parametri', () => {
+  it('R azzera anche la base: LC T dopo R = 0', () => {
+    const { scan } = rig();
+    scan(run('SP', 'W#16#3050'), { in: 1 });
+    expect(scan(['\tLC T 1;']).regs.accu1).toBe(0x3050);
+    scan(['\tSET;\n\tR T 1;']);
+    expect(scan(['\tLC T 1;']).regs.accu1).toBe(0);
+  });
+
+  it('FR su SF con RLO=0: nessun riavvio', () => {
+    const { clock, mem, scan } = rig();
+    scan(run('SF'), { in: 0 });
+    scan(['\tA M 0.1;\n\tFR T 1;'], { aux: 1 });
+    clock.t = 10;
+    scan(run('SF'), { in: 0 });
+    expect(q(mem)).toBe(0);
+  });
+
+  it('SF: RLO torna 1 durante il ritardo, poi nuovo fronte di discesa riavvia', () => {
+    const { clock, mem, scan } = rig();
+    scan(run('SF'), { in: 1 });
+    clock.t = 100;
+    scan(run('SF'), { in: 0 }); // parte, scade a 2100
+    clock.t = 1000;
+    scan(run('SF'), { in: 1 }); // ritardo fermato, Q=1
+    expect(q(mem)).toBe(1);
+    clock.t = 5000;
+    scan(run('SF'), { in: 0 }); // nuovo avvio da 5000
+    clock.t = 6999;
+    scan(run('SF'));
+    expect(q(mem)).toBe(1);
+    clock.t = 7000;
+    scan(run('SF'));
+    expect(q(mem)).toBe(0);
+  });
+
+  it('SS: nuovo fronte durante il conteggio riavvia, Q ancora 0', () => {
+    const { clock, mem, scan } = rig();
+    scan(run('SS'), { in: 1 });
+    clock.t = 1000;
+    scan(run('SS'), { in: 0 });
+    clock.t = 1500;
+    scan(run('SS'), { in: 1 }); // riparte da 1500
+    clock.t = 2000;
+    scan(run('SS'));
+    expect(q(mem)).toBe(0); // senza riavvio sarebbe scaduto
+    clock.t = 3500;
+    scan(run('SS'));
+    expect(q(mem)).toBe(1);
+  });
+
+  it('FR su SE in corso: riavvia con RLO già a 1', () => {
+    const { clock, mem, scan } = rig();
+    scan(run('SE'), { in: 1 });
+    clock.t = 1500;
+    scan(['\tA M 0.1;\n\tFR T 1;'], { aux: 1 });
+    scan(run('SE')); // RLO a 1 senza nuovo fronte, ma FR ha cancellato la memoria: riparte da 1500
+    clock.t = 2500;
+    scan(run('SE'));
+    expect(q(mem)).toBe(1); // senza il riavvio sarebbe scaduto a 2000
+    clock.t = 3500;
+    scan(run('SE'));
+    expect(q(mem)).toBe(0);
+  });
+
+  it('parametro formale TIMER di una FC: SD, A e L come su T 5', () => {
+    // ⚠️ La voce della lista dei puntatori porta il numero nei primi 2 byte (mc7 §2.5, [DN]).
+    const FC1: BlockSpec = {
+      kind: 'FC',
+      number: 1,
+      sections: sec({ in: [m('T_IN', { kind: 'parameter', name: 'Timer' } as never)] }),
+      networks: [
+        '\tA M 0.0;\n\tL S5T#2S;\n\tSD #T_IN;\n\tA #T_IN;\n\t= M 1.0;\n\tL #T_IN;\n\tT MW 4;',
+      ],
+    };
+    const p = buildProgram([
+      { kind: 'OB', number: 1, networks: ['\tCALL FC 1 (T_IN := T 5);'] },
+      FC1,
+    ]);
+    let t = 0;
+    const timers = new TimerBank(256, () => t);
+    const setup = (mem: SimMemory) => (mem.M[0] = 1);
+    const mem = new SimMemory(memorySizesFor('cpu-315-2-pn-dp'));
+    runProgram(p, { mem, setup, timers, now: () => t });
+    expect(timers.value(5).units).toBe(200);
+    expect(word(mem, 4)).toBe(200);
+    t = 2000;
+    runProgram(p, { mem, timers, now: () => t });
+    expect(mem.M[1]! & 1).toBe(1);
+    expect(word(mem, 4)).toBe(0);
+    expect(timers.q(5)).toBe(true);
   });
 });

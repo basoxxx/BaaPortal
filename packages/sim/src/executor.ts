@@ -155,6 +155,8 @@ const FORMAL_SIZE: Partial<Record<string, 'X' | 'B' | 'W' | 'D'>> = {
 function withFormal(stmt: DecodedStatement): DecodedStatement {
   const f = stmt.formal;
   if (!f) return stmt;
+  // TIMER e COUNTER: il parametro porta un numero, non una posizione di memoria.
+  if (f.type === 'Timer' || f.type === 'Counter') return stmt;
   const size = FORMAL_SIZE[f.type];
   if (!size || stmt.operand?.kind !== 'local')
     throw new SimError('NON_SIMULATA_2B', `parametro formale ${f.name} di tipo ${f.type}`);

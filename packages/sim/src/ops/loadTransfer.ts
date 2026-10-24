@@ -27,10 +27,13 @@ function memSize(op: Operand): 'B' | 'W' | 'D' {
 }
 
 /** Legge un operando di memoria (indirizzo assoluto o indiretto), a zero esteso. */
-export function readMem(st: ExecState, op: Operand | undefined): number {
+export function readMem(st: ExecState, op: Operand | undefined, formal?: { type: string }): number {
   if (!op) throw new SimError('MC7_NON_ESEGUIBILE', 'operando mancante');
   // Manuale AWL S7-300/400, «L T»: residuo binario 0–999, senza base.
-  if ((op.kind === 'timerCounter' || op.kind === 'indirect') && op.area === 'T')
+  if (
+    ((op.kind === 'timerCounter' || op.kind === 'indirect') && op.area === 'T') ||
+    (op.kind === 'local' && formal?.type === 'Timer')
+  )
     return st.ctx.timers.value(timerNumber(st, op)).units;
   if (op.kind === 'timerCounter') throw new SimError('NON_SIMULATA_2B', `${op.area}${op.number}`);
   const loc = resolveOperand(op, st.regs, st.mem, st.frame);
@@ -60,20 +63,20 @@ function special(st: ExecState, name: string): number {
   }
 }
 
-function loadValue(st: ExecState, op: Operand | undefined): number {
+function loadValue(st: ExecState, op: Operand | undefined, formal?: { type: string }): number {
   switch (op?.kind) {
     case 'constant':
       return constantValue(op);
     case 'special':
       return special(st, op.name);
     default:
-      return readMem(st, op);
+      return readMem(st, op, formal);
   }
 }
 
 /** Manuale AWL S7-300/400, «L»: ACCU1 passa in ACCU2, poi si carica; byte e parola a zero esteso. */
 const L: OpHandler = (st, stmt) => {
-  const v = loadValue(st, stmt.operand);
+  const v = loadValue(st, stmt.operand, stmt.formal);
   st.regs.accu2 = st.regs.accu1;
   st.regs.accu1 = v >>> 0;
 };

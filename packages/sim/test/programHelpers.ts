@@ -162,6 +162,9 @@ export function runProgram(
     mem?: SimMemory;
     sizes?: MemorySizes;
     regs?: { stw?: Partial<Registers['stw']> };
+    /** Orologio e temporizzatori da riusare fra più esecuzioni. */
+    now?: () => number;
+    timers?: TimerBank;
   } = {},
 ): ProgRun {
   const mem = opts.mem ?? new SimMemory(opts.sizes ?? memorySizesFor('cpu-315-2-pn-dp'));
@@ -178,8 +181,8 @@ export function runProgram(
     mem,
     regs,
     program,
-    now: () => 0,
-    timers: new TimerBank(256, () => 0),
+    now: opts.now ?? (() => 0),
+    timers: opts.timers ?? new TimerBank(256, opts.now ?? (() => 0)),
     maxCycleMs: 150,
     cycleStart: 0,
   };

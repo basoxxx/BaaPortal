@@ -61,7 +61,9 @@ export function callBlock(
     prevLBase: st.frame.lBase,
     lSize: callee.localBytes,
     prevLSize: callerSize,
-    ...(pointers ? { params: pointers.map((p) => pointerLocation(st, p)) } : {}),
+    ...(pointers
+      ? { params: pointers.map((p) => pointerLocation(st, p)), rawParams: pointers }
+      : {}),
   };
   const { db, di } = st.regs;
   execBlock(newExecState(st.ctx, callee, frame, st.depth + 1));

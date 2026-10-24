@@ -13,6 +13,8 @@ export interface FrameView {
   prevLSize?: number;
   /** Parametri attuali di una FC: posizioni assolute risolte dalla lista dei puntatori (null = non in memoria). */
   params?: readonly (Location | null)[];
+  /** Voci grezze della lista dei puntatori: per TIMER e COUNTER il numero sta nei primi 2 byte (mc7 §2.5). */
+  rawParams?: readonly Uint8Array[];
 }
 
 /** Posizione risolta: `bit` è l'indirizzo in bit (byte·8 + bit) nell'area; per L/V è assoluto nello stack L. */
@@ -134,6 +136,18 @@ export function resolveOperand(
     default:
       throw new SimError('MC7_NON_ESEGUIBILE', `operando ${op.kind} senza posizione`);
   }
+}
+
+/**
+ * Numero di T o C passato come parametro formale di una FC (`#T_IN`): i primi 2 byte della voce
+ * della lista dei puntatori (mc7 §2.5, ⚠️ solo [DN]); una voce con area (p[0] >= 0x80) non è un numero.
+ */
+export function formalTcNumber(op: Operand, frame: FrameView): number {
+  if (op.kind !== 'local') throw new SimError('MC7_NON_ESEGUIBILE', 'parametro formale atteso');
+  const p = frame.rawParams?.[formalIndex(op.path[0]?.name)];
+  if (!p || p[0]! >= 0x80)
+    throw new SimError('MC7_NON_ESEGUIBILE', `parametro formale #${op.path[0]?.name} senza numero`);
+  return (p[0]! << 8) | p[1]!;
 }
 
 /**

@@ -168,7 +168,7 @@ describe('SimCpu', () => {
     cpu.run();
     expect(cpu.memory.M[15]).toBe(0xff);
     expect(cpu.memory.M[16]).toBe(0);
-    expect([0, 1, 2, 3].map((n) => cpu.timers.get(n).edge)).toEqual([true, true, false, false]);
+    expect([0, 1, 2, 3].map((n) => cpu.timers.value(n).units)).toEqual([1, 1, 0, 0]);
     expect(Array.from(cpu.counters.subarray(0, 4))).toEqual([9, 9, 0, 0]);
   });
 
@@ -198,7 +198,7 @@ describe('SimCpu', () => {
     cpu.memoryReset();
     expect(Array.from(cpu.memory.dbs.get(5)!.data.subarray(0, 4))).toEqual([0, 5, 0, 7]);
     expect(cpu.memory.M[3] + cpu.memory.I[3] + cpu.memory.Q[3]).toBe(0);
-    expect(cpu.timers.get(0).edge).toBe(false);
+    expect(cpu.timers.value(0).units).toBe(0);
     expect(cpu.counters[0]).toBe(0);
     expect(cpu.program.get('OB', 1)).toBeDefined();
     expect(cpu.diagnostics.at(-1)?.code).toBe('CANCELLAZIONE_TOTALE');

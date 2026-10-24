@@ -1,7 +1,7 @@
 import type { Operand } from '@baaportal/awl';
 import { SimError } from '../errors';
 import type { ExecState, OpHandler } from '../executor';
-import { resolveIndirectNumber } from '../operands';
+import { formalTcNumber, resolveIndirectNumber } from '../operands';
 import type { TimerKind } from '../timers';
 
 /** Numero di temporizzatore da `T n` o `T [MW n]`. */
@@ -9,8 +9,8 @@ export function timerNumber(st: ExecState, op: Operand | undefined): number {
   if (op?.kind === 'timerCounter' && op.area === 'T') return op.number;
   if (op?.kind === 'indirect' && op.area === 'T')
     return resolveIndirectNumber(op, st.regs, st.mem, st.frame);
-  if (op?.kind === 'local')
-    throw new SimError('NON_SIMULATA_2B', `parametro formale di tipo TIMER #${op.path[0]?.name}`);
+  // Parametro formale di FC di tipo TIMER (`#T_IN`): il numero viene dalla lista dei puntatori.
+  if (op?.kind === 'local') return formalTcNumber(op, st.frame);
   throw new SimError('MC7_NON_ESEGUIBILE', 'temporizzatore atteso');
 }
 

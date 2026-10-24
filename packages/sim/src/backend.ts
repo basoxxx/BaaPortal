@@ -171,7 +171,16 @@ export function simBackend(cpu: SimCpu, o: { orderNumber?: string } = {}): CpuBa
       case 'C': {
         const total = it.area === 'T' ? config.sizes.timers : config.sizes.counters;
         const n = it.size === 'TIMER' || it.size === 'COUNTER' ? it.count : Math.ceil(len / 2);
-        return it.start + n > total ? { rc: 0x05 } : { data: new Uint8Array(len) };
+        if (it.start + n > total) return { rc: 0x05 };
+        const data = new Uint8Array(len);
+        // ⚠️ Formato sul filo non verificato: per T, la parola BCD con la base (come `LC`), big-endian.
+        if (it.area === 'T')
+          for (let i = 0; i < n && 2 * i + 1 < len; i++) {
+            const w = cpu.timers.bcd(it.start + i);
+            data[2 * i] = w >> 8;
+            data[2 * i + 1] = w & 255;
+          }
+        return { data };
       }
       default:
         // L e V non sono raggiungibili dall'esterno
