@@ -25,6 +25,7 @@ export type IconName =
   | 'redo'
   | 'compile'
   | 'download'
+  | 'monitor'
   | 'upload'
   | 'simulation'
   | 'goOnline'

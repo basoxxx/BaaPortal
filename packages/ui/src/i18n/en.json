@@ -79,6 +79,7 @@
     "simFailed": "The simulation stopped: {{message}}",
     "simDownloadBlocked": "Download cancelled: the compilation has {{errors}} errors.",
     "simDownloadStale": "Download cancelled: {{count}} blocks are not compiled from their current content.",
+    "simMonitorFailed": "Monitoring failed: {{message}}",
     "simDownloadFailed": "Download to the simulator failed: {{message}}",
     "simDownloaded": "{{count}} blocks loaded into the simulator.",
     "simModeFailed": "Changing the CPU mode failed: {{message}}",
@@ -135,6 +136,7 @@
     "online.goOffline": "Go offline",
     "online.simulation": "Simulation",
     "online.download": "Download to device",
+    "online.monitor": "Monitor program",
     "online.upload": "Upload from device…",
     "online.accessibleDevices": "Accessible devices…",
     "online.startCpu": "Start CPU",
@@ -199,6 +201,19 @@
     }
   },
   "sim": {
+    "monitor": {
+      "title": "Program monitoring",
+      "on": "Monitoring on: values are those of the first execution in the last cycle.",
+      "format": "Accumulator format",
+      "hex": "Hexadecimal",
+      "dec": "Decimal",
+      "reason": {
+        "notLoaded": "Monitoring not available: the block is not loaded in the simulator. Use \"Download to device\".",
+        "stale": "Monitoring not available: the block is not compiled with the current changes. Download it to the device again.",
+        "noLines": "Monitoring not available: the block is imported and has no mapping to the text lines.",
+        "edited": "Monitoring suspended: the text is being edited. Download it to the device again to resume."
+      }
+    },
     "startCpuTitle": "Download to device",
     "startCpuMessage": "Start the CPU?",
     "yes": "Yes",

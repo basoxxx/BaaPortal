@@ -59,6 +59,7 @@ describe('vista progetto: struttura', () => {
       'Carica nel dispositivo',
       'Carica dal dispositivo…',
       'Simulazione',
+      'Osserva programma',
       'Collegamento online',
       'Interrompi collegamento online',
       'Dispositivi accessibili…',

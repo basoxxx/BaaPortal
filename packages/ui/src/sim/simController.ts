@@ -1,6 +1,6 @@
 import type { StoreApi } from 'zustand/vanilla';
 import { findDevice, type PlcDevice } from '@baaportal/project';
-import type { SimCpuProps } from '@baaportal/sim';
+import type { MonitorRequest, SimCpuProps } from '@baaportal/sim';
 import type { BaaBridge } from '../bridge';
 import { t } from '../i18n';
 import { compileProgram, contextHashOf, hashOf } from '../project/compile/compileActions';
@@ -8,6 +8,7 @@ import { targetPlcId } from '../project/navigation/treeIds';
 import { getProgress } from '../project/progress';
 import { SIM_OFF, type AppState } from '../state/store';
 import { downloadOrder } from './downloadOrder';
+import { activeCodeBlock, monitorReasonOf, monitorStillShown } from './monitorStatus';
 import { SimSession, type SimSessionOptions } from './session';
 
 export interface SimCtx {
@@ -44,6 +45,10 @@ export class SimController {
   private generation = 0;
   /** `setInputs` in volo: finché ce ne sono, gli `inputs` delle notifiche (possibili copie vecchie) si ignorano. */
   private inputsInFlight = 0;
+  /** Il blocco che il worker osserva adesso (`FC5`…), o niente. */
+  private sentMonitor: string | undefined;
+  /** Ciò da cui dipende il motivo di indisponibilità, per non ricalcolare l'impronta a ogni notifica. */
+  private reasonInputs: unknown[] = [];
 
   constructor(
     private readonly store: StoreApi<AppState>,
@@ -55,6 +60,7 @@ export class SimController {
       load = s.docLoadId;
       this.shutdown();
     });
+    store.subscribe(() => this.syncMonitor());
   }
 
   private push(
@@ -107,8 +113,16 @@ export class SimController {
     // istante (solo STOP) si perdono, la successiva arriva entro 200 ms.
     this.session = session;
     this.inputsInFlight = 0;
+    this.sentMonitor = undefined;
     session.onNotice((n) => {
-      if (n.kind !== 'status' || this.session !== session) return;
+      if (this.session !== session) return;
+      if (n.kind === 'monitor') {
+        // Una notifica di un blocco non più osservato (o appena cambiato) si scarta.
+        if (this.sentMonitor === `${n.block.kind}${n.block.number}`)
+          this.store.getState().setSim({ monitorSteps: n.steps });
+        return;
+      }
+      if (n.kind !== 'status') return;
       this.store.getState().setSim({
         mode: n.mode,
         stats: n.stats,
@@ -134,6 +148,7 @@ export class SimController {
     this.generation++;
     const s = this.session;
     this.session = undefined;
+    this.sentMonitor = undefined;
     s?.dispose();
     if (this.store.getState().sim.phase !== 'off') this.store.getState().setSim(SIM_OFF);
   }
@@ -205,6 +220,64 @@ export class SimController {
     }
   }
 
+  /** «Osserva»: accende l'osservazione del blocco aperto, o la spegne. */
+  toggleMonitor(): void {
+    const st = this.store.getState();
+    if (st.sim.monitor) {
+      st.setSim({ monitor: null, monitorSteps: null });
+      return;
+    }
+    const a = activeCodeBlock(st);
+    if (!a) return;
+    st.setSim({
+      monitor: {
+        deviceId: a.deviceId,
+        blockId: a.blockId,
+        reason: monitorReasonOf(st, a.deviceId, a.blockId),
+        edited: false,
+      },
+      monitorSteps: null,
+    });
+  }
+
+  /**
+   * Allinea il worker allo stato dell'osservazione: la ferma se l'editor non è più visibile,
+   * aggiorna il motivo di indisponibilità quando cambiano progetto, caricamenti o compilazione, e
+   * chiede al worker il blocco giusto (o nessuno).
+   */
+  private syncMonitor(): void {
+    const st = this.store.getState();
+    const m = st.sim.monitor;
+    if (m && !monitorStillShown(st, m.deviceId, m.blockId)) {
+      st.setSim({ monitor: null, monitorSteps: null });
+      return; // lo stato è cambiato: la sottoscrizione richiama questa funzione
+    }
+    let want: MonitorRequest | undefined;
+    if (m) {
+      const inputs = [st.doc, st.sim.loaded, st.compile, m.blockId];
+      if (inputs.some((x, i) => x !== this.reasonInputs[i])) {
+        this.reasonInputs = inputs;
+        const reason = monitorReasonOf(st, m.deviceId, m.blockId);
+        if (reason !== m.reason) {
+          st.setSim({ monitor: { ...m, reason }, monitorSteps: null });
+          return;
+        }
+      }
+      if (m.reason === 'ok') {
+        const a = activeCodeBlock(st);
+        if (a) want = { kind: a.kind, number: a.number };
+      }
+    } else this.reasonInputs = [];
+    const key = want ? `${want.kind}${want.number}` : undefined;
+    const s = this.session;
+    if (!s || key === this.sentMonitor) return;
+    this.sentMonitor = key;
+    if (!want && st.sim.monitorSteps) st.setSim({ monitorSteps: null });
+    s.request({ op: 'monitor', ...(want ? { block: want } : {}) }).catch((e: unknown) => {
+      if (this.session === s) this.push('error', 'simMonitorFailed', { message: errorText(e) });
+    });
+  }
+
   /** "Carica nel dispositivo" sul simulatore. */
   async download(ctx: SimCtx): Promise<void> {
     const s = this.session;
@@ -247,13 +320,23 @@ export class SimController {
     }
     const files = downloadOrder(items).map((i) => i.file!);
     const wasStopped = store.getState().sim.mode === 'STOP';
+    let failure: unknown;
     try {
       await s.request({ op: 'download', files });
     } catch (e) {
-      if (this.session === s) this.push('error', 'simDownloadFailed', { message: errorText(e) });
-      return;
+      failure = e;
     }
     if (this.session !== s) return;
+    // Caricare un blocco ferma la sua osservazione nel worker: va richiesta di nuovo.
+    this.sentMonitor = undefined;
+    if (failure !== undefined) {
+      this.push('error', 'simDownloadFailed', { message: errorText(failure) });
+      this.syncMonitor();
+      return;
+    }
+    store.getState().setSim({
+      loaded: Object.fromEntries(dev.blocks.map((b) => [b.id, hashOf(b, context)])),
+    });
     this.push('info', 'simDownloaded', { count: String(files.length) });
     if (!wasStopped) return;
     let yes: boolean;

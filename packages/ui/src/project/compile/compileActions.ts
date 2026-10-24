@@ -16,6 +16,7 @@ import { readKitZip } from '@baaportal/s7comm';
 import type { BaaBridge, FileFilter } from '../../bridge';
 import { flushPendingEdits } from '../../flushPendingEdits';
 import { t } from '../../i18n';
+import type { LineMapRow } from '../../editors/awl/monitorExtension';
 import type { AppState, CompileRow, CompileSummary } from '../../state/store';
 import { ids, parseNodeId } from '../navigation/treeIds';
 import { getProgress, Interrupted, runWithProgress } from '../progress';
@@ -156,8 +157,7 @@ export async function compileProgram(
   const sameSession = () => store.getState().docLoadId === session;
   lastYield = performance.now();
   const rows: CompileRow[] = [];
-  const compiled: Record<string, { hash: string; file: Uint8Array; diagnostics: Mc7Diagnostic[] }> =
-    {};
+  const compiled: Parameters<AppState['finishCompile']>[0]['compiled'] = {};
   const failed: string[] = [];
   try {
     const known = store.getState().compile.hashes;
@@ -176,7 +176,12 @@ export async function compileProgram(
         const row = rowOf(deviceId, b, r.diagnostics, r.file !== undefined);
         rows.push(row);
         if (row.status !== 'error' && r.file) {
-          compiled[b.id] = { hash: hashOf(b, context), file: r.file, diagnostics: r.diagnostics };
+          compiled[b.id] = {
+            hash: hashOf(b, context),
+            file: r.file,
+            diagnostics: r.diagnostics,
+            ...(r.lines ? { lines: r.lines } : {}),
+          };
         } else failed.push(b.id);
         step();
       }
@@ -219,8 +224,12 @@ export async function exportCompiledBlock(
     const key = hashOf(block, contextHashOf(dev));
     const kept = store.getState().compile;
     const reuse = kept.hashes[block.id] === key ? kept.files[block.id] : undefined;
-    const r = reuse
-      ? { file: reuse, diagnostics: kept.diagnostics[block.id] ?? [] }
+    const r: { file?: Uint8Array; diagnostics: Mc7Diagnostic[]; lines?: LineMapRow[] } = reuse
+      ? {
+          file: reuse,
+          diagnostics: kept.diagnostics[block.id] ?? [],
+          ...(kept.lines[block.id] ? { lines: kept.lines[block.id] } : {}),
+        }
       : blockToMc7File(block, dev, findCpu(dev.cpu.typeId));
     const row = rowOf(deviceId, block, r.diagnostics, r.file !== undefined);
     store.getState().finishCompile({
@@ -228,7 +237,14 @@ export async function exportCompiledBlock(
       summary: summaryOf([row]),
       compiled:
         row.status !== 'error' && r.file
-          ? { [block.id]: { hash: key, file: r.file, diagnostics: r.diagnostics } }
+          ? {
+              [block.id]: {
+                hash: key,
+                file: r.file,
+                diagnostics: r.diagnostics,
+                ...(r.lines ? { lines: r.lines } : {}),
+              },
+            }
           : {},
       failed: row.status === 'error' ? [block.id] : [],
     });

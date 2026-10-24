@@ -73,6 +73,14 @@ const shapes: Partial<Record<IconName, ReactNode>> = {
     </>
   ),
   download: <path d="M8 2v8M4.5 6.5L8 10l3.5-3.5M2.5 13.5h11" />,
+  // occhiali: due lenti e il ponte
+  monitor: (
+    <>
+      <circle cx="4.5" cy="9.5" r="2.75" />
+      <circle cx="11.5" cy="9.5" r="2.75" />
+      <path d="M7.25 9.5h1.5M1.75 9.5L3 4.5M14.25 9.5L13 4.5" />
+    </>
+  ),
   upload: <path d="M8 10V2M4.5 5.5L8 2l3.5 3.5M2.5 13.5h11" />,
   simulation: (
     <>

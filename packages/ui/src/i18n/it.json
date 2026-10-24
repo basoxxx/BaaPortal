@@ -79,6 +79,7 @@
     "simFailed": "La simulazione si è interrotta: {{message}}",
     "simDownloadBlocked": "Caricamento annullato: la compilazione ha {{errors}} errori.",
     "simDownloadStale": "Caricamento annullato: {{count}} blocchi non sono compilati con il contenuto attuale.",
+    "simMonitorFailed": "Osservazione non riuscita: {{message}}",
     "simDownloadFailed": "Caricamento nel simulatore non riuscito: {{message}}",
     "simDownloaded": "Caricati {{count}} blocchi nel simulatore.",
     "simModeFailed": "Cambio di modo della CPU non riuscito: {{message}}",
@@ -135,6 +136,7 @@
     "online.goOffline": "Interrompi collegamento online",
     "online.simulation": "Simulazione",
     "online.download": "Carica nel dispositivo",
+    "online.monitor": "Osserva programma",
     "online.upload": "Carica dal dispositivo…",
     "online.accessibleDevices": "Dispositivi accessibili…",
     "online.startCpu": "Avvia CPU",
@@ -199,6 +201,19 @@
     }
   },
   "sim": {
+    "monitor": {
+      "title": "Osservazione del programma",
+      "on": "Osservazione attiva: i valori sono quelli della prima esecuzione nell'ultimo ciclo.",
+      "format": "Formato degli accumulatori",
+      "hex": "Esadecimale",
+      "dec": "Decimale",
+      "reason": {
+        "notLoaded": "Osservazione non disponibile: il blocco non è caricato nel simulatore. Usa «Carica nel dispositivo».",
+        "stale": "Osservazione non disponibile: il blocco non è compilato con le modifiche correnti. Caricalo di nuovo nel dispositivo.",
+        "noLines": "Osservazione non disponibile: il blocco è importato e non ha la corrispondenza con le righe del testo.",
+        "edited": "Osservazione sospesa: il testo è in modifica. Caricalo di nuovo nel dispositivo per riprendere."
+      }
+    },
     "startCpuTitle": "Carica nel dispositivo",
     "startCpuMessage": "Avviare la CPU?",
     "yes": "Sì",

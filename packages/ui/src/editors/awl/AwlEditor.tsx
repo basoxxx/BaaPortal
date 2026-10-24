@@ -13,6 +13,7 @@ import { setDiagnostics } from '@codemirror/lint';
 import { type AwlDiagnostic, type Completion, type Mnemonic } from '@baaportal/awl';
 import { getSettings } from '../../settings/settings';
 import { awlHighlight, displayText, storedText, toLintDiagnostics } from './awlExtensions';
+import { monitorExtension, setMonitorLines, type MonitorLines } from './monitorExtension';
 import { CommittedEditor, type CommittedEditorHandle, type EditorCodec } from './CommittedEditor';
 
 export { useMnemonic } from './mnemonicPreference';
@@ -34,6 +35,8 @@ export interface AwlEditorProps {
   /** Ad ogni modifica del testo mostrato (anche quelle esterne). */
   onChange?(textShown: string): void;
   'aria-label': string;
+  /** Valori dell'osservazione per riga (simulatore); `null`/assente = nessuna osservazione. */
+  monitor?: MonitorLines | null;
   /** Sola lettura (blocco importato non ricodificabile). */
   readOnly?: boolean;
   ref?: React.Ref<AwlEditorHandle>;
@@ -95,6 +98,7 @@ export function AwlEditor(p: AwlEditorProps): React.JSX.Element {
     };
     return [
       awlHighlight(),
+      monitorExtension(),
       autocompletion({ override: [source], activateOnTyping: false }),
       // Dopo `"`, `#` e `.` si propone il completamento.
       EditorView.updateListener.of((u: ViewUpdate) => {
@@ -119,6 +123,10 @@ export function AwlEditor(p: AwlEditorProps): React.JSX.Element {
     const msg = (d: AwlDiagnostic) => tRef.current(`awl.diag.${d.code}`, d.params ?? {});
     v.dispatch(setDiagnostics(v.state, toLintDiagnostics(p.diagnostics, v.state.doc.length, msg)));
   }, [p.diagnostics, t]);
+
+  useEffect(() => {
+    core.current?.getView()?.dispatch({ effects: setMonitorLines.of(p.monitor ?? null) });
+  }, [p.monitor]);
 
   useImperativeHandle(
     p.ref,

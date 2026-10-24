@@ -1,6 +1,7 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { Mc7Diagnostic, Project } from '@baaportal/project';
-import type { DiagEntry, SimMode } from '@baaportal/sim';
+import type { DiagEntry, MonitorStep, SimMode } from '@baaportal/sim';
+import type { LineMapRow } from '../editors/awl/monitorExtension';
 import type { SimStats, SimWarning } from '../sim/protocol';
 import type { ImportSummary } from '../project/navigation/tagTableIo';
 import * as wa from './workArea';
@@ -92,6 +93,8 @@ export interface CompileState {
   summary: CompileSummary | null;
   hashes: Record<string, string>;
   files: Record<string, Uint8Array>;
+  /** Mappa istruzioni MC7 → righe di testo dell'ultima compilazione riuscita (solo blocchi con testo). */
+  lines: Record<string, LineMapRow[]>;
   /** Diagnostiche (avvisi) dell'ultima compilazione riuscita di ogni blocco. */
   diagnostics: Record<string, Mc7Diagnostic[]>;
   /** L'ultima compilazione è stata interrotta da Interrompi. */
@@ -130,6 +133,25 @@ export interface SimUiState {
   downloading: boolean;
   /** Byte aggiunti a mano nel pannello I/O («+ byte»): solo per questa simulazione, non nel progetto. */
   ioExtra: { inputs: number[]; outputs: number[] };
+  /** Blocchi caricati nel simulatore dall'ultimo «Carica nel dispositivo»: id → impronta di allora. */
+  loaded: Record<string, string>;
+  /** Osservazione del programma: il blocco aperto che si osserva (uno solo alla volta). */
+  monitor: MonitorUiState | null;
+  /** Passi dell'ultimo ciclo del blocco osservato (`null` finché non arrivano o se non disponibile). */
+  monitorSteps: MonitorStep[] | null;
+  /** ACCU in esadecimale (predefinito) o in decimale; non si salva. */
+  monitorHex: boolean;
+}
+
+/** Perché l'osservazione non è disponibile (`ok` = disponibile). */
+export type MonitorReason = 'ok' | 'notLoaded' | 'stale' | 'noLines';
+
+export interface MonitorUiState {
+  deviceId: string;
+  blockId: string;
+  reason: MonitorReason;
+  /** L'editor ha testo non ancora confermato: finché c'è, i valori si sospendono. */
+  edited: boolean;
 }
 
 export const SIM_OFF: SimUiState = {
@@ -143,6 +165,10 @@ export const SIM_OFF: SimUiState = {
   outputs: new Uint8Array(0),
   downloading: false,
   ioExtra: { inputs: [], outputs: [] },
+  loaded: {},
+  monitor: null,
+  monitorSteps: null,
+  monitorHex: true,
 };
 
 export interface AppState {
@@ -212,7 +238,10 @@ export interface AppState {
   finishCompile(r: {
     rows: CompileRow[];
     summary: CompileSummary;
-    compiled: Record<string, { hash: string; file: Uint8Array; diagnostics: Mc7Diagnostic[] }>;
+    compiled: Record<
+      string,
+      { hash: string; file: Uint8Array; diagnostics: Mc7Diagnostic[]; lines?: LineMapRow[] }
+    >;
     failed: string[];
     interrupted?: boolean;
   }): void;
@@ -246,6 +275,7 @@ const emptyCompile = (): CompileState => ({
   summary: null,
   hashes: {},
   files: {},
+  lines: {},
   diagnostics: {},
   interrupted: false,
 });
@@ -400,14 +430,25 @@ export function createAppStore(now: () => Date = () => new Date()): StoreApi<App
       set((s) => {
         const hashes = { ...s.compile.hashes };
         const files = { ...s.compile.files };
+        const lines = { ...s.compile.lines };
         const diagnostics = { ...s.compile.diagnostics };
         for (const [id, c] of Object.entries(compiled)) {
           hashes[id] = c.hash;
           files[id] = c.file;
+          if (c.lines) lines[id] = c.lines;
+          else delete lines[id];
           diagnostics[id] = c.diagnostics;
         }
         return {
-          compile: { rows, summary, hashes, files, diagnostics, interrupted: interrupted ?? false },
+          compile: {
+            rows,
+            summary,
+            hashes,
+            files,
+            lines,
+            diagnostics,
+            interrupted: interrupted ?? false,
+          },
         };
       }),
     openBlockAt: (t) => {

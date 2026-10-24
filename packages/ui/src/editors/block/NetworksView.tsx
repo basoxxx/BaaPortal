@@ -13,6 +13,7 @@ import { CommitInput, CommitTextarea } from '../../components/CommitField';
 import { ContextMenu } from '../../components/ContextMenu';
 import { AwlEditor, type AwlEditorHandle } from '../awl/AwlEditor';
 import { displayText } from '../awl/awlExtensions';
+import { monitorLinesByNetwork } from '../awl/monitorExtension';
 import { offsetOfLineCol } from '../../project/navigation/sourceActions';
 import { hasRawLines, isLockedImport, lockedBannerKey } from './readOnlyImport';
 import { useMnemonic } from '../awl/mnemonicPreference';
@@ -51,7 +52,30 @@ export function NetworksView({ deviceId, blockId }: Props) {
     () => (dev && isAwl ? createAwlContext(dev, blockId, findCpu(dev.cpu.typeId)) : null),
     [dev, blockId, isAwl],
   );
+  // Osservazione (simulatore): i valori valgono solo se disponibile e senza testo non confermato.
+  const mon = useAppStore((s) =>
+    s.sim.monitor?.blockId === blockId && s.sim.monitor.deviceId === deviceId
+      ? s.sim.monitor
+      : null,
+  );
+  const monSteps = useAppStore((s) => s.sim.monitorSteps);
+  const monHex = useAppStore((s) => s.sim.monitorHex);
+  const lineMap = useAppStore((s) => s.compile.lines[blockId]);
+  const monLines = useMemo(
+    () =>
+      mon && mon.reason === 'ok' && !mon.edited && monSteps && lineMap
+        ? monitorLinesByNetwork(lineMap, monSteps, monHex)
+        : null,
+    [mon, monSteps, monHex, lineMap],
+  );
   const drafts = useRef(new Map<string, Draft>());
+  /** Il testo non confermato sospende l'osservazione finché c'è (poi vale il confronto delle impronte). */
+  const markEdited = () => {
+    const m = store.getState().sim.monitor;
+    const edited = drafts.current.size > 0;
+    if (m && m.blockId === blockId && m.deviceId === deviceId && m.edited !== edited)
+      store.getState().setSim({ monitor: { ...m, edited } });
+  };
   const handles = useRef(new Map<string, AwlEditorHandle>());
   // Le diagnostiche di ogni segmento: un segmento che non cambia tiene lo stesso array, e il suo editor non ricalcola.
   // Chiavi per id del segmento: se un segmento viene inserito o tolto, i problemi restano ai loro segmenti.
@@ -157,6 +181,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
   const onDraft = (n: Network, text: string) => {
     if (text === shown(n.source, mnemonic)) drafts.current.delete(n.id);
     else drafts.current.set(n.id, { base: n.source, mnemonic, text });
+    markEdited();
     scheduleCheck();
   };
   const commitCode = (id: string, stored: string) => {
@@ -165,6 +190,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
       const n = b.networks.find((x) => x.id === id);
       if (n) n.source = stored;
     });
+    markEdited();
   };
   return (
     <div className="baa-block-networks">
@@ -243,6 +269,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
                 mnemonic={mnemonic}
                 aria-label={`${t('block.source')} ${i + 1}`}
                 diagnostics={byNetwork[n.id] ?? NO_DIAGNOSTICS}
+                monitor={monLines?.get(i) ?? null}
                 complete={(offset, text) =>
                   awlCtx
                     ? completeAt(textsShown({ index: i, text }), i, offset, awlCtx, mnemonic)
