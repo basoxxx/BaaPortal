@@ -398,6 +398,25 @@
     "tag": "Variabile_1",
     "constant": "Costante_1"
   },
+  "settings": {
+    "title": "Impostazioni",
+    "general": "Generale",
+    "appearance": "Aspetto",
+    "editor": "Comportamento editor",
+    "language": "Lingua dell'interfaccia",
+    "author": "Autore predefinito dei nuovi progetti",
+    "recovery": "Salvataggio di recupero",
+    "recoveryOff": "Disattivato",
+    "minutes_one": "Ogni minuto",
+    "minutes_other": "Ogni {{count}} minuti",
+    "uiScale": "Scala dell'interfaccia",
+    "mnemonic": "Mnemonica SIMATIC",
+    "fontSize": "Dimensione del carattere",
+    "tabSize": "Larghezza tabulazione",
+    "autocomplete": "Completamento automatico",
+    "lineNumbers": "Numeri di riga",
+    "reset": "Ripristina predefiniti"
+  },
   "dialog": {
     "ok": "OK",
     "cancel": "Annulla"

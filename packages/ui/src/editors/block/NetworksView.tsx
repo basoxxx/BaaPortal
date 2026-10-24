@@ -44,7 +44,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
     return b && b.kind !== 'DB' && b.kind !== 'IDB' ? b : undefined;
   });
   const dev = useAppStore((s) => (s.doc ? findDevice(s.doc.project, deviceId) : undefined));
-  const [mnemonic, setMnemonic] = useMnemonic();
+  const [mnemonic] = useMnemonic();
   const isAwl = block?.language === 'AWL';
   // Il contesto del controllo si rifà a ogni revisione del dispositivo, non a ogni tasto.
   const awlCtx = useMemo(
@@ -183,15 +183,6 @@ export function NetworksView({ deviceId, blockId }: Props) {
             onCommit={(v) => editHeader('title', v)}
           />
         </label>
-        {isAwl ? (
-          <label className="baa-awl-mnemonic">
-            <span>{t('block.mnemonic')}</span>
-            <select value={mnemonic} onChange={(e) => setMnemonic(e.target.value as Mnemonic)}>
-              <option value="international">{t('block.mnemonicInternational')}</option>
-              <option value="german">{t('block.mnemonicGerman')}</option>
-            </select>
-          </label>
-        ) : null}
         <label>
           <span>{t('block.comment')}</span>
           <CommitTextarea

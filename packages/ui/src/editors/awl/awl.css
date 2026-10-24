@@ -5,7 +5,7 @@
   border: 1px solid var(--baa-border);
   background: var(--baa-surface);
   color: var(--baa-text);
-  font-size: var(--baa-font-size);
+  font-size: var(--baa-editor-font-size, var(--baa-font-size));
 }
 .baa-awl-editor .cm-editor.cm-focused {
   outline: 1px solid var(--baa-accent);
@@ -83,11 +83,6 @@
 }
 .baa-awl-problems .is-warning::before {
   background: var(--baa-online);
-}
-.baa-awl-mnemonic {
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }
 .baa-source-editor {
   height: 100%;

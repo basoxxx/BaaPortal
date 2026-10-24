@@ -8,6 +8,7 @@ import {
 } from '@codemirror/state';
 import { EditorView, keymap, type ViewUpdate } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
+import { getSettings, useSettings } from '../../settings/settings';
 import { lineEndingOf } from './awlExtensions';
 import './awl.css';
 
@@ -78,6 +79,9 @@ export function CommittedEditor(p: CommittedEditorProps): React.JSX.Element {
   const latest = useRef(p);
   const label = useRef(new Compartment());
   const lock = useRef(new Compartment());
+  const tabs = useRef(new Compartment());
+  const [settings] = useSettings();
+  const tabSize = settings.editor.tabSize;
   const s = useRef<Session>({
     baseline: p.value,
     eol: lineEndingOf(p.value),
@@ -130,6 +134,7 @@ export function CommittedEditor(p: CommittedEditorProps): React.JSX.Element {
           keymap.of([...defaultKeymap, ...historyKeymap]),
           ...(latest.current.extensions ?? []),
           lock.current.of(lockExtension(!!latest.current.readOnly)),
+          tabs.current.of(EditorState.tabSize.of(getSettings().editor.tabSize)),
           label.current.of(
             EditorView.contentAttributes.of({
               role: 'textbox',
@@ -175,6 +180,12 @@ export function CommittedEditor(p: CommittedEditorProps): React.JSX.Element {
   useEffect(() => {
     viewRef.current?.dispatch({ effects: lock.current.reconfigure(lockExtension(!!p.readOnly)) });
   }, [p.readOnly]);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({
+      effects: tabs.current.reconfigure(EditorState.tabSize.of(tabSize)),
+    });
+  }, [tabSize]);
 
   useEffect(() => {
     viewRef.current?.dispatch({

@@ -398,6 +398,25 @@
     "tag": "Tag_1",
     "constant": "Constant_1"
   },
+  "settings": {
+    "title": "Settings",
+    "general": "General",
+    "appearance": "Appearance",
+    "editor": "Editor behavior",
+    "language": "Interface language",
+    "author": "Default author of new projects",
+    "recovery": "Recovery save",
+    "recoveryOff": "Off",
+    "minutes_one": "Every minute",
+    "minutes_other": "Every {{count}} minutes",
+    "uiScale": "Interface scale",
+    "mnemonic": "SIMATIC mnemonics",
+    "fontSize": "Font size",
+    "tabSize": "Tab width",
+    "autocomplete": "Autocomplete",
+    "lineNumbers": "Line numbers",
+    "reset": "Restore defaults"
+  },
   "dialog": {
     "ok": "OK",
     "cancel": "Cancel"

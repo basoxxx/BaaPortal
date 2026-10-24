@@ -18,6 +18,7 @@ export type DialogState =
   | { kind: 'addDevice' }
   | { kind: 'addBlock'; deviceId: string }
   | { kind: 'collectKit' }
+  | { kind: 'settings' }
   | { kind: 'importTagsReport'; fileName: string; tableName: string; summary: ImportSummary }
   | null;
 

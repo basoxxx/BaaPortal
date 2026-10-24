@@ -246,7 +246,10 @@ const list: Command[] = [
   def('online.startCpu', { icon: 'startCpu' }),
   def('online.stopCpu', { icon: 'stopCpu' }),
   def('online.diagnostics'),
-  def('options.settings'),
+  def('options.settings', {
+    isEnabled: always,
+    run: ({ store }) => store.getState().openDialog({ kind: 'settings' }),
+  }),
   def('tools.crossReferences'),
   def('tools.callStructure'),
   def('tools.collectCpuData', {

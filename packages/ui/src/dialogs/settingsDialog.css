@@ -1,0 +1,22 @@
+.baa-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+.baa-settings h3 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--baa-border);
+}
+.baa-settings-row {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+}
+.baa-settings-row input[type='checkbox'] {
+  justify-self: start;
+}

@@ -3,6 +3,7 @@ import { EditorView } from '@codemirror/view';
 import { describe, expect, it, vi } from 'vitest';
 import { setDiagnostics } from '@codemirror/lint';
 import { createCodeBlock, readBaap, type CodeBlock } from '@baaportal/project';
+import { updateSettings } from '../src/settings/settings';
 import { dev, fb, mem, openEditor, past } from './blockFixtures';
 import { PROJECT_PATH, type RenderedApp } from './renderApp';
 
@@ -24,7 +25,9 @@ async function app_deleteFirst() {
   fireEvent.click(screen.getByRole('button', { name: 'Menu del segmento 1' }));
   fireEvent.click(screen.getByRole('menuitem', { name: 'Elimina segmento' }));
 }
-const mnemonicSelect = () => screen.getByRole('combobox', { name: 'Mnemonica' });
+// La mnemonica si sceglie nelle Impostazioni (non più nell'intestazione del blocco).
+const setMnemonic = (m: 'german' | 'international') =>
+  act(() => updateSettings({ editor: { mnemonic: m === 'german' ? 'de' : 'int' } }));
 // Aspetta che le diagnostiche iniziali siano finite: il conteggio resta fermo per `quiet` ms.
 // Un'attesa fissa non basta sui runner lenti (Windows nella CI).
 async function diagnosticsSettled(quiet = 500, max = 15_000) {
@@ -44,7 +47,7 @@ describe("segmenti AWL con l'editor CodeMirror", () => {
     async () => {
       const f = fb('Nastro');
       const app = await openEditor('block', f.id, (d) => void d.blocks.push(f));
-      await app.user.selectOptions(mnemonicSelect(), 'german');
+      setMnemonic('german');
       const before = past(app);
       const v = viewOf();
       focus(v);
@@ -145,19 +148,19 @@ describe("segmenti AWL con l'editor CodeMirror", () => {
       f.networks[0]!.source = 'A I 0.0';
       const app = await openEditor('block', f.id, (d) => void d.blocks.push(f));
       const before = past(app);
-      await app.user.selectOptions(mnemonicSelect(), 'german');
+      setMnemonic('german');
       expect(viewOf().state.doc.toString()).toBe('U E 0.0');
       expect(block(app, f.id).networks[0]!.source).toBe('A I 0.0');
       expect(past(app)).toBe(before);
-      expect(localStorage.getItem('baa.mnemonic')).toBe('german');
+      expect(JSON.parse(localStorage.getItem('baa.settings.v1')!).editor.mnemonic).toBe('de');
       const v = viewOf();
       focus(v);
       set(v, 'U E 0.5');
-      await app.user.selectOptions(mnemonicSelect(), 'international');
+      setMnemonic('international');
       expect(block(app, f.id).networks[0]!.source).toBe('A I 0.5');
       expect(past(app)).toBe(before + 1);
       expect(viewOf().state.doc.toString()).toBe('A I 0.5');
-      await app.user.selectOptions(mnemonicSelect(), 'german');
+      setMnemonic('german');
       expect(past(app)).toBe(before + 1);
       expect(block(app, f.id).networks[0]!.source).toBe('A I 0.5');
     },

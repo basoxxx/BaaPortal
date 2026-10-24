@@ -3,6 +3,7 @@ import type { StoreApi } from 'zustand/vanilla';
 import { BaapFormatError, readBaap, writeBaap } from '@baaportal/project';
 import type { BaaBridge, RecoveryEntry } from '../bridge';
 import { i18next } from '../i18n';
+import { getSettings, subscribeSettings } from '../settings/settings';
 import type { AppState } from '../state/store';
 import type { ProjectService } from './projectService';
 
@@ -132,8 +133,29 @@ export function createRecoveryService(deps: RecoveryDeps): RecoveryService {
       }
     }
     if (disposed) return;
-    timer = setInterval(() => void flush(), ms ?? RECOVERY_INTERVAL_MS);
+    baseMs = ms;
+    schedule();
   }
+  // Intervallo di recupero: quello delle Impostazioni (0 = disattivato); le sostituzioni dei test
+  // e `intervalMs` hanno la precedenza sui minuti.
+  let baseMs: number | undefined;
+  let started = false;
+  function schedule() {
+    if (disposed) return;
+    started = true;
+    if (timer !== undefined) clearInterval(timer);
+    timer = undefined;
+    const minutes = getSettings().general.recoveryMinutes;
+    if (minutes === 0) return;
+    timer = setInterval(() => void flush(), baseMs ?? minutes * 60_000);
+  }
+  let lastMinutes = getSettings().general.recoveryMinutes;
+  const unsubscribeSettings = subscribeSettings(() => {
+    const m = getSettings().general.recoveryMinutes;
+    if (m === lastMinutes) return;
+    lastMinutes = m;
+    if (started) schedule();
+  });
   void start();
 
   const formatDate = (iso: string) => {
@@ -209,6 +231,7 @@ export function createRecoveryService(deps: RecoveryDeps): RecoveryService {
       if (timer !== undefined) clearInterval(timer);
       timer = undefined;
       unsubscribe();
+      unsubscribeSettings();
     },
   };
 }

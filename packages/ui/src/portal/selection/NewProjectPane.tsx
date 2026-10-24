@@ -2,19 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { validateProjectName } from '@baaportal/project';
 import { isAbsolutePath, joinPath } from '../../services/projectService';
+import { getSettings, updateSettings } from '../../settings/settings';
 import { useServices } from '../../state/AppContext';
 
 const AUTHOR_KEY = 'baa.lastAuthor';
 
-function readLastAuthor(): string {
-  try {
-    return localStorage.getItem(AUTHOR_KEY) ?? '';
-  } catch {
-    return '';
-  }
-}
+/** L'autore predefinito dei nuovi progetti (Impostazioni → Generale). */
+const readLastAuthor = (): string => getSettings().general.author;
 
 function saveLastAuthor(author: string): void {
+  updateSettings({ general: { author } });
   try {
     localStorage.setItem(AUTHOR_KEY, author);
   } catch {
