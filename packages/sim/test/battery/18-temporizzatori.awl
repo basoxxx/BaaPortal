@@ -1,0 +1,29 @@
+// Temporizzatori S5: SP, SE, SD, SS, SF, FR, R, L T, LC T, A T. Un solo ciclo: il tempo quasi non passa.
+// Esempi nello stile del manuale AWL («Operazioni di temporizzazione»).
+// atteso: MB0=1, MW2=50, MW4=16#1050
+//@ block OB 1
+	SET;
+	L W#16#1050;
+	SP T 1;
+	A T 1;
+	= M 0.0;
+	L T 1;
+	T MW 2;
+	LC T 1;
+	T MW 4;
+//@ network
+	SET;
+	L W#16#1050;
+	SE T 2;
+	SD T 3;
+	SS T 4;
+	CLR;
+	SF T 5;
+	SET;
+	FR T 2;
+	SET;
+	R T 2;
+	R T 3;
+	CLR;
+	A T 2;
+	= M 0.2;

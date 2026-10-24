@@ -1,8 +1,17 @@
+import { findSystemBlock } from '@baaportal/catalog';
 import { compileBlock, type CompileInput } from '@baaportal/mc7';
 import type { AwlBlockInfo, AwlContext } from '@baaportal/awl';
+import type {
+  DataType,
+  ElementaryTypeName,
+  ParameterTypeName,
+  TypedMember,
+} from '@baaportal/s7-types';
 import {
+  CounterBank,
   Program,
   SimMemory,
+  TimerBank,
   memorySizesFor,
   newRegisters,
   runBlock,
@@ -13,9 +22,14 @@ import {
 
 type Sections = CompileInput['sections'];
 
-export const el = (name: string) => ({ kind: 'elementary', name }) as never;
-export const named = (name: string) => ({ kind: 'named', name }) as never;
-export const m = (name: string, type: never) => ({ name, type });
+/** `name` arriva anche da testo (batteria): il nome non riconosciuto lo respinge il compilatore. */
+export const el = (name: string): DataType => ({
+  kind: 'elementary',
+  name: name as ElementaryTypeName,
+});
+export const named = (name: string): DataType => ({ kind: 'named', name });
+export const param = (name: ParameterTypeName): DataType => ({ kind: 'parameter', name });
+export const m = (name: string, type: DataType): TypedMember => ({ name, type });
 export const EMPTY: Sections = { in: [], out: [], inOut: [], stat: [], temp: [], ret: [] };
 export const sec = (s: Partial<Sections>): Sections => ({ ...EMPTY, ...s });
 
@@ -33,6 +47,12 @@ function ctxFor(specs: BlockSpec[], infos: Infos, owner: { kind: string; iface: 
     resolve: (name: string) => {
       const f = specs.find((x) => x.kind === 'FB' && `FB${x.number}` === name.toUpperCase());
       const fs = f?.sections ?? EMPTY;
+      const sys = f ? undefined : findSystemBlock({ name });
+      if (sys)
+        return {
+          kind: 'fb',
+          sections: { input: sys.input, output: sys.output, inOut: sys.inOut, static: [] },
+        };
       return f
         ? {
             kind: 'fb',
@@ -161,6 +181,10 @@ export function runProgram(
     mem?: SimMemory;
     sizes?: MemorySizes;
     regs?: { stw?: Partial<Registers['stw']> };
+    /** Orologio e temporizzatori da riusare fra più esecuzioni. */
+    now?: () => number;
+    timers?: TimerBank;
+    counters?: CounterBank;
   } = {},
 ): ProgRun {
   const mem = opts.mem ?? new SimMemory(opts.sizes ?? memorySizesFor('cpu-315-2-pn-dp'));
@@ -177,7 +201,9 @@ export function runProgram(
     mem,
     regs,
     program,
-    now: () => 0,
+    now: opts.now ?? (() => 0),
+    timers: opts.timers ?? new TimerBank(256, opts.now ?? (() => 0)),
+    counters: opts.counters ?? new CounterBank(256),
     maxCycleMs: 150,
     cycleStart: 0,
   };

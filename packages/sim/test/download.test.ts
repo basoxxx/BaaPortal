@@ -10,6 +10,7 @@ const PROPS: SimCpuOptions['props'] = {
   minCycleMs: 0,
   clockMemory: { enabled: false, byte: 0 },
   retentivity: { mBytes: 16, timers: 2, counters: 2 },
+  cyclicInterruptMs: 100,
 };
 
 const newCpu = (): SimCpu => new SimCpu({ cpuTypeId: 'cpu-315-2-pn-dp', props: PROPS });
@@ -172,6 +173,22 @@ describe('download nella CPU simulata attraverso il server S7', () => {
       ]);
       expect(w!.returnCode).toBe(0x05);
     }
+    await c.close();
+  });
+
+  it('T: parola BCD con la base come LC, big-endian', async () => {
+    const { cpu, c } = await loaded();
+    cpu.timers.startOp(1, 'SP', true, 0x3999); // 999 · 10 s, a orologio reale resta 999
+    const [r] = await c.readItems([{ area: 'T', db: 0, start: 0, size: 'TIMER', count: 2 }]);
+    expect(Array.from(r?.ok ? r.data : [])).toEqual([0, 0, 0x39, 0x99]);
+    await c.close();
+  });
+
+  it('C: parola BCD come LC C, big-endian', async () => {
+    const { cpu, c } = await loaded();
+    cpu.counters.setValue(1, 123);
+    const [r] = await c.readItems([{ area: 'C', db: 0, start: 0, size: 'COUNTER', count: 2 }]);
+    expect(Array.from(r?.ok ? r.data : [])).toEqual([0, 0, 0x01, 0x23]);
     await c.close();
   });
 

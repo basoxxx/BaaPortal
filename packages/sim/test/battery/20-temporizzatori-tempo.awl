@@ -1,0 +1,61 @@
+// Temporizzatori S5 nel tempo, durata S5T#1S, un ciclo ogni 400 ms (il ciclo k gira a 400*k ms).
+// Diagrammi del manuale AWL («Operazioni di temporizzazione»):
+//  SD (ritardo all'inserzione)  M0.0: 1 dal ciclo 0 al 5. Q=1 solo dopo 1 s (ciclo 3) e finché l'ingresso è 1.
+//  SP (impulso)                 M0.1: 1 dal ciclo 0 al 5. Q=1 per 1 s al massimo (cicli 0..2), poi 0.
+//  SE (impulso prolungato)      M0.2: 1 solo nel ciclo 0. Q=1 per tutto 1 s anche se l'ingresso cade (cicli 0..2).
+//  SF (ritardo alla disinserzione) M0.3: 1 nei cicli 0 e 1. Q=1 con l'ingresso 1 e per 1 s dopo il fronte di discesa.
+//  SS (ritardo all'inserzione con memoria) M0.4: 1 solo nel ciclo 0. Q=1 dopo 1 s anche se l'ingresso è caduto;
+//     torna a 0 solo con R (M0.5=1 al ciclo 8).
+//  L T 1 legge il tempo residuo di SD (S5T#1S = 100 x 10 ms): 100 all'inizio, 60 dopo 400 ms.
+// cicli: 12, passo: 400 ms
+// imposta: M0.0=1, M0.1=1, M0.2=1, M0.3=1, M0.4=1
+// imposta-al-ciclo: 1: M0.2=0
+// imposta-al-ciclo: 1: M0.4=0
+// imposta-al-ciclo: 2: M0.3=0
+// imposta-al-ciclo: 6: M0.0=0, M0.1=0
+// imposta-al-ciclo: 8: M0.5=1
+// atteso-al-ciclo: 0: M1.0=0, M1.1=1, M1.2=1, M1.3=1, M1.4=0, MW20=100
+// atteso-al-ciclo: 1: M1.0=0, M1.1=1, M1.2=1, M1.3=1, M1.4=0, MW20=60
+// atteso-al-ciclo: 2: M1.0=0, M1.1=1, M1.2=1, M1.3=1, M1.4=0
+// atteso-al-ciclo: 3: M1.0=1, M1.1=0, M1.2=0, M1.3=1, M1.4=1
+// atteso-al-ciclo: 4: M1.0=1, M1.1=0, M1.2=0, M1.3=1, M1.4=1
+// atteso-al-ciclo: 5: M1.0=1, M1.1=0, M1.2=0, M1.3=0, M1.4=1
+// atteso-al-ciclo: 6: M1.0=0, M1.1=0, M1.2=0, M1.3=0, M1.4=1
+// atteso-al-ciclo: 7: M1.4=1
+// atteso-al-ciclo: 8: M1.4=0
+// atteso: M1.0=0, M1.4=0
+//@ block OB 1
+	A M 0.5;
+	R T 5;
+//@ network
+	A M 0.0;
+	L S5T#1S;
+	SD T 1;
+	A T 1;
+	= M 1.0;
+	L T 1;
+	T MW 20;
+//@ network
+	A M 0.1;
+	L S5T#1S;
+	SP T 2;
+	A T 2;
+	= M 1.1;
+//@ network
+	A M 0.2;
+	L S5T#1S;
+	SE T 3;
+	A T 3;
+	= M 1.2;
+//@ network
+	A M 0.3;
+	L S5T#1S;
+	SF T 4;
+	A T 4;
+	= M 1.3;
+//@ network
+	A M 0.4;
+	L S5T#1S;
+	SS T 5;
+	A T 5;
+	= M 1.4;

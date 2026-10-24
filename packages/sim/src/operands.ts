@@ -13,6 +13,8 @@ export interface FrameView {
   prevLSize?: number;
   /** Parametri attuali di una FC: posizioni assolute risolte dalla lista dei puntatori (null = non in memoria). */
   params?: readonly (Location | null)[];
+  /** Voci grezze della lista dei puntatori: per TIMER e COUNTER il numero sta nei primi 2 byte (mc7 §2.5). */
+  rawParams?: readonly Uint8Array[];
 }
 
 /** Posizione risolta: `bit` è l'indirizzo in bit (byte·8 + bit) nell'area; per L/V è assoluto nello stack L. */
@@ -107,7 +109,7 @@ export function resolveOperand(
       return withDb(op.area, op.byte * 8 + (op.bit ?? 0), op.db, regs, frame);
     case 'indirect': {
       if (op.area === 'T' || op.area === 'C')
-        throw new SimError('NON_SIMULATA_2B', `accesso indiretto a ${op.area}`);
+        throw new SimError('MC7_NON_ESEGUIBILE', `accesso indiretto a ${op.area}`);
       if (op.via.kind === 'register') {
         // Manuale AWL S7-300/400, indirizzamento indiretto: AR + offset (P#x.y, 16 bit).
         const off = parseOffset(op.via.offset);
@@ -128,12 +130,24 @@ export function resolveOperand(
       // Parametro formale di FC (`#PAR<n>`, mc7 §2.2.6): la posizione viene dalla lista dei puntatori.
       const idx = formalIndex(op.path[0]?.name);
       const p = frame.params?.[idx];
-      if (!p) throw new SimError('NON_SIMULATA_2B', `parametro formale #${op.path[0]?.name}`);
+      if (!p) throw new SimError('MC7_NON_ESEGUIBILE', `parametro formale #${op.path[0]?.name}`);
       return p;
     }
     default:
       throw new SimError('MC7_NON_ESEGUIBILE', `operando ${op.kind} senza posizione`);
   }
+}
+
+/**
+ * Numero di T o C passato come parametro formale di una FC (`#T_IN`): i primi 2 byte della voce
+ * della lista dei puntatori (mc7 §2.5, ⚠️ solo [DN]); una voce con area (p[0] >= 0x80) non è un numero.
+ */
+export function formalTcNumber(op: Operand, frame: FrameView): number {
+  if (op.kind !== 'local') throw new SimError('MC7_NON_ESEGUIBILE', 'parametro formale atteso');
+  const p = frame.rawParams?.[formalIndex(op.path[0]?.name)];
+  if (!p || p[0]! >= 0x80)
+    throw new SimError('MC7_NON_ESEGUIBILE', `parametro formale #${op.path[0]?.name} senza numero`);
+  return (p[0]! << 8) | p[1]!;
 }
 
 /**
@@ -158,9 +172,21 @@ function checkWindow(loc: Location, size: Size): void {
     throw new SimError('AREA_LUNGHEZZA', `${loc.area} byte ${loc.bit >> 3} fuori dalla finestra`);
 }
 
+/** Dà all'errore di un accesso la sua direzione (OB121_SW_FLT 16#22/16#23, OB122 16#42/16#43). */
+function tagged<T>(access: 'read' | 'write', f: () => T): T {
+  try {
+    return f();
+  } catch (e) {
+    if (e instanceof SimError && e.access === undefined) e.access = access;
+    throw e;
+  }
+}
+
 export function readBits(mem: SimMemory, loc: Location, size: Size): number {
-  checkWindow(loc, size);
-  const b = mem.bytes(loc.area === 'P' ? 'PI' : loc.area, loc.db, loc.bit >> 3, BYTES[size]);
+  const b = tagged('read', () => {
+    checkWindow(loc, size);
+    return mem.bytes(loc.area === 'P' ? 'PI' : loc.area, loc.db, loc.bit >> 3, BYTES[size]);
+  });
   if (size === 'X') return (b[0]! >> (loc.bit & 7)) & 1;
   let v = 0;
   for (const x of b) v = v * 256 + x;
@@ -168,9 +194,12 @@ export function readBits(mem: SimMemory, loc: Location, size: Size): number {
 }
 
 export function writeBits(mem: SimMemory, loc: Location, size: Size, value: number): void {
-  checkWindow(loc, size);
   const periph = loc.area === 'P' || loc.area === 'PQ';
-  const b = mem.bytes(loc.area === 'P' ? 'PQ' : loc.area, loc.db, loc.bit >> 3, BYTES[size]);
+  // Tutti i controlli prima di scrivere: una scrittura fallita non scrive niente.
+  const b = tagged('write', () => {
+    checkWindow(loc, size);
+    return mem.bytes(loc.area === 'P' ? 'PQ' : loc.area, loc.db, loc.bit >> 3, BYTES[size]);
+  });
   store(b, loc.bit & 7, size, value);
   // ⚠️ L'accesso diretto alle uscite di periferia aggiorna anche la PIQ (Q), se l'indirizzo vi cade.
   if (periph && (loc.bit >> 3) + BYTES[size] <= mem.Q.length)

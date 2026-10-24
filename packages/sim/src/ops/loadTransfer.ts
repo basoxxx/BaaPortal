@@ -5,6 +5,8 @@ import type { ExecState, OpHandler } from '../executor';
 import { readBits, resolveOperand, writeBits } from '../operands';
 import { stwToWord, wordToStw } from '../registers';
 import { mcrOff } from './bitLogic';
+import { counterNumber, isCounter } from './counter';
+import { timerNumber } from './timer';
 
 /** Valore a 32 bit (big-endian) della costante AWL di un operando `constant`. */
 export function constantValue(op: Operand | undefined): number {
@@ -26,9 +28,18 @@ function memSize(op: Operand): 'B' | 'W' | 'D' {
 }
 
 /** Legge un operando di memoria (indirizzo assoluto o indiretto), a zero esteso. */
-export function readMem(st: ExecState, op: Operand | undefined): number {
+export function readMem(st: ExecState, op: Operand | undefined, formal?: { type: string }): number {
   if (!op) throw new SimError('MC7_NON_ESEGUIBILE', 'operando mancante');
-  if (op.kind === 'timerCounter') throw new SimError('NON_SIMULATA_2B', `${op.area}${op.number}`);
+  // Manuale AWL S7-300/400, «L T»: residuo binario 0–999, senza base.
+  if (
+    ((op.kind === 'timerCounter' || op.kind === 'indirect') && op.area === 'T') ||
+    (op.kind === 'local' && formal?.type === 'Timer')
+  )
+    return st.ctx.timers.value(timerNumber(st, op)).units;
+  // Manuale AWL S7-300/400, «L C»: valore binario 0–999.
+  if (isCounter(op, formal)) return st.ctx.counters.value(counterNumber(st, op));
+  if (op.kind === 'timerCounter')
+    throw new SimError('MC7_NON_ESEGUIBILE', `${op.area}${op.number}`);
   const loc = resolveOperand(op, st.regs, st.mem, st.frame);
   return readBits(st.mem, loc, memSize(op)) >>> 0;
 }
@@ -56,20 +67,20 @@ function special(st: ExecState, name: string): number {
   }
 }
 
-function loadValue(st: ExecState, op: Operand | undefined): number {
+function loadValue(st: ExecState, op: Operand | undefined, formal?: { type: string }): number {
   switch (op?.kind) {
     case 'constant':
       return constantValue(op);
     case 'special':
       return special(st, op.name);
     default:
-      return readMem(st, op);
+      return readMem(st, op, formal);
   }
 }
 
 /** Manuale AWL S7-300/400, «L»: ACCU1 passa in ACCU2, poi si carica; byte e parola a zero esteso. */
 const L: OpHandler = (st, stmt) => {
-  const v = loadValue(st, stmt.operand);
+  const v = loadValue(st, stmt.operand, stmt.formal);
   st.regs.accu2 = st.regs.accu1;
   st.regs.accu1 = v >>> 0;
 };
@@ -85,7 +96,8 @@ const T: OpHandler = (st, stmt) => {
   }
   if (!op || op.kind === 'special' || op.kind === 'constant')
     throw new SimError('MC7_NON_ESEGUIBILE', 'T: operando non valido');
-  if (op.kind === 'timerCounter') throw new SimError('NON_SIMULATA_2B', `${op.area}${op.number}`);
+  if (op.kind === 'timerCounter')
+    throw new SimError('MC7_NON_ESEGUIBILE', `${op.area}${op.number}`);
   // Solo le scritture in memoria seguono l'MCR (non T STW).
   const value = mcrOff(st) ? 0 : st.regs.accu1;
   const size = memSize(op);

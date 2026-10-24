@@ -21,7 +21,7 @@ export const DB_OPS: Record<string, OpHandler> = {
   // Manuale AWL S7-300/400, «OPN»: apre il DB o il DI; se non è caricato, errore di programmazione.
   OPN: (st, stmt) => {
     const { reg, n } = blockNumber(st, stmt);
-    if (!st.mem.dbs.has(n)) throw new SimError('DB_NON_CARICATO', `DB${n}`);
+    if (!st.mem.dbs.has(n)) throw new SimError('DB_NON_CARICATO', `DB${n}`, { faultReg: n });
     st.regs[reg] = n;
   },
   // Manuale AWL S7-300/400, «CDB»: scambia DB e DI.

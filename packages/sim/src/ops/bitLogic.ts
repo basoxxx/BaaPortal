@@ -2,6 +2,8 @@ import type { Operand } from '@baaportal/awl';
 import { SimError } from '../errors';
 import type { ExecState, OpHandler } from '../executor';
 import { readBits, resolveOperand, writeBits } from '../operands';
+import { counterNumber, endCounterOp, isCounter } from './counter';
+import { timerNumber } from './timer';
 
 /** Profondità dello stack di annidamento delle parentesi (S7-300: 7 livelli). */
 export const NEST_DEPTH = 7;
@@ -30,7 +32,7 @@ export function checkBit(st: ExecState, fn: ChainFn, v: boolean, sta: boolean): 
 }
 
 /** Valore di un operando a bit: bit di memoria o condizione di stato (`A ==0`, `A OV`, ...). */
-function bitValue(st: ExecState, op: Operand | undefined): boolean {
+function bitValue(st: ExecState, op: Operand | undefined, formal?: { type: string }): boolean {
   if (!op) throw new SimError('MC7_NON_ESEGUIBILE', 'operando mancante');
   const s = st.regs.stw;
   switch (op.kind) {
@@ -61,10 +63,14 @@ function bitValue(st: ExecState, op: Operand | undefined): boolean {
           throw new SimError('MC7_NON_ESEGUIBILE', `condizione ${op.condition}`);
       }
     case 'timerCounter':
-      throw new SimError('NON_SIMULATA_2B', `${op.area}${op.number}`);
-    case 'address':
     case 'indirect':
+      if (op.area === 'T') return st.ctx.timers.q(timerNumber(st, op));
+      if (op.area === 'C') return st.ctx.counters.q(counterNumber(st, op));
+      return readBits(st.mem, resolveOperand(op, st.regs, st.mem, st.frame), 'X') === 1;
+    case 'address':
     case 'local':
+      if (formal?.type === 'Timer') return st.ctx.timers.q(timerNumber(st, op));
+      if (formal?.type === 'Counter') return st.ctx.counters.q(counterNumber(st, op));
       return readBits(st.mem, resolveOperand(op, st.regs, st.mem, st.frame), 'X') === 1;
     default:
       throw new SimError('MC7_NON_ESEGUIBILE', `operando ${op.kind}`);
@@ -73,7 +79,8 @@ function bitValue(st: ExecState, op: Operand | undefined): boolean {
 
 function bitLocation(st: ExecState, op: Operand | undefined): ReturnType<typeof resolveOperand> {
   if (!op) throw new SimError('MC7_NON_ESEGUIBILE', 'operando mancante');
-  if (op.kind === 'timerCounter') throw new SimError('NON_SIMULATA_2B', `${op.area}${op.number}`);
+  if (op.kind === 'timerCounter')
+    throw new SimError('MC7_NON_ESEGUIBILE', `${op.area}${op.number}`);
   return resolveOperand(op, st.regs, st.mem, st.frame);
 }
 
@@ -84,7 +91,7 @@ export function mcrOff(st: ExecState): boolean {
 
 function interrogation(fn: ChainFn, negate: boolean): OpHandler {
   return (st, stmt) => {
-    const b = bitValue(st, stmt.operand);
+    const b = bitValue(st, stmt.operand, stmt.formal);
     checkBit(st, fn, negate ? !b : b, b);
   };
 }
@@ -147,9 +154,29 @@ function edge(rising: boolean): OpHandler {
   };
 }
 
+function isTimerOperand(op: Operand | undefined, formal?: { type: string }): boolean {
+  if (op?.kind === 'local') return formal?.type === 'Timer';
+  return (op?.kind === 'timerCounter' || op?.kind === 'indirect') && op.area === 'T';
+}
+
 function setReset(value: 0 | 1): OpHandler {
   return (st, stmt) => {
     const s = st.regs.stw;
+    if (isCounter(stmt.operand, stmt.formal)) {
+      // Manuale AWL S7-300/400, «S»/«R» su contatore: S carica ACCU1-L sul fronte, R azzera con RLO = 1.
+      const n = counterNumber(st, stmt.operand);
+      if (value === 1) st.ctx.counters.setOp(n, s.rlo, st.regs.accu1 & 0xffff);
+      else st.ctx.counters.resetOp(n, s.rlo);
+      endCounterOp(st);
+      return;
+    }
+    if (value === 0 && isTimerOperand(stmt.operand, stmt.formal)) {
+      // Manuale AWL S7-300/400, «R» su temporizzatore: con RLO = 1 azzera tempo e Q.
+      st.ctx.timers.resetOp(timerNumber(st, stmt.operand), s.rlo);
+      s.sta = s.rlo;
+      endChain(st);
+      return;
+    }
     const loc = bitLocation(st, stmt.operand);
     // Manuale AWL S7-300/400, «S»/«R»: agiscono solo con RLO = 1 (e fuori da una zona MCR spenta).
     if (s.rlo && !mcrOff(st)) writeBits(st.mem, loc, 'X', value);

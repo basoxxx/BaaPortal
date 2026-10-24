@@ -61,9 +61,8 @@ describe('L e T', () => {
     expect(r.mem.M[0]).toBe(0);
   });
 
-  it('L T / T C → NON_SIMULATA_2B', () => {
-    expect(errorOf(() => runAwl(prog('L T 3'))).code).toBe('NON_SIMULATA_2B');
-    expect(errorOf(() => runAwl(prog('L C 3'))).code).toBe('NON_SIMULATA_2B');
+  it('L C 3 legge il contatore (a riposo 0)', () => {
+    expect(runAwl(prog('L C 3')).regs.accu1).toBe(0);
   });
 
   it('L STW / T STW andata e ritorno; /FC non scritto', () => {

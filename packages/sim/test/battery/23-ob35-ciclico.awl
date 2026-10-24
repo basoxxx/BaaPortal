@@ -1,0 +1,22 @@
+// OB35 (interruzione di orologio, 100 ms nella CPU di prova): conta le proprie esecuzioni mentre l'OB1 gira
+// ogni 30 ms (il ciclo k a 30*k ms). Prima scadenza a 100 ms (servita al ciclo 4, 120 ms), seconda a 200 ms
+// (ciclo 7, 210 ms); fino a 270 ms non c'è la terza. L'OB35 non gira nel ciclo 0. L'intervallo che l'OB35
+// legge nelle sue informazioni di avvio (OB35_EXC_FREQ, LW 10) è 100 ms.
+// cicli: 10, passo: 30 ms
+// atteso-al-ciclo: 3: MW0=4, MW20=0
+// atteso-al-ciclo: 4: MW0=5, MW20=1
+// atteso-al-ciclo: 6: MW20=1
+// atteso-al-ciclo: 7: MW20=2
+// atteso: MW0=10, MW20=2, MW22=100
+//@ block OB 1
+	L MW 0;
+	L 1;
+	+I;
+	T MW 0;
+//@ block OB 35
+	L MW 20;
+	L 1;
+	+I;
+	T MW 20;
+	L LW 10;
+	T MW 22;

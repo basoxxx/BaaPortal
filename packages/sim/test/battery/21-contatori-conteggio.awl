@@ -1,0 +1,49 @@
+// Contatori S5 su più cicli: S carica sul fronte di salita, CU/CD contano sui fronti di salita,
+// R azzera a livello; limiti 0 e 999 (manuale AWL, «Operazioni di conteggio»).
+// C1 (PV 5): M0.2 = S, M0.0 = CU, M0.1 = CD, M0.3 = R. C2 (PV 998): CU e S come C1. C3: mai caricato, solo CD.
+// ciclo 0: S → C1=5     ciclo 1: CU sale → 6      ciclo 2: CU resta 1 → 6 (nessun fronte)
+// ciclo 3: CU=0 → 6     ciclo 4: CU sale → 7      ciclo 5: CD sale → 6
+// ciclo 6: CD resta 1 → 6     ciclo 7: R → 0 e Q=0
+// C2: 998 → 999 al ciclo 1 → resta 999 al ciclo 4 (limite superiore). C3: CD da 0 resta 0.
+// cicli: 8, passo: 10 ms
+// imposta: M0.2=1
+// imposta-al-ciclo: 1: M0.0=1
+// imposta-al-ciclo: 3: M0.0=0
+// imposta-al-ciclo: 4: M0.0=1
+// imposta-al-ciclo: 5: M0.1=1
+// imposta-al-ciclo: 7: M0.3=1
+// atteso-al-ciclo: 0: MW2=5, M1.0=1, MW4=998, MW6=0
+// atteso-al-ciclo: 1: MW2=6, MW4=999
+// atteso-al-ciclo: 2: MW2=6
+// atteso-al-ciclo: 3: MW2=6
+// atteso-al-ciclo: 4: MW2=7, MW4=999
+// atteso-al-ciclo: 5: MW2=6, MW6=0
+// atteso-al-ciclo: 6: MW2=6
+// atteso: MW2=0, M1.0=0
+//@ block OB 1
+	A M 0.2;
+	L C#5;
+	S C 1;
+	A M 0.0;
+	CU C 1;
+	A M 0.1;
+	CD C 1;
+	A M 0.3;
+	R C 1;
+	L C 1;
+	T MW 2;
+	A C 1;
+	= M 1.0;
+//@ network
+	A M 0.2;
+	L C#998;
+	S C 2;
+	A M 0.0;
+	CU C 2;
+	L C 2;
+	T MW 4;
+//@ network
+	A M 0.1;
+	CD C 3;
+	L C 3;
+	T MW 6;

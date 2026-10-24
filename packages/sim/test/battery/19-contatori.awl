@@ -1,0 +1,24 @@
+// Contatori S5: S, CU, CD, R, FR, L C, LC C, A C. Un solo ciclo: i fronti partono da RLO 0.
+// Esempi nello stile del manuale AWL («Operazioni di conteggio»).
+// atteso: MB0=1, MW2=5, MW4=16#0005
+//@ block OB 1
+	SET;
+	L C#5;
+	S C 1;
+	A C 1;
+	= M 0.0;
+	L C 1;
+	T MW 2;
+	LC C 1;
+	T MW 4;
+//@ network
+	SET;
+	CU C 2;
+	CD C 2;
+	CD C 2;
+	FR C 2;
+	SET;
+	R C 2;
+	CLR;
+	A C 2;
+	= M 0.2;

@@ -12,7 +12,7 @@ const ADDR_MASK = 0x7ffff;
  * `L` e `V` indicano i dati locali del blocco che contiene la chiamata. Puntatori senza area
  * (TIMER, COUNTER, BLOCK) non sono in memoria: `null`.
  */
-function pointerLocation(st: ExecState, p: Uint8Array): Location | null {
+export function pointerLocation(st: ExecState, p: Uint8Array): Location | null {
   const a = p[0]!;
   if (a < 0x80 || a > 0x87) return null;
   const bit = ((p[1]! << 16) | (p[2]! << 8) | p[3]!) & ADDR_MASK;
@@ -49,7 +49,11 @@ export function callBlock(
   pointers?: readonly Uint8Array[],
 ): void {
   const callee = st.ctx.program.get(kind, number);
-  if (!callee) throw new SimError('BLOCCO_NON_CARICATO', `${kind}${number}`);
+  if (!callee)
+    throw new SimError('BLOCCO_NON_CARICATO', `${kind}${number}`, {
+      missingBlock: kind,
+      faultReg: number,
+    });
   if (st.depth + 1 > MAX_BLOCK_STACK)
     throw new SimError('STACK_BLOCCHI_PIENO', `oltre ${MAX_BLOCK_STACK} blocchi annidati`);
   const callerSize = st.frame.lSize ?? st.block.localBytes;
@@ -61,7 +65,9 @@ export function callBlock(
     prevLBase: st.frame.lBase,
     lSize: callee.localBytes,
     prevLSize: callerSize,
-    ...(pointers ? { params: pointers.map((p) => pointerLocation(st, p)) } : {}),
+    ...(pointers
+      ? { params: pointers.map((p) => pointerLocation(st, p)), rawParams: pointers }
+      : {}),
   };
   const { db, di } = st.regs;
   execBlock(newExecState(st.ctx, callee, frame, st.depth + 1));

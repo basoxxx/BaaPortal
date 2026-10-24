@@ -1,5 +1,7 @@
 export * from './errors';
 export * from './memory';
+export * from './timers';
+export * from './counters';
 export * from './registers';
 export * from './operands';
 export * from './program';
@@ -8,5 +10,8 @@ export * from './ops';
 export * from './calls';
 export * from './diagnostics';
 export * from './obStartInfo';
+export * from './events';
 export * from './cpu';
 export * from './backend';
+export * from './system/params';
+export * from './system/registry';

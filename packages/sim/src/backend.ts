@@ -25,26 +25,6 @@ import type { DiagEntry } from './diagnostics';
 
 const BLOCK_TYPES: readonly BlockType[] = ['OB', 'DB', 'SDB', 'FC', 'SFC', 'FB', 'SFB'];
 
-/** Id evento sintetici (0x9000 + n) per i codici della diagnostica simulata: non sono id Siemens. */
-const EVENT_BASE = 0x9000;
-const CODE_ORDER: readonly DiagEntry['code'][] = [
-  'AVVIO',
-  'STOP_RICHIESTO',
-  'CANCELLAZIONE_TOTALE',
-  'AREA_LUNGHEZZA',
-  'DB_NON_CARICATO',
-  'DB_NON_APERTO',
-  'BLOCCO_NON_CARICATO',
-  'STACK_BLOCCHI_PIENO',
-  'STACK_ANNIDAMENTO_PIENO',
-  'STACK_L_PIENO',
-  'ISTRUZIONE_NON_S7300',
-  'MC7_NON_ESEGUIBILE',
-  'BCD_NON_VALIDO',
-  'TEMPO_CICLO_SUPERATO',
-  'NON_SIMULATA_2B',
-];
-
 function dateTimeOf(ms: number, fallback: S7DateTime): S7DateTime {
   if (!Number.isFinite(ms) || ms < 1e11) return fallback; // orologio non da calendario (test)
   const d = new Date(ms);
@@ -117,8 +97,8 @@ export function simBackend(cpu: SimCpu, o: { orderNumber?: string } = {}): CpuBa
       inputBytes: m.I.length,
       outputBytes: m.Q.length,
       mBytes: m.M.length,
-      timers: cpu.timers.length,
-      counters: cpu.counters.length,
+      timers: cpu.timers.count,
+      counters: cpu.counters.count,
     },
     faults: {},
     tsaps: [remoteTsap('pg', 0, 2), remoteTsap('op', 0, 2), remoteTsap('basic', 0, 2)],
@@ -171,7 +151,23 @@ export function simBackend(cpu: SimCpu, o: { orderNumber?: string } = {}): CpuBa
       case 'C': {
         const total = it.area === 'T' ? config.sizes.timers : config.sizes.counters;
         const n = it.size === 'TIMER' || it.size === 'COUNTER' ? it.count : Math.ceil(len / 2);
-        return it.start + n > total ? { rc: 0x05 } : { data: new Uint8Array(len) };
+        if (it.start + n > total) return { rc: 0x05 };
+        const data = new Uint8Array(len);
+        // ⚠️ Formato sul filo non verificato: per T, la parola BCD con la base (come `LC`), big-endian.
+        if (it.area === 'T')
+          for (let i = 0; i < n && 2 * i + 1 < len; i++) {
+            const w = cpu.timers.bcd(it.start + i);
+            data[2 * i] = w >> 8;
+            data[2 * i + 1] = w & 255;
+          }
+        // ⚠️ Per C, la parola BCD (come `LC C`), big-endian.
+        else
+          for (let i = 0; i < n && 2 * i + 1 < len; i++) {
+            const w = cpu.counters.bcd(it.start + i);
+            data[2 * i] = w >> 8;
+            data[2 * i + 1] = w & 255;
+          }
+        return { data };
       }
       default:
         // L e V non sono raggiungibili dall'esterno
@@ -182,7 +178,7 @@ export function simBackend(cpu: SimCpu, o: { orderNumber?: string } = {}): CpuBa
   function applyWrite(items: WriteItem[]): number[] {
     return items.map((it) => {
       const len = itemByteLength(it);
-      if (it.area === 'T' || it.area === 'C') return 0x05; // fino al piano 2B
+      if (it.area === 'T' || it.area === 'C') return 0x05; // scrittura di T e C non supportata
       const buf = bufferOf(it, true);
       if (!buf) return it.area === 'DB' || it.area === 'DI' ? 0x0a : 0x03;
       // stessa verifica di confini della lettura: se non si legge, non si scrive
@@ -214,9 +210,8 @@ export function simBackend(cpu: SimCpu, o: { orderNumber?: string } = {}): CpuBa
       const fallback = wallClock();
       return [...cpu.diagnostics].reverse().map((e: DiagEntry) => {
         const rec = new Uint8Array(20);
-        const index = CODE_ORDER.indexOf(e.code);
-        if (index < 0) throw new RangeError(`codice di diagnostica sconosciuto: ${e.code}`);
-        const id = EVENT_BASE + index;
+        // Id del manuale quando c'è (16#25xx, 16#29xx, 16#35xx…), altrimenti sintetico (⚠️).
+        const id = e.eventId;
         rec[0] = id >>> 8;
         rec[1] = id & 0xff;
         rec.set(encodeBcdDateTimeShort(dateTimeOf(e.time, fallback)), 12);

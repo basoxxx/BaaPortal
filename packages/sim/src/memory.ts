@@ -36,8 +36,11 @@ export class SimMemory {
   readonly I: Uint8Array;
   readonly Q: Uint8Array;
   readonly M: Uint8Array;
-  /** Stack dei dati locali, condiviso fra i blocchi in esecuzione. */
-  readonly L: Uint8Array;
+  /** Byte dello stack L di ogni classe di priorità (`localDataBytesPerClass`). */
+  readonly localBytes: number;
+  /** Stack L per classe di priorità (manuale delle CPU 31x): ogni classe ha il suo. */
+  private readonly lStacks = new Map<number, Uint8Array>();
+  private currentL: Uint8Array;
   /** Periferia: PI legge `physIn`, PQ scrive `physOut`. */
   readonly physIn: Uint8Array;
   readonly physOut: Uint8Array;
@@ -47,9 +50,33 @@ export class SimMemory {
     this.I = new Uint8Array(sizes.inputs);
     this.Q = new Uint8Array(sizes.outputs);
     this.M = new Uint8Array(sizes.flags);
-    this.L = new Uint8Array(sizes.localBytes);
+    this.localBytes = sizes.localBytes;
+    this.currentL = this.lStack(1);
     this.physIn = new Uint8Array(sizes.inputs);
     this.physOut = new Uint8Array(sizes.outputs);
+  }
+
+  /** Stack dei dati locali della classe di priorità in esecuzione, condiviso fra i suoi blocchi. */
+  get L(): Uint8Array {
+    return this.currentL;
+  }
+
+  /** Stack L della classe `prio` (creato alla prima richiesta). */
+  lStack(prio: number): Uint8Array {
+    let s = this.lStacks.get(prio);
+    if (!s) this.lStacks.set(prio, (s = new Uint8Array(this.localBytes)));
+    return s;
+  }
+
+  /** Rende `L` lo stack della classe `prio`; restituisce quello di prima, da ripassare a `restoreL`. */
+  selectL(prio: number): Uint8Array {
+    const prev = this.currentL;
+    this.currentL = this.lStack(prio);
+    return prev;
+  }
+
+  restoreL(prev: Uint8Array): void {
+    this.currentL = prev;
   }
 
   /**
@@ -82,15 +109,20 @@ export class SimMemory {
       case 'DB':
       case 'DI': {
         const block = db === null ? undefined : this.dbs.get(db);
-        if (!block) throw new SimError('DB_NON_CARICATO', `DB${db ?? '?'}`);
+        if (!block) throw new SimError('DB_NON_CARICATO', `DB${db ?? '?'}`, { faultReg: db ?? 0 });
         arr = block.data;
         break;
       }
       default:
-        throw new SimError('NON_SIMULATA_2B', `area ${area}`);
+        throw new SimError('MC7_NON_ESEGUIBILE', `area ${area}`);
     }
     if (!Number.isInteger(byteOffset) || byteOffset < 0 || byteOffset + length > arr.length)
-      throw new SimError('AREA_LUNGHEZZA', `${area} byte ${byteOffset} lunghezza ${length}`);
+      throw new SimError(
+        'AREA_LUNGHEZZA',
+        `${area} byte ${byteOffset} lunghezza ${length}`,
+        // Periferia oltre il campo di I/O della CPU: è l'evento di OB122, non di OB121.
+        area === 'PI' || area === 'PQ' ? { periphery: { byte: byteOffset, width: length } } : {},
+      );
     return arr.subarray(byteOffset, byteOffset + length);
   }
 }

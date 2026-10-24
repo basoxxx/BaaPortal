@@ -2,9 +2,15 @@ import { SimError } from '../errors';
 import { endBlock, type ExecState, type OpHandler } from '../executor';
 import { readBits, resolveOperand } from '../operands';
 import { callBlock } from '../calls';
+import { callSystem } from '../system/registry';
+import { COUNTER_OPS } from './counter';
+import { TIMER_OPS } from './timer';
 
 /** Chi e che cosa richiamare: operando a blocco, o numero letto da memoria (`UC FC [MW 4]`). */
-function callee(st: ExecState, stmt: Parameters<OpHandler>[1]): { kind: 'FC' | 'FB'; n: number } {
+function callee(
+  st: ExecState,
+  stmt: Parameters<OpHandler>[1],
+): { kind: 'FC' | 'FB' | 'SFC' | 'SFB'; n: number } {
   if (stmt.indirectBlock) {
     const loc = resolveOperand(stmt.indirectBlock.location, st.regs, st.mem, st.frame);
     return { kind: stmt.indirectBlock.block, n: readBits(st.mem, loc, 'W') };
@@ -12,9 +18,14 @@ function callee(st: ExecState, stmt: Parameters<OpHandler>[1]): { kind: 'FC' | '
   const op = stmt.operand;
   if (op?.kind !== 'block')
     throw new SimError('MC7_NON_ESEGUIBILE', `${stmt.id}: operando non valido`);
-  if (op.blockKind === 'FC' || op.blockKind === 'FB') return { kind: op.blockKind, n: op.number };
-  // SFC e SFB sono del piano 2B.
-  throw new SimError('NON_SIMULATA_2B', `${stmt.id} ${op.blockKind}${op.number}`);
+  if (
+    op.blockKind === 'FC' ||
+    op.blockKind === 'FB' ||
+    op.blockKind === 'SFC' ||
+    op.blockKind === 'SFB'
+  )
+    return { kind: op.blockKind, n: op.number };
+  throw new SimError('MC7_NON_ESEGUIBILE', `${stmt.id} ${op.blockKind}${op.number}`);
 }
 
 /**
@@ -31,7 +42,10 @@ function call(conditional: boolean): OpHandler {
     s.sta = true;
     s.fc = false;
     if (conditional) s.rlo = true;
-    if (go) callBlock(st, target.kind, target.n, stmt.pointers);
+    if (!go) return;
+    if (target.kind === 'SFC' || target.kind === 'SFB')
+      callSystem(st, target.kind, target.n, stmt.pointers);
+    else callBlock(st, target.kind, target.n, stmt.pointers);
   };
 }
 
@@ -49,11 +63,6 @@ const BEC: OpHandler = (st) => {
   return undefined;
 };
 
-/** Temporizzatori e contatori sono del piano 2B. */
-const later: OpHandler = (_st, stmt) => {
-  throw new SimError('NON_SIMULATA_2B', stmt.text);
-};
-
 export const CONTROL_OPS: Record<string, OpHandler> = {
   // Manuale AWL S7-300/400, controllo del programma: BLD e NOP non fanno niente, BE e BEU terminano il blocco.
   BLD: () => undefined,
@@ -69,13 +78,6 @@ export const CONTROL_OPS: Record<string, OpHandler> = {
   BEC,
   UC: call(false),
   CC: call(true),
-  SP: later,
-  SE: later,
-  SD: later,
-  SS: later,
-  SF: later,
-  FR: later,
-  LC: later,
-  CU: later,
-  CD: later,
+  ...TIMER_OPS,
+  ...COUNTER_OPS,
 };
