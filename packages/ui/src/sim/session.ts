@@ -36,6 +36,7 @@ export class SimSession {
     { resolve: (v: never) => void; reject: (e: Error) => void }
   >();
   private readonly listeners = new Set<(n: SimNotice) => void>();
+  private readonly failListeners = new Set<(e: Error) => void>();
   private disposed = false;
 
   private constructor(private readonly worker: SimWorkerLike) {
@@ -71,12 +72,19 @@ export class SimSession {
     return () => this.listeners.delete(cb);
   }
 
+  /** Avvisa se la sessione muore per un guasto del worker (non per `dispose`). */
+  onFail(cb: (e: Error) => void): () => void {
+    this.failListeners.add(cb);
+    return () => this.failListeners.delete(cb);
+  }
+
   /** Termina il worker (niente resta in esecuzione) e rifiuta le richieste pendenti. */
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     this.worker.terminate();
     this.listeners.clear();
+    this.failListeners.clear();
     this.failAll(new Error('simulazione terminata'));
   }
 
@@ -103,6 +111,9 @@ export class SimSession {
     this.worker.terminate();
     this.listeners.clear();
     this.failAll(e);
+    const fl = [...this.failListeners];
+    this.failListeners.clear();
+    for (const cb of fl) cb(e);
   }
 
   private failAll(e: Error): void {

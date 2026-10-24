@@ -12,6 +12,7 @@ import {
   type Project,
 } from '@baaportal/project';
 import type { BaaBridge } from '../bridge';
+import { shutdownSimulation } from '../sim/simController';
 import type { AppState } from '../state/store';
 
 export type CreateResult =
@@ -376,6 +377,7 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
 
   async function handleCloseRequest(): Promise<void> {
     if (!(await ensureCanDiscard())) return;
+    shutdownSimulation(store); // il worker del simulatore non deve restare in esecuzione
     try {
       await deps.beforeWindowClose?.();
     } catch {

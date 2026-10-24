@@ -43,7 +43,10 @@
   "status": {
     "compiling": "Compilazione in corso…",
     "cancel": "Interrompi",
-    "progress": "Avanzamento"
+    "progress": "Avanzamento",
+    "simulation": "Simulazione: {{mode}}",
+    "simulationStarting": "Simulazione in avvio…",
+    "simulationFailed": "Simulazione non disponibile"
   },
   "messages": {
     "replaced": "Sostituiti {{replaced}} testi, saltati {{skipped}}.",
@@ -70,6 +73,14 @@
     "actionFailed": "Operazione non riuscita: {{message}}",
     "compileInterrupted": "Compilazione interrotta: i blocchi già compilati restano compilati.",
     "compileFailed": "Compilazione non riuscita: {{message}}",
+    "simStarted": "Simulazione avviata per {{name}} (CPU in STOP).",
+    "simStopped": "Simulazione terminata.",
+    "simStartFailed": "Impossibile avviare la simulazione: {{message}}",
+    "simFailed": "La simulazione si è interrotta: {{message}}",
+    "simDownloadBlocked": "Caricamento annullato: la compilazione ha {{errors}} errori.",
+    "simDownloadFailed": "Caricamento nel simulatore non riuscito: {{message}}",
+    "simDownloaded": "Caricati {{count}} blocchi nel simulatore.",
+    "simModeFailed": "Cambio di modo della CPU non riuscito: {{message}}",
     "blockExported": "Blocco \"{{name}}\" esportato in {{path}}.",
     "blockExportFailed": "Impossibile esportare il blocco \"{{name}}\": {{message}}",
     "blocksImported": "Importazione blocchi: creati {{created}}, sostituiti {{replaced}}, aggiornati i metadati {{refreshed}}, saltati {{skipped}}.",
@@ -182,6 +193,12 @@
       "PROTETTO": "Blocco protetto: il testo non si può modificare.",
       "MC7_GREZZO": "Codice MC7 non decodificabile: il testo non si può modificare."
     }
+  },
+  "sim": {
+    "startCpuTitle": "Carica nel dispositivo",
+    "startCpuMessage": "Avviare la CPU?",
+    "yes": "Sì",
+    "no": "No"
   },
   "toolbar": {
     "search": "Ricerca"

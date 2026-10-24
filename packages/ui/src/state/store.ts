@@ -1,5 +1,7 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { Mc7Diagnostic, Project } from '@baaportal/project';
+import type { DiagEntry, SimMode } from '@baaportal/sim';
+import type { SimStats, SimWarning } from '../sim/protocol';
 import type { ImportSummary } from '../project/navigation/tagTableIo';
 import * as wa from './workArea';
 import type { FindRequest, FindUi, TagReveal } from '../search/findState';
@@ -113,6 +115,30 @@ export interface PanelState {
 export type PanelName = 'navigation' | 'details' | 'inspector' | 'taskCards';
 export type TaskCardId = 'instructions' | 'test' | 'tasks' | 'libraries';
 
+/** Simulatore: spento, in avvio (worker in creazione) o attivo sul dispositivo `deviceId`. */
+export interface SimUiState {
+  phase: 'off' | 'starting' | 'on';
+  deviceId: string | null;
+  /** Modo della CPU simulata dall'ultima notifica (STOP finché non arriva). */
+  mode: SimMode;
+  stats: SimStats | null;
+  diagnostics: DiagEntry[];
+  warnings: SimWarning[];
+  inputs: Uint8Array;
+  outputs: Uint8Array;
+}
+
+export const SIM_OFF: SimUiState = {
+  phase: 'off',
+  deviceId: null,
+  mode: 'STOP',
+  stats: null,
+  diagnostics: [],
+  warnings: [],
+  inputs: new Uint8Array(0),
+  outputs: new Uint8Array(0),
+};
+
 export interface AppState {
   view: View;
   portal: PortalId;
@@ -130,6 +156,9 @@ export interface AppState {
   reveal: SourceReveal | null;
   infoSubTab: InfoSubTab;
   compile: CompileState;
+  /** Stato del simulatore (la sessione vera sta in `sim/simController`). */
+  sim: SimUiState;
+  setSim(patch: Partial<SimUiState>): void;
   compileReveal: CompileReveal | null;
   status: { textKey: string; params?: Record<string, string> } | null;
   panels: Record<PanelName, PanelState>;
@@ -257,6 +286,8 @@ export function createAppStore(now: () => Date = () => new Date()): StoreApi<App
     setPortal: (portal) => set({ portal }),
     setStartAction: (startAction) => set({ startAction }),
     history: { past: [], future: [] },
+    sim: SIM_OFF,
+    setSim: (patch) => set((s) => ({ sim: { ...s.sim, ...patch } })),
     setDoc: (doc) => {
       if (doc) revisionCounter = doc.revision; // il prossimo edit prende revision + 1
       set((s) => ({

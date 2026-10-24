@@ -187,3 +187,14 @@ describe('statusBar', () => {
     T,
   );
 });
+
+describe('indicatore della simulazione', () => {
+  it('compare solo con la simulazione accesa e mostra il modo della CPU', async () => {
+    const app = await setup();
+    expect(screen.queryByTestId('sim-indicator')).toBeNull();
+    act(() => app.store.getState().setSim({ phase: 'on', deviceId: PLC, mode: 'STOP' }));
+    expect(screen.getByTestId('sim-indicator')).toHaveTextContent('Simulazione: STOP');
+    act(() => app.store.getState().setSim({ mode: 'RUN' }));
+    expect(screen.getByTestId('sim-indicator')).toHaveTextContent('Simulazione: RUN');
+  });
+});

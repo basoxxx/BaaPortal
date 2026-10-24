@@ -43,7 +43,10 @@
   "status": {
     "compiling": "Compiling…",
     "cancel": "Stop",
-    "progress": "Progress"
+    "progress": "Progress",
+    "simulation": "Simulation: {{mode}}",
+    "simulationStarting": "Starting simulation…",
+    "simulationFailed": "Simulation unavailable"
   },
   "messages": {
     "replaced": "Replaced {{replaced}} texts, skipped {{skipped}}.",
@@ -70,6 +73,14 @@
     "actionFailed": "The operation failed: {{message}}",
     "compileInterrupted": "Compilation stopped: the blocks already compiled stay compiled.",
     "compileFailed": "Compilation failed: {{message}}",
+    "simStarted": "Simulation started for {{name}} (CPU in STOP).",
+    "simStopped": "Simulation ended.",
+    "simStartFailed": "Could not start the simulation: {{message}}",
+    "simFailed": "The simulation stopped: {{message}}",
+    "simDownloadBlocked": "Download cancelled: the compilation has {{errors}} errors.",
+    "simDownloadFailed": "Download to the simulator failed: {{message}}",
+    "simDownloaded": "{{count}} blocks loaded into the simulator.",
+    "simModeFailed": "Changing the CPU mode failed: {{message}}",
     "blockExported": "Block \"{{name}}\" exported to {{path}}.",
     "blockExportFailed": "Cannot export block \"{{name}}\": {{message}}",
     "blocksImported": "Block import: created {{created}}, replaced {{replaced}}, metadata updated {{refreshed}}, skipped {{skipped}}.",
@@ -182,6 +193,12 @@
       "PROTETTO": "Protected block: the text cannot be edited.",
       "MC7_GREZZO": "Undecodable MC7 code: the text cannot be edited."
     }
+  },
+  "sim": {
+    "startCpuTitle": "Download to device",
+    "startCpuMessage": "Start the CPU?",
+    "yes": "Yes",
+    "no": "No"
   },
   "toolbar": {
     "search": "Search"

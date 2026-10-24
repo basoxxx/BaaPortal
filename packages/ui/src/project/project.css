@@ -316,6 +316,16 @@
   text-overflow: ellipsis;
 }
 
+/* Indicatore del simulatore: a destra, prima del testo nel DOM perché il float lo ammetta */
+.baa-status-sim {
+  float: right;
+  margin-left: 12px;
+  font-weight: 600;
+}
+.baa-status-sim[data-mode='RUN'] {
+  color: var(--baa-accent-strong);
+}
+
 /* Albero, tabelle, schede */
 .baa-tree {
   list-style: none;

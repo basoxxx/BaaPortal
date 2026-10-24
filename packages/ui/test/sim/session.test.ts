@@ -1,47 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { SimHost } from '../../src/sim/host';
-import { SimSession, type SimWorkerLike } from '../../src/sim/session';
-import type { SimNotice, SimWireMessage, SimWireRequest } from '../../src/sim/protocol';
-import { PROPS, ob1 } from './simFixtures';
-
-/** Worker finto: fa girare `SimHost` in memoria con l'orologio e i timer veri. */
-function fakeWorker() {
-  const w: SimWorkerLike & { terminated: boolean; sent: SimWireRequest[] } = {
-    terminated: false,
-    sent: [],
-    onmessage: null,
-    onerror: null,
-    onmessageerror: null,
-    postMessage(m: SimWireRequest) {
-      w.sent.push(m);
-      void host.handle(m.req).then(
-        (value) => reply({ type: 'response', id: m.id, ok: true, value }),
-        (e: unknown) =>
-          reply({
-            type: 'response',
-            id: m.id,
-            ok: false,
-            error: e instanceof Error ? e.message : String(e),
-          }),
-      );
-    },
-    terminate() {
-      w.terminated = true;
-    },
-  };
-  const reply = (data: SimWireMessage) => {
-    if (!w.terminated) queueMicrotask(() => w.onmessage?.({ data }));
-  };
-  const host = new SimHost({
-    post: (notice: SimNotice) => reply({ type: 'notice', notice }),
-    now: () => performance.now(),
-    schedule: (fn, ms) => {
-      const h = setTimeout(fn, ms);
-      return () => clearTimeout(h);
-    },
-  });
-  return w;
-}
+import { SimSession } from '../../src/sim/session';
+import type { SimNotice } from '../../src/sim/protocol';
+import { PROPS, fakeWorker, ob1 } from './simFixtures';
 
 describe('SimSession', () => {
   it('richieste e risposte numerate, notifiche, errori', async () => {
@@ -135,5 +95,32 @@ describe('SimSession', () => {
     w.onmessage?.({ data: { type: 'notice', notice: { kind: 'error', message: 'guasto' } } });
     await expect(p).rejects.toThrow(/guasto/);
     expect(w.terminated).toBe(true);
+  });
+});
+
+describe('SimSession.onFail', () => {
+  it('avvisa del guasto del worker ma non della dispose', async () => {
+    const w = fakeWorker();
+    const s = await SimSession.start({
+      cpuTypeId: 'cpu-315-2-pn-dp',
+      props: PROPS,
+      createWorker: () => w,
+    });
+    const failed = vi.fn();
+    s.onFail(failed);
+    w.onerror?.({ message: 'boom' });
+    expect(failed).toHaveBeenCalledTimes(1);
+    expect(failed.mock.calls[0]![0]).toHaveProperty('message', 'boom');
+
+    const w2 = fakeWorker();
+    const s2 = await SimSession.start({
+      cpuTypeId: 'cpu-315-2-pn-dp',
+      props: PROPS,
+      createWorker: () => w2,
+    });
+    const failed2 = vi.fn();
+    s2.onFail(failed2);
+    s2.dispose();
+    expect(failed2).not.toHaveBeenCalled();
   });
 });

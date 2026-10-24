@@ -7,8 +7,16 @@ export function StatusBar() {
   const { t } = useTranslation();
   const status = useAppStore((s) => s.status);
   const progress = useProgress();
+  const sim = useAppStore((s) => s.sim);
   return (
     <div data-testid="status-bar" className="baa-status-bar" role="status">
+      {sim.phase !== 'off' ? (
+        <span data-testid="sim-indicator" className="baa-status-sim" data-mode={sim.mode}>
+          {sim.phase === 'starting'
+            ? t('status.simulationStarting')
+            : t('status.simulation', { mode: sim.mode })}
+        </span>
+      ) : null}
       {progress ? (
         <span className="baa-status-progress">
           <span>{t(progress.labelKey)}</span>
