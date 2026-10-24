@@ -215,7 +215,6 @@ export class SimCpu {
 
   loadBlock(file: Uint8Array): void {
     const f = readBlockFile(file);
-    this.monitorGone(f.header.kind ?? '', f.header.number);
     if (f.header.kind === 'DB') {
       // Dati attuali = sezione MC7 del file; a questi si torna con la cancellazione totale.
       this.memory.dbs.set(f.header.number, {
@@ -226,6 +225,8 @@ export class SimCpu {
       return;
     }
     this.program.load(file);
+    // Solo a caricamento riuscito: un file respinto lascia il blocco (e l'osservazione) com'erano.
+    this.monitorGone(f.header.kind ?? '', f.header.number);
   }
 
   deleteBlock(kind: string, number: number): void {
@@ -310,6 +311,7 @@ export class SimCpu {
     if (this.monitor) {
       this.monitor.steps = [];
       this.monitor.seen.clear();
+      delete this.monitor.prio;
     }
     const ctx = this.newContext(start);
     let elapsedMs: number;
@@ -424,7 +426,7 @@ export class SimCpu {
     const block = this.program.get('OB', ob);
     if (!block) throw new SimError('BLOCCO_NON_CARICATO', `OB${ob}`, { missingBlock: 'OB' });
     // Registri propri: quelli del blocco interrotto restano nel suo contesto e si ritrovano al ritorno.
-    const sub: ExecContext = { ...parent, regs: newRegisters() };
+    const sub: ExecContext = { ...parent, regs: newRegisters(), prio };
     const prevL = this.memory.selectL(prio);
     this.running.push({ ob, prio });
     try {

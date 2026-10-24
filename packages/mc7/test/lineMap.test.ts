@@ -1,6 +1,6 @@
 import type { AwlBlockInfo, AwlContext } from '@baaportal/awl';
 import { describe, expect, it } from 'vitest';
-import { compileBlock, readBlockFile } from '../src';
+import { compileBlock, decodeBlock, readBlockFile, type LineMapEntry } from '../src';
 
 const IFACE = {
   input: [],
@@ -24,8 +24,9 @@ const ctx = {
   allBlocks: () => INFOS,
 } as unknown as AwlContext;
 
-function compile(networks: string[]) {
+function compile(networks: string[], codeMeta?: Parameters<typeof compileBlock>[0]['codeMeta']) {
   return compileBlock({
+    ...(codeMeta ? { codeMeta } : {}),
     kind: 'FC',
     number: 1,
     now: new Date(2026, 9, 20),
@@ -69,5 +70,45 @@ describe('tabella delle righe', () => {
     }
     // il resto è la coda del codice (BE), senza riga
     expect(f.mc7.length - pos).toBe(2);
+  });
+
+  /** Le voci coprono il codice senza buchi né sovrapposizioni, rete per rete come l'ADD. */
+  function expectTiling(r: ReturnType<typeof compile>, lines: LineMapEntry[]): void {
+    const f = readBlockFile(r.file!);
+    let pos = 0;
+    for (const l of lines) {
+      expect(l.offset).toBe(pos);
+      pos += l.length;
+    }
+    expect(pos).toBe(f.add.networks.reduce((a, n) => a + n, 0));
+    f.add.networks.forEach((n, k) => {
+      expect(lines.filter((l) => l.network === k).reduce((a, l) => a + l.length, 0)).toBe(n);
+    });
+  }
+
+  it('blocco importato (codeMeta) con una rete modificata: la mappa copre il codice', () => {
+    const first = compile([NET0, NET1]);
+    const d = decodeBlock(first.file!);
+    const nets = [...d.networks!];
+    nets[0] = `// modificata\n\n${nets[0]!}\n\tNOP 0;`;
+    const r = compile(nets, d.meta.code);
+    expect(r.diagnostics.filter((x) => x.severity === 'error')).toEqual([]);
+    const lines = r.lines!;
+    expectTiling(r, lines);
+    const count = (k: number) => nets[k]!.split('\n').length;
+    for (const l of lines) expect(l.line).toBeLessThan(count(l.network));
+    // l'istruzione aggiunta in coda alla rete 0 è sull'ultima riga
+    expect(lines.filter((l) => l.network === 0).at(-1)!.line).toBe(count(0) - 1);
+  });
+
+  it('salti J e JL tra reti: ogni salto ha la sua riga e la mappa copre il codice', () => {
+    const net0 = '\tL MB 0;\n\tJL lst;\n\tJU a;\n\tJU b;\nlst:\tJU a;';
+    const net1 = '// destinazioni\na:\tNOP 0;\nb:\tNOP 0;';
+    const r = compile([net0, net1]);
+    expect(r.diagnostics.filter((x) => x.severity === 'error')).toEqual([]);
+    const lines = r.lines!;
+    expectTiling(r, lines);
+    expect(lines.filter((l) => l.network === 0).map((l) => l.line)).toEqual([0, 1, 2, 3, 4]);
+    expect(lines.filter((l) => l.network === 1).map((l) => l.line)).toEqual([1, 2]);
   });
 });
