@@ -20,7 +20,15 @@
       "RESERVED": "Questo nome è riservato dal sistema operativo: scegline un altro.",
       "TRAILING_DOT_OR_SPACE": "Il nome non può terminare con un punto o uno spazio.",
       "EXISTS": "Esiste già un progetto con questo nome in questa cartella."
-    }
+    },
+    "baapz": {
+      "NON_ZIP": "Il file non è un archivio BaaPortal valido.",
+      "MANIFESTO_MANCANTE": "L'archivio non contiene il manifesto: non è un archivio BaaPortal.",
+      "VERSIONE_FUTURA": "L'archivio è stato creato con una versione più recente di BaaPortal. Aggiorna l'applicazione.",
+      "PROGETTO_MANCANTE": "L'archivio non contiene il file di progetto atteso.",
+      "PROGETTO_ILLEGGIBILE": "Il progetto contenuto nell'archivio è danneggiato."
+    },
+    "baapzFailed": "Impossibile ritirare l'archivio: {{message}} (codice {{code}}). Nessun file è stato scritto."
   },
   "confirm": {
     "unsaved": {
@@ -66,7 +74,8 @@
     "tagsImported": "Importazione variabili da \"{{name}}\": creati {{created}}, aggiornati {{updated}}, scartati {{skipped}}.",
     "tagsImportFailed": "Impossibile importare le variabili da \"{{name}}\": {{message}}",
     "tagsExported": "Tabella \"{{name}}\" esportata in \"{{path}}\".",
-    "tagsExportFailed": "Impossibile esportare la tabella \"{{name}}\": {{message}}"
+    "tagsExportFailed": "Impossibile esportare la tabella \"{{name}}\": {{message}}",
+    "archived": "Progetto \"{{name}}\" archiviato in \"{{path}}\"."
   },
   "commands": {
     "project.new": "Nuovo…",
@@ -850,6 +859,15 @@
       "RIGA_ILLEGGIBILE": "riga illeggibile",
       "VALORE_VUOTO": "valore vuoto per {{detail}}",
       "NOME_IN_ALTRA_TABELLA": "nome già usato nella tabella \"{{detail}}\""
+    }
+  },
+  "archive": {
+    "filter": "Archivio BaaPortal (*.baapz)",
+    "overwrite": {
+      "title": "File esistente",
+      "message": "Il file \"{{path}}\" esiste già. Vuoi sovrascriverlo?",
+      "yes": "Sovrascrivi",
+      "no": "Annulla"
     }
   }
 }

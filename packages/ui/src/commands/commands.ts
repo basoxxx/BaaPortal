@@ -151,8 +151,14 @@ const list: Command[] = [
     isEnabled: hasDoc,
     run: async ({ service }) => void (await service.saveAs()),
   }),
-  def('project.archive'),
-  def('project.retrieve'),
+  def('project.archive', {
+    isEnabled: hasDoc,
+    run: async ({ service }) => void (await service.archive()),
+  }),
+  def('project.retrieve', {
+    isEnabled: always,
+    run: async ({ service }) => void (await service.retrieve()),
+  }),
   def('project.print', { icon: 'print' }),
   def('project.printPreview'),
   def('project.exit', { isEnabled: always, run: ({ service }) => service.handleCloseRequest() }),

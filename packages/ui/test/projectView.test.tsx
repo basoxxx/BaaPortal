@@ -73,14 +73,18 @@ describe('vista progetto: struttura', () => {
 });
 
 describe('vista progetto: menu', () => {
-  it('menu Progetto: Salva attivo con progetto, Archivia disattivato', async () => {
+  it('menu Progetto: Salva e Archivia attivi con progetto, Stampa disattivato', async () => {
     const { user } = await renderApp({ view: 'project', withProject: true });
     await user.click(screen.getByRole('menuitem', { name: 'Progetto' }));
     expect(screen.getByRole('menuitem', { name: 'Salva' })).not.toHaveAttribute(
       'aria-disabled',
       'true',
     );
-    expect(screen.getByRole('menuitem', { name: 'Archivia…' })).toHaveAttribute(
+    expect(screen.getByRole('menuitem', { name: 'Archivia…' })).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.getByRole('menuitem', { name: 'Stampa…' })).toHaveAttribute(
       'aria-disabled',
       'true',
     );

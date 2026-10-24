@@ -2,10 +2,13 @@ import type { TFunction } from 'i18next';
 import type { StoreApi } from 'zustand/vanilla';
 import {
   BaapFormatError,
+  BaapzFormatError,
   createProject,
   readBaap,
+  readBaapz,
   validateProjectName,
   writeBaap,
+  writeBaapz,
   type Project,
 } from '@baaportal/project';
 import type { BaaBridge } from '../bridge';
@@ -26,6 +29,10 @@ export interface ProjectService {
   open(path: string): Promise<boolean>;
   save(): Promise<boolean>;
   saveAs(): Promise<boolean>;
+  /** Archivia: scrive il progetto aperto in un .baapz. */
+  archive(): Promise<boolean>;
+  /** Ritira archivio: estrae il .baap di un .baapz in una cartella e lo apre. */
+  retrieve(): Promise<boolean>;
   close(): Promise<boolean>;
   /** Apre un progetto recuperato come documento modificato (revisione 1, mai salvata). */
   openRecovered(project: Project, filePath: string): Promise<boolean>;
@@ -146,6 +153,10 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
 
   async function open(path: string): Promise<boolean> {
     if (!(await ensureCanDiscard())) return false;
+    return openUnchecked(path);
+  }
+
+  async function openUnchecked(path: string): Promise<boolean> {
     let project: Project;
     try {
       project = readBaap(await bridge.readFile(path));
@@ -223,6 +234,88 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
     return path ? enqueueSave(() => saveTo(path)) : false;
   }
 
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const stampOf = (d: Date) =>
+    `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}`;
+
+  async function archive(): Promise<boolean> {
+    if (!store.getState().doc) return false;
+    if (!(await ensureCanDiscard())) return false;
+    const doc = store.getState().doc;
+    if (!doc) return false;
+    const name = doc.project.meta.name;
+    const when = now();
+    const filters = [{ name: t('archive.filter'), extensions: ['baapz'] }];
+    let path: string | null;
+    try {
+      path = await bridge.showSaveFileDialog({
+        defaultName: `${name}_${stampOf(when)}.baapz`,
+        filters,
+      });
+    } catch (e) {
+      await showError(t('errors.read', { path: '', code: errorCode(e) }));
+      return false;
+    }
+    if (!path) return false;
+    if (!/\.baapz$/i.test(path)) path = `${path}.baapz`;
+    try {
+      const bytes = writeBaapz(doc.project, {
+        appVersion,
+        projectFileName: `${name}.baap`,
+        now: when,
+      });
+      await bridge.writeFileAtomic(path, bytes);
+    } catch (e) {
+      await showError(t('errors.write', { path, code: errorCode(e) }));
+      return false;
+    }
+    store
+      .getState()
+      .pushMessage({ severity: 'info', textKey: 'messages.archived', params: { name, path } });
+    return true;
+  }
+
+  async function retrieve(): Promise<boolean> {
+    flush();
+    const filters = [{ name: t('archive.filter'), extensions: ['baapz'] }];
+    const archivePath = (await bridge.showOpenFileDialog({ filters }))[0];
+    if (!archivePath) return false;
+    let manifest: ReturnType<typeof readBaapz>['manifest'];
+    let baap: Uint8Array;
+    try {
+      ({ manifest, baap } = readBaapz(await bridge.readFile(archivePath)));
+    } catch (e) {
+      if (e instanceof BaapzFormatError) {
+        const code = e.detail ? `${e.code}: ${e.detail}` : e.code;
+        await showError(t('errors.baapzFailed', { message: t(`errors.baapz.${e.code}`), code }));
+      } else {
+        await showError(t('errors.read', { path: archivePath, code: errorCode(e) }));
+      }
+      return false;
+    }
+    const dir = await bridge.showSelectFolderDialog();
+    if (!dir) return false;
+    // Il nome viene da un file non fidato: readBaapz ha già garantito che sia un nome semplice.
+    const target = joinPath(dir, manifest.projectFileName);
+    if (await bridge.fileExists(target)) {
+      const yes = await bridge.askQuestion({
+        title: t('archive.overwrite.title'),
+        message: t('archive.overwrite.message', { path: target }),
+        yes: t('archive.overwrite.yes'),
+        no: t('archive.overwrite.no'),
+      });
+      if (!yes) return false;
+    }
+    if (!(await ensureCanDiscard())) return false;
+    try {
+      await bridge.writeFileAtomic(target, baap);
+    } catch (e) {
+      await showError(t('errors.write', { path: target, code: errorCode(e) }));
+      return false;
+    }
+    return openUnchecked(target);
+  }
+
   async function close(): Promise<boolean> {
     if (!store.getState().doc) return true;
     if (!(await ensureCanDiscard())) return false;
@@ -268,6 +361,8 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
     open,
     save,
     saveAs,
+    archive,
+    retrieve,
     close,
     openRecovered,
     handleCloseRequest,

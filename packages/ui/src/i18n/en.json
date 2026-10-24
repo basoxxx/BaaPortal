@@ -20,7 +20,15 @@
       "RESERVED": "This name is reserved by the operating system: choose another one.",
       "TRAILING_DOT_OR_SPACE": "The name cannot end with a dot or a space.",
       "EXISTS": "A project with this name already exists in this folder."
-    }
+    },
+    "baapz": {
+      "NON_ZIP": "The file is not a valid BaaPortal archive.",
+      "MANIFESTO_MANCANTE": "The archive has no manifest: it is not a BaaPortal archive.",
+      "VERSIONE_FUTURA": "The archive was created with a newer version of BaaPortal. Update the application.",
+      "PROGETTO_MANCANTE": "The archive does not contain the expected project file.",
+      "PROGETTO_ILLEGGIBILE": "The project inside the archive is damaged."
+    },
+    "baapzFailed": "Cannot retrieve the archive: {{message}} (code {{code}}). No file was written."
   },
   "confirm": {
     "unsaved": {
@@ -66,7 +74,8 @@
     "tagsImported": "Tag import from \"{{name}}\": created {{created}}, updated {{updated}}, skipped {{skipped}}.",
     "tagsImportFailed": "Cannot import tags from \"{{name}}\": {{message}}",
     "tagsExported": "Table \"{{name}}\" exported to \"{{path}}\".",
-    "tagsExportFailed": "Cannot export table \"{{name}}\": {{message}}"
+    "tagsExportFailed": "Cannot export table \"{{name}}\": {{message}}",
+    "archived": "Project \"{{name}}\" archived to \"{{path}}\"."
   },
   "commands": {
     "project.new": "New…",
@@ -850,6 +859,15 @@
       "RIGA_ILLEGGIBILE": "unreadable row",
       "VALORE_VUOTO": "empty value for {{detail}}",
       "NOME_IN_ALTRA_TABELLA": "name already used in table \"{{detail}}\""
+    }
+  },
+  "archive": {
+    "filter": "BaaPortal archive (*.baapz)",
+    "overwrite": {
+      "title": "File exists",
+      "message": "The file \"{{path}}\" already exists. Do you want to overwrite it?",
+      "yes": "Overwrite",
+      "no": "Cancel"
     }
   }
 }
