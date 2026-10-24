@@ -21,7 +21,8 @@ Tutte le aree sono **big-endian**. Le dimensioni vengono dal catalogo della CPU 
 | L      | stack dei dati locali, un solo array condiviso fra i blocchi (finestra per blocco, §3)                          |
 | V      | dati locali del chiamante: stesso array di L, offset calcolato dalla finestra del chiamante                     |
 | DB, DI | blocchi dati; si leggono con il registro DB o DI aperto (`OPN`), oppure con il numero esplicito (`DB5.DBX 0.0`) |
-| T, C   | riservate (2048 elementi a 16 bit ciascuna); le istruzioni arrivano con il piano 2B                             |
+| T      | temporizzatori S5 (numero da `limits.timers` del catalogo): SP, SE, SD, SS, SF, FR, R, L, LC, A/O/X             |
+| C      | riservata (2048 elementi a 16 bit); le istruzioni arrivano con il piano 2B                                      |
 
 **⚠️ PQ → Q**: una scrittura diretta in PQ (o in `P` da puntatore) scrive gli stessi byte anche in Q, se l'indirizzo vi cade, così l'uscita non si perde alla copia di Q in `physOut` a fine ciclo (la S7-300 aggiorna la PIQ negli accessi diretti alle uscite; non verificato su una CPU).
 

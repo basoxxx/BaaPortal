@@ -1,3 +1,4 @@
+import { findCpu } from '@baaportal/catalog';
 import { readBlockFile } from '@baaportal/mc7';
 import { diagFromError, type DiagEntry } from './diagnostics';
 import { SimError } from './errors';
@@ -6,6 +7,7 @@ import { Program } from './program';
 import { SimMemory, memorySizesFor } from './memory';
 import { ob100StartInfo, ob1StartInfo } from './obStartInfo';
 import { newRegisters } from './registers';
+import { TimerBank } from './timers';
 
 export type SimMode = 'STOP' | 'STARTUP' | 'RUN';
 
@@ -38,8 +40,9 @@ export interface CycleResult {
   elapsedMs: number;
 }
 
-/** Aree T e C riservate (le istruzioni arrivano nel piano 2B): un valore a 16 bit per elemento. */
-const TIMER_COUNT = 2048;
+/** Numero di temporizzatori se la CPU non è nel catalogo (CPU 315-2 PN/DP). */
+const DEFAULT_TIMER_COUNT = 256;
+/** Area C riservata (le istruzioni arrivano nel Task 2): un valore a 16 bit per elemento. */
 const COUNTER_COUNT = 2048;
 
 /** Voci di diagnostica conservate (le più vecchie si perdono). */
@@ -51,8 +54,8 @@ const CLOCK_PERIODS_MS = [100, 200, 400, 500, 800, 1000, 1600, 2000];
 export class SimCpu {
   readonly memory: SimMemory;
   readonly program = new Program();
-  /** Temporizzatori e contatori: solo strutture riservate, usate da avvio e cancellazione totale. */
-  readonly timers = new Uint16Array(TIMER_COUNT);
+  /** Temporizzatori S5 (numero dal catalogo) e contatori (ancora solo riservati). */
+  readonly timers: TimerBank;
   readonly counters = new Uint16Array(COUNTER_COUNT);
 
   private readonly props: SimCpuProps;
@@ -67,6 +70,9 @@ export class SimCpu {
     this.props = o.props;
     this.now = o.now ?? (() => Date.now());
     this.memory = new SimMemory(memorySizesFor(o.cpuTypeId));
+    this.timers = new TimerBank(findCpu(o.cpuTypeId)?.limits.timers ?? DEFAULT_TIMER_COUNT, () =>
+      this.now(),
+    );
   }
 
   get mode(): SimMode {
@@ -145,7 +151,7 @@ export class SimCpu {
     m.Q.fill(0);
     m.M.fill(0);
     m.physOut.fill(0);
-    this.timers.fill(0);
+    this.timers.reset(0);
     this.counters.fill(0);
     for (const db of m.dbs.values()) db.data.set(db.initial);
     this.st = { last: 0, min: 0, max: 0, cycles: 0 };
@@ -213,6 +219,7 @@ export class SimCpu {
       regs: newRegisters(),
       program: this.program,
       now: this.now,
+      timers: this.timers,
       maxCycleMs: this.props.maxCycleMs,
       cycleStart,
       onTick: () => {
@@ -232,7 +239,7 @@ export class SimCpu {
     m.I.fill(0);
     m.Q.fill(0);
     m.M.fill(0, Math.max(0, mBytes));
-    this.timers.fill(0, Math.max(0, timers));
+    this.timers.reset(timers);
     this.counters.fill(0, Math.max(0, counters));
   }
 

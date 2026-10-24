@@ -1,5 +1,6 @@
 export * from './errors';
 export * from './memory';
+export * from './timers';
 export * from './registers';
 export * from './operands';
 export * from './program';

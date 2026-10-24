@@ -115,7 +115,7 @@ describe('richiami di FC', () => {
     expect(errorOf(() => runProgram(p)).code).toBe('NON_SIMULATA_2B');
   });
 
-  it('UC SFB e temporizzatori → NON_SIMULATA_2B', () => {
+  it('UC SFB e contatori → NON_SIMULATA_2B', () => {
     const p = new Program();
     const put = (text: string) => {
       const r = encodeCode([text]);
@@ -127,7 +127,7 @@ describe('richiami di FC', () => {
         networkStarts: [0],
       } as LoadedBlock);
     };
-    for (const t of ['\tUC SFB 4;', '\tA M 0.0;\n\tL S5T#1S;\n\tSP T 1;'] as const) {
+    for (const t of ['\tUC SFB 4;', '\tA M 0.0;\n\tL S5T#1S;\n\tCU C 1;'] as const) {
       put(t);
       expect(errorOf(() => runProgram(p)).code).toBe('NON_SIMULATA_2B');
     }

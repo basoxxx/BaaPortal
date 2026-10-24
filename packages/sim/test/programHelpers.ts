@@ -3,6 +3,7 @@ import type { AwlBlockInfo, AwlContext } from '@baaportal/awl';
 import {
   Program,
   SimMemory,
+  TimerBank,
   memorySizesFor,
   newRegisters,
   runBlock,
@@ -178,6 +179,7 @@ export function runProgram(
     regs,
     program,
     now: () => 0,
+    timers: new TimerBank(256, () => 0),
     maxCycleMs: 150,
     cycleStart: 0,
   };

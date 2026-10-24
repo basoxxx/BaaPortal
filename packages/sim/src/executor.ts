@@ -5,6 +5,7 @@ import type { FrameView } from './operands';
 import { OPS } from './ops';
 import type { LoadedBlock, Program } from './program';
 import { stwToWord, type Registers } from './registers';
+import type { TimerBank } from './timers';
 
 export interface TraceStep {
   block: { kind: string; number: number };
@@ -20,6 +21,8 @@ export interface ExecContext {
   regs: Registers;
   program: Program;
   now(): number;
+  /** Temporizzatori S5 della CPU. */
+  timers: TimerBank;
   maxCycleMs: number;
   cycleStart: number;
   trace?: (t: TraceStep) => void;

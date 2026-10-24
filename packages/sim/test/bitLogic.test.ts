@@ -237,9 +237,10 @@ describe('logica combinatoria a bit', () => {
     expect(inactive.mem.M[1]).toBe(0b01);
   });
 
-  it('A T1 → NON_SIMULATA_2B', () => {
-    // Manuale AWL, «A» su temporizzatore: rinviato al piano 2B.
-    expect(() => runAwl(['\tA %T1;'])).toThrowError(/NON_SIMULATA_2B/);
+  it('A T1 legge il bit di stato del temporizzatore; A C1 → NON_SIMULATA_2B', () => {
+    // Manuale AWL, «A» su temporizzatore: Q di T1 (a riposo 0); i contatori sono del Task 2.
+    expect(runAwl(['\tA %T1;']).regs.stw.rlo).toBe(false);
+    expect(() => runAwl(['\tA %C1;'])).toThrowError(/NON_SIMULATA_2B/);
   });
 
   it('BLD e NOP non fanno niente; BE termina', () => {

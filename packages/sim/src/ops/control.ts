@@ -2,6 +2,7 @@ import { SimError } from '../errors';
 import { endBlock, type ExecState, type OpHandler } from '../executor';
 import { readBits, resolveOperand } from '../operands';
 import { callBlock } from '../calls';
+import { TIMER_OPS } from './timer';
 
 /** Chi e che cosa richiamare: operando a blocco, o numero letto da memoria (`UC FC [MW 4]`). */
 function callee(st: ExecState, stmt: Parameters<OpHandler>[1]): { kind: 'FC' | 'FB'; n: number } {
@@ -49,7 +50,7 @@ const BEC: OpHandler = (st) => {
   return undefined;
 };
 
-/** Temporizzatori e contatori sono del piano 2B. */
+/** I contatori sono del Task 2 del piano 2B. */
 const later: OpHandler = (_st, stmt) => {
   throw new SimError('NON_SIMULATA_2B', stmt.text);
 };
@@ -69,13 +70,7 @@ export const CONTROL_OPS: Record<string, OpHandler> = {
   BEC,
   UC: call(false),
   CC: call(true),
-  SP: later,
-  SE: later,
-  SD: later,
-  SS: later,
-  SF: later,
-  FR: later,
-  LC: later,
+  ...TIMER_OPS,
   CU: later,
   CD: later,
 };

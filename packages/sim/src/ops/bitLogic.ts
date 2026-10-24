@@ -2,6 +2,7 @@ import type { Operand } from '@baaportal/awl';
 import { SimError } from '../errors';
 import type { ExecState, OpHandler } from '../executor';
 import { readBits, resolveOperand, writeBits } from '../operands';
+import { timerNumber } from './timer';
 
 /** Profondità dello stack di annidamento delle parentesi (S7-300: 7 livelli). */
 export const NEST_DEPTH = 7;
@@ -61,9 +62,11 @@ function bitValue(st: ExecState, op: Operand | undefined): boolean {
           throw new SimError('MC7_NON_ESEGUIBILE', `condizione ${op.condition}`);
       }
     case 'timerCounter':
-      throw new SimError('NON_SIMULATA_2B', `${op.area}${op.number}`);
-    case 'address':
     case 'indirect':
+      if (op.area === 'T') return st.ctx.timers.q(timerNumber(st, op));
+      if (op.area === 'C') throw new SimError('NON_SIMULATA_2B', 'contatore');
+      return readBits(st.mem, resolveOperand(op, st.regs, st.mem, st.frame), 'X') === 1;
+    case 'address':
     case 'local':
       return readBits(st.mem, resolveOperand(op, st.regs, st.mem, st.frame), 'X') === 1;
     default:
@@ -147,9 +150,20 @@ function edge(rising: boolean): OpHandler {
   };
 }
 
+function isTimerOperand(op: Operand | undefined): boolean {
+  return (op?.kind === 'timerCounter' || op?.kind === 'indirect') && op.area === 'T';
+}
+
 function setReset(value: 0 | 1): OpHandler {
   return (st, stmt) => {
     const s = st.regs.stw;
+    if (value === 0 && isTimerOperand(stmt.operand)) {
+      // Manuale AWL S7-300/400, «R» su temporizzatore: con RLO = 1 azzera tempo e Q.
+      st.ctx.timers.resetOp(timerNumber(st, stmt.operand), s.rlo);
+      s.sta = s.rlo;
+      endChain(st);
+      return;
+    }
     const loc = bitLocation(st, stmt.operand);
     // Manuale AWL S7-300/400, «S»/«R»: agiscono solo con RLO = 1 (e fuori da una zona MCR spenta).
     if (s.rlo && !mcrOff(st)) writeBits(st.mem, loc, 'X', value);

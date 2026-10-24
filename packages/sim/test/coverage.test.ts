@@ -5,23 +5,12 @@ import { batteryFiles, runBatteryFile } from './batteryRunner';
 
 /**
  * Istruzioni che la batteria non esegue perché il piano 2B le aggiunge:
- *  - temporizzatori e contatori: SP, SE, SD, SS, SF, FR, LC (categoria `timer`), CU, CD (categoria `counter`);
+ *  - contatori: CU, CD (categoria `counter`), del Task 2;
  *  - CALL, che nell'MC7 non esiste come istruzione (la chiamata compilata è UC o CC);
  *  - le chiamate di SFC e SFB (UC/CC con operando SFC o SFB), che sono operandi e non id a sé.
  * Ogni altro id di INSTRUCTIONS deve essere eseguito da almeno un programma della batteria.
  */
-export const DEFERRED_2B: readonly string[] = [
-  'SP',
-  'SE',
-  'SD',
-  'SS',
-  'SF',
-  'FR',
-  'LC',
-  'CU',
-  'CD',
-  'CALL',
-];
+export const DEFERRED_2B: readonly string[] = ['CU', 'CD', 'CALL'];
 
 describe('copertura delle istruzioni da parte della batteria', () => {
   const executedByBattery = async (): Promise<Set<string>> => {
@@ -39,12 +28,12 @@ describe('copertura delle istruzioni da parte della batteria', () => {
     expect([...new Set(missing)]).toEqual([]);
   });
 
-  it('DEFERRED_2B contiene solo id esistenti, tutti i timer e i contatori, e nient’altro', () => {
+  it('DEFERRED_2B contiene solo id esistenti, tutti i contatori, e nient’altro', () => {
     const ids = new Set(INSTRUCTIONS.map((i) => i.id));
     for (const id of DEFERRED_2B) expect(ids.has(id), id).toBe(true);
-    const later = INSTRUCTIONS.filter((i) => i.category === 'timer' || i.category === 'counter');
+    const later = INSTRUCTIONS.filter((i) => i.category === 'counter');
     for (const i of later) expect(DEFERRED_2B, i.id).toContain(i.id);
-    // Fuori da timer e contatori resta solo CALL.
+    // Fuori dai contatori resta solo CALL.
     const extra = DEFERRED_2B.filter((id) => !later.some((i) => i.id === id));
     expect(extra).toEqual(['CALL']);
   });

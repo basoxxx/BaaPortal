@@ -5,6 +5,7 @@ import type { ExecState, OpHandler } from '../executor';
 import { readBits, resolveOperand, writeBits } from '../operands';
 import { stwToWord, wordToStw } from '../registers';
 import { mcrOff } from './bitLogic';
+import { timerNumber } from './timer';
 
 /** Valore a 32 bit (big-endian) della costante AWL di un operando `constant`. */
 export function constantValue(op: Operand | undefined): number {
@@ -28,6 +29,9 @@ function memSize(op: Operand): 'B' | 'W' | 'D' {
 /** Legge un operando di memoria (indirizzo assoluto o indiretto), a zero esteso. */
 export function readMem(st: ExecState, op: Operand | undefined): number {
   if (!op) throw new SimError('MC7_NON_ESEGUIBILE', 'operando mancante');
+  // Manuale AWL S7-300/400, «L T»: residuo binario 0–999, senza base.
+  if ((op.kind === 'timerCounter' || op.kind === 'indirect') && op.area === 'T')
+    return st.ctx.timers.value(timerNumber(st, op)).units;
   if (op.kind === 'timerCounter') throw new SimError('NON_SIMULATA_2B', `${op.area}${op.number}`);
   const loc = resolveOperand(op, st.regs, st.mem, st.frame);
   return readBits(st.mem, loc, memSize(op)) >>> 0;

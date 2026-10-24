@@ -117,7 +117,7 @@ export function simBackend(cpu: SimCpu, o: { orderNumber?: string } = {}): CpuBa
       inputBytes: m.I.length,
       outputBytes: m.Q.length,
       mBytes: m.M.length,
-      timers: cpu.timers.length,
+      timers: cpu.timers.count,
       counters: cpu.counters.length,
     },
     faults: {},

@@ -162,13 +162,13 @@ describe('SimCpu', () => {
     const { cpu } = makeCpu([ob1('\tNOP 0;')]);
     cpu.run();
     cpu.memory.M.fill(0xff, 0, 20);
-    cpu.timers.fill(9, 0, 4);
+    for (const n of [0, 1, 2, 3]) cpu.timers.startOp(n, 'SS', true, 1);
     cpu.counters.fill(9, 0, 4);
     cpu.stop();
     cpu.run();
     expect(cpu.memory.M[15]).toBe(0xff);
     expect(cpu.memory.M[16]).toBe(0);
-    expect(Array.from(cpu.timers.subarray(0, 4))).toEqual([9, 9, 0, 0]);
+    expect([0, 1, 2, 3].map((n) => cpu.timers.get(n).edge)).toEqual([true, true, false, false]);
     expect(Array.from(cpu.counters.subarray(0, 4))).toEqual([9, 9, 0, 0]);
   });
 
@@ -193,12 +193,13 @@ describe('SimCpu', () => {
     cpu.memory.M[3] = 1;
     cpu.memory.I[3] = 1;
     cpu.memory.Q[3] = 1;
-    cpu.timers[0] = 4;
+    cpu.timers.startOp(0, 'SS', true, 1);
     cpu.counters[0] = 4;
     cpu.memoryReset();
     expect(Array.from(cpu.memory.dbs.get(5)!.data.subarray(0, 4))).toEqual([0, 5, 0, 7]);
     expect(cpu.memory.M[3] + cpu.memory.I[3] + cpu.memory.Q[3]).toBe(0);
-    expect(cpu.timers[0]! + cpu.counters[0]!).toBe(0);
+    expect(cpu.timers.get(0).edge).toBe(false);
+    expect(cpu.counters[0]).toBe(0);
     expect(cpu.program.get('OB', 1)).toBeDefined();
     expect(cpu.diagnostics.at(-1)?.code).toBe('CANCELLAZIONE_TOTALE');
   });
