@@ -250,7 +250,7 @@ const list: Command[] = [
   }),
   def('online.download', {
     icon: 'download',
-    isEnabled: (s) => s.sim.phase === 'on' && !getProgress(),
+    isEnabled: (s) => s.sim.phase === 'on' && !s.sim.downloading && !getProgress(),
     run: ({ store, bridge }) => simControllerFor(store).download({ store, bridge }),
   }),
   def('online.upload', { icon: 'upload' }),

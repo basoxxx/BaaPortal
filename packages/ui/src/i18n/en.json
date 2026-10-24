@@ -78,6 +78,7 @@
     "simStartFailed": "Could not start the simulation: {{message}}",
     "simFailed": "The simulation stopped: {{message}}",
     "simDownloadBlocked": "Download cancelled: the compilation has {{errors}} errors.",
+    "simDownloadStale": "Download cancelled: {{count}} blocks are not compiled from their current content.",
     "simDownloadFailed": "Download to the simulator failed: {{message}}",
     "simDownloaded": "{{count}} blocks loaded into the simulator.",
     "simModeFailed": "Changing the CPU mode failed: {{message}}",

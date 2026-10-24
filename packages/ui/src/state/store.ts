@@ -126,6 +126,8 @@ export interface SimUiState {
   warnings: SimWarning[];
   inputs: Uint8Array;
   outputs: Uint8Array;
+  /** Un «Carica nel dispositivo» è in corso su questa sessione. */
+  downloading: boolean;
 }
 
 export const SIM_OFF: SimUiState = {
@@ -137,6 +139,7 @@ export const SIM_OFF: SimUiState = {
   warnings: [],
   inputs: new Uint8Array(0),
   outputs: new Uint8Array(0),
+  downloading: false,
 };
 
 export interface AppState {

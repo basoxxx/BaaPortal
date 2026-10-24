@@ -75,7 +75,8 @@ export function contextHashOf(dev: PlcDevice): string {
 }
 
 /** Chiave di compilazione: contenuto del blocco (reti, interfaccia, intestazione) e contesto. */
-const hashOf = (b: Block, context: string) => `${sourceHashOf(b)}:${interfaceHashOf(b)}:${context}`;
+export const hashOf = (b: Block, context: string) =>
+  `${sourceHashOf(b)}:${interfaceHashOf(b)}:${context}`;
 
 function showCompileTab(store: StoreApi<AppState>): void {
   const s = store.getState();

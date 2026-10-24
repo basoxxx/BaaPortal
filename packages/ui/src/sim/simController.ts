@@ -3,7 +3,7 @@ import { findDevice, type PlcDevice } from '@baaportal/project';
 import type { SimCpuProps } from '@baaportal/sim';
 import type { BaaBridge } from '../bridge';
 import { t } from '../i18n';
-import { compileProgram } from '../project/compile/compileActions';
+import { compileProgram, contextHashOf, hashOf } from '../project/compile/compileActions';
 import { targetPlcId } from '../project/navigation/treeIds';
 import { getProgress } from '../project/progress';
 import { SIM_OFF, type AppState } from '../state/store';
@@ -42,7 +42,6 @@ export class SimController {
   private session: SimSession | undefined;
   /** Cresce a ogni spegnimento: un avvio ancora in corso, se è cambiato, si scarta. */
   private generation = 0;
-  private busy = false;
 
   constructor(
     private readonly store: StoreApi<AppState>,
@@ -102,6 +101,8 @@ export class SimController {
       session.dispose(); // spenta mentre partiva
       return;
     }
+    // L'API non permette di registrare gli ascoltatori prima di `start`: le notifiche del primo
+    // istante (solo STOP) si perdono, la successiva arriva entro 200 ms.
     this.session = session;
     session.onNotice((n) => {
       if (n.kind !== 'status' || this.session !== session) return;
@@ -148,12 +149,13 @@ export class SimController {
   async download(ctx: SimCtx): Promise<void> {
     const s = this.session;
     const sim = this.store.getState().sim;
-    if (!s || sim.phase !== 'on' || !sim.deviceId || this.busy || getProgress()) return;
-    this.busy = true;
+    if (!s || sim.phase !== 'on' || !sim.deviceId || sim.downloading || getProgress()) return;
+    this.store.getState().setSim({ downloading: true });
     try {
       await this.downloadTo(s, sim.deviceId, ctx);
     } finally {
-      this.busy = false;
+      // se nel frattempo la sessione è finita, lo stato è già stato azzerato
+      if (this.session === s) this.store.getState().setSim({ downloading: false });
     }
   }
 
@@ -165,16 +167,22 @@ export class SimController {
     const { compile, doc } = store.getState();
     const dev = doc && findDevice(doc.project, deviceId);
     if (!dev || !compile.summary) return; // compilazione non eseguita o fallita (già segnalata)
+    if (compile.interrupted) return;
+    if (compile.summary.errors > 0) {
+      this.push('error', 'simDownloadBlocked', { errors: String(compile.summary.errors) });
+      return;
+    }
+    // Si carica solo ciò che è stato compilato con il contenuto e il contesto di adesso: una
+    // compilazione interrotta da un'eccezione lascia blocchi vecchi, che non vanno caricati.
+    const context = contextHashOf(dev);
     const items = dev.blocks.map((b) => ({
       kind: b.kind,
       number: b.number,
-      file: compile.hashes[b.id] !== undefined ? compile.files[b.id] : undefined,
+      file: compile.hashes[b.id] === hashOf(b, context) ? compile.files[b.id] : undefined,
     }));
-    const missing = items.filter((i) => !i.file).length;
-    const errors = Math.max(compile.summary.errors, missing);
-    if (compile.interrupted || errors > 0) {
-      if (!compile.interrupted)
-        this.push('error', 'simDownloadBlocked', { errors: String(errors) });
+    const stale = items.filter((i) => !i.file).length;
+    if (stale > 0) {
+      this.push('error', 'simDownloadStale', { count: String(stale) });
       return;
     }
     const files = downloadOrder(items).map((i) => i.file!);
@@ -185,6 +193,7 @@ export class SimController {
       if (this.session === s) this.push('error', 'simDownloadFailed', { message: errorText(e) });
       return;
     }
+    if (this.session !== s) return;
     this.push('info', 'simDownloaded', { count: String(files.length) });
     if (!wasStopped) return;
     let yes: boolean;

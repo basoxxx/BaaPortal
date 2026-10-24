@@ -78,6 +78,7 @@
     "simStartFailed": "Impossibile avviare la simulazione: {{message}}",
     "simFailed": "La simulazione si è interrotta: {{message}}",
     "simDownloadBlocked": "Caricamento annullato: la compilazione ha {{errors}} errori.",
+    "simDownloadStale": "Caricamento annullato: {{count}} blocchi non sono compilati con il contenuto attuale.",
     "simDownloadFailed": "Caricamento nel simulatore non riuscito: {{message}}",
     "simDownloaded": "Caricati {{count}} blocchi nel simulatore.",
     "simModeFailed": "Cambio di modo della CPU non riuscito: {{message}}",

@@ -8,6 +8,7 @@ import {
   findDevice,
   type PlcDevice,
 } from '@baaportal/project';
+import { applyImport, blockToMc7File, planImport } from '@baaportal/project';
 import { commands, type CommandContext } from '../../src/commands/commands';
 import { simControllerFor } from '../../src/sim/simController';
 import { SimSession } from '../../src/sim/session';
@@ -17,9 +18,24 @@ import { initI18n } from '../../src/i18n';
 import { FakeBridge } from '../fakeBridge';
 import { fakeWorker } from './simFixtures';
 
+// Gancio sul compilatore di ogni blocco: i test vi inseriscono eccezioni o eventi a metà compilazione.
+const hook = vi.hoisted(() => ({ onBlock: (n: number): void => void n, n: 0 }));
+vi.mock('@baaportal/project', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@baaportal/project')>();
+  return {
+    ...real,
+    blockToMc7File: (...a: Parameters<typeof real.blockToMc7File>) => {
+      hook.onBlock(++hook.n);
+      return real.blockToMc7File(...a);
+    },
+  };
+});
+
 const DEV = 'dev1';
 
-function setup(opts: { badFc?: boolean } = {}) {
+function setup(opts: { badFc?: boolean; gate?: Promise<void> } = {}) {
+  hook.n = 0;
+  hook.onBlock = () => undefined;
   const store = createAppStore();
   const project = createProject({ name: 'P', author: '', comment: '' }, new Date());
   let n = 0;
@@ -44,22 +60,24 @@ function setup(opts: { badFc?: boolean } = {}) {
     savedRevision: 0,
   });
   const workers: ReturnType<typeof fakeWorker>[] = [];
-  simControllerFor(store, {
-    start: (o) =>
-      SimSession.start({
+  const controller = simControllerFor(store, {
+    start: async (o) => {
+      await opts.gate;
+      return SimSession.start({
         ...o,
         createWorker: () => {
           const w = fakeWorker();
           workers.push(w);
           return w;
         },
-      }),
+      });
+    },
   });
   const bridge = new FakeBridge();
   const ctx: CommandContext = { store, bridge, service: {} as never };
   const ops = (): SimWireRequest['req']['op'][] =>
     workers.flatMap((w) => w.sent.map((m) => m.req.op));
-  return { store, bridge, ctx, workers, ops };
+  return { store, bridge, ctx, workers, ops, controller };
 }
 
 const on = async (s: ReturnType<typeof setup>) => {
@@ -196,5 +214,185 @@ describe('comandi online sul simulatore', () => {
     s.workers[0]!.onerror?.({ message: 'boom' });
     expect(s.store.getState().sim.phase).toBe('off');
     expect(s.store.getState().messages.at(-1)!.textKey).toBe('messages.simFailed');
+  });
+
+  it('compilatore che lancia a metà: non si carica nulla e si dice perché', async () => {
+    await initI18n('it');
+    const s = setup();
+    await on(s);
+    hook.onBlock = (n) => {
+      if (n === 2) throw new Error('compilatore guasto');
+    };
+    await commands['online.download'].run(s.ctx);
+    expect(s.ops()).toEqual(['start']);
+    expect(s.bridge.questions).toHaveLength(0);
+    expect(s.store.getState().messages.at(-1)!.textKey).toBe('messages.simDownloadStale');
+    expect(s.store.getState().sim.downloading).toBe(false);
+  });
+
+  it('un blocco compilato prima e poi modificato non si carica con il file vecchio', async () => {
+    await initI18n('it');
+    const s = setup();
+    await on(s);
+    await commands['online.download'].run(s.ctx);
+    const ob = findDevice(s.store.getState().doc!.project, DEV)!.blocks.find(
+      (b) => b.kind === 'FC',
+    )!;
+    s.store.getState().edit('history.test', (p) => {
+      const b = findDevice(p, DEV)!.blocks.find((x) => x.id === ob.id);
+      if (b && b.kind === 'FC') b.networks[0]!.source = 'A %I0.1\n= %Q0.1';
+    });
+    hook.n = 0;
+    hook.onBlock = (n) => {
+      if (n === 1) throw new Error('compilatore guasto');
+    };
+    const before = s.ops().filter((o) => o === 'download').length;
+    await commands['online.download'].run(s.ctx);
+    expect(s.ops().filter((o) => o === 'download')).toHaveLength(before);
+    expect(s.store.getState().messages.at(-1)!.textKey).toBe('messages.compileFailed');
+  });
+
+  it('Simulazione spenta mentre sta partendo: il worker nato dopo è terminato', async () => {
+    await initI18n('it');
+    let open!: () => void;
+    const s = setup({ gate: new Promise<void>((r) => (open = r)) });
+    const starting = commands['online.simulation'].run(s.ctx);
+    expect(s.store.getState().sim.phase).toBe('starting');
+    await commands['online.simulation'].run(s.ctx); // spegne
+    expect(s.store.getState().sim.phase).toBe('off');
+    open();
+    await starting;
+    expect(s.store.getState().sim.phase).toBe('off');
+    expect(s.workers.every((w) => w.terminated)).toBe(true);
+  });
+
+  it('spenta durante la compilazione: nessun caricamento, nessun messaggio', async () => {
+    await initI18n('it');
+    const s = setup();
+    await on(s);
+    const n0 = s.store.getState().messages.length;
+    hook.onBlock = (n) => {
+      if (n === 1) s.controller.shutdown();
+    };
+    await commands['online.download'].run(s.ctx);
+    expect(s.ops()).toEqual(['start']);
+    expect(s.bridge.questions).toHaveLength(0);
+    expect(s.store.getState().sim.phase).toBe('off');
+    expect(
+      s.store
+        .getState()
+        .messages.slice(n0)
+        .map((m) => m.textKey),
+    ).not.toContain('messages.simDownloaded');
+  });
+
+  it('spenta durante la richiesta di download: niente messaggio, niente domanda', async () => {
+    await initI18n('it');
+    const s = setup();
+    await on(s);
+    const w = s.workers[0]!;
+    const post = w.postMessage.bind(w);
+    w.postMessage = (m) => {
+      if (m.req.op === 'download') s.controller.shutdown();
+      post(m);
+    };
+    const n0 = s.store.getState().messages.length;
+    await commands['online.download'].run(s.ctx);
+    expect(s.bridge.questions).toHaveLength(0);
+    expect(
+      s.store
+        .getState()
+        .messages.slice(n0)
+        .map((m) => m.textKey),
+    ).toEqual([]);
+  });
+
+  it('spenta durante la domanda «Avviare la CPU?»: la CPU non viene avviata', async () => {
+    await initI18n('it');
+    const s = setup();
+    await on(s);
+    s.bridge.askQuestion = async (q) => {
+      s.bridge.questions.push(q);
+      s.controller.shutdown();
+      return true;
+    };
+    const n0 = s.store.getState().messages.length;
+    await commands['online.download'].run(s.ctx);
+    expect(s.ops()).not.toContain('mode');
+    expect(
+      s.store
+        .getState()
+        .messages.slice(n0)
+        .map((m) => m.textKey),
+    ).toEqual(['messages.simDownloaded']);
+    expect(s.store.getState().sim.phase).toBe('off');
+  });
+
+  it('doppio clic su Carica: un solo caricamento, il comando è disabilitato mentre dura', async () => {
+    await initI18n('it');
+    const s = setup();
+    await on(s);
+    let during: boolean | undefined;
+    hook.onBlock = (n) => {
+      if (n === 1) during = commands['online.download'].isEnabled(s.store.getState());
+    };
+    const a = commands['online.download'].run(s.ctx);
+    const b = commands['online.download'].run(s.ctx);
+    await Promise.all([a, b]);
+    expect(s.ops().filter((o) => o === 'download')).toHaveLength(1);
+    expect(during).toBe(false);
+    expect(commands['online.download'].isEnabled(s.store.getState())).toBe(true);
+  });
+
+  it('cambio di progetto a metà caricamento: nessuna scrittura nello stato del nuovo progetto', async () => {
+    await initI18n('it');
+    const s = setup();
+    await on(s);
+    hook.onBlock = (n) => {
+      if (n === 1)
+        s.store.getState().setDoc({
+          project: createProject({ name: 'Altro', author: '', comment: '' }, new Date()),
+          filePath: '/a.baap',
+          dirty: false,
+          revision: 0,
+          savedRevision: 0,
+        });
+    };
+    const n0 = s.store.getState().messages.length;
+    await commands['online.download'].run(s.ctx);
+    const st = s.store.getState();
+    expect(s.ops()).toEqual(['start']);
+    expect(st.sim.phase).toBe('off');
+    expect(st.compile.hashes).toEqual({});
+    expect(st.compile.files).toEqual({});
+    expect(st.messages.slice(n0).map((m) => m.textKey)).toEqual([]);
+  });
+
+  it('un blocco importato e non modificato si carica con i suoi byte originali', async () => {
+    await initI18n('it');
+    const s = setup();
+    const cpu = findCpu('cpu-315-2-pn-dp')!;
+    const other = createPlcDevice({
+      cpu,
+      orderNumber: '6ES7 315-2EH14-0AB0',
+      firmware: 'V3.3',
+      name: 'PLC_X',
+      texts: { defaultTagTable: 'Tabella' },
+    });
+    const src = createCodeBlock({ kind: 'FC', number: 9, name: 'Importato', language: 'AWL' });
+    src.networks[0]!.source = 'A %I0.3\n= %Q0.3';
+    other.blocks.push(src);
+    const blk = blockToMc7File(src, other, cpu, new Date('2026-10-20T10:00:00Z')).file!;
+    s.store.getState().edit('history.importBlocks', (p) => {
+      const d = findDevice(p, DEV)!;
+      applyImport(d, planImport(d, [blk]));
+    });
+    await on(s);
+    await commands['online.download'].run(s.ctx);
+    const dl = s.workers[0]!.sent.find((m) => m.req.op === 'download')!.req;
+    if (dl.op !== 'download') throw new Error('atteso download');
+    expect(dl.files.some((f) => f.length === blk.length && f.every((v, i) => v === blk[i]))).toBe(
+      true,
+    );
   });
 });
