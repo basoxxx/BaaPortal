@@ -14,3 +14,11 @@ export type {
   KitSummary,
   KitStartResult,
 } from './bridge';
+export type {
+  PlcAccess,
+  PlcIdentity,
+  PlcMode,
+  PlcEvent,
+  PlcConnectResult,
+  PlcStatus,
+} from './online/plcTypes';

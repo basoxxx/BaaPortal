@@ -17,6 +17,7 @@ import { isTrustedFrame, type FrameLike, type TrustOptions } from './trust';
 import { deleteRecovery, listRecovery, readRecovery, writeRecovery } from './recoveryStore';
 import { parseOpenOptions, parseSaveOptions } from './fileDialogOptions';
 import { registerKit } from './kit';
+import { registerPlc } from './plc/plcIpc';
 import { addRecent, removeRecent, type Platform, type StoredRecent } from './recentProjects';
 
 const platform = process.platform as Platform;
@@ -182,6 +183,7 @@ export function registerIpc(
   );
 
   registerKit(handle);
+  registerPlc(handle);
 
   // Valori solo per i test e2e: come BAA_USER_DATA, mai onorati nelle build pacchettizzate.
   handle('app:test-overrides', () => {

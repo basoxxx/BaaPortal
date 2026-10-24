@@ -1,3 +1,5 @@
+import type { PlcAccess, PlcConnectResult, PlcEvent, PlcStatus } from './online/plcTypes';
+
 export interface RecentEntry {
   path: string;
   name: string;
@@ -109,5 +111,10 @@ export interface BaaBridge {
   /** Riepilogo dell'ultima raccolta finita e non ancora salvata (dal processo principale), o null. */
   kitUnsavedSummary(): Promise<KitSummary | null>;
   onKitProgress(cb: (p: KitProgress) => void): () => void;
+  // Collegamento online a una CPU reale, sempre in sola lettura: la rete la usa solo il processo principale.
+  plcConnect(access: PlcAccess): Promise<PlcConnectResult>;
+  plcDisconnect(): Promise<void>;
+  plcStatus(): Promise<PlcStatus>;
+  onPlcEvent(cb: (e: PlcEvent) => void): () => void;
   testOverrides(): Promise<{ recoveryIntervalMs?: number }>; // sempre {} nelle build pacchettizzate
 }
