@@ -94,7 +94,7 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
   - Gli editor nelle finestre staccate non vengono osservati.
   - Il tasto esadecimale/decimale non viene salvato e torna esadecimale a ogni simulazione.
 - **Nessun FORCE.** Il pannello I/O simula gli ingressi fisici e non forza valori; il forzamento è della tappa 7.
-- **Blocchi cancellati.** «Carica nel dispositivo» cancella dalla CPU simulata i blocchi (compresi i DB) non più nel progetto; un blocco cancellato che era in osservazione smette di essere osservato.
+- **Blocchi cancellati.** «Carica nel dispositivo» cancella dalla CPU simulata i blocchi (compresi i DB) non più nel progetto; un blocco cancellato che era in osservazione smette di essere osservato. Anche i DB creati dal programma con SFC 22 (CREAT_DB) vengono cancellati da un nuovo caricamento.
 - **Byte aggiunti a mano nel pannello I/O** («+ byte») durano solo la sessione di simulazione e non sono salvati nel progetto.
 - **Tabelle di controllo.**
   - La scrittura di T e C non è supportata (lo stato si legge).
