@@ -47,6 +47,7 @@
     "saved": "Project \"{{name}}\" saved.",
     "recentMissing": "The project \"{{name}}\" was not found: it was removed from the list.",
     "standardTableLocked": "The default tag table cannot be deleted.",
+    "referenceCopyOnly": "The reference project is read-only: objects can only be copied into the project.",
     "pasteNoNumber": "No free number: {{count}} objects were not pasted.",
     "recoveryWriteFailed": "The automatic recovery copy could not be written: unsaved changes may be lost if the application closes abnormally.",
     "recovered": "Changes to \"{{name}}\" recovered.",
@@ -84,6 +85,7 @@
     "project.close": "Close",
     "project.save": "Save",
     "project.saveAs": "Save as…",
+    "project.openReference": "Open reference project…",
     "project.archive": "Archive…",
     "project.retrieve": "Retrieve archived project…",
     "project.print": "Print…",
@@ -454,6 +456,10 @@
       "allTags": "PLC tags",
       "source": "External sources"
     }
+  },
+  "reference": {
+    "copyIntoProject": "Copy into project",
+    "close": "Close reference {{name}}"
   },
   "objects": {
     "deleteTitle": "Delete",

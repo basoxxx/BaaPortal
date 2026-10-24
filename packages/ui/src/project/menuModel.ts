@@ -19,6 +19,8 @@ export const MENUS: MenuDef[] = [
       'project.save',
       'project.saveAs',
       'sep',
+      'project.openReference',
+      'sep',
       'project.archive',
       'project.retrieve',
       'sep',

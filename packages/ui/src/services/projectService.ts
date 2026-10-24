@@ -70,6 +70,25 @@ export function joinPath(dir: string, file: string): string {
   return dir.endsWith(sep) ? dir + file : dir + sep + file;
 }
 
+/** Legge e valida un .baap dal disco (via bridge); in caso di errore, il messaggio già tradotto. */
+export async function readProjectFile(
+  bridge: BaaBridge,
+  path: string,
+  t: TFunction,
+): Promise<{ ok: true; project: Project } | { ok: false; message: string }> {
+  try {
+    return { ok: true, project: readBaap(await bridge.readFile(path)) };
+  } catch (e) {
+    return {
+      ok: false,
+      message:
+        e instanceof BaapFormatError
+          ? t(`errors.baap.${e.code}`)
+          : t('errors.read', { path, code: errorCode(e) }),
+    };
+  }
+}
+
 export function createProjectService(deps: ProjectServiceDeps): ProjectService {
   const { store, bridge, t, appVersion } = deps;
   const now = deps.now ?? (() => new Date());
@@ -157,17 +176,12 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
   }
 
   async function openUnchecked(path: string): Promise<boolean> {
-    let project: Project;
-    try {
-      project = readBaap(await bridge.readFile(path));
-    } catch (e) {
-      const message =
-        e instanceof BaapFormatError
-          ? t(`errors.baap.${e.code}`)
-          : t('errors.read', { path, code: errorCode(e) });
-      await showError(message);
+    const read = await readProjectFile(bridge, path, t);
+    if (!read.ok) {
+      await showError(read.message);
       return false;
     }
+    const project = read.project;
     store
       .getState()
       .setDoc({ project, filePath: path, dirty: false, revision: 0, savedRevision: 0 });

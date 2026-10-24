@@ -4,6 +4,7 @@ import type { IconName } from '../icons';
 import type { ProjectService } from '../services/projectService';
 import type { AppState, EditAction, PanelName } from '../state/store';
 import { compileProgram } from '../project/compile/compileActions';
+import { openReference } from '../project/reference/referenceStore';
 import { targetPlcId } from '../project/navigation/treeIds';
 
 export type CommandId =
@@ -12,6 +13,7 @@ export type CommandId =
   | 'project.close'
   | 'project.save'
   | 'project.saveAs'
+  | 'project.openReference'
   | 'project.archive'
   | 'project.retrieve'
   | 'project.print'
@@ -150,6 +152,15 @@ const list: Command[] = [
     shortcut: 'Mod+Shift+S',
     isEnabled: hasDoc,
     run: async ({ service }) => void (await service.saveAs()),
+  }),
+  def('project.openReference', {
+    isEnabled: always,
+    run: async ({ store, bridge }) => {
+      const path = await bridge.showOpenProjectDialog();
+      if (!path) return;
+      await openReference(path, bridge);
+      store.getState().setReferenceProjectsOpen(true);
+    },
   }),
   def('project.archive', {
     isEnabled: hasDoc,

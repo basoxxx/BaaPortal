@@ -47,6 +47,7 @@
     "saved": "Progetto \"{{name}}\" salvato.",
     "recentMissing": "Il progetto \"{{name}}\" non è stato trovato: è stato tolto dall'elenco.",
     "standardTableLocked": "La Tabella delle variabili standard non può essere eliminata.",
+    "referenceCopyOnly": "Il progetto di riferimento è in sola lettura: gli oggetti si possono solo copiare nel progetto.",
     "pasteNoNumber": "Nessun numero libero: {{count}} oggetti non sono stati incollati.",
     "recoveryWriteFailed": "Impossibile scrivere la copia di recupero automatico: le modifiche non salvate potrebbero andare perse in caso di chiusura anomala.",
     "recovered": "Modifiche di \"{{name}}\" recuperate.",
@@ -84,6 +85,7 @@
     "project.close": "Chiudi",
     "project.save": "Salva",
     "project.saveAs": "Salva con nome…",
+    "project.openReference": "Apri progetto di riferimento…",
     "project.archive": "Archivia…",
     "project.retrieve": "Ritira archivio…",
     "project.print": "Stampa…",
@@ -454,6 +456,10 @@
       "allTags": "Variabili PLC",
       "source": "Sorgenti esterne"
     }
+  },
+  "reference": {
+    "copyIntoProject": "Copia nel progetto",
+    "close": "Chiudi il riferimento {{name}}"
   },
   "objects": {
     "deleteTitle": "Elimina",
