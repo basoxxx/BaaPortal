@@ -169,15 +169,62 @@ describe('PlcService contro il PLC di prova (CPU simulata su 127.0.0.1)', () => 
 });
 
 describe('PlcService, casi di rete', () => {
-  it('host irraggiungibile → messaggio leggibile', async () => {
-    const service = new PlcService({ connectTimeoutMs: 300 });
-    const r = await service.connect(new FakeOwner(), {
-      host: '192.0.2.10',
-      rack: 0,
-      slot: 2,
-      connectionType: 'PG',
+  const ACCESS: PlcAccess = { host: '192.0.2.10', rack: 0, slot: 2, connectionType: 'PG' };
+
+  it.each(['CONNECT_TIMEOUT', 'CONNECT_REFUSED'] as const)(
+    'host irraggiungibile (%s) → messaggio leggibile',
+    async (code) => {
+      const service = new PlcService({
+        connect: (async () => {
+          throw new S7Error(code, 'prova');
+        }) as PlcConnectFn,
+      });
+      const r = await service.connect(new FakeOwner(), ACCESS);
+      expect(r).toEqual({ ok: false, error: 'Nessuna risposta da 192.0.2.10:102' });
+    },
+  );
+
+  describe('corse di connect', () => {
+    const setup = async () => {
+      let resolve!: (c: unknown) => void;
+      const close = vi.fn(async () => undefined);
+      const fake = {
+        closed: false,
+        close,
+        identity: async () => ({ orderNumber: 'X' }),
+        mode: async () => 'RUN' as const,
+        protection: async () => ({}),
+      };
+      const service = new PlcService({
+        connect: (() => new Promise((r) => (resolve = r))) as unknown as PlcConnectFn,
+      });
+      const owner = new FakeOwner();
+      const pending = service.connect(owner, ACCESS);
+      await new Promise((r) => setTimeout(r, 0)); // il connect è partito ed è in attesa
+      return { service, owner, pending, close, finish: () => resolve(fake) };
+    };
+    const expectCancelled = async (t: Awaited<ReturnType<typeof setup>>) => {
+      t.finish();
+      expect(await t.pending).toEqual({ ok: false, error: 'Collegamento annullato' });
+      expect(t.close).toHaveBeenCalled();
+      expect(t.service.status(t.owner).connected).toBe(false);
+    };
+
+    it('disconnect durante il connect lo annulla', async () => {
+      const t = await setup();
+      await t.service.disconnect(t.owner);
+      await expectCancelled(t);
     });
-    expect(r).toEqual({ ok: false, error: 'Nessuna risposta da 192.0.2.10:102' });
+    it('finestra distrutta durante il connect lo annulla', async () => {
+      const t = await setup();
+      t.owner.destroy();
+      await expectCancelled(t);
+    });
+    it('closeAll durante il connect lo annulla', async () => {
+      const t = await setup();
+      await t.service.closeAll();
+      await expectCancelled(t);
+    });
   });
 
   describe('CPU che non risponde', () => {

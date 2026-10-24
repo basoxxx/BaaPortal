@@ -74,7 +74,9 @@ function connectMessage(err: unknown, access: PlcAccess): string {
 export class PlcService {
   private readonly links = new Map<PlcOwner, Link>();
   /** Per finestra: numero dell'ultimo connect, per scartare quelli superati mentre attendono. */
-  private readonly epochs = new Map<PlcOwner, number>();
+  private readonly epochs = new WeakMap<PlcOwner, number>();
+  /** Finestre con un connect in attesa: servono a `closeAll` per annullarlo. */
+  private readonly pending = new Map<PlcOwner, number>();
   private readonly intervalMs: number;
   private readonly readTimeoutMs: number;
   private readonly connectTimeoutMs: number;
@@ -88,8 +90,18 @@ export class PlcService {
   }
 
   async connect(owner: PlcOwner, access: PlcAccess): Promise<PlcConnectResult> {
-    const epoch = (this.epochs.get(owner) ?? 0) + 1;
-    this.epochs.set(owner, epoch);
+    this.pending.set(owner, (this.pending.get(owner) ?? 0) + 1);
+    try {
+      return await this.doConnect(owner, access);
+    } finally {
+      const n = (this.pending.get(owner) ?? 1) - 1;
+      if (n > 0) this.pending.set(owner, n);
+      else this.pending.delete(owner);
+    }
+  }
+
+  private async doConnect(owner: PlcOwner, access: PlcAccess): Promise<PlcConnectResult> {
+    const epoch = this.bump(owner);
     await this.drop(owner);
     if (owner.isDestroyed()) return { ok: false, error: 'Finestra chiusa' };
     let client: Client;
@@ -149,8 +161,14 @@ export class PlcService {
       : { ok: true, identity, mode, protection };
   }
 
+  private bump(owner: PlcOwner): number {
+    const n = (this.epochs.get(owner) ?? 0) + 1;
+    this.epochs.set(owner, n);
+    return n;
+  }
+
   async disconnect(owner: PlcOwner): Promise<void> {
-    this.epochs.set(owner, (this.epochs.get(owner) ?? 0) + 1); // annulla un connect in attesa
+    this.bump(owner); // annulla un connect in attesa
     await this.drop(owner);
   }
 
@@ -161,6 +179,7 @@ export class PlcService {
 
   /** Chiude tutto (uscita dall'app). */
   async closeAll(): Promise<void> {
+    for (const o of this.pending.keys()) this.bump(o); // annulla i connect in attesa
     await Promise.all([...this.links.keys()].map((o) => this.drop(o)));
   }
 

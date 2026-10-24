@@ -185,7 +185,7 @@ if (!app.requestSingleInstanceLock()) {
   }
   app.on('window-all-closed', () => app.quit());
 
-  registerIpc(
+  const ipc = registerIpc(
     () => win,
     trust,
     () => {
@@ -197,10 +197,13 @@ if (!app.requestSingleInstanceLock()) {
       for (const p of pendingOpen.splice(0)) win?.webContents.send('app:open-file', p);
     },
   );
+  app.on('before-quit', () => void ipc.closeOnline());
 
   // Solo sviluppo: PLC di prova locale (CPU simulata) per provare il collegamento online.
   if (!app.isPackaged && process.env['BAAPORTAL_TEST_PLC'] === '1') {
-    void startTestPlc().then((p) => console.log(`PLC di prova su 127.0.0.1:${p.port}`));
+    void startTestPlc()
+      .then((p) => console.log(`PLC di prova su 127.0.0.1:${p.port}`))
+      .catch((err: unknown) => console.error('PLC di prova non avviato', err));
   }
 
   void app.whenReady().then(() => {

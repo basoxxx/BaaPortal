@@ -48,7 +48,7 @@ export function registerIpc(
   trust: TrustOptions,
   onCloseConfirmed: () => void,
   onRendererReady: () => void,
-): void {
+): { closeOnline(): Promise<void> } {
   // Ogni canale risponde solo al frame principale della pagina dell'app.
   const trusted = (e: IpcMainEvent | IpcMainInvokeEvent) =>
     isTrustedFrame(e.senderFrame as FrameLike | null, trust);
@@ -183,7 +183,7 @@ export function registerIpc(
   );
 
   registerKit(handle);
-  registerPlc(handle);
+  const plc = registerPlc(handle);
 
   // Valori solo per i test e2e: come BAA_USER_DATA, mai onorati nelle build pacchettizzate.
   handle('app:test-overrides', () => {
@@ -191,4 +191,5 @@ export function registerIpc(
     const enabled = !app.isPackaged && !!process.env['BAA_USER_DATA'];
     return enabled && Number.isInteger(ms) && ms > 0 ? { recoveryIntervalMs: ms } : {};
   });
+  return { closeOnline: () => plc.closeAll() };
 }
