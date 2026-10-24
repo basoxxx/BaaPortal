@@ -43,6 +43,7 @@ export const MENUS: MenuDef[] = [
       'edit.rename',
       'sep',
       'edit.findReplace',
+      'edit.replace',
       'edit.selectAll',
       'sep',
       'edit.compile',

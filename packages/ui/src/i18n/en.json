@@ -41,6 +41,7 @@
     }
   },
   "messages": {
+    "replaced": "Replaced {{replaced}} texts, skipped {{skipped}}.",
     "detachBlocked": "The separate window could not be opened: the editor stays in the work area.",
     "created": "Project \"{{name}}\" created.",
     "opened": "Project \"{{name}}\" opened.",
@@ -99,6 +100,7 @@
     "edit.delete": "Delete",
     "edit.rename": "Rename",
     "edit.findReplace": "Find and replace…",
+    "edit.replace": "Replace…",
     "edit.selectAll": "Select all",
     "edit.compile": "Compile → Software (changes only)",
     "view.navigation": "Project navigation",
@@ -152,6 +154,28 @@
     "autoHide": "Hide automatically",
     "pin": "Pin the panel",
     "toggleReference": "Show or hide the reference projects"
+  },
+  "find": {
+    "find": "Find",
+    "replaceWith": "Replace with",
+    "matchCase": "Match case",
+    "wholeWord": "Whole word",
+    "regex": "Regular expression",
+    "scope": "Scope",
+    "scopeActive": "Active editor",
+    "scopeProject": "Entire project",
+    "search": "Find",
+    "replace": "Replace",
+    "replaceAll": "Replace all",
+    "stale": "Results out of date, repeat the search",
+    "count_one": "{{count}} result",
+    "count_other": "{{count}} results",
+    "results": "Results",
+    "invalidRegex": "Invalid regular expression: {{detail}}",
+    "reason": {
+      "PROTETTO": "Protected block: the text cannot be edited.",
+      "MC7_GREZZO": "Undecodable MC7 code: the text cannot be edited."
+    }
   },
   "toolbar": {
     "search": "Search"
@@ -255,6 +279,7 @@
     }
   },
   "history": {
+    "replace": "Replace text",
     "author": "Project author",
     "comment": "Project comment",
     "addDevice": "Add device",

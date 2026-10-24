@@ -138,7 +138,8 @@ export function NetworksView({ deviceId, blockId }: Props) {
     if (!reveal || reveal.blockId !== blockId || reveal.deviceId !== deviceId || !block) return;
     const n = reveal.network > 0 ? block.networks[reveal.network - 1] : undefined;
     const handle = n && handles.current.get(n.id);
-    if (handle) handle.focusAt(offsetOfLineCol(handle.getText(), Math.max(reveal.line, 1), 1));
+    if (handle && reveal.range) handle.selectRange(reveal.range.from, reveal.range.to);
+    else if (handle) handle.focusAt(offsetOfLineCol(handle.getText(), Math.max(reveal.line, 1), 1));
     store.getState().clearCompileReveal(reveal.n);
   }, [reveal, block, blockId, deviceId, store]);
 

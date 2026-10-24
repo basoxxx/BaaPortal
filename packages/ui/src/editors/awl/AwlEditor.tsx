@@ -121,6 +121,7 @@ export function AwlEditor(p: AwlEditorProps): React.JSX.Element {
     p.ref,
     () => ({
       focusAt: (o) => core.current?.focusAt(o),
+      selectRange: (a, b) => core.current?.selectRange(a, b),
       getText: () => core.current?.getText() ?? '',
       getView: () => core.current?.getView() ?? null,
     }),

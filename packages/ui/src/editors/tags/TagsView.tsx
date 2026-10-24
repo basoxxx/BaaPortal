@@ -62,6 +62,14 @@ export function TagsView({ deviceId, tableId }: Props) {
   const tables = device?.tagTables;
   const props = device?.properties;
   const diagnostics = useCellDiagnostics(deviceId, 'tag', t);
+  const reveal = useAppStore((s) =>
+    s.tagReveal &&
+    s.tagReveal.deviceId === deviceId &&
+    (tableId === null || s.tagReveal.tableId === tableId)
+      ? s.tagReveal
+      : null,
+  );
+  const revealRow = useMemo(() => (reveal ? { key: reveal.tagId, n: reveal.n } : null), [reveal]);
 
   // Un oggetto riga per ogni Tag: finché il Tag (e la sua tabella) non cambia, la riga resta
   // la stessa e la griglia non la ridisegna.
@@ -293,6 +301,8 @@ export function TagsView({ deviceId, tableId }: Props) {
       diagnostic={diagnostic}
       onRowDragStart={onRowDragStart}
       onRowDragEnd={endDrag}
+      reveal={revealRow}
+      onRevealed={(n) => store.getState().clearTagReveal(n)}
     />
   );
 }

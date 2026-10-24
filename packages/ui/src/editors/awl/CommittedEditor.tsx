@@ -22,6 +22,8 @@ export interface EditorCodec {
 export interface CommittedEditorHandle {
   /** Porta il cursore (spostamento nel testo mostrato) e il focus, e lo rende visibile. */
   focusAt(offset: number): void;
+  /** Seleziona un intervallo del testo mostrato, con il focus, e lo rende visibile. */
+  selectRange(from: number, to: number): void;
   /** Il testo mostrato adesso (anche non confermato). */
   getText(): string;
   getView(): EditorView | null;
@@ -224,6 +226,16 @@ export function CommittedEditor(p: CommittedEditorProps): React.JSX.Element {
         const at = Math.min(Math.max(offset, 0), v.state.doc.length);
         v.focus();
         v.dispatch({ selection: { anchor: at }, scrollIntoView: true });
+        v.dom.scrollIntoView?.({ block: 'nearest' });
+      },
+      selectRange(from: number, to: number) {
+        const v = viewRef.current;
+        if (!v) return;
+        const max = v.state.doc.length;
+        const a = Math.min(Math.max(from, 0), max);
+        const b = Math.min(Math.max(to, a), max);
+        v.focus();
+        v.dispatch({ selection: { anchor: a, head: b }, scrollIntoView: true });
         v.dom.scrollIntoView?.({ block: 'nearest' });
       },
       getText: () => viewRef.current?.state.doc.toString() ?? '',

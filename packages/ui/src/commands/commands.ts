@@ -5,6 +5,7 @@ import type { ProjectService } from '../services/projectService';
 import type { AppState, EditAction, PanelName } from '../state/store';
 import { compileProgram } from '../project/compile/compileActions';
 import { openReference } from '../project/reference/referenceStore';
+import { requestFind } from '../search/findActions';
 import { targetPlcId } from '../project/navigation/treeIds';
 
 export type CommandId =
@@ -27,6 +28,7 @@ export type CommandId =
   | 'edit.delete'
   | 'edit.rename'
   | 'edit.findReplace'
+  | 'edit.replace'
   | 'edit.selectAll'
   | 'edit.compile'
   | 'edit.compileFull'
@@ -191,7 +193,17 @@ const list: Command[] = [
   editCommand('edit.paste', 'paste', 'Mod+V', 'paste'),
   editCommand('edit.delete', 'delete', 'Delete', 'delete'),
   editCommand('edit.rename', 'rename', 'F2'),
-  def('edit.findReplace', { icon: 'search' }),
+  def('edit.findReplace', {
+    icon: 'search',
+    shortcut: 'Mod+F',
+    isEnabled: hasDoc,
+    run: ({ store }) => requestFind(store, 'find'),
+  }),
+  def('edit.replace', {
+    shortcut: 'Mod+H',
+    isEnabled: hasDoc,
+    run: ({ store }) => requestFind(store, 'replace'),
+  }),
   editCommand('edit.selectAll', 'selectAll', 'Mod+A'),
   def('edit.compile', {
     icon: 'compile',

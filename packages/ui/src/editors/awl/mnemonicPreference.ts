@@ -36,3 +36,11 @@ function subscribe(l: () => void): () => void {
 export function useMnemonic(): [Mnemonic, (m: Mnemonic) => void] {
   return [useSyncExternalStore(subscribe, read, () => 'international'), write];
 }
+
+/**
+ * La mnemonica scelta adesso, nella forma che usa la ricerca. Unico punto da cambiare quando la
+ * preferenza passerà alle impostazioni.
+ */
+export function currentMnemonic(): 'de' | 'int' {
+  return read() === 'german' ? 'de' : 'int';
+}

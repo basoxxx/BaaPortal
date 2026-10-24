@@ -27,7 +27,8 @@ export function SourceEditor({ editor }: { editor: EditorRef }) {
   // Un clic su un errore apre la sorgente nel punto: la richiesta si esegue una volta sola.
   useEffect(() => {
     if (!reveal || !handle.current) return;
-    handle.current.focusAt(offsetOfLineCol(handle.current.getText(), reveal.line, reveal.col));
+    if (reveal.range) handle.current.selectRange(reveal.range.from, reveal.range.to);
+    else handle.current.focusAt(offsetOfLineCol(handle.current.getText(), reveal.line, reveal.col));
     store.getState().clearReveal(reveal.n);
   }, [reveal, store]);
 

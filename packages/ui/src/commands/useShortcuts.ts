@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { useServices } from '../state/AppContext';
 import { commands, matchShortcut, type CommandContext } from './commands';
 
+const GLOBAL_IN_FIELD = new Set(['Mod+S', 'Mod+F', 'Mod+H']);
+
 /** Esegue il comando associato al tasto premuto; true se un comando è partito. */
 export function handleShortcutKeydown(e: KeyboardEvent, ctx: CommandContext): boolean {
   if (e.repeat) return false;
@@ -16,8 +18,9 @@ export function handleShortcutKeydown(e: KeyboardEvent, ctx: CommandContext): bo
   for (const cmd of Object.values(commands)) {
     const all = [cmd.shortcut, ...(cmd.altShortcuts ?? [])];
     if (!all.some((sc) => sc && matchShortcut(e, sc, ctx.bridge.platform))) continue;
-    // Nei campi di testo resta globale solo Mod+S: annulla e ripeti sono quelli del campo.
-    if (inField && cmd.shortcut !== 'Mod+S') continue;
+    // Nei campi di testo (anche gli editor CodeMirror, che non hanno una ricerca propria) restano
+    // globali salva, trova e sostituisci: annulla e ripeti sono quelli del campo.
+    if (inField && !GLOBAL_IN_FIELD.has(cmd.shortcut ?? '')) continue;
     // Una bozza ancora nel campo va confermata prima che il comando legga lo stato: il campo può
     // stare in una finestra separata, quindi si toglie il focus proprio a lui.
     if (inField) target.blur();

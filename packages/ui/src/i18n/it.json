@@ -41,6 +41,7 @@
     }
   },
   "messages": {
+    "replaced": "Sostituiti {{replaced}} testi, saltati {{skipped}}.",
     "detachBlocked": "Impossibile aprire la finestra separata: l'editor resta nell'area di lavoro.",
     "created": "Progetto \"{{name}}\" creato.",
     "opened": "Progetto \"{{name}}\" aperto.",
@@ -99,6 +100,7 @@
     "edit.delete": "Elimina",
     "edit.rename": "Rinomina",
     "edit.findReplace": "Trova e sostituisci…",
+    "edit.replace": "Sostituisci…",
     "edit.selectAll": "Seleziona tutto",
     "edit.compile": "Compila → Software (solo modifiche)",
     "view.navigation": "Navigazione del progetto",
@@ -152,6 +154,28 @@
     "autoHide": "Nascondi automaticamente",
     "pin": "Fissa il pannello",
     "toggleReference": "Mostra o nascondi i progetti di riferimento"
+  },
+  "find": {
+    "find": "Trova",
+    "replaceWith": "Sostituisci con",
+    "matchCase": "Maiuscole/minuscole",
+    "wholeWord": "Parola intera",
+    "regex": "Espressione regolare",
+    "scope": "Ambito",
+    "scopeActive": "Editor attivo",
+    "scopeProject": "Tutto il progetto",
+    "search": "Trova",
+    "replace": "Sostituisci",
+    "replaceAll": "Sostituisci tutto",
+    "stale": "Risultati non aggiornati, ripeti la ricerca",
+    "count_one": "{{count}} risultato",
+    "count_other": "{{count}} risultati",
+    "results": "Risultati",
+    "invalidRegex": "Espressione regolare non valida: {{detail}}",
+    "reason": {
+      "PROTETTO": "Blocco protetto: il testo non si può modificare.",
+      "MC7_GREZZO": "Codice MC7 non decodificabile: il testo non si può modificare."
+    }
   },
   "toolbar": {
     "search": "Ricerca"
@@ -255,6 +279,7 @@
     }
   },
   "history": {
+    "replace": "Sostituisci testo",
     "author": "Autore del progetto",
     "comment": "Commento del progetto",
     "addDevice": "Aggiungi dispositivo",

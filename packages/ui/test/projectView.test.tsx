@@ -41,7 +41,7 @@ describe('vista progetto: struttura', () => {
     ]);
   });
 
-  it("la barra degli strumenti ha i comandi nell'ordine della spec e il campo Ricerca disattivato", async () => {
+  it("la barra degli strumenti ha i comandi nell'ordine della spec e il campo Ricerca attivo", async () => {
     await renderApp({ view: 'project', withProject: true });
     const tb = within(screen.getByTestId('toolbar'));
     expect(tb.getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual([
@@ -68,7 +68,7 @@ describe('vista progetto: struttura', () => {
     ]);
     expect(tb.getByRole('button', { name: 'Salva' })).toBeEnabled();
     expect(tb.getByRole('button', { name: 'Taglia' })).toBeDisabled();
-    expect(tb.getByRole('searchbox')).toBeDisabled();
+    expect(tb.getByRole('searchbox')).toBeEnabled();
   });
 });
 

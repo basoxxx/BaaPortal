@@ -2,6 +2,8 @@ import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { Mc7Diagnostic, Project } from '@baaportal/project';
 import type { ImportSummary } from '../project/navigation/tagTableIo';
 import * as wa from './workArea';
+import type { FindRequest, FindUi, TagReveal } from '../search/findState';
+import { initialFindUi } from '../search/findState';
 import { applyHistory, HISTORY_LIMIT, pushLimited, recordEdit, type HistoryEntry } from './history';
 
 export { HISTORY_LIMIT, type HistoryEntry };
@@ -43,6 +45,8 @@ export interface InfoTarget {
   sourceId: string;
   line: number;
   col: number;
+  /** Se c'è, il testo da selezionare (spostamenti nel testo mostrato). */
+  range?: { from: number; to: number };
 }
 /** Richiesta all'editor di una sorgente di portare il cursore in un punto (`n` la rende ripetibile). */
 export interface SourceReveal extends Omit<InfoTarget, 'kind'> {
@@ -94,6 +98,8 @@ export interface CompileReveal {
   blockId: string;
   network: number;
   line: number;
+  /** Se c'è, il testo da selezionare nel segmento (spostamenti nel testo mostrato). */
+  range?: { from: number; to: number };
   n: number;
 }
 export interface PanelState {
@@ -127,6 +133,16 @@ export interface AppState {
   referenceProjectsOpen: boolean;
   taskCard: TaskCardId;
   workArea: wa.WorkAreaState;
+  /** Trova e sostituisci: campi, opzioni e risultati dell'ultima ricerca. */
+  find: FindUi;
+  /** Chiede al pannello di dare il focus a un campo (`n` la rende ripetibile). */
+  findRequest: FindRequest | null;
+  /** Chiede all'editor delle variabili di selezionare una riga. */
+  tagReveal: TagReveal | null;
+  patchFind(patch: Partial<FindUi>): void;
+  setFindRequest(r: Omit<FindRequest, 'n'> | null): void;
+  revealTag(r: Omit<TagReveal, 'n'>): void;
+  clearTagReveal(n: number): void;
   setView(v: View): void;
   setPortal(p: PortalId): void;
   setStartAction(a: StartAction): void;
@@ -224,6 +240,14 @@ export function createAppStore(now: () => Date = () => new Date()): StoreApi<App
     referenceProjectsOpen: false,
     taskCard: 'instructions',
     workArea: wa.initialWorkArea(),
+    find: initialFindUi(),
+    findRequest: null,
+    tagReveal: null,
+    patchFind: (patch) => set((s) => ({ find: { ...s.find, ...patch } })),
+    setFindRequest: (r) =>
+      set((s) => ({ findRequest: r ? { ...r, n: (s.findRequest?.n ?? 0) + 1 } : null })),
+    revealTag: (r) => set((s) => ({ tagReveal: { ...r, n: (s.tagReveal?.n ?? 0) + 1 } })),
+    clearTagReveal: (n) => set((s) => (s.tagReveal?.n === n ? { tagReveal: null } : s)),
     setView: (view) => set({ view }),
     setPortal: (portal) => set({ portal }),
     setStartAction: (startAction) => set({ startAction }),

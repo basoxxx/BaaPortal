@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppStore, useServices } from '../../state/AppContext';
 import type { TaskCardId } from '../../state/store';
+import { FindReplace } from './FindReplace';
 
 const SECTIONS: Record<TaskCardId, string[]> = {
   instructions: ['favorites', 'basic', 'advanced', 'communication', 'optional'],
@@ -26,7 +27,11 @@ function Section({ card, id }: { card: TaskCardId; id: string }) {
           {t(`taskcards.section.${card}.${id}`)}
         </button>
       </h3>
-      {open ? (
+      {open && id === 'findReplace' ? (
+        <div id={`tc-${card}-${id}`}>
+          <FindReplace />
+        </div>
+      ) : open ? (
         <p id={`tc-${card}-${id}`} className="baa-placeholder">
           {t('taskcards.empty')}
         </p>
