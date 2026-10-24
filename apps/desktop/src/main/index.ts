@@ -67,6 +67,7 @@ function setupNativeMenu(): void {
     Menu.setApplicationMenu(null);
     return;
   }
+  // Il menu macOS non ha di proposito il ruolo 'hide': Cmd+H è Sostituisci.
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
       {

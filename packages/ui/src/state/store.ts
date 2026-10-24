@@ -261,6 +261,9 @@ export function createAppStore(now: () => Date = () => new Date()): StoreApi<App
         dialog: null,
         compile: emptyCompile(),
         compileReveal: null,
+        find: initialFindUi(),
+        findRequest: null,
+        tagReveal: null,
         history: { past: [], future: [] },
       }));
     },

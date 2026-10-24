@@ -104,7 +104,12 @@ export function replaceHits(store: Store, only?: Hit[]): void {
   const after = store.getState().find;
   if (only && after.outcome?.kind === 'hits' && after.selected !== null) {
     const cur = after.outcome.hits[after.selected];
-    if (cur && sameSpot(cur, only[0]!) && after.selected + 1 < after.outcome.hits.length)
+    // Un risultato saltato (o ancora lì dopo la sostituzione) non resta selezionato.
+    if (
+      cur &&
+      (result.replaced === 0 || sameSpot(cur, only[0]!)) &&
+      after.selected + 1 < after.outcome.hits.length
+    )
       store.getState().patchFind({ selected: after.selected + 1 });
   }
 }
@@ -122,7 +127,12 @@ export function openHit(store: Store, hit: Hit): void {
   }
   if (l.kind === 'source') {
     const src = findSource(findDevice(doc.project, l.deviceId)!, l.sourceId);
-    const before = (src?.text ?? '').slice(0, l.from).replace(/\r\n?/g, '\n');
+    const raw = src?.text ?? '';
+    // L'editor mostra il testo con a capo LF: gli offset si portano lì.
+    const shownAt = (at: number): number =>
+      raw.slice(0, raw[at - 1] === '\r' && raw[at] === '\n' ? at - 1 : at).replace(/\r\n?/g, '\n')
+        .length;
+    const before = raw.slice(0, l.from).replace(/\r\n?/g, '\n');
     const line = before.split('\n').length;
     const col = before.length - before.lastIndexOf('\n');
     s.openSourceAt({
@@ -130,7 +140,7 @@ export function openHit(store: Store, hit: Hit): void {
       sourceId: l.sourceId,
       line,
       col,
-      range: { from: l.from, to: l.to },
+      range: { from: shownAt(l.from), to: shownAt(l.to) },
     });
     return;
   }
