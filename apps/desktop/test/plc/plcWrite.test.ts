@@ -297,6 +297,7 @@ describe('PlcWriteService con collegamento finto', () => {
       start: vi.fn(),
       copyRamToRom: vi.fn(),
       compressMemory: vi.fn(),
+      setClock: vi.fn(),
     };
     return { client, log };
   }
@@ -517,6 +518,7 @@ describe('PlcWriteService: sicurezza del bersaglio e uscita', () => {
       start: vi.fn(),
       copyRamToRom: vi.fn(),
       compressMemory: vi.fn(),
+      setClock: vi.fn(),
       ...over,
     };
     return { c, log };

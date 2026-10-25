@@ -7,6 +7,7 @@ import {
   cycleTimeFrom,
   diagRecordsFrom,
   lastModeChangeFrom,
+  isUnavailable,
   ledsFrom,
   memoryFrom,
   memoryTransportPair,
@@ -196,6 +197,28 @@ describe('CPU simulata: ora', () => {
   });
 });
 
+describe('CPU simulata: SZL non disponibili', () => {
+  it('faults.szlUnavailable [0x0013, 0x0124] → solo quelle due sono assenti', async () => {
+    const backend = simBackend(newCpu());
+    backend.config.faults = { szlUnavailable: [0x0013, 0x0124] };
+    const c = await connectTo(backend);
+    for (const [id, index] of [
+      [0x0013, 0],
+      [0x0124, 0],
+    ] as const) {
+      expect(isUnavailable(await c.readSzl(id, index).catch((e: unknown) => e))).toBe(true);
+    }
+    for (const [id, index] of [
+      [0x0019, 0],
+      [0x0222, 1],
+      [0x0424, 0],
+    ] as const) {
+      await expect(c.readSzl(id, index)).resolves.toMatchObject({ id });
+    }
+    await c.close();
+  });
+});
+
 describe('CPU simulata: SDB sintetici', () => {
   const sdb0 = syntheticSdb(0, 64);
   const sdb1 = syntheticSdb(1, 128);
@@ -217,7 +240,7 @@ describe('CPU simulata: SDB sintetici', () => {
     const c = await connectTo(simBackend(cpu, { systemBlocks: [sdb0] }));
     await expect(c.downloadBlock(syntheticSdb(5, 16))).rejects.toMatchObject({ code: 'CPU_ERROR' });
     expect((await c.blockCounts()).SDB).toBe(1);
-    expect(cpu.program.list().some((b) => b.kind === 'SDB')).toBe(false);
+    expect(cpu.program.list().some((b) => (b.kind as string) === 'SDB')).toBe(false);
     await c.close();
   });
 

@@ -1,6 +1,8 @@
 import type { IpcMainInvokeEvent } from 'electron';
 import type {
   PlcAccess,
+  PlcClockResult,
+  PlcDiagResult,
   PlcConnectResult,
   PlcBlocksResult,
   PlcControlResult,
@@ -10,6 +12,7 @@ import type {
   PlcUploadBlockResult,
 } from '@baaportal/ui';
 import type { ConfirmFn } from './confirm';
+import { readDiagnostics } from './diagnostics';
 import { PlcWriteService, isControlOp } from './plcWrite';
 import { isUploadableType, listOnlineBlocks, uploadOneBlock } from './onlineBlocks';
 import { PlcService } from './plcService';
@@ -83,6 +86,12 @@ export function registerPlc(
   handle('plc:control', async (e, op): Promise<PlcControlResult> => {
     if (!isControlOp(op)) return { ok: false, error: 'Comando non valido' };
     return writes.control(e.sender, op);
+  });
+  // Imposta l'ora: il servizio controlla la richiesta prima di qualunque conferma.
+  handle('plc:setClock', (e, req): Promise<PlcClockResult> => writes.setClock(e.sender, req));
+  // Diagnostica: sola lettura sul collegamento della finestra; le parti le controlla il servizio.
+  handle('plc:diagnostics', (e, parts): Promise<PlcDiagResult> => {
+    return readDiagnostics(service, e.sender, parts);
   });
   // Elenco dei blocchi della CPU: sola lettura, sul collegamento della finestra.
   handle('plc:blocks', (e): Promise<PlcBlocksResult> => listOnlineBlocks(service, e.sender));

@@ -1,10 +1,11 @@
 import { parseBlockFile } from '@baaportal/s7comm';
-import type { BlockType, ConnectOptions, S7WriteClient } from '@baaportal/s7comm';
+import type { BlockType, ConnectOptions, S7DateTime, S7WriteClient } from '@baaportal/s7comm';
 import { connectWriteTcp } from '@baaportal/s7comm/node';
 import type {
   PlcAccess,
   PlcBlockRef,
   PlcControlOp,
+  PlcClockResult,
   PlcControlResult,
   PlcDownloadResult,
   PlcWriteProgress,
@@ -38,6 +39,7 @@ export type WriteClient = Pick<
   | 'start'
   | 'copyRamToRom'
   | 'compressMemory'
+  | 'setClock'
 >;
 export type PlcWriteConnectFn = (
   o: Omit<ConnectOptions, 'transport' | 'mode'>,
@@ -112,6 +114,69 @@ const CONTROL_TEXTS: Record<PlcControlOp, { title: string; label: string; what: 
   },
   COMPRESS: { title: 'Comprimi la memoria', label: 'Comprimi', what: 'Comprimere la memoria' },
 };
+
+const two = (n: number): string => String(n).padStart(2, '0');
+
+function formatTime(t: {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+}): string {
+  return `${two(t.day)}/${two(t.month)}/${t.year} ${two(t.hour)}:${two(t.minute)}:${two(t.second)}`;
+}
+
+const TIME_FIELDS = [
+  ['year', 1990, 2089],
+  ['month', 1, 12],
+  ['day', 1, 31],
+  ['hour', 0, 23],
+  ['minute', 0, 59],
+  ['second', 0, 59],
+] as const;
+
+/** Controlla un'ora: data di calendario vera (anno 1990-2089), ore, minuti e secondi. */
+function checkTime(t: Record<string, unknown>): string | undefined {
+  for (const [k, lo, hi] of TIME_FIELDS) {
+    const v = t[k];
+    if (typeof v !== 'number' || !Number.isInteger(v) || v < lo || v > hi) {
+      return `Ora non valida: ${k} fuori da ${lo}-${hi}`;
+    }
+  }
+  const year = t['year'] as number;
+  const month = t['month'] as number;
+  const days = [31, year % 4 === 0 ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1]!;
+  if ((t['day'] as number) > days) return 'Ora non valida: il giorno non esiste in quel mese';
+  return undefined;
+}
+
+type ClockSpec = { pc: true } | { pc: false; time: S7DateTime };
+
+/** Controlla ciò che arriva dal renderer prima di qualunque conferma. */
+export function parseClockRequest(raw: unknown): ClockSpec | string {
+  if (typeof raw !== 'object' || raw === null) return 'Richiesta di ora non valida';
+  const r = raw as { source?: unknown; time?: unknown };
+  if (r.source === 'pc') return { pc: true };
+  if (r.source !== 'manual') return "Origine dell'ora non valida";
+  if (typeof r.time !== 'object' || r.time === null) return 'Ora non valida';
+  const t = r.time as Record<string, unknown>;
+  const bad = checkTime(t);
+  if (bad) return bad;
+  return {
+    pc: false,
+    time: {
+      year: t['year'] as number,
+      month: t['month'] as number,
+      day: t['day'] as number,
+      hour: t['hour'] as number,
+      minute: t['minute'] as number,
+      second: t['second'] as number,
+      ms: 0,
+    },
+  };
+}
 
 function listLines(lines: string[]): string {
   if (lines.length <= MAX_LIST_LINES) return lines.join('\n');
@@ -272,6 +337,50 @@ export class PlcWriteService {
   }
 
   /**
+   * Imposta l'ora della CPU. Dal PC: l'ora si prende dopo la conferma, con un solo `Date` e i campi
+   * locali (la CPU non conosce fuso né ora legale). A mano: si scrive così com'è, millisecondi 0.
+   */
+  async setClock(owner: PlcWriteOwner, raw: unknown): Promise<PlcClockResult> {
+    const spec = parseClockRequest(raw);
+    if (typeof spec === 'string') return { ok: false, error: spec };
+    return this.exclusive<PlcClockResult>(
+      owner,
+      (m) => ({ ok: false, error: m }),
+      (err) => ({ ok: false, error: errText(err) }),
+      async (op) => {
+        const p = await this.prepare(owner, op, (target) => {
+          const what = spec.pc
+            ? `Ora del PC al momento della conferma (adesso: ${formatTime(fromDate(new Date(this.now())))})`
+            : `Nuova ora: ${formatTime(spec.time)}`;
+          return {
+            title: 'Imposta ora',
+            message: `Impostare l'ora della CPU ${cpuName(target)}?`,
+            detail: `${what}\nGli interrupt dall'orologio (OB10) possono saltare`,
+            confirmLabel: 'Imposta ora',
+          };
+        });
+        if (!('c' in p)) return p.result;
+        try {
+          if (owner.isDestroyed() || op.aborted)
+            return { ok: false, error: 'Operazione interrotta' };
+          let t: S7DateTime;
+          if (spec.pc) {
+            t = fromDate(new Date(this.now())); // un solo istante: data e ora insieme
+            const bad = checkTime(t as unknown as Record<string, unknown>);
+            if (bad) return { ok: false, error: `L'ora del PC non è impostabile: ${bad}` };
+          } else {
+            t = spec.time;
+          }
+          await p.c.setClock(t);
+          return { ok: true, written: t };
+        } finally {
+          await p.c.close().catch(() => undefined);
+        }
+      },
+    );
+  }
+
+  /**
    * Una scrittura per finestra, anche durante la conferma, e una per CPU fra tutte le finestre;
    * registra l'operazione per `abortAll`.
    */
@@ -414,6 +523,18 @@ function cpuName(t: {
   const port =
     t.access.port !== undefined && t.access.port !== DEFAULT_PORT ? `:${t.access.port}` : '';
   return `${t.identity.moduleName ?? t.identity.orderNumber} (${t.access.host}${port})`;
+}
+
+function fromDate(d: Date): S7DateTime {
+  return {
+    year: d.getFullYear(),
+    month: d.getMonth() + 1,
+    day: d.getDate(),
+    hour: d.getHours(),
+    minute: d.getMinutes(),
+    second: d.getSeconds(),
+    ms: d.getMilliseconds(),
+  };
 }
 
 async function runControl(c: WriteClient, op: PlcControlOp): Promise<string> {

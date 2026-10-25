@@ -1,4 +1,5 @@
 import type { PlcAccess, PlcIdentity, PlcMode } from '@baaportal/project';
+import type { CycleTime, Led, MemoryArea, ProtectionInfo, S7DateTime } from '@baaportal/s7comm';
 
 export type { PlcAccess, PlcIdentity, PlcMode };
 
@@ -119,3 +120,66 @@ export type PlcUploadAllResult =
     }
   | { ok: false; error: string }
   | { ok: false; cancelled: true };
+
+/** Le parti della diagnostica online che si possono chiedere (ognuna una o due SZL, proto §7.5.1). */
+export type DiagPart =
+  | 'identity'
+  | 'mode'
+  | 'leds'
+  | 'protection'
+  | 'lastModeChange'
+  | 'cycle'
+  | 'memory'
+  | 'buffer'
+  | 'clock';
+
+/** Il valore di una parte: letto, non disponibile nella CPU, o fallito per un errore della CPU. */
+export type DiagValue<T> =
+  { ok: true; value: T } | { ok: false; unavailable: true } | { ok: false; error: string };
+
+/** Una voce del buffer diagnostico come viaggia verso il renderer (niente `Uint8Array`). */
+export interface DiagEventView {
+  eventId: number;
+  priority: number;
+  obNumber: number;
+  datId: number;
+  info1: number;
+  info2: number;
+  time?: S7DateTime;
+  /** Ora non valida: gli 8 byte grezzi in esadecimale. */
+  rawTime?: string;
+}
+
+export interface PlcDiagData {
+  identity: DiagValue<PlcIdentity>;
+  mode: DiagValue<PlcMode>;
+  leds: DiagValue<Led[]>;
+  protection: DiagValue<ProtectionInfo>;
+  lastModeChange: DiagValue<DiagEventView | null>;
+  cycle: DiagValue<{ time: CycleTime; config: { minMs: number; maxMs: number } }>;
+  memory: DiagValue<MemoryArea[]>;
+  /** Dalla voce più recente. */
+  buffer: DiagValue<DiagEventView[]>;
+  clock: DiagValue<S7DateTime>;
+}
+
+/** Esito di `plcDiagnostics`: errore solo se manca il collegamento o si perde durante la lettura. */
+export type PlcDiagResult = { ok: true; data: Partial<PlcDiagData> } | { ok: false; error: string };
+
+/** Ora della CPU: quella del PC al momento della conferma, o una data scelta a mano. */
+export type PlcClockRequest =
+  | { source: 'pc' }
+  | {
+      source: 'manual';
+      time: {
+        year: number;
+        month: number;
+        day: number;
+        hour: number;
+        minute: number;
+        second: number;
+      };
+    };
+
+export type PlcClockResult =
+  { ok: true; written: S7DateTime } | { ok: false; error: string } | { ok: false; cancelled: true };

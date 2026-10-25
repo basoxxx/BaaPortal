@@ -1,5 +1,9 @@
 import type {
+  DiagPart,
   NetInterface,
+  PlcClockRequest,
+  PlcClockResult,
+  PlcDiagResult,
   PlcAccess,
   PlcBlockRef,
   PlcBlocksResult,
@@ -148,6 +152,10 @@ export interface BaaBridge {
     opts?: { deleteBlocks?: PlcBlockRef[] },
   ): Promise<PlcDownloadResult>;
   plcControl(op: PlcControlOp): Promise<PlcControlResult>;
+  /** Diagnostica in sola lettura sul collegamento della finestra; ogni parte ha il suo esito. */
+  plcDiagnostics(parts: DiagPart[]): Promise<PlcDiagResult>;
+  /** Imposta l'ora della CPU: conferma nativa nel processo principale. */
+  plcSetClock(req: PlcClockRequest): Promise<PlcClockResult>;
   /** Elenco dei blocchi della CPU collegata (sola lettura); mai eccezioni: l'esito dice tutto. */
   plcBlocks(): Promise<PlcBlocksResult>;
   /** Carica un solo blocco OB, FB, FC o DB dalla CPU collegata (sola lettura); mai eccezioni. */

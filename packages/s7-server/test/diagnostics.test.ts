@@ -290,6 +290,31 @@ describe("impostazione dell'ora (userdata 7/2)", () => {
     await c.close();
   });
 
+  it("set clock con livello di protezione 2 → 0xD241 e l'ora non cambia", async () => {
+    const cpu = new FakeCpu({ protectionLevel: 2 });
+    let called = false;
+    const b = Object.create(cpu) as CpuBackend;
+    b.setClock = () => {
+      called = true;
+    };
+    const c = await connect(b);
+    const err = await c
+      .setClock({ year: 2026, month: 10, day: 28, hour: 1, minute: 2, second: 3, ms: 0 })
+      .catch((e: unknown) => e);
+    expect(err).toMatchObject({ code: 'CPU_ERROR', detail: { errorClass: 0xd2, errorCode: 0x41 } });
+    expect(called).toBe(false);
+    await c.close();
+  });
+
+  it("set clock con la CPU in STOP: accettato, la lettura dopo dà l'ora scritta", async () => {
+    const cpu = new FakeCpu({ mode: 'STOP' });
+    const c = await connect(withClock(cpu));
+    await c.setClock({ year: 2026, month: 10, day: 28, hour: 12, minute: 30, second: 15, ms: 0 });
+    const r = await c.readClock();
+    expect([r.year, r.month, r.day, r.hour, r.minute]).toEqual([2026, 10, 28, 12, 30]);
+    await c.close();
+  });
+
   it('7/4 resta rifiutata', async () => {
     const p = await new TestPeer(new FakeCpu()).open();
     const r = await p.send({

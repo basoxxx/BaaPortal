@@ -37,4 +37,11 @@ export type {
   PlcUploadBlockResult,
   PlcUploadProgress,
   PlcUploadAllResult,
+  DiagPart,
+  DiagValue,
+  DiagEventView,
+  PlcDiagData,
+  PlcDiagResult,
+  PlcClockRequest,
+  PlcClockResult,
 } from './online/plcTypes';
