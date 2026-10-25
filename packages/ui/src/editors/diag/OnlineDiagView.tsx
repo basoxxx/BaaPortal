@@ -123,9 +123,7 @@ function ConnectedDiag() {
       </nav>
       <section className="baa-diag-page">
         <header className="baa-diag-head" data-testid="diag-head">
-          <Part value={d.mode} t={t}>
-            {(m) => <strong data-testid="diag-mode">{m}</strong>}
-          </Part>
+          <strong data-testid="diag-mode">{d.mode?.ok ? d.mode.value : '—'}</strong>
           {d.leds?.ok ? (
             <span className="baa-diag-leds">
               {d.leds.value.map((l) => (
@@ -462,6 +460,9 @@ function ClockPage({ d, t, readAt, ctrl }: PageProps & { readAt: number; ctrl: D
           {t('onlineDiag.apply')}
         </button>
       </div>
+      <p className="baa-diag-note" data-testid="clock-format">
+        {t('onlineDiag.clockFormat')}
+      </p>
       {fieldError ? (
         <p className="baa-diag-note is-error" role="alert" data-testid="clock-field-error">
           {fieldError.text}

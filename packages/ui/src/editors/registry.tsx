@@ -102,7 +102,7 @@ export const EDITORS: Record<EditorKind, EditorDef> = {
   onlineDiag: {
     kind: 'onlineDiag',
     icon: () => 'treeOnlineDiag',
-    title: (_r, _d, t) => t('diag.title'),
+    title: (_r, _d, t) => t('onlineDiag.title'),
     exists: (r, d) => device(r, d) !== undefined,
     Component: OnlineDiagView,
   },

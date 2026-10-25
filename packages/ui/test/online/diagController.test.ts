@@ -154,4 +154,57 @@ describe('DiagController', () => {
     expect(bridge.plcDiagnosticsCalls[1]).toEqual(['mode', 'leds']);
     expect(ctrl.getState().data.buffer).toEqual({ ok: true, value: [{ eventId: 1 }] });
   });
+
+  it('riavvio con una richiesta di prima ancora in corso: nessuna sovrapposizione', async () => {
+    const { bridge, ctrl } = setup();
+    const releases: (() => void)[] = [];
+    let active = 0;
+    let maxActive = 0;
+    bridge.plcDiagnosticsImpl = () =>
+      new Promise((res) => {
+        active++;
+        maxActive = Math.max(maxActive, active);
+        releases.push(() => {
+          active--;
+          res(ok());
+        });
+      });
+    ctrl.start();
+    await flush();
+    ctrl.stop();
+    ctrl.start(); // la richiesta di prima è ancora in corso
+    await flush();
+    expect(bridge.plcDiagnosticsCalls).toHaveLength(1);
+    releases[0]!(); // risposta della sessione chiusa: scartata, poi parte la nuova
+    await flush();
+    expect(bridge.plcDiagnosticsCalls).toHaveLength(2);
+    releases[1]!();
+    await flush();
+    expect(maxActive).toBe(1);
+    expect(ctrl.getState().running).toBe(true);
+  });
+
+  it('finestra nascosta: in pausa; alla visibilitychange riprende', async () => {
+    const { bridge, timers, ctrl } = setup();
+    const setHidden = (h: boolean) => {
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => h });
+      document.dispatchEvent(new Event('visibilitychange'));
+    };
+    try {
+      ctrl.start();
+      await flush();
+      expect(bridge.plcDiagnosticsCalls).toHaveLength(1);
+      setHidden(true);
+      timers.fire(); // il timer già armato scatta ma non chiede nulla
+      await flush();
+      expect(bridge.plcDiagnosticsCalls).toHaveLength(1);
+      expect(timers.pending).toEqual([]);
+      setHidden(false);
+      await flush();
+      expect(bridge.plcDiagnosticsCalls).toHaveLength(2);
+      expect(timers.pending).toHaveLength(1);
+    } finally {
+      setHidden(false);
+    }
+  });
 });

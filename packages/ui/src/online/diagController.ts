@@ -56,6 +56,12 @@ export class DiagController {
   private again = false;
   private session = 0;
   private unsub: (() => void) | undefined;
+  /** `start` arrivato mentre la richiesta di una sessione chiusa è ancora in corso. */
+  private deferred = false;
+  private onVisibility = (): void => {
+    if (!this.state.running || document.hidden) return;
+    if (this.timer === undefined && !this.inFlight) void this.tick(this.session);
+  };
 
   constructor(
     private readonly store: StoreApi<AppState>,
@@ -90,7 +96,9 @@ export class DiagController {
     this.unsub = this.store.subscribe((s) => {
       if (s.online.status !== 'on') this.stop();
     });
-    void this.tick(this.session);
+    document.addEventListener('visibilitychange', this.onVisibility);
+    if (this.inFlight) this.deferred = true;
+    else void this.tick(this.session);
   }
 
   stop(): void {
@@ -101,6 +109,8 @@ export class DiagController {
     this.timer = undefined;
     this.unsub?.();
     this.unsub = undefined;
+    this.deferred = false;
+    document.removeEventListener('visibilitychange', this.onVisibility);
     this.set({ running: false });
   }
 
@@ -134,6 +144,7 @@ export class DiagController {
       return;
     }
     this.timer = undefined;
+    if (document.hidden) return; // finestra nascosta: in pausa fino a `visibilitychange`
     this.inFlight = true;
     let result: Awaited<ReturnType<BaaBridge['plcDiagnostics']>>;
     try {
@@ -142,7 +153,14 @@ export class DiagController {
       result = { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
     this.inFlight = false;
-    if (session !== this.session) return;
+    if (session !== this.session) {
+      // Risposta di una sessione chiusa: si scarta; chi ha riavviato nel frattempo parte ora.
+      if (this.deferred && this.state.running) {
+        this.deferred = false;
+        void this.tick(this.session);
+      }
+      return;
+    }
     if (!result.ok) {
       this.set({ error: result.error });
       this.stop();
@@ -160,7 +178,9 @@ export class DiagController {
       void this.tick(session);
       return;
     }
-    this.timer = this.timers.set(() => void this.tick(session), PERIOD_MS);
+    if (!document.hidden) {
+      this.timer = this.timers.set(() => void this.tick(session), PERIOD_MS);
+    }
   }
 
   /** «Imposta ora»: la conferma è nel processo principale; un esito positivo rilegge subito l'ora. */

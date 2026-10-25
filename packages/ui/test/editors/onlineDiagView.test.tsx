@@ -233,4 +233,17 @@ describe('editor Online e diagnostica', () => {
     page('buffer');
     expect(await screen.findByTestId('diag-row-0')).toHaveTextContent('STOP from the PG or SFB 20');
   });
+
+  it('il titolo dell editor è tradotto', async () => {
+    await open();
+    expect(screen.getAllByText('Online e diagnostica').length).toBeGreaterThan(0);
+    expect(document.body.textContent).not.toContain('diag.title');
+  });
+
+  it('modo mancante: trattino nell intestazione; formato dell ora visibile', async () => {
+    await open({ mode: { ok: false, unavailable: true } });
+    expect(await screen.findByTestId('diag-mode')).toHaveTextContent('—');
+    page('clock');
+    expect(await screen.findByTestId('clock-format')).toHaveTextContent('AAAA-MM-GG');
+  });
 });

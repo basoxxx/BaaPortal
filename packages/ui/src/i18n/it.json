@@ -394,6 +394,7 @@
     "setToPc": "Imposta all'ora del PC",
     "date": "Data",
     "time": "Ora",
+    "clockFormat": "Formato: data AAAA-MM-GG, ora hh:mm:ss",
     "apply": "Applica",
     "clockError": {
       "date": {
