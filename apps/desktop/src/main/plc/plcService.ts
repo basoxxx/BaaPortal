@@ -22,10 +22,17 @@ export interface PlcOwner {
 
 type Client = Pick<
   S7Client,
-  'identity' | 'mode' | 'protection' | 'close' | 'closed' | 'listBlocks' | 'blockInfo'
+  | 'identity'
+  | 'mode'
+  | 'protection'
+  | 'close'
+  | 'closed'
+  | 'listBlocks'
+  | 'blockInfo'
+  | 'uploadWithInfo'
 >;
 /** Il collegamento in sola lettura, come lo vedono le richieste di lettura (elenco blocchi). */
-export type ReadClient = Pick<Client, 'listBlocks' | 'blockInfo'>;
+export type ReadClient = Pick<Client, 'listBlocks' | 'blockInfo' | 'uploadWithInfo'>;
 export type PlcConnectFn = (o: Omit<ConnectOptions, 'transport'>) => Promise<Client>;
 
 export interface PlcServiceOptions {

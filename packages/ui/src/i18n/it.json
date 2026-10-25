@@ -314,6 +314,23 @@
       }
     }
   },
+  "compareView": {
+    "title": "Confronto {{name}}",
+    "project": "Progetto",
+    "cpu": "CPU",
+    "checksum": "Checksum",
+    "mc7Length": "Lunghezza MC7",
+    "loadLength": "Lunghezza di caricamento",
+    "codeTime": "Data del codice",
+    "network": "Rete {{n}}",
+    "onlyProject": "solo nel progetto",
+    "onlyCpu": "solo nella CPU",
+    "identical": "uguale",
+    "loading": "Caricamento del blocco dalla CPU...",
+    "failed": "Il blocco non si è potuto leggere dalla CPU: {{message}}",
+    "offline": "Il collegamento online non è attivo.",
+    "undecodable": "Il blocco della CPU non si può decodificare: si mostrano i suoi byte in esadecimale."
+  },
   "compare": {
     "same": "Uguale alla CPU",
     "different": "Diverso dalla CPU",
@@ -619,7 +636,8 @@
     "compileFull": "Compila → Software (compilazione completa)",
     "importBlocks": "Importa blocchi (.blk o raccolta del kit)…",
     "exportCompiled": "Esporta blocco compilato (.blk)…",
-    "downloadToDevice": "Carica nel dispositivo"
+    "downloadToDevice": "Carica nel dispositivo",
+    "compareOnline": "Confronta online/offline"
   },
   "grid": {
     "addRow": "<Aggiungi>",

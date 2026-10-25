@@ -314,6 +314,23 @@
       }
     }
   },
+  "compareView": {
+    "title": "Compare {{name}}",
+    "project": "Project",
+    "cpu": "CPU",
+    "checksum": "Checksum",
+    "mc7Length": "MC7 length",
+    "loadLength": "Load length",
+    "codeTime": "Code date",
+    "network": "Network {{n}}",
+    "onlyProject": "project only",
+    "onlyCpu": "CPU only",
+    "identical": "identical",
+    "loading": "Loading the block from the CPU...",
+    "failed": "The block could not be read from the CPU: {{message}}",
+    "offline": "The online connection is not active.",
+    "undecodable": "The CPU block cannot be decoded: its bytes are shown in hexadecimal."
+  },
   "compare": {
     "same": "Same as CPU",
     "different": "Different from CPU",
@@ -619,7 +636,8 @@
     "compileFull": "Compile → Software (full compile)",
     "importBlocks": "Import blocks (.blk or kit archive)…",
     "exportCompiled": "Export compiled block (.blk)…",
-    "downloadToDevice": "Download to device"
+    "downloadToDevice": "Download to device",
+    "compareOnline": "Compare online/offline"
   },
   "grid": {
     "addRow": "<Add>",

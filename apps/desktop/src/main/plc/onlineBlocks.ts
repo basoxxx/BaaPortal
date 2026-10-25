@@ -1,5 +1,5 @@
 import { S7Error, type BlockType, type S7Client } from '@baaportal/s7comm';
-import type { OnlineBlock, PlcBlocksResult } from '@baaportal/ui';
+import type { OnlineBlock, PlcBlocksResult, PlcUploadBlockResult } from '@baaportal/ui';
 import type { PlcOwner, PlcService } from './plcService';
 
 /** Tipi che si elencano dalla CPU: SFC, SFB e SDB non si confrontano. */
@@ -84,4 +84,18 @@ async function infoOf(
         }
       : {}),
   };
+}
+
+export const isUploadableType = (v: unknown): v is 'OB' | 'FB' | 'FC' | 'DB' =>
+  typeof v === 'string' && (LISTED as string[]).includes(v);
+
+/** Carica un solo blocco dal collegamento della finestra (sola lettura, in coda alla sorveglianza). */
+export async function uploadOneBlock(
+  service: PlcService,
+  owner: PlcOwner,
+  type: BlockType,
+  number: number,
+): Promise<PlcUploadBlockResult> {
+  const r = await service.read(owner, (run) => run((c) => c.uploadWithInfo(type, number)));
+  return r.ok ? { ok: true, bytes: r.value.bytes } : { ok: false, error: r.error };
 }

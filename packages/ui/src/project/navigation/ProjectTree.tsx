@@ -407,6 +407,7 @@ export function ProjectTree() {
     }
     if (parsed.kind === 'block') {
       const blocks = blockNodesOf(inNodes);
+      const online0 = store.getState().online;
       compileItems.push(
         {
           id: 'compileBlock',
@@ -422,6 +423,22 @@ export function ProjectTree() {
           run: () => void settle(exportCompiledBlock(ctx, parsed.dev, parsed.id)),
         },
       );
+      // Solo online e per i blocchi diversi dalla CPU.
+      const row =
+        online0.compare?.deviceId === parsed.dev
+          ? online0.compare.rows.find((r) => r.blockId === parsed.id)
+          : undefined;
+      if (online0.status === 'on' && online0.deviceId === parsed.dev) {
+        compileItems.push({
+          id: 'compareOnline',
+          label: t('objects.compareOnline'),
+          disabled: inNodes.length !== 1 || row?.state !== 'different',
+          run: () =>
+            store
+              .getState()
+              .openEditor({ kind: 'compare', deviceId: parsed.dev, objectId: parsed.id }),
+        });
+      }
       // Solo col PLC online: i blocchi scelti nell'albero, con l'anteprima del confronto.
       const online = store.getState().online;
       if (online.status === 'on' && online.deviceId === parsed.dev) {

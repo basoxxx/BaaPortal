@@ -7,10 +7,11 @@ import type {
   PlcDownloadResult,
   PlcScanStartResult,
   PlcUploadAllResult,
+  PlcUploadBlockResult,
 } from '@baaportal/ui';
 import type { ConfirmFn } from './confirm';
 import { PlcWriteService, isControlOp, parseDownloadRequest } from './plcWrite';
-import { listOnlineBlocks } from './onlineBlocks';
+import { isUploadableType, listOnlineBlocks, uploadOneBlock } from './onlineBlocks';
 import { PlcService } from './plcService';
 import { ScanService } from './scanService';
 import { UploadService } from './uploadAll';
@@ -86,6 +87,14 @@ export function registerPlc(
   });
   // Elenco dei blocchi della CPU: sola lettura, sul collegamento della finestra.
   handle('plc:blocks', (e): Promise<PlcBlocksResult> => listOnlineBlocks(service, e.sender));
+  // Un solo blocco della CPU collegata: sola lettura, solo OB, FB, FC e DB.
+  handle('plc:uploadBlock', (e, type, number): Promise<PlcUploadBlockResult> => {
+    if (!isUploadableType(type))
+      return Promise.resolve({ ok: false, error: 'Tipo di blocco non valido' });
+    if (!int(number, 0, 65535))
+      return Promise.resolve({ ok: false, error: 'Numero di blocco non valido' });
+    return uploadOneBlock(service, e.sender, type, number);
+  });
   // Caricamento dalla CPU: collegamento proprio, in sola lettura, dall'accesso dato dalla finestra.
   handle('plc:uploadAll', async (e, raw): Promise<PlcUploadAllResult> => {
     const access = parsePlcAccess(raw);

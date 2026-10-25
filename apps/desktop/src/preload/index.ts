@@ -69,6 +69,7 @@ const bridge: RawBridge = {
   plcDownload: (files, opts) => ipcRenderer.invoke('plc:download', files, opts),
   plcControl: (op) => ipcRenderer.invoke('plc:control', op),
   plcBlocks: () => ipcRenderer.invoke('plc:blocks'),
+  plcUploadBlock: (type, number) => ipcRenderer.invoke('plc:uploadBlock', type, number),
   onPlcWriteProgress: (cb) => subscribe<[PlcWriteProgress]>('plc:writeProgress', cb),
   plcUploadAll: (access) => ipcRenderer.invoke('plc:uploadAll', access),
   plcUploadCancel: () => ipcRenderer.invoke('plc:uploadCancel'),

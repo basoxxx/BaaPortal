@@ -3,6 +3,7 @@ import type {
   PlcAccess,
   PlcBlockRef,
   PlcBlocksResult,
+  PlcUploadBlockResult,
   PlcConnectResult,
   PlcControlOp,
   PlcControlResult,
@@ -147,6 +148,8 @@ export interface BaaBridge {
   plcControl(op: PlcControlOp): Promise<PlcControlResult>;
   /** Elenco dei blocchi della CPU collegata (sola lettura); mai eccezioni: l'esito dice tutto. */
   plcBlocks(): Promise<PlcBlocksResult>;
+  /** Carica un solo blocco OB, FB, FC o DB dalla CPU collegata (sola lettura); mai eccezioni. */
+  plcUploadBlock(type: PlcBlockRef['type'], number: number): Promise<PlcUploadBlockResult>;
   onPlcWriteProgress(cb: (p: PlcWriteProgress) => void): () => void;
   /**
    * Carica OB, FB, FC e DB da una CPU in sola lettura, su un collegamento proprio (non serve essere

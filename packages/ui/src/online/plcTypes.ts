@@ -96,6 +96,9 @@ export interface PlcUploadedFile {
   bytes: Uint8Array;
 }
 
+/** Esito di `plcUploadBlock`: i byte del file `.blk` di un solo blocco della CPU collegata. */
+export type PlcUploadBlockResult = { ok: true; bytes: Uint8Array } | { ok: false; error: string };
+
 /** Avanzamento di «Carica dal dispositivo»: `current` è il blocco appena finito. */
 export interface PlcUploadProgress {
   done: number;

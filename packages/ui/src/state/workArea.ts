@@ -1,6 +1,7 @@
 import { ids, parseNodeId } from '../project/navigation/treeIds';
 
-export type EditorKind = 'tagTable' | 'allTags' | 'block' | 'udt' | 'source' | 'watchTable';
+export type EditorKind =
+  'tagTable' | 'allTags' | 'block' | 'udt' | 'source' | 'watchTable' | 'compare';
 export interface EditorRef {
   /** `${kind}:${deviceId}:${objectId}`; "Mostra tutte le variabili" ha objectId ''. */
   key: string;
@@ -56,6 +57,8 @@ export function nodeIdOfEditor(e: EditorTarget): string {
       return ids.source(e.deviceId, e.objectId);
     case 'watchTable':
       return ids.watchTable(e.deviceId, e.objectId);
+    case 'compare':
+      return ids.block(e.deviceId, e.objectId);
     case 'allTags':
       return ids.folder(e.deviceId, 'tags-all');
   }

@@ -290,6 +290,14 @@ export class FakeBridge implements BaaBridge {
   emitPlcWriteProgress(p: PlcWriteProgress): void {
     for (const cb of [...this.plcWriteCbs]) cb(p);
   }
+  plcUploadBlockResults = new Map<string, PlcUploadBlockResult>();
+  plcUploadBlockCalls: string[] = [];
+  async plcUploadBlock(type: string, number: number): Promise<PlcUploadBlockResult> {
+    this.plcUploadBlockCalls.push(`${type}${number}`);
+    return (
+      this.plcUploadBlockResults.get(`${type}${number}`) ?? { ok: false, error: 'nessun blocco' }
+    );
+  }
   // Ricerca dei dispositivi accessibili.
   plcUploadResults: PlcUploadAllResult[] = [];
   plcUploadCalls: PlcAccess[] = [];

@@ -5,6 +5,7 @@ import { findDevice } from '@baaportal/project';
 import type { IconName } from '../icons';
 import { useAppStore } from '../state/AppContext';
 import { BlockEditor } from './block/BlockEditor';
+import { CompareView } from './compare/CompareView';
 import { DbEditor } from './db/DbEditor';
 import { SourceEditor } from './source/SourceEditor';
 import { WatchTableView } from './watch/WatchTableView';
@@ -86,6 +87,16 @@ export const EDITORS: Record<EditorKind, EditorDef> = {
     title: (r, d) => device(r, d)?.tagTables.find((x) => x.id === r.objectId)?.name ?? '',
     exists: (r, d) => !!device(r, d)?.tagTables.some((x) => x.id === r.objectId),
     Component: TagTableEditor,
+  },
+  compare: {
+    kind: 'compare',
+    icon: (r, d) => BLOCK_ICON[block(r, d)?.kind ?? 'FB'],
+    title: (r, d, t) => {
+      const b = block(r, d);
+      return b ? t('compareView.title', { name: b.name }) : '';
+    },
+    exists: (r, d) => block(r, d) !== undefined,
+    Component: CompareView,
   },
   allTags: {
     kind: 'allTags',

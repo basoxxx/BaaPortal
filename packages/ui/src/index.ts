@@ -34,6 +34,7 @@ export type {
   OnlineBlock,
   PlcBlocksResult,
   PlcUploadedFile,
+  PlcUploadBlockResult,
   PlcUploadProgress,
   PlcUploadAllResult,
 } from './online/plcTypes';
