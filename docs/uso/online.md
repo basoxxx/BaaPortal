@@ -70,7 +70,7 @@ La pagina _Imposta ora_ mostra l'ora della CPU, quella del PC e la differenza. S
 
 ## Tabelle di controllo online
 
-Una tabella di controllo funziona anche con la CPU vera. Con il collegamento attivo, _Osserva tutto_ legge i valori di stato ogni secondo circa. _Comanda_ scrive i valori di comando: prima compare la conferma, con l'elenco degli indirizzi e dei valori. Le righe che online non si possono usare (per esempio le uscite di periferia PQ) dicono «non disponibile online». PI, temporizzatori e contatori si osservano ma non si comandano. Al massimo 200 righe osservate. Se una scrittura si interrompe a metà, le righe già scritte restano scritte e la riga in corso dice «esito sconosciuto».
+Una tabella di controllo funziona anche con la CPU vera. Con il collegamento attivo, _Osserva tutto_ legge i valori di stato ogni mezzo secondo circa. _Comanda_ scrive i valori di comando: prima compare la conferma, con l'elenco degli indirizzi e dei valori. Le righe che online non si possono usare (per esempio le uscite di periferia PQ) dicono «non disponibile online». PI, temporizzatori e contatori si osservano ma non si comandano. Al massimo 200 righe osservate. Se una scrittura si interrompe a metà, le righe già scritte restano scritte. L'«esito sconosciuto» riguarda tutta la richiesta in corso (fino a 20 righe): le righe successive dicono «Non scritto», e se la CPU rifiuta la richiesta le righe dicono «Rifiutato dalla CPU».
 
 ## Backup online
 

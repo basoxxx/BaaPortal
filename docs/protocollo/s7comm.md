@@ -1378,8 +1378,10 @@ Es. `28 … fd 00 0a 01 00 30 41 "00001" P 05 "_INSE"`. **verificato** su
 ### 10.5 `_DELE` (cancella blocco)
 
 Stessa struttura PI-service `0x28` ma servizio `"_DELE"` e subfun `0x42`. Cancella il
-blocco indicato dal filesystem passivo. (Non in cattura S7-300 locale; struttura da
-snap7 `opDelete` e dissector.)
+blocco indicato nel filesystem `'A'`, come fa TIA (errata sotto). La struttura è
+**verificata** in una cattura reale (`tia_s300_downloadHwConfig.pcapng`, SDB); per i blocchi
+utente resta l'ipotesi che valga la stessa forma. Origine della struttura: snap7 `opDelete`
+e dissector, poi confermati dalla cattura.
 
 Codifica implementata (`encodeDeleteBlock`): identica a `_INSE` (§10.4) con servizio
 `"_DELE"`: len1 `0x000A`, conteggio `01`, `00`, nome a 8 caratteri (tipo ASCII a 2 caratteri,
