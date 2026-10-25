@@ -22,6 +22,7 @@ import { plcMonitorFor } from '../../online/plcMonitor';
 import { offsetOfLineCol } from '../../project/navigation/sourceActions';
 import { LadNetworkEditor } from '../lad/LadNetworkEditor';
 import { setLadActive } from '../lad/ladActive';
+import { callInstanceOf } from './callInstance';
 import { hasRawLines, isLockedImport, lockedBannerKey } from './readOnlyImport';
 import { useMnemonic } from '../awl/mnemonicPreference';
 import { useAppStore, useServices } from '../../state/AppContext';
@@ -31,24 +32,6 @@ const CHECK_DELAY_MS = 250;
 const NO_DIAGNOSTICS: AwlDiagnostic[] = [];
 const shown = displayText;
 const NO_MESSAGES = new Map<string, string[]>();
-
-/** Il blocco trascinato dall'albero come istanza di un box CALL: simbolo, con il suo DB per un FB. */
-function callInstanceOf(dev: PlcDevice | undefined, raw: string): string | undefined {
-  let ref: { deviceId?: string; refs?: { kind?: string; id?: string }[] } | null;
-  try {
-    ref = JSON.parse(raw) as typeof ref;
-  } catch {
-    return undefined;
-  }
-  if (!ref || typeof ref !== 'object') return undefined;
-  const r = ref.refs?.length === 1 ? ref.refs[0] : undefined;
-  const b = r?.kind === 'block' ? dev?.blocks.find((x) => x.id === r.id) : undefined;
-  if (!dev || ref.deviceId !== dev.id || !b || (b.kind !== 'FC' && b.kind !== 'FB'))
-    return undefined;
-  if (b.kind === 'FC') return `"${b.name}"`;
-  const idb = dev.blocks.find((x) => x.kind === 'IDB' && x.instanceOf === b.name);
-  return idb ? `"${b.name}", "${idb.name}"` : `"${b.name}"`;
-}
 
 /** Testo non ancora confermato di un segmento, valido finché sorgente e mnemonica sono quelli da cui parte. */
 interface Draft {
@@ -185,6 +168,13 @@ export function NetworksView({ deviceId, blockId }: Props) {
       }),
     [store, deviceId, blockId],
   );
+  /** Le etichette automatiche sono per blocco: ogni modifica ai segmenti riscrive la sorgente di tutti. */
+  const refreshKopSources = (b: CodeBlock, d: PlcDevice) => {
+    const sources = kopSources(current(b), d);
+    b.networks.forEach((x, i) => {
+      x.source = sources[i]?.source ?? x.source;
+    });
+  };
   const editNetwork = (id: string, field: 'title' | 'comment' | 'source', value: string) =>
     edit('history.editNetwork', (b) => {
       const n = b.networks.find((x) => x.id === id);
@@ -196,21 +186,21 @@ export function NetworksView({ deviceId, blockId }: Props) {
       const n = b.networks.find((x) => x.id === id);
       if (!n) return;
       n.lad = next;
-      const sources = kopSources(current(b), d);
-      b.networks.forEach((x, i) => {
-        x.source = sources[i]?.source ?? x.source;
-      });
+      refreshKopSources(b, d);
     });
   const insert = () =>
-    edit('history.addNetwork', (b) => {
+    edit('history.addNetwork', (b, d) => {
       const fresh: Network = { id: newId(), title: '', comment: '', source: '' };
       if (b.language === 'KOP') fresh.lad = emptyNetwork(newId);
       const at = b.networks.findIndex((x) => x.id === focusedId);
       b.networks.splice(at < 0 ? b.networks.length : at + 1, 0, fresh);
+      if (b.language === 'KOP') refreshKopSources(b, d);
     });
   const remove = (id: string) =>
-    edit('history.deleteNetwork', (b) => {
-      if (b.networks.length > 1) b.networks = b.networks.filter((x) => x.id !== id);
+    edit('history.deleteNetwork', (b, d) => {
+      if (b.networks.length <= 1) return;
+      b.networks = b.networks.filter((x) => x.id !== id);
+      if (b.language === 'KOP') refreshKopSources(b, d);
     });
 
   const networks = block?.networks;

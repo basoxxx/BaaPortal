@@ -118,7 +118,12 @@ function scanBlock(re: RegExp, o: FindOptions, d: PlcDevice, b: Block, out: Matc
       ({ kind, deviceId: d.id, blockId: b.id, networkIndex: i, from, to }) as HitLocation;
     scanText(re, n.title, o, ni('networkTitle'), ok, out);
     scanText(re, n.comment, o, ni('networkComment'), ok, out);
-    const meta: Meta = hasRawLines(n.source) ? { editable: false, reason: 'MC7_GREZZO' } : ok;
+    // Di un segmento KOP con grafico il compilatore usa `lad`, non `source`: sostituire lì non cambierebbe nulla.
+    const meta: Meta = n.lad
+      ? { editable: false, reason: 'KOP' }
+      : hasRawLines(n.source)
+        ? { editable: false, reason: 'MC7_GREZZO' }
+        : ok;
     const shown = displayText(n.source, o.mnemonic === 'de' ? 'german' : 'international');
     scanText(
       re,

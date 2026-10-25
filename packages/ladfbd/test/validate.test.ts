@@ -46,6 +46,11 @@ describe('validateNetwork', () => {
   it('EMPTY_BRANCH: ramo parallelo vuoto', () => {
     const p: LadElem = { id: 'p', k: 'parallel', branches: [[c('a')], []] };
     expect(validateNetwork(net([p], [coil('q')]))).toEqual([
+      { elemId: 'p', code: 'EMPTY_BRANCH', params: { branch: '2' } },
+    ]);
+    // il numero è 1-based anche per il primo ramo
+    const first: LadElem = { id: 'p', k: 'parallel', branches: [[], [c('a')]] };
+    expect(validateNetwork(net([first], [coil('q')]))).toEqual([
       { elemId: 'p', code: 'EMPTY_BRANCH', params: { branch: '1' } },
     ]);
   });
@@ -196,6 +201,8 @@ describe('validateNetwork: box', () => {
       ['CALL', '"Nastro", "Nastro_DB"', true],
       ['CALL', '#Motore', true],
       ['CALL', 'FB 1', false],
+      // FB trascinato dall'albero senza DB di istanza: `"Nome", ` con il DB vuoto
+      ['CALL', '"Nastro", ', false],
       ['CALL', 'DB 1', false],
       ['CALL', '', false],
       // la forma con % che scrive formatNetwork

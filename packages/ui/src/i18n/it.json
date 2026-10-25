@@ -244,7 +244,8 @@
     "invalidRegex": "Espressione regolare non valida: {{detail}}",
     "reason": {
       "PROTETTO": "Blocco protetto: il testo non si può modificare.",
-      "MC7_GREZZO": "Codice MC7 non decodificabile: il testo non si può modificare."
+      "MC7_GREZZO": "Codice MC7 non decodificabile: il testo non si può modificare.",
+      "KOP": "Segmento KOP: l'AWL è generato dal grafico e non si modifica qui."
     }
   },
   "sim": {

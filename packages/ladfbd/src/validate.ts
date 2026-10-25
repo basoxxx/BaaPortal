@@ -112,7 +112,7 @@ function checkSeries(
         break;
       case 'parallel':
         e.branches.forEach((b, i) => {
-          if (b.length === 0) add(e.id, 'EMPTY_BRANCH', { branch: String(i) });
+          if (b.length === 0) add(e.id, 'EMPTY_BRANCH', { branch: String(i + 1) });
           else checkSeries(b, true, !logic, add, inPin);
         });
         break;

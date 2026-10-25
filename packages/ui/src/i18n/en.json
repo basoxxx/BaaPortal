@@ -244,7 +244,8 @@
     "invalidRegex": "Invalid regular expression: {{detail}}",
     "reason": {
       "PROTETTO": "Protected block: the text cannot be edited.",
-      "MC7_GREZZO": "Undecodable MC7 code: the text cannot be edited."
+      "MC7_GREZZO": "Undecodable MC7 code: the text cannot be edited.",
+      "KOP": "LAD network: the STL is generated from the diagram and cannot be edited here."
     }
   },
   "sim": {

@@ -2,7 +2,8 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { EditorView } from '@codemirror/view';
 import { describe, expect, it, vi } from 'vitest';
 import { setDiagnostics } from '@codemirror/lint';
-import { createCodeBlock, readBaap, type CodeBlock } from '@baaportal/project';
+import { createCodeBlock, kopSources, readBaap, type CodeBlock } from '@baaportal/project';
+import type { LadNetwork } from '@baaportal/ladfbd';
 import { updateSettings } from '../src/settings/settings';
 import { dev, fb, mem, openEditor, past } from './blockFixtures';
 import { PROJECT_PATH, type RenderedApp } from './renderApp';
@@ -312,6 +313,53 @@ describe("segmenti AWL con l'editor CodeMirror", () => {
       // Un segmento KOP con sorgente e senza grafico si vede in AWL, in sola lettura.
       expect(screen.getByTestId('kop-awl-hint')).toHaveTextContent('Segmento in AWL');
       expect(viewOf().state.readOnly).toBe(true);
+    },
+    T,
+  );
+
+  it(
+    'eliminare un segmento KOP rinumera le etichette nelle sorgenti salvate degli altri',
+    async () => {
+      const k = createCodeBlock({ kind: 'FC', number: 21, name: 'K', language: 'KOP' });
+      k.id = 'fc-K';
+      // Ogni segmento ha un box MOVE con ENO: genera un'etichetta automatica, numerata per blocco.
+      const lad = (n: number): LadNetwork => ({
+        root: {
+          id: `r${n}`,
+          series: [
+            { id: `c${n}`, k: 'contact', neg: false, op: 'I 0.0' },
+            {
+              id: `b${n}`,
+              k: 'box',
+              box: 'MOVE',
+              instance: '',
+              pins: { IN: 'MW 10', OUT: 'MW 12' },
+              boolPins: {},
+            },
+          ],
+          outs: [],
+        },
+      });
+      k.networks = [1, 2, 3].map((n) => ({
+        id: `n${n}`,
+        title: '',
+        comment: '',
+        source: '',
+        lad: lad(n),
+      }));
+      const app = await openEditor('block', k.id, (d) => {
+        d.blocks.push(k);
+        const b = d.blocks.find((x) => x.id === k.id) as CodeBlock;
+        kopSources(b, d).forEach((r, i) => (b.networks[i]!.source = r.source));
+      });
+      expect(block(app, k.id).networks[2]!.source).toContain('_003');
+      await app_deleteFirst();
+      const b = block(app, k.id);
+      expect(b.networks.map((n) => n.id)).toEqual(['n2', 'n3']);
+      expect(b.networks.map((n) => n.source)).toEqual(kopSources(b, dev(app)).map((r) => r.source));
+      expect(b.networks[0]!.source).toContain('_001');
+      expect(b.networks[1]!.source).toContain('_002');
+      expect(b.networks.some((n) => n.source.includes('_003'))).toBe(false);
     },
     T,
   );
