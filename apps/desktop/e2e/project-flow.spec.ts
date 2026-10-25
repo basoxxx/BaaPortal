@@ -37,9 +37,12 @@ test('crea, modifica, salva, chiude e riapre dai recenti, con nome non ASCII in 
   const author = page.getByTestId('panel-inspector').getByLabel('Autore');
   await author.fill('Collaudo');
   await page.keyboard.press(`${mod}+s`);
-  await expect
-    .poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getTitle()))
-    .toBe(`BaaPortal - ${file}`);
+  // Il titolo non cambia col salvataggio (il file esiste già dalla creazione): l'unico segnale
+  // che il salvataggio è finito, documento segnato come salvato compreso, è il messaggio di esito.
+  // Chiudere prima lo troverebbe ancora «modificato» (corsa vista su Windows).
+  await page.getByTestId('inspector-tab-info').click();
+  await expect(page.getByTestId('info-row').filter({ hasText: /salvato\./ })).toBeVisible();
+  await page.getByTestId('inspector-tab-properties').click();
 
   await page
     .getByTestId('menu-bar')
