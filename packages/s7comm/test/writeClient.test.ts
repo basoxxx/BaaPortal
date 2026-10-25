@@ -6,6 +6,13 @@ import {
   S7Error,
   S7WriteClient,
   buildBlockFile,
+  decodeCotp,
+  decodeS7,
+  encodeCotp,
+  encodeS7,
+  encodeTpkt,
+  fromHex,
+  hex,
   memoryTransportPair,
   type Transport,
   type TransportFactory,
@@ -168,5 +175,64 @@ describe('S7WriteClient contro il finto PLC', () => {
     for (const k of ['writeItems', 'writeArea', 'downloadBlock', 'stop', 'start']) {
       expect(keys).not.toContain(k);
     }
+  });
+});
+
+/** Risponde al set clock con i byte di una CPU reale (proto §12.0), con `code` nel parametro. */
+function setClockRig(code: number, seen: string[]): Promise<S7WriteClient> {
+  const transport: TransportFactory = async () => {
+    const [a, b] = memoryTransportPair();
+    serve(new FakeCpu(), b);
+    let reply: ((c: Uint8Array) => void) | undefined;
+    return {
+      send: (bytes) => {
+        const cotp = decodeCotp(bytes.subarray(4));
+        const pdu = cotp.type === 'DT' ? decodeS7(cotp.data) : undefined;
+        if (pdu?.rosctr === 7 && pdu.param[5] === 0x47 && pdu.param[6] === 0x02) {
+          seen.push(hex(pdu.param) + ' ' + hex(pdu.data));
+          const param = fromHex('000112081287020000000000');
+          param[10] = code >> 8;
+          param[11] = code & 0xff;
+          const res = encodeS7({
+            rosctr: 7,
+            pduRef: pdu.pduRef,
+            errorClass: 0,
+            errorCode: 0,
+            param,
+            data: fromHex('0a000000'),
+          });
+          reply?.(encodeTpkt(encodeCotp({ type: 'DT', eot: true, data: res })));
+          return;
+        }
+        a.send(bytes);
+      },
+      close: () => a.close(),
+      onClose: (cb) => a.onClose(cb),
+      onData: (cb) => {
+        reply = cb;
+        a.onData(cb);
+      },
+    } satisfies Transport;
+  };
+  return S7WriteClient.connect({ host: 'finto', transport, timeoutMs: 3000 });
+}
+
+describe('S7WriteClient.setClock', () => {
+  const T = { year: 2020, month: 5, day: 17, hour: 10, minute: 20, second: 30, ms: 0 };
+
+  it('anno 2090: RangeError senza invio', async () => {
+    const seen: string[] = [];
+    const c = await setClockRig(0, seen);
+    await expect(c.setClock({ ...T, year: 2090 })).rejects.toBeInstanceOf(RangeError);
+    expect(seen).toEqual([]);
+  });
+
+  it('manda 7/2 canonico e accetta la risposta senza dati utili; un error code diverso da 0 è CPU_ERROR', async () => {
+    const seen: string[] = [];
+    await (await setClockRig(0, seen)).setClock(T);
+    expect(seen).toEqual(['0001120411470200 ff09000a00192005171020300000']);
+    const e: unknown = await (await setClockRig(0xd241, [])).setClock(T).catch((x: unknown) => x);
+    expect(e).toMatchObject({ code: 'CPU_ERROR', detail: { errorClass: 0xd2, errorCode: 0x41 } });
+    expect((e as Error).message).toContain('set clock');
   });
 });

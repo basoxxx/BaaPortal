@@ -2,6 +2,7 @@ import { readU16 } from './bytes';
 import { decodeCotp, encodeCotp } from './cotp';
 import { S7Error } from './errors';
 import { decodeBlockInfoRequest, decodeBlockListOfTypeRequest } from './s7/blocks';
+import { decodeBcdDateTime } from './s7/clock';
 import { decodeS7, encodeS7, type S7Pdu } from './s7/header';
 import { MAX_ITEMS_PER_REQUEST } from './s7/plan';
 import { decodeReadRequest, encodeReadRequest } from './s7/readVar';
@@ -42,6 +43,7 @@ import {
   reqContinue,
   reqReadClock,
   reqReadSzl,
+  reqSetClock,
   type UserdataFrame,
 } from './s7/userdataRequests';
 
@@ -181,6 +183,7 @@ function refuseWrite(msg: string): never {
  */
 export function assertOnlineWrite(pdu: S7Pdu): void {
   if (pdu.rosctr === 3) return assertDownloadAck(pdu);
+  if (pdu.rosctr === 7 && isSetClock(pdu)) return assertSetClock(pdu);
   if (pdu.rosctr !== 1 || pdu.param.length === 0) return assertReadOnly(pdu);
   const fn = pdu.param[0]!;
   if (fn !== 0x05 && fn !== 0x1a && fn !== 0x1c && fn !== 0x28 && fn !== 0x29) {
@@ -253,6 +256,34 @@ export function assertOnlineWrite(pdu: S7Pdu): void {
   } catch (e) {
     if (e instanceof S7Error && e.code === 'FORBIDDEN') throw e;
     refuseWrite(`${label} non canonica (${e instanceof Error ? e.message : String(e)})`);
+  }
+}
+
+/** Userdata richiesta 7/2 (set clock): l'unico userdata di scrittura ammesso (proto §12.0). */
+function isSetClock(pdu: S7Pdu): boolean {
+  try {
+    const d = decodeUserdata(pdu.param, pdu.data);
+    return d.param.method === 'request' && d.param.group === 7 && d.param.subfunction === 2;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Set clock canonico: sottofunzione 0x02 (mai 0x04), giorno della settimana 0, e i byte identici
+ * a `reqSetClock` dell'ora decodificata (anno 1990-2089 compreso).
+ */
+function assertSetClock(pdu: S7Pdu): void {
+  try {
+    const d = decodeUserdata(pdu.param, pdu.data);
+    must(d.param.type === 4 && d.param.dataUnitRef === undefined, 'set clock non è una richiesta');
+    const want = reqSetClock(decodeBcdDateTime(d.payload), d.param.sequence);
+    must(
+      sameBytes(pdu.param, want.param) && sameBytes(pdu.data, want.data),
+      'set clock non canonico',
+    );
+  } catch (e) {
+    refuseWrite(`set clock non canonico (${e instanceof Error ? e.message : String(e)})`);
   }
 }
 

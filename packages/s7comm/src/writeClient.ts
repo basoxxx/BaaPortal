@@ -16,6 +16,10 @@ import {
 } from './s7/control';
 import { encodeRequestDownload, sliceBlockForDownload } from './s7/download';
 import type { Area } from './s7/readVar';
+import { decodeUserdata } from './s7/userdata';
+import { reqSetClock } from './s7/userdataRequests';
+import type { S7DateTime } from './s7/clock';
+import { errorName } from './s7/errorCodes';
 import {
   decodeWriteResponse,
   encodeWriteRequest,
@@ -167,6 +171,29 @@ export class S7WriteClient extends S7Client {
   /** Comprime la memoria (`_GARB`, proto §11.3). Un esito diverso da 0 lancia CPU_ERROR. */
   compressMemory(): Promise<void> {
     return this.#controlOk(encodeCompressMemory(), '_GARB');
+  }
+
+  /**
+   * Imposta l'ora della CPU (proto §12.0): userdata 7/2. La risposta non ha parte dati utile
+   * (`0a 00 00 00`), quindi non passa dal percorso di lettura. Un anno fuori 1990-2089 lancia
+   * RangeError senza inviare nulla; un error code della CPU diverso da 0 lancia CPU_ERROR.
+   */
+  async setClock(t: S7DateTime): Promise<void> {
+    const frame = reqSetClock(t);
+    const pdu = await this.#wconn.request(frame.param, frame.data, 7);
+    if (pdu.rosctr !== 7)
+      throw new S7Error('PROTOCOL', `risposta a set clock con ROSCTR ${pdu.rosctr}`);
+    const u = decodeUserdata(pdu.param, pdu.data);
+    const code = u.param.errorCode ?? 0;
+    if (code !== 0) {
+      const cls = code >> 8;
+      const num = code & 0xff;
+      throw new S7Error(
+        'CPU_ERROR',
+        `set clock rifiutato dalla CPU: classe ${h2(cls)} codice ${h2(num)} (${errorName(cls, num)})`,
+        { errorClass: cls, errorCode: num },
+      );
+    }
   }
 
   async #controlOk(param: Uint8Array, what: string): Promise<void> {

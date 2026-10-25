@@ -1,8 +1,10 @@
 import { encodeBlockInfoRequest, encodeBlockListOfTypeRequest, type BlockType } from './blocks';
 import { encodeSzlRequest } from './szl';
-import { encodeUserdata } from './userdata';
+import { encodeBcdDateTime, type S7DateTime } from './clock';
+import { S7Error } from '../errors';
+import { encodeSetClockUserdata, encodeUserdata } from './userdata';
 
-/** Costruttori delle sole richieste di lettura (proto §15.1). Niente set clock, niente scritture. */
+/** Costruttori delle richieste di lettura (proto §15.1) e, solo `reqSetClock`, del set clock (proto §12.0). */
 export interface UserdataFrame {
   param: Uint8Array;
   data: Uint8Array;
@@ -58,4 +60,20 @@ export function reqContinue(group: number, subfunction: number, sequence: number
     empty,
     0x0a,
   );
+}
+
+/**
+ * Set clock (gruppo 7, subfunction `0x02`, proto §12.0; mai la `0x04`): dati `ff 09 000a` + ora
+ * di 10 byte. Il giorno della settimana è sempre 0: lo ricalcola la CPU. Un campo fuori
+ * intervallo (anno 1990-2089 compreso, §12.1) lancia RangeError prima di costruire i byte.
+ */
+export function reqSetClock(t: S7DateTime, sequence = 0): UserdataFrame {
+  let payload: Uint8Array;
+  try {
+    payload = encodeBcdDateTime({ ...t, weekday: 0 });
+  } catch (e) {
+    if (e instanceof S7Error) throw new RangeError(e.message);
+    throw e;
+  }
+  return encodeSetClockUserdata(payload, sequence);
 }

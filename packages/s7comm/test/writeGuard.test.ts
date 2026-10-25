@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   S7Connection,
   assertOnlineWrite,
+  assertReadOnly,
   assertOutgoingFrame,
   decodeDownloadBlockAck,
   decodeRequestDownload,
@@ -19,7 +20,9 @@ import {
   encodeTpkt,
   encodeWarmRestart,
   encodeWriteRequest,
+  fromHex,
   memoryTransportPair,
+  reqSetClock,
   type S7Pdu,
   type Transport,
 } from '../src';
@@ -131,6 +134,48 @@ describe('assertOnlineWrite', () => {
         expect.objectContaining({ code: 'FORBIDDEN' }),
       );
     }
+  });
+
+  it('set clock: online-write ammette la forma canonica; sottofunzione 0x04, giorno ≠ 0 e byte in più sono FORBIDDEN; read-only rifiuta', () => {
+    const T = { year: 2014, month: 8, day: 20, hour: 11, minute: 59, second: 33, ms: 40 };
+    const f = reqSetClock(T, 3);
+    const ok = job(f.param, f.data, 7);
+    expect(() => assertOnlineWrite(ok)).not.toThrow();
+    // anche con byte 0/1 dell'anno diversi, ricodificato uguale solo se identico: qui identico
+    const forbidden = (p: S7Pdu): void =>
+      expect(() => assertOnlineWrite(p)).toThrowError(
+        expect.objectContaining({ code: 'FORBIDDEN' }),
+      );
+    forbidden(
+      job(
+        f.param.map((b, i) => (i === 6 ? 0x04 : b)),
+        f.data,
+        7,
+      ),
+    ); // 7/4
+    forbidden(
+      job(
+        f.param,
+        f.data.map((b, i) => (i === 13 ? 0x04 : b)),
+        7,
+      ),
+    ); // giorno 4
+    forbidden(job(f.param, Uint8Array.from([...f.data, 0]), 7));
+    forbidden(
+      job(
+        f.param,
+        f.data.map((b, i) => (i === 7 ? 0x9a : b)),
+        7,
+      ),
+    ); // anno non BCD
+    forbidden(job(f.param, f.data.slice(0, 4), 7)); // dati corti
+    forbidden(job(fromHex('0001120811470200000000 00'.replace(/ /g, '')), f.data, 7)); // forma risposta
+    // read-only
+    expect(() => assertReadOnly(ok)).toThrowError(expect.objectContaining({ code: 'FORBIDDEN' }));
+    expect(() => assertOutgoingFrame(dt(encodeS7(ok)))).toThrowError(
+      expect.objectContaining({ code: 'FORBIDDEN' }),
+    );
+    expect(() => assertOutgoingFrame(dt(encodeS7(ok)), 'online-write')).not.toThrow();
   });
 
   it('assertOutgoingFrame(mode="online-write") accetta un DT con write var; mode default la rifiuta', () => {

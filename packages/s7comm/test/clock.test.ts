@@ -8,6 +8,7 @@ import {
   encodeBlockTimestamp,
   fromHex,
   hex,
+  reqSetClock,
 } from '../src';
 import * as V from './vectors';
 
@@ -123,5 +124,24 @@ describe('ora BCD (proto §12.1)', () => {
     expect(() => encodeBlockTimestamp({ ...t, month: 2, day: 31 })).toThrow(S7Error);
     expect(() => encodeBlockTimestamp({ ...t, month: 13 })).toThrow(S7Error);
     expect(() => encodeBlockTimestamp({ ...t, day: 1.5 })).toThrow(S7Error);
+  });
+});
+
+describe('set clock (proto §12.0, §17.12)', () => {
+  const T = { year: 2014, month: 8, day: 20, hour: 11, minute: 59, second: 33, ms: 40 };
+
+  it('reqSetClock è il vettore §17.12: param 00 01 12 04 11 47 02 00, dati ff 09 000a + ora, giorno 0', () => {
+    const f = reqSetClock({ ...T, weekday: 4 });
+    expect(hex(f.param)).toBe('0001120411470200');
+    expect(hex(f.data)).toBe('ff09000a' + '00191408201159330400');
+    expect(hex(reqSetClock(T, 5).param)).toBe('0001120411470205');
+  });
+
+  it('anno fuori 1990-2089 o campo fuori intervallo: RangeError', () => {
+    expect(() => reqSetClock({ ...T, year: 2090 })).toThrow(RangeError);
+    expect(() => reqSetClock({ ...T, year: 1989 })).toThrow(RangeError);
+    expect(() => reqSetClock({ ...T, month: 13 })).toThrow(RangeError);
+    expect(reqSetClock({ ...T, year: 2089 }).data.length).toBe(14);
+    expect(reqSetClock({ ...T, year: 1990 }).data.length).toBe(14);
   });
 });

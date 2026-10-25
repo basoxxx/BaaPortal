@@ -75,6 +75,27 @@ export function encodeUserdata(
   transportSize?: number,
 ): { param: Uint8Array; data: Uint8Array } {
   checkAllowed(p);
+  return build(p, payload, returnCode, transportSize);
+}
+
+/**
+ * Richiesta di set clock (gruppo 7, subfunction 2, proto §12.0): l'unica scrittura userdata,
+ * fuori dall'allowlist di sola lettura di `encodeUserdata`. Il chiamante passa il payload già
+ * codificato (`reqSetClock`); il filtro di `online-write` ne verifica i byte.
+ */
+export function encodeSetClockUserdata(
+  payload: Uint8Array,
+  sequence: number,
+): { param: Uint8Array; data: Uint8Array } {
+  return build({ method: 'request', group: 7, subfunction: 2, sequence }, payload, 0xff);
+}
+
+function build(
+  p: UserdataParam,
+  payload: Uint8Array | null,
+  returnCode: number,
+  transportSize?: number,
+): { param: Uint8Array; data: Uint8Array } {
   const type = p.type ?? (p.method === 'request' ? 4 : 8);
   if (p.method === 'request' ? type !== 4 : type !== 8 && type !== 0) {
     throw new RangeError(`type ${type} incoerente con method '${p.method}'`);
