@@ -1,4 +1,12 @@
-import type { PlcAccess, PlcConnectResult, PlcEvent, PlcStatus } from './online/plcTypes';
+import type {
+  NetInterface,
+  PlcAccess,
+  PlcConnectResult,
+  PlcEvent,
+  PlcScanEvent,
+  PlcScanStartResult,
+  PlcStatus,
+} from './online/plcTypes';
 
 export interface RecentEntry {
   path: string;
@@ -116,5 +124,11 @@ export interface BaaBridge {
   plcDisconnect(): Promise<void>;
   plcStatus(): Promise<PlcStatus>;
   onPlcEvent(cb: (e: PlcEvent) => void): () => void;
+  // Ricerca dei dispositivi accessibili: solo su richiesta, una per finestra, interrompibile.
+  plcInterfaces(): Promise<NetInterface[]>;
+  /** `address` è l'indirizzo di una delle interfacce restituite da `plcInterfaces`. */
+  plcScanStart(address: string): Promise<PlcScanStartResult>;
+  plcScanCancel(): Promise<void>;
+  onPlcScanEvent(cb: (e: PlcScanEvent) => void): () => void;
   testOverrides(): Promise<{ recoveryIntervalMs?: number }>; // sempre {} nelle build pacchettizzate
 }

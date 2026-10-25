@@ -1,6 +1,7 @@
 import type { IpcMainInvokeEvent } from 'electron';
-import type { PlcAccess, PlcConnectResult } from '@baaportal/ui';
+import type { PlcAccess, PlcConnectResult, PlcScanStartResult } from '@baaportal/ui';
 import { PlcService } from './plcService';
+import { ScanService } from './scanService';
 
 type Handle = (
   channel: string,
@@ -39,7 +40,11 @@ export function parsePlcAccess(raw: unknown): PlcAccess | string {
 }
 
 /** Canali del collegamento online; il servizio tiene un collegamento per finestra (`e.sender`). */
-export function registerPlc(handle: Handle, service = new PlcService()): PlcService {
+export function registerPlc(
+  handle: Handle,
+  service = new PlcService(),
+  scans = new ScanService(),
+): { closeAll(): Promise<void> } {
   handle('plc:connect', async (e, raw): Promise<PlcConnectResult> => {
     const access = parsePlcAccess(raw);
     if (typeof access === 'string') return { ok: false, error: access };
@@ -47,5 +52,16 @@ export function registerPlc(handle: Handle, service = new PlcService()): PlcServ
   });
   handle('plc:disconnect', (e) => service.disconnect(e.sender));
   handle('plc:status', (e) => service.status(e.sender));
-  return service;
+  // Ricerca: parte solo da questo canale, su richiesta; l'indirizzo deve essere di un'interfaccia reale.
+  handle('plc:interfaces', () => scans.listInterfaces());
+  handle('plc:scanStart', (e, address): PlcScanStartResult => {
+    if (typeof address !== 'string') return { ok: false, error: 'Indirizzo non valido' };
+    return scans.start(e.sender, address);
+  });
+  handle('plc:scanCancel', (e) => scans.cancel(e.sender));
+  return {
+    closeAll: async () => {
+      await Promise.all([scans.cancelAll(), service.closeAll()]);
+    },
+  };
 }

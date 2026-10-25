@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { BaaBridge, KitProgress, PlcEvent } from '@baaportal/ui';
+import type { BaaBridge, KitProgress, PlcEvent, PlcScanEvent } from '@baaportal/ui';
 import type { RawBridge } from '../shared/rawBridge';
 
 function subscribe<T extends unknown[]>(channel: string, cb: (...args: T) => void): () => void {
@@ -55,6 +55,10 @@ const bridge: RawBridge = {
   plcDisconnect: () => ipcRenderer.invoke('plc:disconnect'),
   plcStatus: () => ipcRenderer.invoke('plc:status'),
   onPlcEvent: (cb) => subscribe<[PlcEvent]>('plc:event', cb),
+  plcInterfaces: () => ipcRenderer.invoke('plc:interfaces'),
+  plcScanStart: (address) => ipcRenderer.invoke('plc:scanStart', address),
+  plcScanCancel: () => ipcRenderer.invoke('plc:scanCancel'),
+  onPlcScanEvent: (cb) => subscribe<[PlcScanEvent]>('plc:scanEvent', cb),
   testOverrides: () => ipcRenderer.invoke('app:test-overrides'),
 };
 

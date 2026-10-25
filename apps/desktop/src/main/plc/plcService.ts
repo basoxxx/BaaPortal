@@ -1,6 +1,7 @@
 import { S7Error, type S7Client } from '@baaportal/s7comm';
 import { connectTcp } from '@baaportal/s7comm/node';
 import type { ConnectOptions } from '@baaportal/s7comm';
+import { toPlcIdentity, toPlcMode } from './plcMap';
 import type {
   PlcAccess,
   PlcConnectResult,
@@ -34,12 +35,6 @@ export interface PlcServiceOptions {
 
 const DEFAULT_PORT = 102;
 const CONNECTION_TYPES = { PG: 'pg', OP: 'op', S7_BASIC: 'basic' } as const;
-const MODES: readonly PlcMode[] = ['RUN', 'STOP', 'STARTUP', 'HOLD'];
-
-/** DEFECT e valori sconosciuti diventano UNKNOWN: l'interfaccia conosce solo questi modi. */
-function toPlcMode(m: string): PlcMode {
-  return MODES.find((x) => x === m) ?? 'UNKNOWN';
-}
 
 interface Link {
   access: PlcAccess;
@@ -128,7 +123,7 @@ export class PlcService {
     let mode: PlcMode;
     let protection: string | undefined;
     try {
-      identity = this.identityOf(await client.identity());
+      identity = toPlcIdentity(await client.identity());
       mode = toPlcMode(await client.mode());
       try {
         const p = await client.protection();
@@ -181,15 +176,6 @@ export class PlcService {
   async closeAll(): Promise<void> {
     for (const o of this.pending.keys()) this.bump(o); // annulla i connect in attesa
     await Promise.all([...this.links.keys()].map((o) => this.drop(o)));
-  }
-
-  private identityOf(i: Awaited<ReturnType<Client['identity']>>): PlcIdentity {
-    const out: PlcIdentity = { orderNumber: i.orderNumber };
-    if (i.moduleName !== undefined) out.moduleName = i.moduleName;
-    if (i.version !== undefined) out.firmware = i.version;
-    if (i.serialNumber !== undefined) out.serial = i.serialNumber;
-    if (i.plantId !== undefined) out.plantId = i.plantId;
-    return out;
   }
 
   /** Ferma la sorveglianza e chiude il socket; non manda eventi. */

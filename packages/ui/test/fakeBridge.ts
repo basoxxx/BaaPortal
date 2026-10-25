@@ -10,7 +10,15 @@ import type {
   KitStartResult,
   KitSummary,
 } from '../src/bridge';
-import type { PlcAccess, PlcConnectResult, PlcEvent, PlcStatus } from '../src/online/plcTypes';
+import type {
+  NetInterface,
+  PlcAccess,
+  PlcConnectResult,
+  PlcEvent,
+  PlcScanEvent,
+  PlcScanStartResult,
+  PlcStatus,
+} from '../src/online/plcTypes';
 
 type Answer = 'save' | 'discard' | 'cancel';
 
@@ -234,6 +242,31 @@ export class FakeBridge implements BaaBridge {
   }
   emitPlcEvent(e: PlcEvent): void {
     for (const cb of [...this.plcCbs]) cb(e);
+  }
+  // Ricerca dei dispositivi accessibili.
+  plcInterfacesValue: NetInterface[] = [];
+  plcScanResults: PlcScanStartResult[] = [];
+  plcScanStartCalls: string[] = [];
+  plcScanCancelCalls = 0;
+  private plcScanCbs = new Set<(e: PlcScanEvent) => void>();
+  async plcInterfaces() {
+    return this.plcInterfacesValue;
+  }
+  async plcScanStart(address: string): Promise<PlcScanStartResult> {
+    this.plcScanStartCalls.push(address);
+    return this.plcScanResults.shift() ?? { ok: false, error: 'nessun risultato previsto' };
+  }
+  async plcScanCancel() {
+    this.plcScanCancelCalls++;
+  }
+  onPlcScanEvent(cb: (e: PlcScanEvent) => void) {
+    this.plcScanCbs.add(cb);
+    return () => {
+      this.plcScanCbs.delete(cb);
+    };
+  }
+  emitPlcScanEvent(e: PlcScanEvent): void {
+    for (const cb of [...this.plcScanCbs]) cb(e);
   }
   async testOverrides() {
     return this.testOverridesValue;

@@ -21,4 +21,8 @@ export type {
   PlcEvent,
   PlcConnectResult,
   PlcStatus,
+  NetInterface,
+  FoundDevice,
+  PlcScanEvent,
+  PlcScanStartResult,
 } from './online/plcTypes';

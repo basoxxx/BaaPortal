@@ -9,6 +9,7 @@ describe('punti di ingresso', () => {
       'connectTcp',
       'connectWriteTcp',
       'openTcp',
+      'probePort',
     ]);
     for (const f of Object.values(node)) expect(typeof f).toBe('function');
   });
