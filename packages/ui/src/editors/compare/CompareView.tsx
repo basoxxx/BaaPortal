@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { parseBlockFile } from '@baaportal/s7comm';
 import {
   blockFromMc7,
+  blockSources,
   findDevice,
   type Block,
   type Member,
@@ -52,13 +53,14 @@ function memberLines(ms: Member[], depth = 0): string[] {
 }
 
 /** Forma testuale di un blocco: una voce per rete; un DB è una sola voce con i suoi membri. */
-export function blockText(b: Block): NetworkText[] {
+export function blockText(b: Block, device: PlcDevice): NetworkText[] {
   if (b.kind === 'DB') return [{ title: '', lines: memberLines(b.members) }];
   if (b.kind === 'IDB') {
     const ov = Object.entries(b.overrides).map(([k, v]) => `${k} := ${v}`);
     return [{ title: '', lines: [b.instanceOf, ...ov] }];
   }
-  return b.networks.map((n) => ({ title: n.title, lines: n.source.split('\n') }));
+  const sources = blockSources(b, device);
+  return b.networks.map((n, k) => ({ title: n.title, lines: sources[k]!.split('\n') }));
 }
 
 type Online =
@@ -69,7 +71,7 @@ type Online =
 
 function decodeOnline(device: PlcDevice, bytes: Uint8Array): NetworkText[] | null {
   try {
-    return blockText(blockFromMc7(device, bytes).block);
+    return blockText(blockFromMc7(device, bytes).block, device);
   } catch {
     return null;
   }
@@ -124,7 +126,10 @@ export function CompareView({ editor }: { editor: EditorRef }) {
     () => (offlineFile && device ? decodeOnline(device, offlineFile) : null),
     [offlineFile, device],
   );
-  const left = useMemo(() => leftDecoded ?? (block ? blockText(block) : []), [leftDecoded, block]);
+  const left = useMemo(
+    () => leftDecoded ?? (block && device ? blockText(block, device) : []),
+    [leftDecoded, block, device],
+  );
   const decoded = useMemo(
     () => (online.state === 'ready' && device ? decodeOnline(device, online.bytes) : null),
     [online, device],

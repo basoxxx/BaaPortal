@@ -1,6 +1,6 @@
 // Scrittura di una sorgente AWL in stile TIA: nomi tra virgolette, tipi canonici, indirizzi con '%'.
 import { convertMnemonics, formatNetwork, parseNetwork, type Mnemonic } from '@baaportal/awl';
-import { blockSources } from '@baaportal/project';
+import { blockSources, kopSources } from '@baaportal/project';
 import type {
   Block,
   BlockHeader,
@@ -267,6 +267,11 @@ export function generateAwlSource(
     // si esporta con l'AWL generato.
     if (b.language !== 'AWL' && b.language !== 'KOP') {
       warnings.push({ kind: 'language', ref, name: b.name, language: b.language });
+      continue;
+    }
+    // Un segmento KOP con errori darebbe una rete vuota: AWL parziale, quindi il blocco si salta.
+    if (kopSources(b, device).some((r) => r.diagnostics.length > 0)) {
+      warnings.push({ kind: 'kop', ref, name: b.name });
       continue;
     }
     const i = b.interface;

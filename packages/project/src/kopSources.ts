@@ -22,28 +22,35 @@ export function tempEnd(block: CodeBlock, dev: PlcDevice): number {
   );
 }
 
-/**
- * Parametri del blocco chiamato da un box CALL, in ordine di dichiarazione (ingressi, uscite,
- * ingressi/uscite). L'istanza è come scritta nel box: `FC 1`, `SFC 6`, `"Nome"`, `FB 1, DB 2`,
- * `#multi` (multi-istanza: il tipo del dato statico).
- */
-function callParamsOf(ctx: AwlContext, block: CodeBlock, instance: string): string[] | undefined {
-  let callee = instance.split(',')[0]!.trim();
-  if (callee.startsWith('#')) {
-    const member = block.interface.static.find((m) => sameName(m.name, callee.slice(1)));
-    if (!member) return undefined;
-    callee = `"${member.type.replace(/^"|"$/g, '')}"`;
-  }
-  const abs = /^(SFC|SFB|FC|FB)\s*(\d+)$/i.exec(callee);
-  const info = abs
+/** Il blocco chiamato: `FC 1`, `SFB 3`, `"Nome"` o `Nome` (come scritto in un tipo). */
+function calleeOf(ctx: AwlContext, ref: string) {
+  const abs = /^%?\s*(SFC|SFB|FC|FB)\s*(\d+)$/i.exec(ref);
+  return abs
     ? ctx.block({
         kind: abs[1]!.toUpperCase() as 'SFC' | 'SFB' | 'FC' | 'FB',
         number: Number(abs[2]),
       })
-    : ctx.block({ name: callee.replace(/^"|"$/g, '') });
-  const i = info?.iface;
+    : ctx.block({ name: ref.replace(/^"|"$/g, '') });
+}
+
+/**
+ * Parametri del blocco chiamato da un box CALL, in ordine di dichiarazione (ingressi, RET_VAL,
+ * uscite, ingressi/uscite). L'istanza è in forma canonica (`normalizeInstance`): `FC 1`, `SFC 6`,
+ * `"Nome"`, `FB 1, DB 2`, `#multi` o `#"multi"` (multi-istanza: il tipo del dato statico, anche
+ * scritto assoluto come `FB1`).
+ */
+function callParamsOf(ctx: AwlContext, block: CodeBlock, instance: string): string[] | undefined {
+  let callee = /^("[^"]*"|[^,]+)/.exec(instance)?.[1]?.trim() ?? '';
+  if (callee.startsWith('#')) {
+    const name = callee.slice(1).replace(/^"|"$/g, '');
+    const member = block.interface.static.find((m) => sameName(m.name, name));
+    if (!member) return undefined;
+    callee = member.type.trim();
+  }
+  const i = calleeOf(ctx, callee)?.iface;
   if (!i) return undefined;
-  return [...i.input, ...i.output, ...i.inOut].map((m) => m.name);
+  const ret = i.returnType && i.returnType.kind !== 'void' ? [{ name: 'RET_VAL' }] : [];
+  return [...i.input, ...ret, ...i.output, ...i.inOut].map((m) => m.name);
 }
 
 /** Un risultato per segmento, nell'ordine del blocco. */
@@ -56,7 +63,7 @@ export function kopSources(block: CodeBlock, dev: PlcDevice): KopNetworkResult[]
   });
   if (nets.every((n) => n === null)) return block.networks.map((_, i) => plain(i));
   const ctx = createAwlContext(dev, block.id, undefined);
-  const { networks } = blockToAwl(nets, tempEndByte(toTypedMembers(block.interface.temp), ctx), {
+  const { networks } = blockToAwl(nets, tempEnd(block, dev), {
     callParams: (instance) => callParamsOf(ctx, block, instance),
   });
   return networks.map((r, i) =>

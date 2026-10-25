@@ -75,6 +75,7 @@ export const MC7_BRIDGE_DIAG_CODES = [
   'KOP_BAD_INSTANCE',
   'KOP_BAD_LABEL',
   'KOP_BOX_IN_PARALLEL',
+  'KOP_BOX_IN_PIN',
   'KOP_BOX_IN_TBRANCH',
   'KOP_EDGE_ON_RAIL',
   'KOP_EMPTY_BRANCH',
@@ -162,7 +163,9 @@ export function interfaceHashOf(b: Block): string {
 export function sourceHashOf(b: Block): string {
   // Un segmento KOP conta per il suo grafico (la sorgente generata ne deriva); gli altri come prima.
   const nets =
-    b.kind === 'DB' || b.kind === 'IDB' ? [] : b.networks.map((n) => (n.lad ? [n.lad] : n.source));
+    b.kind === 'DB' || b.kind === 'IDB'
+      ? []
+      : b.networks.map((n) => (b.language === 'KOP' && n.lad ? [n.lad] : n.source));
   return fnv(JSON.stringify([interfaceKey(b), nets]));
 }
 

@@ -154,7 +154,7 @@ describe('editor di confronto', () => {
     expect(r.diagnostics.filter((x) => x.severity === 'error')).toEqual([]);
     const file = r.file!;
     const back = blockFromMc7(cur, file).block;
-    const d = diffNetworks(blockText(b), blockText(back));
+    const d = diffNetworks(blockText(b, cur), blockText(back, cur));
     expect(d.flatMap((n) => n.rows).filter((r) => r.kind !== 'same')).toEqual([]);
   }, 30_000);
 

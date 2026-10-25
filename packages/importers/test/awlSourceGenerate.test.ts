@@ -95,7 +95,8 @@ describe('generateAwlSource', () => {
         outs: [{ id: 'o', k: 'coil', op: 'Q 4.0' }],
       },
     };
-    d.blocks.push(scl, fup, awl, kop);
+    const bad = createCodeBlock({ kind: 'FC', number: 5, name: 'Rotto', language: 'KOP', newId });
+    d.blocks.push(scl, fup, awl, kop, bad);
     const { text, warnings } = generateAwlSource(d, allRefs(d), 'international');
     expect(text).not.toContain('"Calc"');
     expect(text).not.toContain('"Fu"');
@@ -116,7 +117,9 @@ describe('generateAwlSource', () => {
         name: 'Fu',
         language: 'FUP',
       },
+      { kind: 'kop', ref: { kind: 'block', deviceId: d.id, id: bad.id }, name: 'Rotto' },
     ]);
+    expect(text).not.toContain('"Rotto"');
     // Solo blocchi non AWL: nessuna unità, testo vuoto.
     expect(generateAwlSource(d, allRefs(d).slice(0, 2), 'international').text).toBe('');
   });
