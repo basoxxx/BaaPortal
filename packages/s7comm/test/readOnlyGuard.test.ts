@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   MAX_ITEMS_PER_REQUEST,
   S7Connection,
+  assertOnlineWrite,
   assertReadOnly,
   encodeCompressMemory,
   encodeCopyRamToRom,
@@ -521,5 +522,41 @@ describe('guardedSender e modo', () => {
       'online-write',
     )(frame);
     expect(sends).toHaveLength(1);
+  });
+});
+
+describe('assertOnlineWrite: aree della write var', () => {
+  const wr = (area: 'I' | 'Q' | 'M' | 'DB' | 'P' | 'DI' | 'L' | 'V', db = 0) => {
+    const w = encodeWriteRequest([
+      { area, db, start: 0, size: 'BYTE', count: 1, data: Uint8Array.of(1) },
+    ]);
+    return job(w.param, w.data);
+  };
+
+  it('ammette I, Q, M e DB', () => {
+    for (const a of ['I', 'Q', 'M'] as const) expect(() => assertOnlineWrite(wr(a))).not.toThrow();
+    expect(() => assertOnlineWrite(wr('DB', 1))).not.toThrow();
+  });
+
+  it('vieta P e le altre aree', () => {
+    for (const a of ['P', 'DI', 'L', 'V'] as const) {
+      expect(() => assertOnlineWrite(wr(a))).toThrowError(
+        expect.objectContaining({ code: 'FORBIDDEN' }),
+      );
+    }
+  });
+
+  it('vieta T e C', () => {
+    for (const [area, size] of [
+      ['T', 'TIMER'],
+      ['C', 'COUNTER'],
+    ] as const) {
+      const w = encodeWriteRequest([
+        { area, db: 0, start: 1, size, count: 1, data: Uint8Array.of(0, 1) },
+      ]);
+      expect(() => assertOnlineWrite(job(w.param, w.data))).toThrowError(
+        expect.objectContaining({ code: 'FORBIDDEN', message: expect.stringContaining(`area ${area}`) }),
+      );
+    }
   });
 });
