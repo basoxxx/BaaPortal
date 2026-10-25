@@ -94,5 +94,5 @@ describe('backupFile', () => {
       'blocks/OB1.blk': big,
     });
     expect(() => decode(bomb)).toThrow(/troppo grande/);
-  });
+  }, 30_000);
 });

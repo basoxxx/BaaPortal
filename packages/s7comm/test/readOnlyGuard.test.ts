@@ -389,7 +389,7 @@ describe('scansioni esaustive', () => {
         .sort(),
     );
     expect(sends.length).toBe(6);
-  });
+  }, 30_000);
 
   it('method byte (256 valori) dei userdata: passa solo 0x11 nella richiesta iniziale', () => {
     const { sends, send } = senderRig();

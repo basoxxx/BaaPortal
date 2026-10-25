@@ -46,6 +46,8 @@ let win: BrowserWindow | null = null;
 let allowClose = false;
 let rendererIsReady = false;
 let writeGuard: WriteCloseGuard | undefined;
+// Chiusura annullata dalla conferma di scrittura: il collegamento online torna utilizzabile.
+let closeCancelled = (): void => undefined;
 const pendingOpen: string[] = [];
 
 const isBaap = (p: string) => p.toLowerCase().endsWith('.baap');
@@ -123,7 +125,7 @@ function createWindow(): void {
       e.preventDefault();
       void writeGuard.confirm().then((yes) => {
         if (yes) win?.close();
-        else online.cancel(() => ipc.resume());
+        else closeCancelled();
       });
       return;
     }
@@ -228,6 +230,7 @@ if (!app.requestSingleInstanceLock()) {
       if (!quitUndo) online.cancel(() => ipc.resume());
     },
   );
+  closeCancelled = () => online.cancel(() => ipc.resume());
   writeGuard = new WriteCloseGuard(
     () => ipc.writing(),
     createInterruptAsk(dialog, () => win),

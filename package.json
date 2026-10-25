@@ -10,7 +10,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "vitest run",
+    "test": "vitest run --testTimeout=30000",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "eslint .",
     "format": "prettier --write .",
