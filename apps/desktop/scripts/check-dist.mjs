@@ -1,7 +1,18 @@
 // Controlla la cartella dist dopo `npm run dist`: i file di aggiornamento devono coincidere con gli
 // installatori e l'app impacchettata deve contenere electron-updater. Uso: node check-dist.mjs [--merge-mac]
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  closeSync,
+  existsSync,
+  openSync,
+  readFileSync,
+  readSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import asar from '@electron/asar';
@@ -19,7 +30,25 @@ function readYml(file, errors) {
     errors.push(`manca ${file}`);
     return null;
   }
-  return yaml.load(readFileSync(file, 'utf8'));
+  try {
+    return yaml.load(readFileSync(file, 'utf8'));
+  } catch (e) {
+    errors.push(`${file} non è leggibile: ${e instanceof Error ? e.message.split('\n')[0] : e}`);
+    return null;
+  }
+}
+
+// sha512 in base64 letto a blocchi (gli installatori pesano decine di MB), in modo sincrono.
+function sha512Of(file) {
+  const hash = createHash('sha512');
+  const buf = Buffer.alloc(1 << 20);
+  const fd = openSync(file, 'r');
+  try {
+    for (let n; (n = readSync(fd, buf, 0, buf.length, null)) > 0;) hash.update(buf.subarray(0, n));
+  } finally {
+    closeSync(fd);
+  }
+  return hash.digest('base64');
 }
 
 function checkApp(resources, label, errors) {
@@ -56,7 +85,7 @@ function checkFile(dir, name, files, errors, blockmap = true) {
     errors.push(`${name} non è elencato nei file di aggiornamento`);
     return;
   }
-  const sha512 = createHash('sha512').update(readFileSync(file)).digest('base64');
+  const sha512 = sha512Of(file);
   if (entry.sha512 !== sha512)
     errors.push(`${name}: sha512 diverso da quello del file di aggiornamento`);
   if (entry.size !== statSync(file).size)
@@ -76,6 +105,8 @@ export function checkDist(dir, platform, version) {
   } else {
     checkApp(join(dir, 'mac-arm64', 'BaaPortal.app', 'Contents', 'Resources'), 'mac-arm64', errors);
     checkApp(join(dir, 'mac', 'BaaPortal.app', 'Contents', 'Resources'), 'mac', errors);
+    const ymls = readdirSync(dir).filter((n) => /^latest-mac.*\.yml$/.test(n));
+    if (ymls.length > 1) errors.push(`più di un latest-mac*.yml: ${ymls.join(', ')}`);
     const latest = readYml(join(dir, 'latest-mac.yml'), errors);
     if (latest) {
       if (latest.version !== version)
@@ -92,7 +123,8 @@ export function checkDist(dir, platform, version) {
   return errors;
 }
 
-// Unisce i latest-mac*.yml (uno per architettura) in un solo latest-mac.yml: path e sha512 di primo
+// Ripiego mai servito: electron-builder oggi scrive già un solo latest-mac.yml con entrambe le
+// architetture. Unisce i latest-mac*.yml (uno per architettura) in un solo latest-mac.yml: path e sha512 di primo
 // livello dal file arm64.
 export function mergeMac(dir) {
   const names = readdirSync(dir)
@@ -107,7 +139,10 @@ export function mergeMac(dir) {
   writeFileSync(join(dir, 'latest-mac.yml'), yaml.dump(merged, { lineWidth: -1 }));
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (
+  process.argv[1] &&
+  realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))
+) {
   const desktop = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const dist = join(desktop, 'dist');
   const version = JSON.parse(readFileSync(join(desktop, 'package.json'), 'utf8')).version;

@@ -41,10 +41,15 @@ jobs:
           EVENT_PRERELEASE: ${{ github.event.release.prerelease }}
         run: |
           if [ "${{ github.event_name }}" = "release" ]; then
-            echo "BAAPORTAL_PRERELEASE=$EVENT_PRERELEASE" >> "$GITHUB_ENV"
+            value="$EVENT_PRERELEASE"
           else
-            echo "BAAPORTAL_PRERELEASE=$(gh release view "$TAG" --json isPrerelease -q .isPrerelease)" >> "$GITHUB_ENV"
+            value=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isPrerelease -q .isPrerelease)
           fi
+          if [ "$value" != "true" ] && [ "$value" != "false" ]; then
+            echo "canale di build non valido: '$value'" >&2
+            exit 1
+          fi
+          echo "BAAPORTAL_PRERELEASE=$value" >> "$GITHUB_ENV"
       - run: npm run dist
       - name: Allega gli installatori alla release
         shell: bash

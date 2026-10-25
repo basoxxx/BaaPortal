@@ -75,30 +75,30 @@ async function fakeMac(archs: ('arm64' | 'x64')[] = ['arm64', 'x64']) {
 describe('checkDist', () => {
   it('cartella Windows completa: nessun errore', async () => {
     await fakeWin();
-    expect(await checkDist(dist, 'win32', V)).toEqual([]);
+    expect(checkDist(dist, 'win32', V)).toEqual([]);
   });
   it('cartella macOS completa: nessun errore', async () => {
     await fakeMac();
-    expect(await checkDist(dist, 'darwin', V)).toEqual([]);
+    expect(checkDist(dist, 'darwin', V)).toEqual([]);
   });
   it("latest.yml con sha512 diverso dall'exe: errore", async () => {
     await fakeWin({ badSha: true });
-    const errs: string[] = await checkDist(dist, 'win32', V);
+    const errs: string[] = checkDist(dist, 'win32', V);
     expect(errs.some((e) => /sha512/.test(e))).toBe(true);
   });
   it('latest-mac.yml con il solo DMG arm64: errore «manca x64»', async () => {
     await fakeMac(['arm64']);
-    const errs: string[] = await checkDist(dist, 'darwin', V);
+    const errs: string[] = checkDist(dist, 'darwin', V);
     expect(errs.some((e) => /manca x64/.test(e))).toBe(true);
   });
   it('manca electron-updater in app.asar: errore', async () => {
     await fakeWin({ updater: false });
-    const errs: string[] = await checkDist(dist, 'win32', V);
+    const errs: string[] = checkDist(dist, 'win32', V);
     expect(errs.some((e) => /electron-updater/.test(e))).toBe(true);
   });
   it('manca app-update.yml: errore', async () => {
     await fakeWin({ updateYml: false });
-    const errs: string[] = await checkDist(dist, 'win32', V);
+    const errs: string[] = checkDist(dist, 'win32', V);
     expect(errs.some((e) => /app-update\.yml/.test(e))).toBe(true);
   });
 });

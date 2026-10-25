@@ -48,6 +48,8 @@ describe('configurazione di rilascio', () => {
     expect(rel).toContain('github.event.release.prerelease');
     expect(rel).toContain('gh release view');
     expect(rel).toContain('isPrerelease');
+    expect(rel).toContain('--repo "$GITHUB_REPOSITORY"');
+    expect(rel).toContain('exit 1');
   });
   it("release.yml: carica exe, dmg, latest*.yml e blockmap, e lancia check-dist prima dell'upload", () => {
     const rel = read('../../.github/workflows/release.yml');
