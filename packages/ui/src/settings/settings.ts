@@ -15,6 +15,8 @@ export interface Settings {
     autocomplete: boolean;
     lineNumbers: boolean;
   };
+  /** `prerelease: null` segue il canale della build. */
+  updates: { checkOnStartup: boolean; prerelease: boolean | null };
 }
 
 export type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K] };
@@ -29,6 +31,7 @@ export const DEFAULT_SETTINGS: Settings = {
   general: { language: 'it', author: '', recoveryMinutes: 1 },
   appearance: { uiScale: 100 },
   editor: { mnemonic: 'int', fontSize: 13, tabSize: 4, autocomplete: true, lineNumbers: true },
+  updates: { checkOnStartup: true, prerelease: null },
 };
 
 export const RECOVERY_MINUTES = [1, 2, 5, 10, 0] as const;
@@ -49,6 +52,7 @@ export function normalizeSettings(raw: unknown): Settings {
   const g = obj(r.general);
   const a = obj(r.appearance);
   const e = obj(r.editor);
+  const u = obj(r.updates);
   const d = DEFAULT_SETTINGS;
   return {
     general: {
@@ -64,6 +68,10 @@ export function normalizeSettings(raw: unknown): Settings {
       autocomplete: bool(e.autocomplete, d.editor.autocomplete),
       lineNumbers: bool(e.lineNumbers, d.editor.lineNumbers),
     },
+    updates: {
+      checkOnStartup: bool(u.checkOnStartup, d.updates.checkOnStartup),
+      prerelease: typeof u.prerelease === 'boolean' ? u.prerelease : null,
+    },
   };
 }
 
@@ -72,6 +80,7 @@ function mergeSettings(base: Settings, patch: DeepPartial<Settings>): Settings {
     general: { ...base.general, ...patch.general },
     appearance: { ...base.appearance, ...patch.appearance },
     editor: { ...base.editor, ...patch.editor },
+    updates: { ...base.updates, ...patch.updates },
   });
 }
 

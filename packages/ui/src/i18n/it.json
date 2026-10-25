@@ -50,7 +50,8 @@
     "simulationFailed": "Simulazione non disponibile",
     "online": "Online: {{module}} {{host}} - {{mode}}",
     "onlineConnecting": "Collegamento online in corso…",
-    "onlineTitleSuffix": " — Online"
+    "onlineTitleSuffix": " — Online",
+    "downloadingUpdate": "Download aggiornamento {{version}}"
   },
   "messages": {
     "replaced": "Sostituiti {{replaced}} testi, saltati {{skipped}}.",
@@ -193,7 +194,8 @@
     "help.show": "Visualizza la guida",
     "help.about": "Informazioni su BaaPortal",
     "tools.collectCpuData": "Raccolta dati CPU (sola lettura)…",
-    "edit.compileFull": "Compila → Software (compilazione completa)"
+    "edit.compileFull": "Compila → Software (compilazione completa)",
+    "help.checkUpdates": "Controlla aggiornamenti…"
   },
   "menu": {
     "project": "Progetto",
@@ -632,7 +634,13 @@
     "tabSize": "Larghezza tabulazione",
     "autocomplete": "Completamento automatico",
     "lineNumbers": "Numeri di riga",
-    "reset": "Ripristina predefiniti"
+    "reset": "Ripristina predefiniti",
+    "updates": "Aggiornamenti",
+    "updatesCheck": "Controlla gli aggiornamenti all'avvio",
+    "updatesPrerelease": "Ricevi anche le versioni di prova",
+    "updatesChannelBeta": "Questa è una versione di prova",
+    "updatesChannelStable": "Questa è una versione stabile",
+    "updatesDisabled": "Gli aggiornamenti funzionano solo nell'app installata"
   },
   "dialog": {
     "ok": "OK",
@@ -1349,5 +1357,28 @@
     "stop": "Interrompi",
     "busy": "Caricamento dal dispositivo in corso.",
     "missingComment": "Blocchi non caricati dalla CPU"
+  },
+  "update": {
+    "available": "È disponibile BaaPortal {{version}}",
+    "download": "Scarica",
+    "later": "Più tardi",
+    "notes": "Note di rilascio",
+    "downloading": "Download di BaaPortal {{version}}: {{percent}}%",
+    "cancel": "Annulla",
+    "ready": "BaaPortal {{version}} è pronto",
+    "restart": "Riavvia e aggiorna",
+    "nextStart": "Al prossimo avvio",
+    "macReady": "Il file è aperto nel Finder. Chiudi BaaPortal, trascina BaaPortal nella cartella Applicazioni sostituendo quella vecchia, poi riaprilo.",
+    "showInFinder": "Mostra nel Finder",
+    "quit": "Chiudi BaaPortal",
+    "ok": "OK",
+    "upToDate": "BaaPortal {{version}} è aggiornato",
+    "close": "Chiudi",
+    "busy": "Aspetta la fine dell'operazione sul PLC (caricamento, scrittura o backup), poi riprova",
+    "notReady": "L'aggiornamento non è pronto: riprova",
+    "check": "Controlla aggiornamenti",
+    "channel": "Versione di prova",
+    "channelStable": "Versione stabile",
+    "region": "Aggiornamenti"
   }
 }

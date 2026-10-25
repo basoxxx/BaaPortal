@@ -93,5 +93,5 @@ export const MENUS: MenuDef[] = [
     id: 'window',
     items: ['window.splitVertical', 'window.splitHorizontal', 'sep', 'window.closeAllEditors'],
   },
-  { id: 'help', items: ['help.show', 'help.about'] },
+  { id: 'help', items: ['help.show', 'help.checkUpdates', 'sep', 'help.about'] },
 ];

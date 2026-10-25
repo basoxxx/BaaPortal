@@ -39,6 +39,8 @@ export interface ProjectService {
   /** Apre un progetto recuperato come documento modificato (revisione 1, mai salvata). */
   openRecovered(project: Project, filePath: string): Promise<boolean>;
   handleCloseRequest(): Promise<void>;
+  /** Come la chiusura (domanda di salvataggio, offline, simulazione) ma senza chiudere la finestra. */
+  prepareForUpdate(): Promise<boolean>;
   /** Annulla le registrazioni sul bridge (StrictMode, smontaggio). */
   dispose(): void;
 }
@@ -379,8 +381,8 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
     return true;
   }
 
-  async function handleCloseRequest(): Promise<void> {
-    if (!(await ensureCanDiscard())) return;
+  async function prepareForUpdate(): Promise<boolean> {
+    if (!(await ensureCanDiscard())) return false;
     shutdownOnline(store);
     shutdownSimulation(store); // il worker del simulatore non deve restare in esecuzione
     try {
@@ -388,6 +390,11 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
     } catch {
       /* la chiusura non deve dipendere dalla pulizia */
     }
+    return true;
+  }
+
+  async function handleCloseRequest(): Promise<void> {
+    if (!(await prepareForUpdate())) return;
     bridge.closeWindowConfirmed();
   }
 
@@ -420,6 +427,7 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
     close,
     openRecovered,
     handleCloseRequest,
+    prepareForUpdate,
     dispose() {
       unsubscribeStore();
       unsubscribeOpen();

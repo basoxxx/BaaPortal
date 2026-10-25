@@ -3,6 +3,26 @@ import { DEFAULT_SETTINGS, loadSettings, saveSettings } from '../src/settings/se
 
 beforeEach(() => localStorage.clear());
 
+describe('settings: aggiornamenti', () => {
+  it('mancante o sbagliato → predefinito', () => {
+    for (const bad of [undefined, 5, { checkOnStartup: 'x' }]) {
+      localStorage.setItem('baa.settings.v1', JSON.stringify({ updates: bad }));
+      expect(loadSettings().updates).toEqual({ checkOnStartup: true, prerelease: null });
+    }
+  });
+  it('prerelease true/false/null conservato; «sì» → null', () => {
+    for (const v of [true, false, null]) {
+      localStorage.setItem(
+        'baa.settings.v1',
+        JSON.stringify({ updates: { checkOnStartup: false, prerelease: v } }),
+      );
+      expect(loadSettings().updates).toEqual({ checkOnStartup: false, prerelease: v });
+    }
+    localStorage.setItem('baa.settings.v1', JSON.stringify({ updates: { prerelease: 'sì' } }));
+    expect(loadSettings().updates.prerelease).toBeNull();
+  });
+});
+
 describe('settings', () => {
   it('nessuna chiave → DEFAULT_SETTINGS', () => {
     expect(loadSettings()).toEqual(DEFAULT_SETTINGS);
@@ -10,6 +30,7 @@ describe('settings', () => {
       general: { language: 'it', author: '', recoveryMinutes: 1 },
       appearance: { uiScale: 100 },
       editor: { mnemonic: 'int', fontSize: 13, tabSize: 4, autocomplete: true, lineNumbers: true },
+      updates: { checkOnStartup: true, prerelease: null },
     });
   });
 
