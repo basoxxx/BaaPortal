@@ -6,7 +6,7 @@ import { compileProgram, contextHashOf, hashOf } from '../project/compile/compil
 import { getProgress } from '../project/progress';
 import { ONLINE_OFF, type AppState } from '../state/store';
 import { compareBlocks, type CompareProjectBlock } from './compare';
-import type { PlcEvent, PlcLostReason } from './plcTypes';
+import type { PlcControlOp, PlcEvent, PlcLostReason } from './plcTypes';
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const norm = (s: string) => s.replace(/\s+/g, '').toUpperCase();
@@ -185,6 +185,32 @@ export class PlcController {
         this.store.getState().patchOnline({ comparing: false });
       }
     }
+  }
+
+  /**
+   * Comando della CPU (RUN, STOP, copia RAM in ROM, comprimi). La conferma è nativa, nel processo
+   * principale; il modo non si forza: lo porta l'evento `mode` della sorveglianza.
+   */
+  async control(op: PlcControlOp): Promise<void> {
+    const st = this.store.getState();
+    const { status, downloading, commanding } = st.online;
+    if (status !== 'on' || downloading || commanding) return;
+    const gen = this.generation;
+    st.patchOnline({ commanding: true });
+    let res: Awaited<ReturnType<BaaBridge['plcControl']>>;
+    try {
+      res = await this.bridge.plcControl(op);
+    } catch (e) {
+      res = { ok: false, error: errorText(e) };
+    }
+    if (gen !== this.generation) return;
+    this.store.getState().patchOnline({ commanding: false });
+    if (!res.ok) {
+      if (!('cancelled' in res)) this.push('error', 'plcCommandFailed', { message: res.error });
+      return;
+    }
+    if (op === 'COPY_RAM_TO_ROM') this.push('info', 'plcCopiedRamToRom');
+    else if (op === 'COMPRESS') this.push('info', 'plcCompressed');
   }
 
   private onEvent(gen: number, e: PlcEvent): void {

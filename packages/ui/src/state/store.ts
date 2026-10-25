@@ -195,6 +195,8 @@ export interface OnlineUiState {
   comparing?: boolean;
   /** Un «Carica nel dispositivo» è in preparazione, in anteprima o in corso. */
   downloading?: boolean;
+  /** Un comando della CPU (RUN, STOP, copia RAM in ROM, comprimi) è in corso. */
+  commanding?: boolean;
 }
 
 export const ONLINE_OFF: OnlineUiState = { status: 'off' };

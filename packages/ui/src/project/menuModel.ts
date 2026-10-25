@@ -77,6 +77,8 @@ export const MENUS: MenuDef[] = [
       'online.accessibleDevices',
       'online.startCpu',
       'online.stopCpu',
+      'online.copyRamToRom',
+      'online.compress',
       'sep',
       'online.diagnostics',
     ],

@@ -122,7 +122,10 @@
     "plcDownloadCancelled": "Download cancelled.",
     "plcDownloadChanged": "The project changed after the preview: repeat the download.",
     "plcStopFailed": "Stopping the CPU failed: {{message}}. Nothing downloaded.",
-    "plcRunFailed": "Starting the CPU failed: {{message}}"
+    "plcRunFailed": "Starting the CPU failed: {{message}}",
+    "plcCommandFailed": "CPU command failed: {{message}}",
+    "plcCopiedRamToRom": "RAM copied to ROM.",
+    "plcCompressed": "CPU memory compressed."
   },
   "commands": {
     "project.new": "New…",
@@ -164,6 +167,8 @@
     "online.accessibleDevices": "Accessible devices…",
     "online.startCpu": "Start CPU",
     "online.stopCpu": "Stop CPU",
+    "online.copyRamToRom": "Copy RAM to ROM",
+    "online.compress": "Compress",
     "online.diagnostics": "Online and diagnostics",
     "options.settings": "Settings",
     "tools.crossReferences": "Cross-references",
@@ -1053,6 +1058,9 @@
     "ledOn": "on",
     "ledOff": "off",
     "readOnly": "Read-only connection",
+    "mresHint": "Use the CPU mode selector (MRES)",
+    "copyRamToRomBtn": "Copy RAM to ROM",
+    "compressBtn": "Compress",
     "module": "Module",
     "orderNumber": "Order number",
     "firmware": "Firmware",

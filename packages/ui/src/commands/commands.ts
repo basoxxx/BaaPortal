@@ -54,6 +54,8 @@ export type CommandId =
   | 'online.accessibleDevices'
   | 'online.startCpu'
   | 'online.stopCpu'
+  | 'online.copyRamToRom'
+  | 'online.compress'
   | 'online.diagnostics'
   | 'options.settings'
   | 'tools.crossReferences'
@@ -84,6 +86,9 @@ export interface Command {
 
 const hasDoc = (s: AppState) => s.doc !== null;
 const hasPlc = (s: AppState) => (s.doc?.project.devices.length ?? 0) > 0;
+/** PLC online e libero: nessun caricamento né altro comando della CPU in corso. */
+const plcFree = (s: AppState) =>
+  s.online.status === 'on' && !s.online.downloading && !s.online.commanding;
 const always = () => true;
 const never = () => false;
 const noop = () => {};
@@ -292,13 +297,29 @@ const list: Command[] = [
   }),
   def('online.startCpu', {
     icon: 'startCpu',
-    isEnabled: (s) => s.sim.phase === 'on' && s.sim.mode === 'STOP',
-    run: ({ store }) => simControllerFor(store).setMode('RUN'),
+    isEnabled: (s) =>
+      (s.sim.phase === 'on' && s.sim.mode === 'STOP') || (plcFree(s) && s.online.mode !== 'RUN'),
+    run: ({ store, bridge }) =>
+      store.getState().online.status === 'on'
+        ? plcControllerFor(store, bridge).control('RUN')
+        : simControllerFor(store).setMode('RUN'),
   }),
   def('online.stopCpu', {
     icon: 'stopCpu',
-    isEnabled: (s) => s.sim.phase === 'on' && s.sim.mode !== 'STOP',
-    run: ({ store }) => simControllerFor(store).setMode('STOP'),
+    isEnabled: (s) =>
+      (s.sim.phase === 'on' && s.sim.mode !== 'STOP') || (plcFree(s) && s.online.mode !== 'STOP'),
+    run: ({ store, bridge }) =>
+      store.getState().online.status === 'on'
+        ? plcControllerFor(store, bridge).control('STOP')
+        : simControllerFor(store).setMode('STOP'),
+  }),
+  def('online.copyRamToRom', {
+    isEnabled: plcFree,
+    run: ({ store, bridge }) => plcControllerFor(store, bridge).control('COPY_RAM_TO_ROM'),
+  }),
+  def('online.compress', {
+    isEnabled: plcFree,
+    run: ({ store, bridge }) => plcControllerFor(store, bridge).control('COMPRESS'),
   }),
   def('online.diagnostics'),
   def('options.settings', {

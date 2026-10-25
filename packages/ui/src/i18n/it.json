@@ -122,7 +122,10 @@
     "plcDownloadCancelled": "Caricamento annullato.",
     "plcDownloadChanged": "Il progetto è cambiato dopo l'anteprima: ripetere il caricamento.",
     "plcStopFailed": "Arresto della CPU non riuscito: {{message}}. Nessun caricamento.",
-    "plcRunFailed": "Avvio della CPU non riuscito: {{message}}"
+    "plcRunFailed": "Avvio della CPU non riuscito: {{message}}",
+    "plcCommandFailed": "Comando alla CPU non riuscito: {{message}}",
+    "plcCopiedRamToRom": "Copia da RAM a ROM eseguita.",
+    "plcCompressed": "Memoria della CPU compressa."
   },
   "commands": {
     "project.new": "Nuovo…",
@@ -164,6 +167,8 @@
     "online.accessibleDevices": "Dispositivi accessibili…",
     "online.startCpu": "Avvia CPU",
     "online.stopCpu": "Arresta CPU",
+    "online.copyRamToRom": "Copia RAM in ROM",
+    "online.compress": "Comprimi",
     "online.diagnostics": "Online e diagnostica",
     "options.settings": "Impostazioni",
     "tools.crossReferences": "Riferimenti incrociati",
@@ -1053,6 +1058,9 @@
     "ledOn": "acceso",
     "ledOff": "spento",
     "readOnly": "Collegamento in sola lettura",
+    "mresHint": "Usa il selettore della CPU (MRES)",
+    "copyRamToRomBtn": "Copia RAM in ROM",
+    "compressBtn": "Comprimi",
     "module": "Modulo",
     "orderNumber": "Numero di ordinazione",
     "firmware": "Firmware",

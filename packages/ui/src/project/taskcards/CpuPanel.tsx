@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import type { DiagCode, DiagEntry } from '@baaportal/sim';
 import { useAppStore, useServices } from '../../state/AppContext';
+import { commands } from '../../commands/commands';
 import { simControllerFor } from '../../sim/simController';
 
 /** Quali codici sono errori della CPU. Esaustivo: un DiagCode nuovo non compila finché non è classificato. */
@@ -146,19 +147,18 @@ export function CpuPanel() {
   );
 }
 
-/** Pannello della CPU vera: solo LED e identità, tutto il resto in sola lettura. */
+/** Pannello della CPU vera: LED, identità e comandi (RUN, STOP, copia RAM in ROM, comprimi). */
 function OnlineCpuPanel() {
   const { t } = useTranslation();
-  const online = useAppStore((s) => s.online);
+  const { store, bridge, service } = useServices();
+  const state = useAppStore((s) => s);
+  const online = state.online;
   const mode = online.mode ?? 'UNKNOWN';
   const id = online.identity;
   const ledLabel = (k: 'run' | 'stop', on: boolean) =>
     `${t(`cpuPanel.${k}`)}: ${t(on ? 'cpuPanel.ledOn' : 'cpuPanel.ledOff')}`;
   return (
     <div className="baa-cpu-panel" data-testid="cpu-panel-online">
-      <p className="baa-placeholder" data-testid="cpu-readonly">
-        {t('cpuPanel.readOnly')}
-      </p>
       <div className="baa-cpu-leds" role="status">
         <span
           data-testid="led-run"
@@ -178,13 +178,25 @@ function OnlineCpuPanel() {
         </span>
       </div>
       <div className="baa-cpu-buttons">
-        <button type="button" disabled data-testid="cpu-run" title={t('cpuPanel.readOnly')}>
-          {t('cpuPanel.runBtn')}
-        </button>
-        <button type="button" disabled data-testid="cpu-stop" title={t('cpuPanel.readOnly')}>
-          {t('cpuPanel.stopBtn')}
-        </button>
-        <button type="button" disabled data-testid="cpu-mres" title={t('cpuPanel.readOnly')}>
+        {(
+          [
+            ['cpu-run', 'online.startCpu', 'cpuPanel.runBtn'],
+            ['cpu-stop', 'online.stopCpu', 'cpuPanel.stopBtn'],
+            ['cpu-copy-ram-rom', 'online.copyRamToRom', 'cpuPanel.copyRamToRomBtn'],
+            ['cpu-compress', 'online.compress', 'cpuPanel.compressBtn'],
+          ] as const
+        ).map(([testId, cmd, label]) => (
+          <button
+            key={testId}
+            type="button"
+            disabled={!commands[cmd].isEnabled(state)}
+            onClick={() => void commands[cmd].run({ store, service, bridge })}
+            data-testid={testId}
+          >
+            {t(label)}
+          </button>
+        ))}
+        <button type="button" disabled data-testid="cpu-mres" title={t('cpuPanel.mresHint')}>
           {t('cpuPanel.mres')}
         </button>
       </div>
