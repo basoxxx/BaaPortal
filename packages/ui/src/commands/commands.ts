@@ -331,7 +331,13 @@ const list: Command[] = [
     isEnabled: plcFree,
     run: ({ store, bridge }) => plcControllerFor(store, bridge).control('COMPRESS'),
   }),
-  def('online.diagnostics'),
+  def('online.diagnostics', {
+    isEnabled: hasPlc,
+    run: ({ store }) => {
+      const id = targetPlcId(store.getState());
+      if (id) store.getState().openEditor({ kind: 'onlineDiag', deviceId: id, objectId: '' });
+    },
+  }),
   def('options.settings', {
     isEnabled: always,
     run: ({ store }) => store.getState().openDialog({ kind: 'settings' }),

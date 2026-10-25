@@ -68,7 +68,7 @@ describe('modalità online nell interfaccia', () => {
     expect(p.getByTestId('cpu-identity')).toHaveTextContent('CPU 315-2 PN/DP');
     expect(p.getByTestId('cpu-mres')).toBeDisabled();
     expect(p.getByTestId('cpu-stop')).toBeEnabled();
-    expect(p.getAllByText('Non disponibile in sola lettura').length).toBeGreaterThan(0);
+    expect(p.getByTestId('cpu-open-diag')).toHaveTextContent('Apri Online e diagnostica');
     act(() => app.bridge.emitPlcEvent({ kind: 'mode', mode: 'STOP' }));
     expect(
       within(screen.getAllByTestId('cpu-panel-online')[0]!).getByTestId('led-stop'),

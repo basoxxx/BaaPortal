@@ -75,7 +75,6 @@ describe('buildTree', () => {
     ]);
     expect(plc.children.filter((c) => !c.enabled).map((c) => c.labelKey)).toEqual([
       'tree.plc.deviceConfig',
-      'tree.plc.onlineDiag',
       'tree.plc.backup',
       'tree.plc.progInfo',
     ]);

@@ -314,6 +314,99 @@
       }
     }
   },
+  "onlineDiag": {
+    "title": "Online & diagnostics",
+    "pages": "Pages",
+    "loading": "Reading...",
+    "unavailable": "not available on this CPU",
+    "needOnline": "Online connection required",
+    "goOnline": "Go online",
+    "simHint": "The simulation is active: use the CPU control panel.",
+    "stopped": "Polling stopped: {{message}}",
+    "group": {
+      "diagnostics": "Diagnostics",
+      "functions": "Functions"
+    },
+    "page": {
+      "general": "General",
+      "buffer": "Diagnostic buffer",
+      "cycle": "Cycle time",
+      "memory": "Memory",
+      "clock": "Set time"
+    },
+    "firmware": "HW/FW version",
+    "plantId": "Station name",
+    "serial": "Serial number",
+    "mmc": "MMC",
+    "mmcAbsent": "absent",
+    "bytes": "{{value}} bytes",
+    "none": "none",
+    "lastModeChange": "Last mode change",
+    "protection": "Protection level",
+    "selector": "selector",
+    "fromTo": "from {{from}} to {{to}}",
+    "modeChange": "Mode change",
+    "modeCode": {
+      "stopUpdate": "STOP (update)",
+      "stopReset": "STOP (memory reset)",
+      "stopSelfInit": "STOP (initialization)",
+      "stopInternal": "STOP (internal)",
+      "warmStart": "warm restart",
+      "startup": "startup",
+      "restart": "restart",
+      "run": "RUN",
+      "hold": "HOLD",
+      "defect": "defective",
+      "unknown": "unknown"
+    },
+    "freeze": "Freeze display",
+    "no": "No.",
+    "dateTime": "Date and time",
+    "event": "Event",
+    "eventId": "Event ID",
+    "class": "Class",
+    "direction": "Direction",
+    "incoming": "incoming",
+    "outgoing": "outgoing",
+    "priority": "Priority",
+    "ob": "OB",
+    "info1": "Info 1",
+    "info2": "Info 2",
+    "genericNote": "Event not in table: generic description",
+    "watchdog": "Watchdog time",
+    "area": "Area",
+    "total": "Total",
+    "used": "Used",
+    "free": "Free",
+    "memoryKind": {
+      "work": "Work memory",
+      "loadIntegrated": "Integrated load memory",
+      "loadMmc": "Load memory (MMC)",
+      "loadMax": "Maximum load memory",
+      "backup": "Backup memory",
+      "cfb": "CFB memory",
+      "unknown": "Other area"
+    },
+    "cpuTime": "CPU time",
+    "pcTime": "PC time",
+    "difference": "Difference (CPU - PC)",
+    "seconds": "{{value}} s",
+    "setToPc": "Set to PC time",
+    "date": "Date",
+    "time": "Time",
+    "apply": "Apply",
+    "clockError": {
+      "date": {
+        "format": "Invalid date: use YYYY-MM-DD",
+        "range": "Date out of range (years 1990-2089)",
+        "day": "That day does not exist in that month"
+      },
+      "time": {
+        "format": "Invalid time: use hh:mm:ss",
+        "range": "Time out of range"
+      }
+    }
+  },
   "compareView": {
     "title": "Compare {{name}}",
     "project": "Project",
@@ -1097,7 +1190,7 @@
     "orderNumber": "Order number",
     "firmware": "Firmware",
     "mode": "Mode",
-    "unavailableReadOnly": "Not available in read-only mode"
+    "openDiag": "Open Online & diagnostics"
   },
   "ioPanel": {
     "inputs": "Inputs",

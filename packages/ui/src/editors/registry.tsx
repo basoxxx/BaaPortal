@@ -6,6 +6,7 @@ import type { IconName } from '../icons';
 import { useAppStore } from '../state/AppContext';
 import { BlockEditor } from './block/BlockEditor';
 import { CompareView } from './compare/CompareView';
+import { OnlineDiagView } from './diag/OnlineDiagView';
 import { DbEditor } from './db/DbEditor';
 import { SourceEditor } from './source/SourceEditor';
 import { WatchTableView } from './watch/WatchTableView';
@@ -97,6 +98,13 @@ export const EDITORS: Record<EditorKind, EditorDef> = {
     },
     exists: (r, d) => block(r, d) !== undefined,
     Component: CompareView,
+  },
+  onlineDiag: {
+    kind: 'onlineDiag',
+    icon: () => 'treeOnlineDiag',
+    title: (_r, _d, t) => t('diag.title'),
+    exists: (r, d) => device(r, d) !== undefined,
+    Component: OnlineDiagView,
   },
   allTags: {
     kind: 'allTags',

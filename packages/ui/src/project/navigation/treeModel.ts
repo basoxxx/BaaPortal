@@ -220,7 +220,7 @@ function deviceNode(dev: PlcDevice, compare?: OnlineCompare): TreeNode {
     ref: { kind: 'device', deviceId: dev.id },
     children: [
       folderNode(dev, 'device-config', 'tree.plc.deviceConfig', 'treeDeviceConfig', false),
-      folderNode(dev, 'online-diag', 'tree.plc.onlineDiag', 'treeOnlineDiag', false),
+      folderNode(dev, 'online-diag', 'tree.plc.onlineDiag', 'treeOnlineDiag', true),
       folderNode(
         dev,
         'blocks',

@@ -314,6 +314,99 @@
       }
     }
   },
+  "onlineDiag": {
+    "title": "Online e diagnostica",
+    "pages": "Pagine",
+    "loading": "Lettura in corso...",
+    "unavailable": "non disponibile su questa CPU",
+    "needOnline": "Collegamento online necessario",
+    "goOnline": "Collegamento online",
+    "simHint": "La simulazione è attiva: usa il Pannello di comando CPU.",
+    "stopped": "Interrogazione ferma: {{message}}",
+    "group": {
+      "diagnostics": "Diagnostica",
+      "functions": "Funzioni"
+    },
+    "page": {
+      "general": "Generale",
+      "buffer": "Buffer di diagnostica",
+      "cycle": "Tempo di ciclo",
+      "memory": "Memoria",
+      "clock": "Imposta ora"
+    },
+    "firmware": "Versione HW/FW",
+    "plantId": "Nome stazione",
+    "serial": "Numero di serie",
+    "mmc": "MMC",
+    "mmcAbsent": "assente",
+    "bytes": "{{value}} byte",
+    "none": "nessuna",
+    "lastModeChange": "Ultimo cambio di modo",
+    "protection": "Livello di protezione",
+    "selector": "selettore",
+    "fromTo": "da {{from}} a {{to}}",
+    "modeChange": "Cambio di modo",
+    "modeCode": {
+      "stopUpdate": "STOP (aggiornamento)",
+      "stopReset": "STOP (cancellazione totale)",
+      "stopSelfInit": "STOP (inizializzazione)",
+      "stopInternal": "STOP (interno)",
+      "warmStart": "avviamento a caldo",
+      "startup": "avviamento",
+      "restart": "riavvio",
+      "run": "RUN",
+      "hold": "HOLD",
+      "defect": "difetto",
+      "unknown": "sconosciuto"
+    },
+    "freeze": "Blocca visualizzazione",
+    "no": "N°",
+    "dateTime": "Data e ora",
+    "event": "Evento",
+    "eventId": "ID evento",
+    "class": "Classe",
+    "direction": "Direzione",
+    "incoming": "entrante",
+    "outgoing": "uscente",
+    "priority": "Priorità",
+    "ob": "OB",
+    "info1": "Info 1",
+    "info2": "Info 2",
+    "genericNote": "Evento non in tabella: descrizione generica",
+    "watchdog": "Tempo di sorveglianza",
+    "area": "Area",
+    "total": "Totale",
+    "used": "Occupato",
+    "free": "Libero",
+    "memoryKind": {
+      "work": "Memoria di lavoro",
+      "loadIntegrated": "Memoria di caricamento integrata",
+      "loadMmc": "Memoria di caricamento (MMC)",
+      "loadMax": "Memoria di caricamento massima",
+      "backup": "Memoria tampone",
+      "cfb": "Memoria CFB",
+      "unknown": "Altra area"
+    },
+    "cpuTime": "Ora della CPU",
+    "pcTime": "Ora del PC",
+    "difference": "Differenza (CPU - PC)",
+    "seconds": "{{value}} s",
+    "setToPc": "Imposta all'ora del PC",
+    "date": "Data",
+    "time": "Ora",
+    "apply": "Applica",
+    "clockError": {
+      "date": {
+        "format": "Data non valida: usa AAAA-MM-GG",
+        "range": "Data fuori campo (anni 1990-2089)",
+        "day": "Il giorno non esiste in quel mese"
+      },
+      "time": {
+        "format": "Ora non valida: usa hh:mm:ss",
+        "range": "Ora fuori campo"
+      }
+    }
+  },
   "compareView": {
     "title": "Confronto {{name}}",
     "project": "Progetto",
@@ -1097,7 +1190,7 @@
     "orderNumber": "Numero di ordinazione",
     "firmware": "Firmware",
     "mode": "Modo",
-    "unavailableReadOnly": "Non disponibile in sola lettura"
+    "openDiag": "Apri Online e diagnostica"
   },
   "ioPanel": {
     "inputs": "Ingressi",

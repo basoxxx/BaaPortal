@@ -26,6 +26,10 @@ import type {
   PlcWriteProgress,
   PlcUploadAllResult,
   PlcUploadProgress,
+  DiagPart,
+  PlcClockRequest,
+  PlcClockResult,
+  PlcDiagResult,
 } from '../src/online/plcTypes';
 
 type Answer = 'save' | 'discard' | 'cancel';
@@ -252,6 +256,27 @@ export class FakeBridge implements BaaBridge {
     for (const cb of [...this.plcCbs]) cb(e);
   }
   // Elenco blocchi della CPU: una risposta per chiamata (l'ultima resta).
+  /** Diagnostica: `plcDiagnosticsImpl` risponde (altrimenti nessuna parte); le chiamate si registrano. */
+  plcDiagnosticsCalls: DiagPart[][] = [];
+  plcDiagnosticsImpl: (parts: DiagPart[]) => Promise<PlcDiagResult> | PlcDiagResult = () => ({
+    ok: true,
+    data: {},
+  });
+  async plcDiagnostics(parts: DiagPart[]): Promise<PlcDiagResult> {
+    this.plcDiagnosticsCalls.push(parts);
+    return this.plcDiagnosticsImpl(parts);
+  }
+  plcClockCalls: PlcClockRequest[] = [];
+  plcClockResults: PlcClockResult[] = [];
+  async plcSetClock(req: PlcClockRequest): Promise<PlcClockResult> {
+    this.plcClockCalls.push(req);
+    return (
+      this.plcClockResults.shift() ?? {
+        ok: true,
+        written: { year: 2026, month: 1, day: 1, hour: 0, minute: 0, second: 0, ms: 0 },
+      }
+    );
+  }
   plcBlocksResults: PlcBlocksResult[] = [{ ok: true, blocks: [] }];
   plcBlocksCalls = 0;
   async plcBlocks(): Promise<PlcBlocksResult> {

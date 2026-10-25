@@ -193,10 +193,14 @@ function OnlineCpuPanel() {
           </>
         ) : null}
       </dl>
-      <h4>{t('cpuPanel.cycle')}</h4>
-      <p className="baa-placeholder">{t('cpuPanel.unavailableReadOnly')}</p>
-      <h4>{t('cpuPanel.diagnostics')}</h4>
-      <p className="baa-placeholder">{t('cpuPanel.unavailableReadOnly')}</p>
+      <button
+        type="button"
+        className="baa-link"
+        onClick={() => void commands['online.diagnostics'].run({ store, service, bridge })}
+        data-testid="cpu-open-diag"
+      >
+        {t('cpuPanel.openDiag')}
+      </button>
     </div>
   );
 }

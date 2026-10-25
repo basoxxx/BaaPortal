@@ -1,7 +1,7 @@
 import { ids, parseNodeId } from '../project/navigation/treeIds';
 
 export type EditorKind =
-  'tagTable' | 'allTags' | 'block' | 'udt' | 'source' | 'watchTable' | 'compare';
+  'tagTable' | 'allTags' | 'block' | 'udt' | 'source' | 'watchTable' | 'compare' | 'onlineDiag';
 export interface EditorRef {
   /** `${kind}:${deviceId}:${objectId}`; "Mostra tutte le variabili" ha objectId ''. */
   key: string;
@@ -61,6 +61,8 @@ export function nodeIdOfEditor(e: EditorTarget): string {
       return ids.block(e.deviceId, e.objectId);
     case 'allTags':
       return ids.folder(e.deviceId, 'tags-all');
+    case 'onlineDiag':
+      return ids.folder(e.deviceId, 'online-diag');
   }
 }
 
@@ -78,6 +80,9 @@ export function editorOfNode(nodeId: string): EditorTarget | null {
   }
   if (p.kind === 'folder' && p.folder === 'tags-all') {
     return { kind: 'allTags', deviceId: p.dev, objectId: '' };
+  }
+  if (p.kind === 'folder' && p.folder === 'online-diag') {
+    return { kind: 'onlineDiag', deviceId: p.dev, objectId: '' };
   }
   return null;
 }
