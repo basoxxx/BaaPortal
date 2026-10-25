@@ -45,6 +45,7 @@ export type CommandId =
   | 'insert.block'
   | 'online.goOnline'
   | 'online.goOffline'
+  | 'online.compare'
   | 'online.simulation'
   | 'online.download'
   | 'online.monitor'
@@ -253,6 +254,10 @@ const list: Command[] = [
     icon: 'goOffline',
     isEnabled: (s) => s.online.status !== 'off',
     run: ({ store, bridge }) => plcControllerFor(store, bridge).goOffline(),
+  }),
+  def('online.compare', {
+    isEnabled: (s) => s.online.status === 'on' && !s.online.comparing && !getProgress(),
+    run: ({ store, bridge }) => plcControllerFor(store, bridge).compare(),
   }),
   def('online.simulation', {
     icon: 'simulation',

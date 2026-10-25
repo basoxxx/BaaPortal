@@ -2,12 +2,14 @@ import type { IpcMainInvokeEvent } from 'electron';
 import type {
   PlcAccess,
   PlcConnectResult,
+  PlcBlocksResult,
   PlcControlResult,
   PlcDownloadResult,
   PlcScanStartResult,
 } from '@baaportal/ui';
 import type { ConfirmFn } from './confirm';
 import { PlcWriteService, isControlOp, parseDownloadRequest } from './plcWrite';
+import { listOnlineBlocks } from './onlineBlocks';
 import { PlcService } from './plcService';
 import { ScanService } from './scanService';
 
@@ -79,6 +81,8 @@ export function registerPlc(
     if (!isControlOp(op)) return { ok: false, error: 'Comando non valido' };
     return writes.control(e.sender, op);
   });
+  // Elenco dei blocchi della CPU: sola lettura, sul collegamento della finestra.
+  handle('plc:blocks', (e): Promise<PlcBlocksResult> => listOnlineBlocks(service, e.sender));
   return {
     closeAll: async () => {
       await Promise.all([scans.cancelAll(), writes.abortAll().then(() => service.closeAll())]);

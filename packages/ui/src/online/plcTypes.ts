@@ -72,3 +72,17 @@ export type PlcControlOp = 'RUN' | 'STOP' | 'COPY_RAM_TO_ROM' | 'COMPRESS';
 /** Esito di `plcControl`; `result` è l'esito della CPU (p.es. «ok»). */
 export type PlcControlResult =
   { ok: true; result: string } | { ok: false; error: string } | { ok: false; cancelled: true };
+
+/** Blocco della CPU come lo elenca il confronto online/offline (sola lettura). */
+export interface OnlineBlock {
+  type: 'OB' | 'FB' | 'FC' | 'DB' | 'SFC' | 'SFB' | 'SDB';
+  number: number;
+  loadLength: number;
+  mc7Length: number;
+  checksum: number;
+  /** Data e ora di compilazione del codice, `AAAA-MM-GG hh:mm:ss`, se la CPU la dà. */
+  codeTime?: string;
+}
+
+/** Esito di `plcBlocks`: l'elenco dei blocchi OB, FB, FC e DB della CPU collegata. */
+export type PlcBlocksResult = { ok: true; blocks: OnlineBlock[] } | { ok: false; error: string };

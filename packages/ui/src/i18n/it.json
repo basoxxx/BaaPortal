@@ -110,6 +110,7 @@
     "plcDisconnected": "Collegamento online interrotto.",
     "plcConnectFailed": "Collegamento non riuscito: {{message}}",
     "plcLostTimeout": "Collegamento interrotto: la CPU non risponde.",
+    "plcCompareFailed": "Confronto con la CPU non riuscito: {{message}}",
     "plcLostClosed": "Collegamento interrotto: connessione chiusa.",
     "plcLostErrors": "Collegamento interrotto: errori ripetuti di comunicazione.",
     "plcMismatch": "La CPU collegata ({{connected}}) è diversa da quella del progetto ({{project}}).",
@@ -147,6 +148,7 @@
     "insert.device": "Nuovo dispositivo…",
     "insert.block": "Nuovo blocco…",
     "online.goOnline": "Collegamento online",
+    "online.compare": "Confronta con la CPU",
     "online.goOffline": "Interrompi collegamento online",
     "online.simulation": "Simulazione",
     "online.download": "Carica nel dispositivo",
@@ -290,6 +292,13 @@
       }
     }
   },
+  "compare": {
+    "same": "Uguale alla CPU",
+    "different": "Diverso dalla CPU",
+    "offlineOnly": "Solo nel progetto",
+    "onlineOnly": "Solo nella CPU",
+    "notCompiled": "Da compilare"
+  },
   "tree": {
     "project": "Progetto",
     "addDevice": "Aggiungi nuovo dispositivo",
@@ -303,6 +312,7 @@
       "onlineDiag": "Online e diagnostica",
       "blocks": "Blocchi di programma",
       "addBlock": "Aggiungi nuovo blocco",
+      "onlineOnly": "Solo online",
       "systemBlocks": "Blocchi di sistema",
       "sources": "Sorgenti esterne",
       "tags": "Variabili PLC",

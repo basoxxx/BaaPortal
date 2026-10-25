@@ -31,4 +31,6 @@ export type {
   PlcDownloadResult,
   PlcControlOp,
   PlcControlResult,
+  OnlineBlock,
+  PlcBlocksResult,
 } from './online/plcTypes';

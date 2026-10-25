@@ -67,6 +67,7 @@ const bridge: RawBridge = {
   onPlcScanEvent: (cb) => subscribe<[PlcScanEvent]>('plc:scanEvent', cb),
   plcDownload: (files, opts) => ipcRenderer.invoke('plc:download', files, opts),
   plcControl: (op) => ipcRenderer.invoke('plc:control', op),
+  plcBlocks: () => ipcRenderer.invoke('plc:blocks'),
   onPlcWriteProgress: (cb) => subscribe<[PlcWriteProgress]>('plc:writeProgress', cb),
   testOverrides: () => ipcRenderer.invoke('app:test-overrides'),
 };

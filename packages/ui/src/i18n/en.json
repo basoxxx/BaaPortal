@@ -110,6 +110,7 @@
     "plcDisconnected": "Online connection closed.",
     "plcConnectFailed": "Connection failed: {{message}}",
     "plcLostTimeout": "Connection lost: the CPU is not responding.",
+    "plcCompareFailed": "Comparison with the CPU failed: {{message}}",
     "plcLostClosed": "Connection lost: connection closed.",
     "plcLostErrors": "Connection lost: repeated communication errors.",
     "plcMismatch": "The connected CPU ({{connected}}) differs from the project CPU ({{project}}).",
@@ -147,6 +148,7 @@
     "insert.device": "New device…",
     "insert.block": "New block…",
     "online.goOnline": "Go online",
+    "online.compare": "Compare with CPU",
     "online.goOffline": "Go offline",
     "online.simulation": "Simulation",
     "online.download": "Download to device",
@@ -290,6 +292,13 @@
       }
     }
   },
+  "compare": {
+    "same": "Same as CPU",
+    "different": "Different from CPU",
+    "offlineOnly": "Project only",
+    "onlineOnly": "CPU only",
+    "notCompiled": "Not compiled"
+  },
   "tree": {
     "project": "Project",
     "addDevice": "Add new device",
@@ -303,6 +312,7 @@
       "onlineDiag": "Online & diagnostics",
       "blocks": "Program blocks",
       "addBlock": "Add new block",
+      "onlineOnly": "Online only",
       "systemBlocks": "System blocks",
       "sources": "External source files",
       "tags": "PLC tags",

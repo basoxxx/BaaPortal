@@ -2,6 +2,7 @@ import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { Mc7Diagnostic, Project } from '@baaportal/project';
 import type { DiagEntry, MonitorStep, SimMode } from '@baaportal/sim';
 import type { LineMapRow } from '../editors/awl/monitorExtension';
+import type { OnlineCompare } from '../online/compare';
 import type { PlcAccess, PlcIdentity, PlcMode } from '../online/plcTypes';
 import type { SimStats, SimWarning, WatchValue } from '../sim/protocol';
 import type { ImportSummary } from '../project/navigation/tagTableIo';
@@ -186,6 +187,10 @@ export interface OnlineUiState {
   identity?: PlcIdentity;
   mode?: PlcMode;
   deviceId?: string;
+  /** Confronto con la CPU: assente finché non è fatto; sparisce andando offline. */
+  compare?: OnlineCompare;
+  /** Un confronto è in corso. */
+  comparing?: boolean;
 }
 
 export const ONLINE_OFF: OnlineUiState = { status: 'off' };

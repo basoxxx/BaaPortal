@@ -53,6 +53,7 @@ import {
 } from './sourceActions';
 import { exportTagTable, importTagTable } from './tagTableIo';
 import { RenameInput } from './RenameInput';
+import type { CompareState } from '../../online/compare';
 import { buildTree, type TreeNode } from './treeModel';
 import { getProgress } from '../progress';
 import { parseNodeId } from './treeIds';
@@ -67,6 +68,57 @@ function ancestorsOf(node: TreeNode, id: string): TreeNode[] | null {
     if (inner) return [node, ...inner];
   }
   return null;
+}
+
+const BADGE_COLOR: Record<CompareState, string> = {
+  same: 'var(--baa-awl-constant)',
+  different: 'var(--baa-online)',
+  offlineOnly: 'var(--baa-text-muted)',
+  onlineOnly: 'var(--baa-text-muted)',
+  notCompiled: 'var(--baa-disabled)',
+};
+
+/** Distintivo del confronto con la CPU, come in TIA: cerchio, cerchio pieno, mezzo cerchio, grigio. */
+function CompareBadge({ state }: { state: CompareState }) {
+  const { t } = useTranslation();
+  const label = t(`compare.${state}`);
+  const c = BADGE_COLOR[state];
+  return (
+    <svg
+      role="img"
+      aria-label={label}
+      data-compare={state}
+      width="10"
+      height="10"
+      viewBox="0 0 10 10"
+      style={{ flex: 'none', marginLeft: 2 }}
+    >
+      <title>{label}</title>
+      {state === 'same' ? (
+        <circle cx="5" cy="5" r="3.5" fill="none" stroke={c} strokeWidth="1.5" />
+      ) : state === 'different' ? (
+        <circle cx="5" cy="5" r="4" fill={c} />
+      ) : state === 'notCompiled' ? (
+        <circle
+          cx="5"
+          cy="5"
+          r="3.5"
+          fill="none"
+          stroke={c}
+          strokeWidth="1.5"
+          strokeDasharray="2 1.5"
+        />
+      ) : (
+        <>
+          <circle cx="5" cy="5" r="3.5" fill="none" stroke={c} strokeWidth="1" />
+          <path
+            d={state === 'offlineOnly' ? 'M5 1.5a3.5 3.5 0 0 0 0 7z' : 'M5 1.5a3.5 3.5 0 0 1 0 7z'}
+            fill={c}
+          />
+        </>
+      )}
+    </svg>
+  );
 }
 
 interface Row {
@@ -92,7 +144,8 @@ export function ProjectTree() {
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [, setClipboardTick] = useState(0);
 
-  const { project, onlineAccess } = useMemo(() => buildTree(doc), [doc]);
+  const compare = useAppStore((s) => s.online.compare);
+  const { project, onlineAccess } = useMemo(() => buildTree(doc, compare), [doc, compare]);
   const rows = useMemo(() => {
     const out: Row[] = [];
     const walk = (node: TreeNode, level: number, parent: TreeNode | null) => {
@@ -548,6 +601,7 @@ export function ProjectTree() {
                 {hasKids ? (collapsed.has(node.id) ? '▸' : '▾') : ''}
               </span>
               <Icon name={node.icon} size={16} />
+              {node.compare ? <CompareBadge state={node.compare} /> : null}
               {renaming === node.id ? (
                 <RenameInput
                   initial={renameInfo(doc, node.id)?.name ?? ''}

@@ -2,6 +2,7 @@ import type {
   NetInterface,
   PlcAccess,
   PlcBlockRef,
+  PlcBlocksResult,
   PlcConnectResult,
   PlcControlOp,
   PlcControlResult,
@@ -142,6 +143,8 @@ export interface BaaBridge {
     opts?: { deleteBlocks?: PlcBlockRef[] },
   ): Promise<PlcDownloadResult>;
   plcControl(op: PlcControlOp): Promise<PlcControlResult>;
+  /** Elenco dei blocchi della CPU collegata (sola lettura); mai eccezioni: l'esito dice tutto. */
+  plcBlocks(): Promise<PlcBlocksResult>;
   onPlcWriteProgress(cb: (p: PlcWriteProgress) => void): () => void;
   testOverrides(): Promise<{ recoveryIntervalMs?: number }>; // sempre {} nelle build pacchettizzate
 }

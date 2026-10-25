@@ -20,7 +20,12 @@ export interface PlcOwner {
   removeListener(event: 'destroyed', cb: () => void): unknown;
 }
 
-type Client = Pick<S7Client, 'identity' | 'mode' | 'protection' | 'close' | 'closed'>;
+type Client = Pick<
+  S7Client,
+  'identity' | 'mode' | 'protection' | 'close' | 'closed' | 'listBlocks' | 'blockInfo'
+>;
+/** Il collegamento in sola lettura, come lo vedono le richieste di lettura (elenco blocchi). */
+export type ReadClient = Pick<Client, 'listBlocks' | 'blockInfo'>;
 export type PlcConnectFn = (o: Omit<ConnectOptions, 'transport'>) => Promise<Client>;
 
 export interface PlcServiceOptions {
@@ -46,7 +51,10 @@ interface Link {
   mode: PlcMode;
   timer: NodeJS.Timeout;
   onGone: () => void;
-  reading: boolean;
+  /** Richieste in coda o in corso (sorveglianza compresa): se > 0 il giro di sorveglianza salta. */
+  active: number;
+  /** Coda: una sola richiesta alla volta sulla connessione. */
+  chain: Promise<unknown>;
   failures: number;
   done: boolean;
 }
@@ -152,7 +160,8 @@ export class PlcService {
       mode,
       timer: setInterval(() => void this.tick(owner, link), this.intervalMs),
       onGone: () => void this.drop(owner),
-      reading: false,
+      active: 0,
+      chain: Promise.resolve(),
       failures: 0,
       done: false,
     };
@@ -190,6 +199,41 @@ export class PlcService {
     return link ? { access: link.access, identity: link.identity, linkId: link.id } : undefined;
   }
 
+  /**
+   * Esegue una lettura sul collegamento della finestra, in coda dietro alle altre richieste e alla
+   * sorveglianza: sulla connessione non corrono mai due richieste insieme. Senza collegamento
+   * (o se cade durante l'attesa) dà `{ ok: false, error }`; mai eccezioni.
+   */
+  async read<T>(
+    owner: PlcOwner,
+    fn: (client: ReadClient) => Promise<T>,
+  ): Promise<{ ok: true; value: T } | { ok: false; error: string }> {
+    const link = this.links.get(owner);
+    if (!link) return { ok: false, error: 'Nessun collegamento online' };
+    try {
+      const value = await this.exclusive(link, async () => {
+        if (link.done) throw new S7Error('CLOSED', 'collegamento chiuso');
+        return fn(link.client);
+      });
+      return { ok: true, value };
+    } catch (err) {
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
+  /** Accoda `fn` dietro alle richieste precedenti del collegamento. */
+  private exclusive<T>(link: Link, fn: () => Promise<T>): Promise<T> {
+    link.active++;
+    const run = link.chain.then(fn, fn);
+    link.chain = run.catch(() => undefined);
+    return run.finally(() => {
+      link.active--;
+    });
+  }
+
   /** Chiude tutto (uscita dall'app). */
   async closeAll(): Promise<void> {
     for (const o of this.pending.keys()) this.bump(o); // annulla i connect in attesa
@@ -225,12 +269,16 @@ export class PlcService {
 
   /** Un giro di sorveglianza; se la lettura precedente non è finita, salta. */
   private async tick(owner: PlcOwner, link: Link): Promise<void> {
-    if (link.done || link.reading) return;
+    if (link.done || link.active > 0) return;
     if (link.client.closed) {
       this.lost(owner, link, 'closed');
       return;
     }
-    link.reading = true;
+    await this.exclusive(link, () => this.poll(owner, link));
+  }
+
+  private async poll(owner: PlcOwner, link: Link): Promise<void> {
+    if (link.done) return;
     let timer: NodeJS.Timeout | undefined;
     try {
       const timeout = new Promise<never>((_, reject) => {
@@ -263,7 +311,6 @@ export class PlcService {
       }
     } finally {
       if (timer) clearTimeout(timer);
-      link.reading = false;
     }
   }
 }

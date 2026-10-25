@@ -2,7 +2,10 @@ import type { StoreApi } from 'zustand/vanilla';
 import { findDevice } from '@baaportal/project';
 import type { BaaBridge } from '../bridge';
 import { targetPlcId } from '../project/navigation/treeIds';
+import { compileProgram, contextHashOf, hashOf } from '../project/compile/compileActions';
+import { getProgress } from '../project/progress';
 import { ONLINE_OFF, type AppState } from '../state/store';
+import { compareBlocks, type CompareProjectBlock } from './compare';
 import type { PlcEvent, PlcLostReason } from './plcTypes';
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -104,6 +107,59 @@ export class PlcController {
         connected: result.identity.orderNumber,
         project: dev.cpu.orderNumber,
       });
+    }
+    void this.compare();
+  }
+
+  /**
+   * Confronta i blocchi del progetto con quelli della CPU collegata: compila ciò che è cambiato,
+   * elenca i blocchi della CPU (sola lettura) e tiene l'esito in `online.compare`. Parte da sola
+   * al collegamento e col comando «Confronta»; non a ogni modifica.
+   */
+  async compare(): Promise<void> {
+    const st = this.store.getState();
+    const { status, deviceId, comparing } = st.online;
+    if (status !== 'on' || !deviceId || comparing) return;
+    const gen = this.generation;
+    const live = () => gen === this.generation && this.store.getState().online.status === 'on';
+    st.patchOnline({ comparing: true });
+    try {
+      if (!getProgress()) {
+        await compileProgram({ store: this.store, bridge: this.bridge }, deviceId, 'changes');
+        if (!live()) return;
+      }
+      let res: Awaited<ReturnType<BaaBridge['plcBlocks']>>;
+      try {
+        res = await this.bridge.plcBlocks();
+      } catch (e) {
+        res = { ok: false, error: errorText(e) };
+      }
+      if (!live()) return;
+      if (!res.ok) {
+        this.push('error', 'plcCompareFailed', { message: res.error });
+        return;
+      }
+      const { doc, compile } = this.store.getState();
+      const dev = doc && findDevice(doc.project, deviceId);
+      if (!dev) return;
+      const context = contextHashOf(dev);
+      const hashes: Record<string, string> = {};
+      const project: CompareProjectBlock[] = dev.blocks.map((b) => {
+        const hash = hashOf(b, context);
+        hashes[b.id] = hash;
+        const file = compile.hashes[b.id] === hash ? compile.files[b.id] : undefined;
+        return {
+          id: b.id,
+          type: b.kind === 'IDB' ? 'DB' : b.kind,
+          number: b.number,
+          ...(file ? { file } : {}),
+        };
+      });
+      this.store.getState().patchOnline({
+        compare: { deviceId, rows: compareBlocks(project, res.blocks), hashes },
+      });
+    } finally {
+      if (live()) this.store.getState().patchOnline({ comparing: false });
     }
   }
 

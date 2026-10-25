@@ -18,6 +18,7 @@ import type {
   PlcScanEvent,
   PlcScanStartResult,
   PlcStatus,
+  PlcBlocksResult,
 } from '../src/online/plcTypes';
 
 type Answer = 'save' | 'discard' | 'cancel';
@@ -242,6 +243,15 @@ export class FakeBridge implements BaaBridge {
   }
   emitPlcEvent(e: PlcEvent): void {
     for (const cb of [...this.plcCbs]) cb(e);
+  }
+  // Elenco blocchi della CPU: una risposta per chiamata (l'ultima resta).
+  plcBlocksResults: PlcBlocksResult[] = [{ ok: true, blocks: [] }];
+  plcBlocksCalls = 0;
+  async plcBlocks(): Promise<PlcBlocksResult> {
+    this.plcBlocksCalls++;
+    const r =
+      this.plcBlocksResults.length > 1 ? this.plcBlocksResults.shift() : this.plcBlocksResults[0];
+    return r ?? { ok: false, error: 'nessun risultato previsto' };
   }
   // Ricerca dei dispositivi accessibili.
   plcInterfacesValue: NetInterface[] = [];

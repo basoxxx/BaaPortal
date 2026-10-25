@@ -67,6 +67,7 @@ export const MENUS: MenuDef[] = [
     items: [
       'online.goOnline',
       'online.goOffline',
+      'online.compare',
       'online.simulation',
       'sep',
       'online.download',

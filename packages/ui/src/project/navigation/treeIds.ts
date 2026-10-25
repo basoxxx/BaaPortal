@@ -7,6 +7,7 @@ export type PlcFolder =
   | 'blocks'
   | 'blocks-add'
   | 'system-blocks'
+  | 'online-only'
   | 'sources'
   | 'sources-add'
   | 'tags'
@@ -26,6 +27,7 @@ const FOLDERS: ReadonlySet<string> = new Set<PlcFolder>([
   'blocks',
   'blocks-add',
   'system-blocks',
+  'online-only',
   'sources',
   'sources-add',
   'tags',
@@ -54,6 +56,8 @@ export const ids = {
   watchTable: (dev: string, id: string) => `plc:${dev}:watchTable:${id}`,
   /** Blocco di sistema richiamato; `tag` è tipo e numero (SFB4). */
   sysBlock: (dev: string, tag: string) => `plc:${dev}:sysBlock:${tag}`,
+  /** Blocco presente solo nella CPU (confronto online); `tag` è tipo e numero (DB7). */
+  onlineBlock: (dev: string, tag: string) => `plc:${dev}:onlineBlock:${tag}`,
 };
 
 export type ParsedNodeId =
