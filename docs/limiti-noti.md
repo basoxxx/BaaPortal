@@ -268,6 +268,20 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
 
 - **Chiusura dell'app con progetto non salvato:** compare la domanda di salvataggio, come previsto. Le prove automatiche dell'app impacchettata devono salvare o scartare prima di chiudere.
 
+## Aggiornamenti (piano 3U)
+
+- **Le versioni fino alla 0.11.0 non si aggiornano da sole:** le loro release non hanno `latest.yml` né `latest-mac.yml`. Va installata la 0.12.0 a mano una volta. Lo dicono anche le note di rilascio della 0.12.0.
+- **Niente firma dell'editore.** Su Windows l'integrità è lo sha512 di `latest.yml`, preso dalla stessa release via HTTPS: chi può modificare la release può anche modificare l'aggiornamento.
+- **macOS: niente aggiornamento automatico vero** (niente Squirrel.Mac senza firma Developer ID). L'app scarica e verifica il DMG, ma l'utente sostituisce l'app a mano. Al primo avvio dopo la sostituzione, Gatekeeper può chiedere conferma come alla prima installazione. Il DMG lo scrive l'app, quindi macOS non lo marca come scaricato da Internet: l'integrità resta lo sha512.
+- **Versioni di prova: «più recente», non «più alta».** Con le versioni di prova attive electron-updater prende la release più recente del feed di GitHub. Il controllo semver evita sempre i ritorni indietro, ma se si pubblicasse una versione più bassa dopo una più alta, chi ha la più alta non la vede (giusto) e chi ha una più vecchia riceve quella più recente. Regola di rilascio: pubblicare le versioni in ordine crescente.
+- **Windows, installazione «per tutti gli utenti»:** l'aggiornamento chiede i permessi di amministratore (UAC).
+- **Limiti di GitHub.** GitHub limita le richieste senza account: dietro un indirizzo condiviso (rete aziendale) un controllo può fallire; quello automatico tace e riprova dopo 6 ore.
+- **Proxy con autenticazione** non gestito.
+- **Mai provato su una release vera** fino alla prima release dopo la 0.12.0 (0.12.1 o 0.13.0): la prova va fatta su Windows e su un Mac per architettura.
+- **Niente e2e contro GitHub:** le regole sono provate con un updater finto.
+- **Controllo a mano durante uno scaricamento:** non mostra nulla (nessun «aggiornato» né altro avviso); lo scaricamento prosegue e il suo avanzamento resta visibile.
+- **Installazione fallita:** se l'installatore non parte, l'app riabilita le operazioni online e mostra l'errore; la finestra di salvataggio e l'offline erano già stati eseguiti.
+
 ## Fuori dal codice, in sospeso per l'utente
 
 - Controlli a mano dei piani 1B (Windows e Mac), 1C e 1F. Le liste sono nei piani; per la 1F: xlsx in Excel e LibreOffice, xlsx di TIA Portal, Archivia/Ritira con percorsi accentati e con spazi, scala a 125%.
