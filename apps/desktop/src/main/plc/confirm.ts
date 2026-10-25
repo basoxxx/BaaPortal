@@ -13,7 +13,6 @@ export type ConfirmFn = (owner: unknown, texts: WriteConfirmTexts) => Promise<bo
 
 interface DialogLike {
   showMessageBox(win: BrowserWindow, opts: MessageBoxOptions): Promise<{ response: number }>;
-  showMessageBox(opts: MessageBoxOptions): Promise<{ response: number }>;
 }
 
 /**
@@ -22,9 +21,9 @@ interface DialogLike {
  */
 export function createConfirm(
   dialog: DialogLike,
-  getWindow: () => BrowserWindow | null,
+  windowOf: (owner: unknown) => BrowserWindow | null,
 ): ConfirmFn {
-  return async (_owner, t) => {
+  return async (owner, t) => {
     const opts: MessageBoxOptions = {
       type: 'warning',
       buttons: [t.confirmLabel, 'Annulla'],
@@ -35,8 +34,10 @@ export function createConfirm(
       detail: t.detail,
       noLink: true,
     };
-    const win = getWindow();
-    const r = win ? await dialog.showMessageBox(win, opts) : await dialog.showMessageBox(opts);
+    // La finestra è quella che ha chiesto la scrittura; senza, non si mostra nulla e non si scrive.
+    const win = windowOf(owner);
+    if (!win || win.isDestroyed()) throw new Error('Finestra non disponibile per la conferma');
+    const r = await dialog.showMessageBox(win, opts);
     return r.response === 0;
   };
 }

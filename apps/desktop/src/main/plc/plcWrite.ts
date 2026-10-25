@@ -9,11 +9,13 @@ import type {
   PlcDownloadResult,
   PlcWriteProgress,
 } from '@baaportal/ui';
-import type { ConfirmFn } from './confirm';
+import type { ConfirmFn, WriteConfirmTexts } from './confirm';
 import { connectMessage, type PlcOwner, type PlcService } from './plcService';
 
 export const MAX_FILES = 2048;
 export const MAX_FILE_BYTES = 1024 * 1024;
+export const MAX_TOTAL_BYTES = 32 * 1024 * 1024;
+const LOADABLE = ['OB', 'FB', 'FC', 'DB'];
 const DEFAULT_PORT = 102;
 const CONNECTION_TYPES = { PG: 'pg', OP: 'op', S7_BASIC: 'basic' } as const;
 const DELETABLE = ['OB', 'FB', 'FC', 'DB'];
@@ -28,7 +30,14 @@ export interface PlcWriteOwner extends PlcOwner {
 
 export type WriteClient = Pick<
   S7WriteClient,
-  'close' | 'downloadBlock' | 'deleteBlock' | 'stop' | 'start' | 'copyRamToRom' | 'compressMemory'
+  | 'close'
+  | 'identity'
+  | 'downloadBlock'
+  | 'deleteBlock'
+  | 'stop'
+  | 'start'
+  | 'copyRamToRom'
+  | 'compressMemory'
 >;
 export type PlcWriteConnectFn = (
   o: Omit<ConnectOptions, 'transport' | 'mode'>,
@@ -53,9 +62,13 @@ export interface DownloadRequest {
 export function parseDownloadRequest(files: unknown, opts: unknown): DownloadRequest | string {
   if (!Array.isArray(files)) return 'Elenco di file non valido';
   if (files.length > MAX_FILES) return `Troppi file (massimo ${MAX_FILES})`;
+  let total = 0;
   for (const f of files) {
     if (!(f instanceof Uint8Array)) return 'File non valido';
     if (f.length > MAX_FILE_BYTES) return 'File di blocco troppo grande (massimo 1 MB)';
+    total += f.length;
+    if (total > MAX_TOTAL_BYTES)
+      return 'Dimensione complessiva dei file troppo grande (massimo 32 MB)';
   }
   const del: PlcBlockRef[] = [];
   if (opts !== undefined && opts !== null) {
@@ -113,13 +126,24 @@ function errText(err: unknown): string {
 
 type Step = { name: string; run: (c: WriteClient) => Promise<void>; counts: 'delete' | 'load' };
 
+/** Un'operazione di scrittura in corso: `aborted` la ferma prima del passo successivo. */
+interface Op {
+  aborted: boolean;
+  /** `confirming` finché la finestra nativa è aperta, poi `running` (c'è un collegamento). */
+  stage: 'confirming' | 'running';
+  settled: Promise<void>;
+}
+
+type Prepared =
+  { c: WriteClient } | { result: { ok: false; cancelled: true } | { ok: false; error: string } };
+
 /**
  * Scritture nella CPU, una alla volta per finestra. Ogni operazione: conferma nativa, poi apre un
  * collegamento `online-write`, esegue, chiude (sempre, anche in caso di errore). L'indirizzo è
  * quello del collegamento online della stessa finestra: il renderer non lo passa mai.
  */
 export class PlcWriteService {
-  private readonly busy = new WeakSet<PlcOwner>();
+  private readonly ops = new Map<PlcOwner, Op>();
   private readonly connectFn: PlcWriteConnectFn;
   private readonly connectTimeoutMs: number;
   private readonly now: () => number;
@@ -130,20 +154,42 @@ export class PlcWriteService {
     this.now = o.now ?? Date.now;
   }
 
+  /** C'è una scrittura con il collegamento aperto (serve all'uscita dall'app). */
+  writing(): boolean {
+    return [...this.ops.values()].some((op) => op.stage === 'running');
+  }
+
+  /**
+   * Uscita dall'app: ferma ogni scrittura prima del passo successivo e aspetta che chiuda il
+   * collegamento. Quelle ancora alla finestra di conferma vengono annullate senza attendere.
+   */
+  async abortAll(): Promise<void> {
+    const running: Promise<void>[] = [];
+    for (const op of this.ops.values()) {
+      op.aborted = true;
+      if (op.stage === 'running') running.push(op.settled);
+    }
+    await Promise.all(running);
+  }
+
   async download(
     owner: PlcWriteOwner,
     files: Uint8Array[],
     opts: { deleteBlocks?: PlcBlockRef[] } = {},
   ): Promise<PlcDownloadResult> {
     const req = parseDownloadRequest(files, opts);
-    if (typeof req === 'string') return { ok: false, loaded: [], error: req };
+    if (typeof req === 'string') return fail(req);
     const names: string[] = [];
     for (const f of req.files) {
       try {
         const h = parseBlockFile(f).header;
-        if (h.type === undefined)
-          return fail(`Blocco di tipo sconosciuto (0x${h.typeCode.toString(16)})`);
-        names.push(`${h.type}${h.number}`);
+        const name = h.type === undefined ? `0x${h.typeCode.toString(16)}` : `${h.type}${h.number}`;
+        if (h.type === undefined || !LOADABLE.includes(h.type)) {
+          return fail(
+            `Tipo di blocco non ammesso per il caricamento: ${name} (solo OB, FB, FC, DB)`,
+          );
+        }
+        names.push(name);
       } catch (err) {
         return fail(`File di blocco non valido: ${errText(err)}`);
       }
@@ -166,60 +212,102 @@ export class PlcWriteService {
       ...req.deleteBlocks.map((b) => `Cancella ${b.type}${b.number}`),
       ...names.map((n) => `Carica ${n}`),
     ];
-    if (this.busy.has(owner)) return fail('Operazione già in corso');
-    this.busy.add(owner);
+    return this.exclusive<PlcDownloadResult>(
+      owner,
+      fail('Operazione già in corso'),
+      (err) => fail(errText(err)), // mai un'eccezione verso il renderer
+      async (op) => {
+        const p = await this.prepare(owner, op, (t) => ({
+          title: 'Carica nel dispositivo',
+          message: `Caricare nella CPU ${cpuName(t)}?`,
+          detail: `Operazione: Carica nel dispositivo\n${listLines(lines)}`,
+          confirmLabel: 'Carica',
+        }));
+        if (!('c' in p)) return 'cancelled' in p.result ? p.result : fail(p.result.error);
+        return this.runSteps(owner, op, p.c, steps);
+      },
+    );
+  }
+
+  async control(owner: PlcWriteOwner, cmd: PlcControlOp): Promise<PlcControlResult> {
+    if (!isControlOp(cmd)) return { ok: false, error: 'Comando non valido' };
+    const t = CONTROL_TEXTS[cmd];
+    return this.exclusive<PlcControlResult>(
+      owner,
+      { ok: false, error: 'Operazione già in corso' },
+      (err) => ({ ok: false, error: errText(err) }),
+      async (op) => {
+        const p = await this.prepare(owner, op, (target) => ({
+          title: t.title,
+          message: `${t.what} della CPU ${cpuName(target)}?`,
+          detail: `Operazione: ${t.title}`,
+          confirmLabel: t.label,
+        }));
+        if (!('c' in p)) return p.result;
+        try {
+          if (owner.isDestroyed() || op.aborted)
+            return { ok: false, error: 'Operazione interrotta' };
+          return { ok: true, result: await runControl(p.c, cmd) };
+        } finally {
+          await p.c.close().catch(() => undefined);
+        }
+      },
+    );
+  }
+
+  /** Una scrittura per finestra, anche durante la conferma; registra l'operazione per `abortAll`. */
+  private async exclusive<R>(
+    owner: PlcOwner,
+    busy: R,
+    onError: (err: unknown) => R,
+    fn: (op: Op) => Promise<R>,
+  ): Promise<R> {
+    if (this.ops.has(owner)) return busy;
+    let settle!: () => void;
+    const op: Op = {
+      aborted: false,
+      stage: 'confirming',
+      settled: new Promise<void>((r) => (settle = r)),
+    };
+    this.ops.set(owner, op);
     try {
-      const target = this.o.service.target(owner);
-      if (!target) return fail('Nessun collegamento online');
-      const ok = await this.o.confirm(owner, {
-        title: 'Carica nel dispositivo',
-        message: `Caricare nella CPU ${cpuName(target)}?`,
-        detail: `Operazione: Carica nel dispositivo\n${listLines(lines)}`,
-        confirmLabel: 'Carica',
-      });
-      if (!ok) return { ok: false, cancelled: true };
-      const c = await this.open(target.access);
-      if (typeof c === 'string') return fail(c);
-      return await this.runSteps(owner, c, steps);
+      return await fn(op);
     } catch (err) {
-      return fail(errText(err)); // mai un'eccezione verso il renderer
+      return onError(err);
     } finally {
-      this.busy.delete(owner);
+      this.ops.delete(owner);
+      settle();
     }
   }
 
-  async control(owner: PlcWriteOwner, op: PlcControlOp): Promise<PlcControlResult> {
-    if (!isControlOp(op)) return { ok: false, error: 'Comando non valido' };
-    const t = CONTROL_TEXTS[op];
-    if (this.busy.has(owner)) return { ok: false, error: 'Operazione già in corso' };
-    this.busy.add(owner);
-    try {
-      const target = this.o.service.target(owner);
-      if (!target) return { ok: false, error: 'Nessun collegamento online' };
-      const ok = await this.o.confirm(owner, {
-        title: t.title,
-        message: `${t.what} della CPU ${cpuName(target)}?`,
-        detail: `Operazione: ${t.title}`,
-        confirmLabel: t.label,
-      });
-      if (!ok) return { ok: false, cancelled: true };
-      const c = await this.open(target.access);
-      if (typeof c === 'string') return { ok: false, error: c };
-      try {
-        return { ok: true, result: await runControl(c, op) };
-      } finally {
-        await c.close().catch(() => undefined);
-      }
-    } catch (err) {
-      return { ok: false, error: errText(err) };
-    } finally {
-      this.busy.delete(owner);
+  /**
+   * Bersaglio, conferma nativa, poi collegamento in scrittura. Dopo la conferma si ricontrolla che
+   * il collegamento online sia lo stesso, e dopo l'apertura che la CPU sia quella confermata.
+   */
+  private async prepare(
+    owner: PlcWriteOwner,
+    op: Op,
+    texts: (target: Target) => WriteConfirmTexts,
+  ): Promise<Prepared> {
+    const target = this.o.service.target(owner);
+    if (!target) return { result: { ok: false, error: 'Nessun collegamento online' } };
+    const ok = await this.o.confirm(owner, texts(target));
+    if (!ok || op.aborted) return { result: { ok: false, cancelled: true } };
+    if (owner.isDestroyed()) return { result: { ok: false, error: 'Finestra chiusa' } };
+    const again = this.o.service.target(owner);
+    if (!again || again.linkId !== target.linkId) {
+      return { result: { ok: false, error: 'Collegamento online cambiato: operazione annullata' } };
     }
+    op.stage = 'running';
+    const c = await this.open(target);
+    return typeof c === 'string' ? { result: { ok: false, error: c } } : { c };
   }
 
-  private async open(access: PlcAccess): Promise<WriteClient | string> {
+  private async open(target: Target): Promise<WriteClient | string> {
+    const access = target.access;
+    let c: WriteClient;
     try {
-      return await this.connectFn({
+      c = await this.connectFn({
         host: access.host,
         port: access.port ?? DEFAULT_PORT,
         rack: access.rack,
@@ -231,32 +319,46 @@ export class PlcWriteService {
     } catch (err) {
       return connectMessage(err, access);
     }
+    try {
+      const id = await c.identity();
+      const want = target.identity;
+      const serialDiffers =
+        id.serialNumber !== undefined &&
+        want.serial !== undefined &&
+        id.serialNumber !== want.serial;
+      if (id.orderNumber !== want.orderNumber || serialDiffers) {
+        await c.close().catch(() => undefined);
+        return 'La CPU raggiunta non è quella confermata (numero di ordinazione o di serie diverso): operazione annullata';
+      }
+    } catch (err) {
+      await c.close().catch(() => undefined);
+      return `Verifica della CPU non riuscita: ${errText(err)}`;
+    }
+    return c;
   }
 
   private async runSteps(
     owner: PlcWriteOwner,
+    op: Op,
     c: WriteClient,
     steps: Step[],
   ): Promise<PlcDownloadResult> {
     const loaded: string[] = [];
+    const deleted: string[] = [];
     const total = steps.length;
     let lastSent = -Infinity;
     try {
       for (const [i, s] of steps.entries()) {
-        if (owner.isDestroyed()) {
-          return {
-            ok: false,
-            loaded,
-            failedAt: s.name,
-            error: 'Finestra chiusa: caricamento interrotto',
-          };
+        if (owner.isDestroyed() || op.aborted) {
+          const why = op.aborted ? "Uscita dall'app" : 'Finestra chiusa';
+          return { ok: false, loaded, deleted, error: `${why}: interrotto prima di ${s.name}` };
         }
         try {
           await s.run(c);
         } catch (err) {
-          return { ok: false, loaded, failedAt: s.name, error: errText(err) };
+          return { ok: false, loaded, deleted, failedAt: s.name, error: errText(err) };
         }
-        if (s.counts === 'load') loaded.push(s.name);
+        (s.counts === 'load' ? loaded : deleted).push(s.name);
         const done = i + 1;
         const t = this.now();
         if ((done === total || t - lastSent >= PROGRESS_MIN_MS) && !owner.isDestroyed()) {
@@ -265,15 +367,17 @@ export class PlcWriteService {
           owner.send('plc:writeProgress', p);
         }
       }
-      return { ok: true, loaded };
+      return { ok: true, loaded, deleted };
     } finally {
       await c.close().catch(() => undefined);
     }
   }
 }
 
+type Target = NonNullable<ReturnType<PlcService['target']>>;
+
 function fail(error: string): PlcDownloadResult {
-  return { ok: false, loaded: [], error };
+  return { ok: false, loaded: [], deleted: [], error };
 }
 
 function cpuName(t: {

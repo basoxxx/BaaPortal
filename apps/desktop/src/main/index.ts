@@ -197,13 +197,14 @@ if (!app.requestSingleInstanceLock()) {
       for (const p of pendingOpen.splice(0)) win?.webContents.send('app:open-file', p);
     },
   );
-  // Prima di uscire si chiude il collegamento online (al massimo 1 s), poi si esce davvero.
+  // Prima di uscire si chiude il collegamento online (al massimo 1 s), poi si esce davvero. Con una
+  // scrittura nella CPU in corso si ferma prima del blocco successivo (al massimo 15 s).
   let onlineClosed = false;
   app.on('before-quit', (e) => {
     if (onlineClosed) return;
     e.preventDefault();
     onlineClosed = true;
-    const cap = new Promise<void>((r) => setTimeout(r, 1000));
+    const cap = new Promise<void>((r) => setTimeout(r, ipc.writing() ? 15000 : 1000));
     void Promise.race([ipc.closeOnline().catch(() => undefined), cap]).finally(() => app.quit());
   });
 

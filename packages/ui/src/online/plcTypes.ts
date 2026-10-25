@@ -58,13 +58,13 @@ export interface PlcWriteProgress {
 }
 
 /**
- * Esito di `plcDownload`. `loaded` elenca i blocchi già nella CPU anche se il caricamento si è
- * fermato; `failedAt` è il blocco che ha fallito. `cancelled`: l'utente ha detto «Annulla» nella
+ * Esito di `plcDownload`. `loaded` e `deleted` elencano i blocchi già caricati e già cancellati anche se l'operazione si
+ * è fermata; `failedAt` è il blocco che ha fallito. `cancelled`: l'utente ha detto «Annulla» nella
  * finestra nativa e non è partito nulla.
  */
 export type PlcDownloadResult =
-  | { ok: true; loaded: string[] }
-  | { ok: false; loaded: string[]; failedAt?: string; error: string }
+  | { ok: true; loaded: string[]; deleted: string[] }
+  | { ok: false; loaded: string[]; deleted: string[]; failedAt?: string; error: string }
   | { ok: false; cancelled: true };
 
 export type PlcControlOp = 'RUN' | 'STOP' | 'COPY_RAM_TO_ROM' | 'COMPRESS';

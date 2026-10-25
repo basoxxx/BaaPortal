@@ -38,6 +38,8 @@ const DEFAULT_PORT = 102;
 const CONNECTION_TYPES = { PG: 'pg', OP: 'op', S7_BASIC: 'basic' } as const;
 
 interface Link {
+  /** Numero progressivo: distingue un collegamento da uno successivo allo stesso indirizzo. */
+  id: number;
   access: PlcAccess;
   identity: PlcIdentity;
   client: Client;
@@ -70,6 +72,7 @@ export function connectMessage(err: unknown, access: PlcAccess): string {
  */
 export class PlcService {
   private readonly links = new Map<PlcOwner, Link>();
+  private linkSeq = 0;
   /** Per finestra: numero dell'ultimo connect, per scartare quelli superati mentre attendono. */
   private readonly epochs = new WeakMap<PlcOwner, number>();
   /** Finestre con un connect in attesa: servono a `closeAll` per annullarlo. */
@@ -142,6 +145,7 @@ export class PlcService {
       return { ok: false, error: 'Collegamento annullato' };
     }
     const link: Link = {
+      id: ++this.linkSeq,
       access,
       identity,
       client,
@@ -179,9 +183,11 @@ export class PlcService {
    * Bersaglio delle scritture: indirizzo e identità del collegamento attivo della stessa finestra.
    * Il renderer non passa mai un indirizzo, lo decide solo questo.
    */
-  target(owner: PlcOwner): { access: PlcAccess; identity: PlcIdentity } | undefined {
+  target(
+    owner: PlcOwner,
+  ): { access: PlcAccess; identity: PlcIdentity; linkId: number } | undefined {
     const link = this.links.get(owner);
-    return link ? { access: link.access, identity: link.identity } : undefined;
+    return link ? { access: link.access, identity: link.identity, linkId: link.id } : undefined;
   }
 
   /** Chiude tutto (uscita dall'app). */

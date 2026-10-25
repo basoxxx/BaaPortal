@@ -54,7 +54,7 @@ export function registerPlc(
   service = new PlcService(),
   scans = new ScanService(),
   writes = new PlcWriteService({ service, confirm }),
-): { closeAll(): Promise<void> } {
+): { closeAll(): Promise<void>; writing(): boolean } {
   handle('plc:connect', async (e, raw): Promise<PlcConnectResult> => {
     const access = parsePlcAccess(raw);
     if (typeof access === 'string') return { ok: false, error: access };
@@ -72,7 +72,7 @@ export function registerPlc(
   // Scritture: la conferma nativa la chiede il servizio, qualunque cosa faccia il renderer.
   handle('plc:download', async (e, files, opts): Promise<PlcDownloadResult> => {
     const req = parseDownloadRequest(files, opts);
-    if (typeof req === 'string') return { ok: false, loaded: [], error: req };
+    if (typeof req === 'string') return { ok: false, loaded: [], deleted: [], error: req };
     return writes.download(e.sender, req.files, { deleteBlocks: req.deleteBlocks });
   });
   handle('plc:control', async (e, op): Promise<PlcControlResult> => {
@@ -81,7 +81,8 @@ export function registerPlc(
   });
   return {
     closeAll: async () => {
-      await Promise.all([scans.cancelAll(), service.closeAll()]);
+      await Promise.all([scans.cancelAll(), writes.abortAll().then(() => service.closeAll())]);
     },
+    writing: () => writes.writing(),
   };
 }
