@@ -3,3 +3,4 @@
 export { connectTcp, openTcp } from './tcpTransport';
 export { collectTcp } from './collectTcp';
 export { connectWriteTcp } from './connectWrite';
+export { probePort } from './probePort';

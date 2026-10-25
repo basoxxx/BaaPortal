@@ -46,7 +46,10 @@
     "progress": "Progress",
     "simulation": "Simulation: {{mode}}",
     "simulationStarting": "Starting simulation…",
-    "simulationFailed": "Simulation unavailable"
+    "simulationFailed": "Simulation unavailable",
+    "online": "Online: {{module}} {{host}} - {{mode}}",
+    "onlineConnecting": "Going online…",
+    "onlineTitleSuffix": " — Online"
   },
   "messages": {
     "replaced": "Replaced {{replaced}} texts, skipped {{skipped}}.",
@@ -102,7 +105,16 @@
     "simInputsFailed": "The simulator did not accept the inputs: {{message}}",
     "simInterruptFailed": "The simulator did not accept the interrupt: {{message}}",
     "simWatchFailed": "Watch table monitoring failed: {{message}}",
-    "simWriteFailed": "Command failed: {{message}}"
+    "simWriteFailed": "Command failed: {{message}}",
+    "plcConnected": "Connected to {{name}} ({{host}}) read-only.",
+    "plcDisconnected": "Online connection closed.",
+    "plcConnectFailed": "Connection failed: {{message}}",
+    "plcLostTimeout": "Connection lost: the CPU is not responding.",
+    "plcLostClosed": "Connection lost: connection closed.",
+    "plcLostErrors": "Connection lost: repeated communication errors.",
+    "plcMismatch": "The connected CPU ({{connected}}) differs from the project CPU ({{project}}).",
+    "plcBlockedBySim": "Stop the simulation before going online with the PLC.",
+    "simBlockedByOnline": "Go offline before starting the simulation."
   },
   "commands": {
     "project.new": "New…",
@@ -358,7 +370,8 @@
     "editSource": "Edit source",
     "importBlocks": "Import blocks",
     "importTags": "Import tags",
-    "addWatchTable": "Add watch table"
+    "addWatchTable": "Add watch table",
+    "setAccess": "Set CPU access"
   },
   "inspector": {
     "tab": {
@@ -1019,7 +1032,13 @@
       "SFB_NON_SIMULATA": "SFB not simulated"
     },
     "ledOn": "on",
-    "ledOff": "off"
+    "ledOff": "off",
+    "readOnly": "Read-only connection",
+    "module": "Module",
+    "orderNumber": "Order number",
+    "firmware": "Firmware",
+    "mode": "Mode",
+    "unavailableReadOnly": "Not available in read-only mode"
   },
   "ioPanel": {
     "inputs": "Inputs",
@@ -1082,5 +1101,50 @@
       "S5_RESOLUTION": "Time not representable: minimum resolution 10 ms (100 ms above 9.99 s, 1 s above 99.9 s, 10 s above 999 s).",
       "TOO_MANY": "Too many rows to monitor: the simulator accepts at most 1000."
     }
+  },
+  "accessDevices": {
+    "title": "Accessible devices",
+    "interface": "PG/PC interface",
+    "noInterfaces": "No network interface available.",
+    "type": "Connection type",
+    "direct": "Direct (PN CPU or CP 343-1)",
+    "gateway": "RFC 1006 gateway",
+    "tsap": "Remote TSAP (hexadecimal)",
+    "tsapInvalid": "Invalid TSAP: use two hexadecimal bytes, for example 03.02.",
+    "rack": "Rack",
+    "slot": "Slot",
+    "cpu": "Project CPU",
+    "start": "Start search",
+    "stop": "Stop",
+    "connect": "Connect",
+    "close": "Close",
+    "progress": "Searching: {{done}} of {{total}}",
+    "finished": "Search finished: {{found}} devices found.",
+    "cancelled": "Search stopped.",
+    "colAddress": "Address",
+    "colType": "Type",
+    "colModule": "Module",
+    "colOrder": "Order number",
+    "colStatus": "Status",
+    "typeCpu": "CPU",
+    "typeUnknown": "Unrecognized device",
+    "typeManual": "Manual address",
+    "statusManual": "Not verified",
+    "empty": "No devices. Start the search or add an address.",
+    "manual": "Manual address",
+    "manualHint": "192.0.2.10 or 192.0.2.10:102",
+    "add": "Add address",
+    "errEmpty": "Enter an IPv4 address.",
+    "errSpaces": "The address cannot contain spaces.",
+    "errFormat": "Invalid format: use address or address:port.",
+    "errNotIpv4": "An IPv4 address is required (for example 192.0.2.10): host names are not allowed.",
+    "errOctet": "Each number of the address must be between 0 and 255.",
+    "errPort": "The port must be a number between 1 and 65535.",
+    "rowSelect": "Select {{host}}",
+    "errOnline": "Go offline first.",
+    "errLeadingZero": "Leading zeros are not allowed: write 192.0.2.1, not 192.0.2.01.",
+    "errInterfaces": "Cannot read the network interfaces: {{error}}",
+    "rackInvalid": "The rack must be a number between 0 and 7.",
+    "slotInvalid": "The slot must be a number between 0 and 31."
   }
 }

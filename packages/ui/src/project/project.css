@@ -961,3 +961,14 @@
   color: var(--baa-error, #c42b1c);
   padding: 0 6px;
 }
+
+/* Modalità online: titolo (barra dei menu), intestazione dell'albero e degli editor in arancione */
+.baa-app.online .baa-menubar,
+.baa-app.online [data-panel='navigation'] > .baa-panel-header,
+.baa-app.online .baa-editor-header {
+  background: var(--baa-online);
+  color: var(--baa-online-text);
+}
+.baa-app.online .baa-menubar-title {
+  color: var(--baa-online-text);
+}

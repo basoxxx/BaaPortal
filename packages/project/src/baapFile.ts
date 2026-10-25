@@ -84,6 +84,14 @@ const deviceShape = {
     clockMemory: obj({ enabled: z.boolean(), byte: z.number() }),
     retentivity: obj({ mBytes: z.number(), timers: z.number(), counters: z.number() }),
     cyclicInterrupts: obj({ ob35Ms: z.number() }),
+    access: obj({
+      host: z.string().max(64),
+      port: z.number().int().min(1).max(65535).optional(),
+      rack: z.number().int().min(0).max(7),
+      slot: z.number().int().min(0).max(31),
+      connectionType: z.enum(['PG', 'OP', 'S7_BASIC']),
+      remoteTsap: z.number().int().min(0).max(0xffff).optional(),
+    }).optional(),
   }),
   groups: obj({ blocks: z.array(str), tags: z.array(str), types: z.array(str) }),
   // Ordine degli oggetti: gli id dei file elencati.

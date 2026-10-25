@@ -46,7 +46,10 @@
     "progress": "Avanzamento",
     "simulation": "Simulazione: {{mode}}",
     "simulationStarting": "Simulazione in avvio…",
-    "simulationFailed": "Simulazione non disponibile"
+    "simulationFailed": "Simulazione non disponibile",
+    "online": "Online: {{module}} {{host}} - {{mode}}",
+    "onlineConnecting": "Collegamento online in corso…",
+    "onlineTitleSuffix": " — Online"
   },
   "messages": {
     "replaced": "Sostituiti {{replaced}} testi, saltati {{skipped}}.",
@@ -102,7 +105,16 @@
     "simInputsFailed": "Il simulatore non ha accettato gli ingressi: {{message}}",
     "simInterruptFailed": "Il simulatore non ha accettato l'allarme: {{message}}",
     "simWatchFailed": "Osservazione della tabella di controllo non riuscita: {{message}}",
-    "simWriteFailed": "Comando non riuscito: {{message}}"
+    "simWriteFailed": "Comando non riuscito: {{message}}",
+    "plcConnected": "Collegato a {{name}} ({{host}}) in sola lettura.",
+    "plcDisconnected": "Collegamento online interrotto.",
+    "plcConnectFailed": "Collegamento non riuscito: {{message}}",
+    "plcLostTimeout": "Collegamento interrotto: la CPU non risponde.",
+    "plcLostClosed": "Collegamento interrotto: connessione chiusa.",
+    "plcLostErrors": "Collegamento interrotto: errori ripetuti di comunicazione.",
+    "plcMismatch": "La CPU collegata ({{connected}}) è diversa da quella del progetto ({{project}}).",
+    "plcBlockedBySim": "Termina la simulazione prima di collegarti al PLC.",
+    "simBlockedByOnline": "Interrompi il collegamento online prima di avviare la simulazione."
   },
   "commands": {
     "project.new": "Nuovo…",
@@ -358,7 +370,8 @@
     "editSource": "Modifica sorgente",
     "importBlocks": "Importa blocchi",
     "importTags": "Importa variabili",
-    "addWatchTable": "Aggiungi tabella di controllo"
+    "addWatchTable": "Aggiungi tabella di controllo",
+    "setAccess": "Imposta accesso CPU"
   },
   "inspector": {
     "tab": {
@@ -1019,7 +1032,13 @@
       "SFB_NON_SIMULATA": "SFB non simulato"
     },
     "ledOn": "acceso",
-    "ledOff": "spento"
+    "ledOff": "spento",
+    "readOnly": "Collegamento in sola lettura",
+    "module": "Modulo",
+    "orderNumber": "Numero di ordinazione",
+    "firmware": "Firmware",
+    "mode": "Modo",
+    "unavailableReadOnly": "Non disponibile in sola lettura"
   },
   "ioPanel": {
     "inputs": "Ingressi",
@@ -1082,5 +1101,50 @@
       "S5_RESOLUTION": "Tempo non rappresentabile: risoluzione minima 10 ms (100 ms oltre 9,99 s, 1 s oltre 99,9 s, 10 s oltre 999 s).",
       "TOO_MANY": "Troppe righe da osservare: il simulatore ne accetta al più 1000."
     }
+  },
+  "accessDevices": {
+    "title": "Dispositivi accessibili",
+    "interface": "Interfaccia PG/PC",
+    "noInterfaces": "Nessuna interfaccia di rete disponibile.",
+    "type": "Tipo di collegamento",
+    "direct": "Diretto (CPU PN o CP 343-1)",
+    "gateway": "Gateway RFC 1006",
+    "tsap": "TSAP remoto (esadecimale)",
+    "tsapInvalid": "TSAP non valido: usa due byte in esadecimale, per esempio 03.02.",
+    "rack": "Rack",
+    "slot": "Slot",
+    "cpu": "CPU del progetto",
+    "start": "Avvia ricerca",
+    "stop": "Interrompi",
+    "connect": "Collega",
+    "close": "Chiudi",
+    "progress": "Ricerca in corso: {{done}} di {{total}}",
+    "finished": "Ricerca terminata: {{found}} dispositivi trovati.",
+    "cancelled": "Ricerca interrotta.",
+    "colAddress": "Indirizzo",
+    "colType": "Tipo",
+    "colModule": "Modulo",
+    "colOrder": "Numero di ordinazione",
+    "colStatus": "Stato",
+    "typeCpu": "CPU",
+    "typeUnknown": "Dispositivo non riconosciuto",
+    "typeManual": "Indirizzo manuale",
+    "statusManual": "Non verificato",
+    "empty": "Nessun dispositivo. Avvia la ricerca o aggiungi un indirizzo.",
+    "manual": "Indirizzo manuale",
+    "manualHint": "192.0.2.10 oppure 192.0.2.10:102",
+    "add": "Aggiungi indirizzo",
+    "errEmpty": "Scrivi un indirizzo IPv4.",
+    "errSpaces": "L'indirizzo non può contenere spazi.",
+    "errFormat": "Formato non valido: usa indirizzo o indirizzo:porta.",
+    "errNotIpv4": "Serve un indirizzo IPv4 (per esempio 192.0.2.10): i nomi host non sono ammessi.",
+    "errOctet": "Ogni numero dell'indirizzo deve essere tra 0 e 255.",
+    "errPort": "La porta deve essere un numero tra 1 e 65535.",
+    "rowSelect": "Seleziona {{host}}",
+    "errOnline": "Interrompi prima il collegamento online.",
+    "errLeadingZero": "Zeri iniziali non ammessi: scrivi 192.0.2.1, non 192.0.2.01.",
+    "errInterfaces": "Impossibile leggere le interfacce di rete: {{error}}",
+    "rackInvalid": "Il rack deve essere un numero tra 0 e 7.",
+    "slotInvalid": "Lo slot deve essere un numero tra 0 e 31."
   }
 }

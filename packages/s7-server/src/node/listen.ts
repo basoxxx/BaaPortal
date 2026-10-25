@@ -1,6 +1,6 @@
 import net from 'node:net';
 import { S7Error, type Transport } from '@baaportal/s7comm';
-import type { FakeCpu } from '../fakeCpu';
+import type { CpuBackend } from '../backend';
 import { serve } from '../session';
 
 export interface ListenOptions {
@@ -60,8 +60,8 @@ function socketTransport(socket: net.Socket): Transport {
   };
 }
 
-/** Mette il finto PLC in ascolto su TCP. Ogni connessione accettata diventa una sessione `serve`. */
-export function listen(cpu: FakeCpu, opts: ListenOptions = {}): Promise<ListeningCpu> {
+/** Mette in ascolto il finto PLC (o qualunque `CpuBackend`, p.es. la CPU simulata) su TCP. Ogni connessione accettata diventa una sessione `serve`. */
+export function listen(cpu: CpuBackend, opts: ListenOptions = {}): Promise<ListeningCpu> {
   const sockets = new Set<net.Socket>();
   const sessions = new Set<{ close(): void }>();
   const server = net.createServer((socket) => {

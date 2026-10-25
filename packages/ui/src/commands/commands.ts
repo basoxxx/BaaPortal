@@ -8,6 +8,7 @@ import { compileProgram } from '../project/compile/compileActions';
 import { openReference } from '../project/reference/referenceStore';
 import { requestFind } from '../search/findActions';
 import { activeCodeBlock } from '../sim/monitorStatus';
+import { plcControllerFor } from '../online/plcController';
 import { simControllerFor } from '../sim/simController';
 import { targetPlcId } from '../project/navigation/treeIds';
 
@@ -242,11 +243,20 @@ const list: Command[] = [
       if (deviceId) store.getState().openDialog({ kind: 'addBlock', deviceId });
     },
   }),
-  def('online.goOnline', { icon: 'goOnline' }),
-  def('online.goOffline', { icon: 'goOffline' }),
+  def('online.goOnline', {
+    icon: 'goOnline',
+    isEnabled: (s) => hasPlc(s) && s.sim.phase === 'off' && s.online.status === 'off',
+    isChecked: (s) => s.online.status !== 'off',
+    run: ({ store, bridge }) => plcControllerFor(store, bridge).goOnline(),
+  }),
+  def('online.goOffline', {
+    icon: 'goOffline',
+    isEnabled: (s) => s.online.status !== 'off',
+    run: ({ store, bridge }) => plcControllerFor(store, bridge).goOffline(),
+  }),
   def('online.simulation', {
     icon: 'simulation',
-    isEnabled: (s) => hasPlc(s) || s.sim.phase !== 'off',
+    isEnabled: (s) => (hasPlc(s) && s.online.status === 'off') || s.sim.phase !== 'off',
     isChecked: (s) => s.sim.phase !== 'off',
     run: ({ store }) => simControllerFor(store).toggle(),
   }),
@@ -263,7 +273,11 @@ const list: Command[] = [
     run: ({ store }) => simControllerFor(store).toggleMonitor(),
   }),
   def('online.upload', { icon: 'upload' }),
-  def('online.accessibleDevices', { icon: 'accessibleDevices' }),
+  def('online.accessibleDevices', {
+    icon: 'accessibleDevices',
+    isEnabled: hasDoc,
+    run: ({ store }) => store.getState().openDialog({ kind: 'accessibleDevices' }),
+  }),
   def('online.startCpu', {
     icon: 'startCpu',
     isEnabled: (s) => s.sim.phase === 'on' && s.sim.mode === 'STOP',

@@ -8,6 +8,7 @@ export function StatusBar() {
   const status = useAppStore((s) => s.status);
   const progress = useProgress();
   const sim = useAppStore((s) => s.sim);
+  const online = useAppStore((s) => s.online);
   return (
     <div data-testid="status-bar" className="baa-status-bar" role="status">
       {sim.phase !== 'off' ? (
@@ -15,6 +16,17 @@ export function StatusBar() {
           {sim.phase === 'starting'
             ? t('status.simulationStarting')
             : t('status.simulation', { mode: sim.mode })}
+        </span>
+      ) : null}
+      {online.status !== 'off' ? (
+        <span data-testid="plc-indicator" className="baa-status-sim" data-mode={online.mode}>
+          {online.status === 'connecting'
+            ? t('status.onlineConnecting')
+            : t('status.online', {
+                module: online.identity?.moduleName ?? online.identity?.orderNumber ?? '',
+                host: online.access?.host ?? '',
+                mode: online.mode ?? 'UNKNOWN',
+              })}
         </span>
       ) : null}
       {progress ? (

@@ -245,6 +245,16 @@ function checkProperties(ctx: Ctx): void {
     bad('retentivity.counters');
   }
   if (!inRange(p.cyclicInterrupts.ob35Ms, 1, 60000)) bad('cyclicInterrupts.ob35Ms');
+  // L'accesso online non blocca il progetto: un host non IPv4 è solo un avviso.
+  if (p.access && !parseIp(p.access.host)) {
+    add(ctx, {
+      severity: 'warning',
+      code: 'PROPERTY_INVALID',
+      ref,
+      field: 'property',
+      property: 'access.host',
+    });
+  }
 }
 
 // ---- Tabelle delle variabili ----

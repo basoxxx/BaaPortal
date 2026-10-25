@@ -2,6 +2,7 @@ import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { Mc7Diagnostic, Project } from '@baaportal/project';
 import type { DiagEntry, MonitorStep, SimMode } from '@baaportal/sim';
 import type { LineMapRow } from '../editors/awl/monitorExtension';
+import type { PlcAccess, PlcIdentity, PlcMode } from '../online/plcTypes';
 import type { SimStats, SimWarning, WatchValue } from '../sim/protocol';
 import type { ImportSummary } from '../project/navigation/tagTableIo';
 import * as wa from './workArea';
@@ -22,6 +23,7 @@ export type DialogState =
   | { kind: 'addBlock'; deviceId: string }
   | { kind: 'collectKit' }
   | { kind: 'settings' }
+  | { kind: 'accessibleDevices' }
   | { kind: 'importTagsReport'; fileName: string; tableName: string; summary: ImportSummary }
   | null;
 
@@ -177,6 +179,17 @@ export const SIM_OFF: SimUiState = {
   watchValues: null,
 };
 
+/** Collegamento online a un PLC vero in sola lettura (la sessione vera sta in `online/plcController`). */
+export interface OnlineUiState {
+  status: 'off' | 'connecting' | 'on';
+  access?: PlcAccess;
+  identity?: PlcIdentity;
+  mode?: PlcMode;
+  deviceId?: string;
+}
+
+export const ONLINE_OFF: OnlineUiState = { status: 'off' };
+
 export interface AppState {
   view: View;
   portal: PortalId;
@@ -197,6 +210,10 @@ export interface AppState {
   /** Stato del simulatore (la sessione vera sta in `sim/simController`). */
   sim: SimUiState;
   setSim(patch: Partial<SimUiState>): void;
+  /** Stato del collegamento online al PLC vero. `set` sostituisce l'intero stato. */
+  online: OnlineUiState;
+  setOnline(next: OnlineUiState): void;
+  patchOnline(patch: Partial<OnlineUiState>): void;
   compileReveal: CompileReveal | null;
   status: { textKey: string; params?: Record<string, string> } | null;
   panels: Record<PanelName, PanelState>;
@@ -330,6 +347,9 @@ export function createAppStore(now: () => Date = () => new Date()): StoreApi<App
     history: { past: [], future: [] },
     sim: SIM_OFF,
     setSim: (patch) => set((s) => ({ sim: { ...s.sim, ...patch } })),
+    online: ONLINE_OFF,
+    setOnline: (next) => set({ online: next }),
+    patchOnline: (patch) => set((s) => ({ online: { ...s.online, ...patch } })),
     setDoc: (doc) => {
       if (doc) revisionCounter = doc.revision; // il prossimo edit prende revision + 1
       set((s) => ({

@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, Menu } from 'electron';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { registerIpc } from './ipc';
+import { startTestPlc } from './plc/testPlc';
 import type { Platform } from './recentProjects';
 import { isTrustedUrl, type TrustOptions } from './trust';
 
@@ -184,7 +185,7 @@ if (!app.requestSingleInstanceLock()) {
   }
   app.on('window-all-closed', () => app.quit());
 
-  registerIpc(
+  const ipc = registerIpc(
     () => win,
     trust,
     () => {
@@ -196,6 +197,22 @@ if (!app.requestSingleInstanceLock()) {
       for (const p of pendingOpen.splice(0)) win?.webContents.send('app:open-file', p);
     },
   );
+  // Prima di uscire si chiude il collegamento online (al massimo 1 s), poi si esce davvero.
+  let onlineClosed = false;
+  app.on('before-quit', (e) => {
+    if (onlineClosed) return;
+    e.preventDefault();
+    onlineClosed = true;
+    const cap = new Promise<void>((r) => setTimeout(r, 1000));
+    void Promise.race([ipc.closeOnline().catch(() => undefined), cap]).finally(() => app.quit());
+  });
+
+  // Solo sviluppo: PLC di prova locale (CPU simulata) per provare il collegamento online.
+  if (!app.isPackaged && process.env['BAAPORTAL_TEST_PLC'] === '1') {
+    void startTestPlc()
+      .then((p) => console.log(`PLC di prova su 127.0.0.1:${p.port}`))
+      .catch((err: unknown) => console.error('PLC di prova non avviato', err));
+  }
 
   void app.whenReady().then(() => {
     setupNativeMenu();

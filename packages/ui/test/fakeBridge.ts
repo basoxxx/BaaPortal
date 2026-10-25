@@ -10,6 +10,15 @@ import type {
   KitStartResult,
   KitSummary,
 } from '../src/bridge';
+import type {
+  NetInterface,
+  PlcAccess,
+  PlcConnectResult,
+  PlcEvent,
+  PlcScanEvent,
+  PlcScanStartResult,
+  PlcStatus,
+} from '../src/online/plcTypes';
 
 type Answer = 'save' | 'discard' | 'cancel';
 
@@ -205,6 +214,59 @@ export class FakeBridge implements BaaBridge {
     return () => {
       this.kitCbs.delete(cb);
     };
+  }
+  // Collegamento online: una risposta per chiamata a plcConnect; le chiamate si registrano.
+  plcResults: PlcConnectResult[] = [];
+  plcConnectCalls: PlcAccess[] = [];
+  plcDisconnectCalls = 0;
+  plcState: PlcStatus = { connected: false };
+  private plcCbs = new Set<(e: PlcEvent) => void>();
+  async plcConnect(access: PlcAccess): Promise<PlcConnectResult> {
+    this.plcConnectCalls.push(access);
+    const r = this.plcResults.shift() ?? { ok: false, error: 'nessun risultato previsto' };
+    this.plcState = r.ok ? { connected: true, access } : { connected: false };
+    return r;
+  }
+  async plcDisconnect() {
+    this.plcDisconnectCalls++;
+    this.plcState = { connected: false };
+  }
+  async plcStatus() {
+    return this.plcState;
+  }
+  onPlcEvent(cb: (e: PlcEvent) => void) {
+    this.plcCbs.add(cb);
+    return () => {
+      this.plcCbs.delete(cb);
+    };
+  }
+  emitPlcEvent(e: PlcEvent): void {
+    for (const cb of [...this.plcCbs]) cb(e);
+  }
+  // Ricerca dei dispositivi accessibili.
+  plcInterfacesValue: NetInterface[] = [];
+  plcScanResults: PlcScanStartResult[] = [];
+  plcScanStartCalls: string[] = [];
+  plcScanCancelCalls = 0;
+  private plcScanCbs = new Set<(e: PlcScanEvent) => void>();
+  async plcInterfaces() {
+    return this.plcInterfacesValue;
+  }
+  async plcScanStart(address: string): Promise<PlcScanStartResult> {
+    this.plcScanStartCalls.push(address);
+    return this.plcScanResults.shift() ?? { ok: false, error: 'nessun risultato previsto' };
+  }
+  async plcScanCancel() {
+    this.plcScanCancelCalls++;
+  }
+  onPlcScanEvent(cb: (e: PlcScanEvent) => void) {
+    this.plcScanCbs.add(cb);
+    return () => {
+      this.plcScanCbs.delete(cb);
+    };
+  }
+  emitPlcScanEvent(e: PlcScanEvent): void {
+    for (const cb of [...this.plcScanCbs]) cb(e);
   }
   async testOverrides() {
     return this.testOverridesValue;
