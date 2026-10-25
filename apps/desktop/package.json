@@ -14,6 +14,7 @@
   },
   "devDependencies": {
     "@baaportal/awl": "*",
+    "@baaportal/ladfbd": "*",
     "@baaportal/mc7": "*",
     "@baaportal/project": "*",
     "@baaportal/s7-server": "*",
