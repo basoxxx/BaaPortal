@@ -21,7 +21,7 @@
   margin: 8px 0;
 }
 .baa-compare-note.is-error {
-  color: var(--baa-error, #c0392b);
+  color: var(--baa-error);
 }
 .baa-compare-hex {
   font-family: monospace;
@@ -53,5 +53,5 @@
 .baa-compare-net tr.is-changed td,
 .baa-compare-net tr.is-missing .baa-compare-l,
 .baa-compare-net tr.is-added .baa-compare-r {
-  background: rgba(255, 170, 0, 0.25);
+  background: color-mix(in srgb, var(--baa-online) 25%, transparent);
 }

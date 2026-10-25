@@ -61,6 +61,7 @@ export function blockText(b: Block): NetworkText[] {
 }
 
 type Online =
+  | { state: 'idle' }
   | { state: 'loading' }
   | { state: 'error'; message: string }
   | { state: 'ready'; bytes: Uint8Array };
@@ -84,10 +85,14 @@ export function CompareView({ editor }: { editor: EditorRef }) {
   const block = device?.blocks.find((b) => b.id === editor.objectId);
   const type = block ? (block.kind === 'IDB' ? 'DB' : block.kind) : undefined;
   const number = block?.number;
-  const [online, setOnline] = useState<Online>({ state: 'loading' });
+  const [online, setOnline] = useState<Online>({ state: 'idle' });
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
-    if (!type || number === undefined) return;
+    if (!type || number === undefined || status !== 'on') {
+      setOnline({ state: 'idle' });
+      return;
+    }
     let live = true;
     setOnline({ state: 'loading' });
     bridge
@@ -105,7 +110,7 @@ export function CompareView({ editor }: { editor: EditorRef }) {
     return () => {
       live = false;
     };
-  }, [bridge, type, number]);
+  }, [bridge, type, number, status, reload]);
 
   const offlineFile = block ? compile.files[block.id] : undefined;
   const left = useMemo(() => (block ? blockText(block) : []), [block]);
@@ -119,6 +124,7 @@ export function CompareView({ editor }: { editor: EditorRef }) {
 
   if (!block) return null;
   const dash = '-';
+  const notCompiled = offlineFile === undefined ? t('compareView.notCompiled') : undefined;
   const num = (v: number | undefined) => (v === undefined ? dash : String(v));
   const hex = (v: number | undefined) =>
     v === undefined ? dash : `0x${v.toString(16).toUpperCase().padStart(4, '0')}`;
@@ -136,10 +142,10 @@ export function CompareView({ editor }: { editor: EditorRef }) {
         <tbody>
           {(
             [
-              ['checksum', hex(offSide.checksum), hex(onSide.checksum)],
-              ['mc7Length', num(offSide.mc7Length), num(onSide.mc7Length)],
-              ['loadLength', num(offSide.loadLength), num(onSide.loadLength)],
-              ['codeTime', offSide.codeTime ?? dash, onSide.codeTime ?? dash],
+              ['checksum', notCompiled ?? hex(offSide.checksum), hex(onSide.checksum)],
+              ['mc7Length', notCompiled ?? num(offSide.mc7Length), num(onSide.mc7Length)],
+              ['loadLength', notCompiled ?? num(offSide.loadLength), num(onSide.loadLength)],
+              ['codeTime', notCompiled ?? offSide.codeTime ?? dash, onSide.codeTime ?? dash],
             ] as const
           ).map(([k, a, b]) => (
             <tr key={k}>
@@ -150,7 +156,20 @@ export function CompareView({ editor }: { editor: EditorRef }) {
           ))}
         </tbody>
       </table>
-      {status !== 'on' ? <p className="baa-compare-note">{t('compareView.offline')}</p> : null}
+      {status !== 'on' ? (
+        <p className="baa-compare-note" data-testid="compare-offline">
+          {t('compareView.offline')}
+        </p>
+      ) : (
+        <button
+          type="button"
+          className="baa-compare-reload"
+          disabled={online.state === 'loading'}
+          onClick={() => setReload((n) => n + 1)}
+        >
+          {t('compareView.reload')}
+        </button>
+      )}
       {online.state === 'loading' ? (
         <p className="baa-compare-note">{t('compareView.loading')}</p>
       ) : null}
@@ -183,6 +202,11 @@ export function CompareView({ editor }: { editor: EditorRef }) {
             {d.presence === 'right' ? ` (${t('compareView.onlyCpu')})` : ''}
             {!d.different ? ` (${t('compareView.identical')})` : ''}
           </h4>
+          {d.approximate ? (
+            <p className="baa-compare-note" data-testid="compare-approximate">
+              {t('compareView.approximate')}
+            </p>
+          ) : null}
           <table>
             <tbody>
               {d.rows.map((r, i) => (
