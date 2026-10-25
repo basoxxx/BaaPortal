@@ -165,7 +165,6 @@ export type PlcRestorePlanResult =
       ok: true;
       token: string;
       rows: RestoreRow[];
-      cpuMismatch?: { backup: string; online: string };
       warnings: string[];
     }
   | { ok: false; error: string }
@@ -185,6 +184,8 @@ export interface PlcRestoreResult {
   rows: RestoreOutcomeRow[];
   /** La CPU è stata arrestata da noi e non è ripartita. */
   cpuStopped: boolean;
+  /** STOP inviato ma non confermato entro il tempo: la CPU potrebbe fermarsi più tardi. */
+  stopUnconfirmed?: boolean;
   restarted?: boolean;
   /** Prime voci del buffer di diagnostica, se la CPU è rimasta in STOP dopo l'avvio. */
   diag?: DiagEventView[];

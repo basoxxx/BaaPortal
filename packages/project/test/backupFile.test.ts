@@ -147,4 +147,20 @@ describe('backupFile', () => {
     });
     expect(() => decode(zip)).toThrow(/troppo grande/);
   });
+
+  it('zip bomb: i byte gonfiati restano entro il tetto più un pezzo', () => {
+    const zip = zipSync(
+      {
+        'manifest.json': strToU8(JSON.stringify(manifest())),
+        'blocks/OB1.blk': new Uint8Array(100 * 1024 * 1024), // 100 MB di zeri, pochi KB compressi
+        'blocks/SDB0.blk': B,
+      },
+      { level: 9 },
+    );
+    expect(zip.length).toBeLessThan(1024 * 1024);
+    const stats = { inflated: 0 };
+    expect(() => decodeBackup(zip, sha256Hex, stats)).toThrow(/troppo grande/);
+    const cap = A.length; // la length del manifest per OB1
+    expect(stats.inflated).toBeLessThanOrEqual(cap + 2 * 1024 * 1024);
+  }, 30_000);
 });

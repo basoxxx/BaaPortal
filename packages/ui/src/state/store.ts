@@ -222,6 +222,7 @@ export type PlcMonitorReason =
   | 'busy'
   | 'stop'
   | 'waiting'
+  | 'noVisible'
   | 'ended';
 
 export interface PlcMonitorUiState {

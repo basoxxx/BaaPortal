@@ -138,7 +138,7 @@
     "uploadNothing": "Nessun blocco caricato dalla CPU: {{reason}}",
     "uploadFirmwareUnknown": "Firmware {{firmware}} non presente nel catalogo: il progetto usa {{used}}.",
     "backupDone": "Backup salvato in «{{path}}»: {{count}} blocchi.",
-    "backupDonePartial": "Backup salvato in «{{path}}»: {{count}} blocchi, {{missing}} non copiati ({{list}}).",
+    "backupDonePartial": "Backup incompleto: {{missing}} blocchi non letti ({{list}}). Salvato in «{{path}}» ({{count}} blocchi); non si può ripristinare.",
     "backupFailed": "Backup non riuscito: {{message}}"
   },
   "commands": {
@@ -1414,6 +1414,7 @@
       "busy": "Osservazione già attiva su questa CPU in un'altra finestra.",
       "stop": "CPU in STOP: nessun valore.",
       "waiting": "Nessun risultato: il blocco non è elaborato o la finestra non è raggiunta.",
+      "noVisible": "Nessuna riga visibile da osservare",
       "ended": "Osservazione terminata."
     }
   },
@@ -1426,7 +1427,6 @@
     "cancel": "Annulla",
     "warnExperimental": "Funzione sperimentale, mai provata su una CPU reale.",
     "warnStop": "La CPU andrà in STOP.",
-    "warnMismatch": "Il backup è di una CPU diversa ({{backup}}); la CPU collegata è {{online}}.",
     "warnData": "I DB tornano ai valori salvati nel backup; merker, temporizzatori e contatori no.",
     "restart": "Avvia la CPU al termine (avviamento a caldo)",
     "colBlock": "Blocco",
@@ -1459,6 +1459,7 @@
     "failed": "Ripristino non riuscito.",
     "noChange": "Nessuna modifica alla CPU.",
     "cpuStopped": "CPU lasciata in STOP.",
+    "stopUnconfirmed": "Il comando STOP è stato inviato ma la CPU non lo ha confermato: potrebbe fermarsi più tardi. Controllare il modo della CPU.",
     "startCpu": "Avvia CPU",
     "restarted": "CPU avviata.",
     "diagTitle": "Ultime voci del buffer di diagnostica:"

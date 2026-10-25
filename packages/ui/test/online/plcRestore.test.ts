@@ -71,6 +71,13 @@ describe('testi delle righe', () => {
     expect(
       outcomeText({ name: 'a', outcome: 'rejected', error: 'Rifiutato dalla CPU: D241' }),
     ).toBe('Rifiutato dalla CPU: D241');
+    expect(
+      outcomeText({
+        name: 'a',
+        outcome: 'rejected',
+        error: 'Rifiutato da BaaPortal (frame non ammesso)',
+      }),
+    ).toBe('Rifiutato da BaaPortal (frame non ammesso)');
   });
 });
 

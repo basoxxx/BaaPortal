@@ -168,6 +168,7 @@ class Session implements TisSession {
   ) {
     this.pdu = cpu.config.pduLength;
     this.insertBusyLeft = cpu.config.faults.insertBusy ?? 0;
+    this.requestBusyLeft = cpu.config.faults.requestBusy ?? 0;
     this.ourRef = cpu.nextRef();
     t.onData((chunk) => this.onData(chunk));
     t.onClose(() => this.shutdown());
@@ -479,6 +480,8 @@ class Session implements TisSession {
   /** Con protezione 2 o 3 le funzioni che cambiano stato sono rifiutate (proto §14); la lettura no. */
   /** `_INSE` ancora da rifiutare con 0xD2A9 (guasto `insertBusy`). */
   private insertBusyLeft: number;
+  /** Richieste di download ancora da rifiutare con 0xD2A9 (guasto `requestBusy`). */
+  private requestBusyLeft: number;
 
   private writeProtected(): boolean {
     return this.cpu.config.protectionLevel >= 2;
@@ -549,6 +552,10 @@ class Session implements TisSession {
 
   private requestDownload(p: S7Pdu): S7Pdu {
     if (this.writeProtected()) return headerError(p, ERR.PROTECTED);
+    if (this.requestBusyLeft > 0) {
+      this.requestBusyLeft--;
+      return headerError(p, ERR.PARAMS_BUSY);
+    }
     let req;
     try {
       req = decodeRequestDownload(p.param);

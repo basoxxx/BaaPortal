@@ -1,5 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { diagRecordsFrom, modeFrom, parseBlockFile, planWrites, S7Error } from '@baaportal/s7comm';
+import {
+  diagRecordsFrom,
+  modeFrom,
+  parseBlockFile,
+  planWrites,
+  protectionFrom,
+  S7Error,
+} from '@baaportal/s7comm';
 import type { BlockType, ConnectOptions, S7DateTime, S7WriteClient } from '@baaportal/s7comm';
 import { connectWriteTcp } from '@baaportal/s7comm/node';
 import { BACKUP_MAX_BYTES, BackupFormatError, decodeBackup } from '@baaportal/project';
@@ -82,7 +89,7 @@ export interface RestoreFileIo {
 }
 
 export interface PlcWriteOptions {
-  service: Pick<PlcService, 'target'> & Partial<Pick<PlcService, 'read' | 'modeOf'>>;
+  service: Pick<PlcService, 'target'> & Partial<Pick<PlcService, 'read' | 'modeOf' | 'onLinkEnd'>>;
   confirm: ConfirmFn;
   connectTimeoutMs?: number;
   /** Iniettabile nei test (collegamento finto). */
@@ -269,7 +276,7 @@ export class PlcWriteService {
   /** Piani di ripristino preparati: restano qui, legati alla finestra e al collegamento. */
   private readonly plans = new Map<
     string,
-    { owner: PlcOwner; linkId: number; plan: RestorePlan }
+    { owner: PlcOwner; linkId: number; plan: RestorePlan; dispose: () => void }
   >();
   /** Prima di un ripristino ferma l'osservazione del blocco sulla stessa CPU (la imposta `plcIpc`). */
   beforeRestore?: (owner: PlcOwner) => Promise<void>;
@@ -283,6 +290,19 @@ export class PlcWriteService {
     this.sleep = o.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
     this.connectTimeoutMs = o.connectTimeoutMs ?? 3000;
     this.now = o.now ?? Date.now;
+  }
+
+  /** Piani di ripristino ancora in attesa di essere usati (serve ai test). */
+  pendingPlans(): number {
+    return this.plans.size;
+  }
+
+  /** Toglie un piano (e i suoi byte) dalla memoria: usato, sostituito, finestra chiusa o link finito. */
+  private dropPlan(token: string): void {
+    const p = this.plans.get(token);
+    if (!p) return;
+    this.plans.delete(token);
+    p.dispose();
   }
 
   /** Un ripristino è in corso su questa CPU. */
@@ -576,39 +596,54 @@ export class PlcWriteService {
           if (e instanceof S7Error && (e.code === 'CLOSED' || e.code === 'TIMEOUT')) throw e;
           warnings.push('Stato del forzamento non leggibile dalla CPU');
         }
-        return { blocks, force };
+        let protection: string | undefined;
+        try {
+          const p = protectionFrom(await run((c) => c.readSzl(0x0232, 4)));
+          if ((p.validLevel ?? 0) >= 2) protection = PROTECTED;
+        } catch (e) {
+          if (e instanceof S7Error && (e.code === 'CLOSED' || e.code === 'TIMEOUT')) throw e;
+          protection = PROTECTION_UNREADABLE;
+        }
+        return { blocks, force, protection };
       });
       if (!online.ok) return { ok: false, error: online.error };
+      if (online.value.protection) return { ok: false, error: online.value.protection };
       if (online.value.force) {
         return {
           ok: false,
-          error: 'Forzamento attivo sulla CPU: terminarlo con TIA o STEP 7 prima del ripristino',
+          error: FORCE_ACTIVE,
+        };
+      }
+      // §19.5.0: il backup si ripristina solo su una CPU dello stesso tipo
+      const backupCpu = decoded.manifest.cpu.orderNumber;
+      if (backupCpu !== target.identity.orderNumber) {
+        return {
+          ok: false,
+          error: `Il backup è di una CPU di tipo diverso (${backupCpu}) da quella collegata (${target.identity.orderNumber}): ripristino non possibile`,
         };
       }
       const plan = planRestore(decoded.manifest, decoded.files, online.value.blocks);
       if (typeof plan === 'string') return { ok: false, error: plan };
-      const backupCpu = decoded.manifest.cpu.orderNumber;
-      if (backupCpu !== target.identity.orderNumber) {
-        plan.cpuMismatch = { backup: backupCpu, online: target.identity.orderNumber };
-      }
-      for (const [token, p] of this.plans) if (p.owner === owner) this.plans.delete(token);
+      for (const [t, p] of this.plans) if (p.owner === owner) this.dropPlan(t);
       const token = randomUUID();
-      this.plans.set(token, { owner, linkId: target.linkId, plan });
-      return {
-        ok: true,
-        token,
-        rows: restoreRows(plan),
-        ...(plan.cpuMismatch ? { cpuMismatch: plan.cpuMismatch } : {}),
-        warnings,
+      // I byte del backup non restano in memoria se la finestra si chiude o il collegamento finisce
+      const drop = (): void => this.dropPlan(token);
+      const offLink = this.o.service.onLinkEnd?.(owner, drop);
+      owner.once('destroyed', drop);
+      const dispose = (): void => {
+        offLink?.();
+        owner.removeListener('destroyed', drop);
       };
+      this.plans.set(token, { owner, linkId: target.linkId, plan, dispose });
+      return { ok: true, token, rows: restoreRows(plan), warnings };
     } catch (e) {
       return { ok: false, error: errText(e) }; // mai un'eccezione verso il renderer
     }
   }
 
   /**
-   * Esegue il ripristino (SPERIMENTALE, mai provato su una CPU reale): osservazione fermata, conferma
-   * (con una in più se la CPU è diversa), collegamento `online-restore` con identità ricontrollata,
+   * Esegue il ripristino (SPERIMENTALE, mai provato su una CPU reale): osservazione fermata, conferma,
+   * collegamento `online-restore` con identità ricontrollata,
    * lista dei job, conferma e STOP, i passi del piano uno dopo l'altro, riavvio solo se richiesto e
    * confermato, elenco dei blocchi riletto. Nessuna ripetizione, nessun annullamento di ciò che è
    * già stato fatto.
@@ -642,7 +677,7 @@ export class PlcWriteService {
     if (!saved || saved.owner !== owner) {
       return restoreFail('Piano di ripristino non valido o già usato: prepararlo di nuovo');
     }
-    this.plans.delete(req.token); // monouso
+    this.dropPlan(req.token); // monouso
     const plan = saved.plan;
     const target = this.o.service.target(owner);
     if (!target || target.linkId !== saved.linkId) {
@@ -664,29 +699,22 @@ export class PlcWriteService {
         outcome: 'kept',
       })),
     ];
+    let stopConfirmed = false;
     const cancelled = (): PlcRestoreResult => ({
       ok: false,
       cancelled: true,
       rows,
       cpuStopped: false,
     });
-    const fin = (error: string, cpuStopped = false): PlcRestoreResult => ({
+    const fin = (error: string, cpuStopped = false, stopUnconfirmed = false): PlcRestoreResult => ({
       ok: false,
       error,
       rows,
       cpuStopped,
+      ...(stopUnconfirmed ? { stopUnconfirmed } : {}),
     });
 
     await this.beforeRestore?.(owner);
-    if (plan.cpuMismatch) {
-      const go = await this.o.confirm(owner, {
-        title: 'Ripristina backup (sperimentale)',
-        message: `Il backup è di una CPU diversa (${plan.cpuMismatch.backup}) da quella collegata (${plan.cpuMismatch.online}). Ripristinare comunque?`,
-        detail: RESTORE_NOTICE,
-        confirmLabel: 'Ripristina comunque',
-      });
-      if (!go || op.aborted) return cancelled();
-    }
     const lines = restoreLines(plan);
     const go = await this.o.confirm(owner, {
       title: 'Ripristina backup (sperimentale)',
@@ -704,16 +732,23 @@ export class PlcWriteService {
     const opened = await this.open(target, this.restoreConnectFn);
     if (typeof opened === 'string') return fin(opened);
     const c = opened as RestoreClient;
-    let stoppedByUs = false;
+    let stopSent = false;
     let restarted = false;
     try {
       // 1. nessun job di test: altrimenti la CPU rifiuterebbe l'assegnazione dei parametri
-      const jobs = await c.readJobList();
-      if (jobs.some((j) => j.fn !== 0x10)) return fin(JOBS_ACTIVE);
-      // 2. STOP (conferma separata), poi si rilegge il modo
+      const noJobs = async (): Promise<boolean> =>
+        !(await c.readJobList()).some((j) => j.fn !== 0x10);
+      if (!(await noJobs())) return fin(JOBS_ACTIVE);
+      // forzamento e protezione si ricontrollano qui: dal piano può essere cambiato tutto
+      const refusal = await safetyRefusal(c);
+      if (refusal) return fin(refusal);
+      // 2. STOP (conferma separata), poi si rilegge il modo: conta solo STOP, HOLD no
       const mode = async (): Promise<string> => toPlcMode(modeFrom(await c.readSzl(0x0424, 0)));
-      const isStopped = (m: string): boolean => m === 'STOP' || m === 'HOLD';
-      if (!isStopped(await mode())) {
+      const m0 = await mode();
+      if (m0 === 'HOLD') {
+        return fin('La CPU è in HOLD (arresto su breakpoint): ripristino rifiutato');
+      }
+      if (m0 !== 'STOP') {
         const stop = await this.o.confirm(owner, {
           title: 'Ripristina backup (sperimentale)',
           message: 'Portare la CPU in STOP?',
@@ -721,17 +756,29 @@ export class PlcWriteService {
           confirmLabel: 'Porta in STOP',
         });
         if (!stop || op.aborted) return cancelled();
+        stopSent = true;
         await c.stop();
-        stoppedByUs = true;
-        let stopped = false;
         for (let waited = 0; waited <= STOP_WAIT_MS; waited += POLL_MS) {
-          if (isStopped(await mode())) {
-            stopped = true;
+          if ((await mode()) === 'STOP') {
+            stopConfirmed = true;
             break;
           }
           await this.sleep(POLL_MS);
         }
-        if (!stopped) return fin('La CPU non è andata in STOP: nulla è stato scritto');
+        if (!stopConfirmed) {
+          return fin(
+            'STOP inviato ma non confermato entro 5 s: la CPU potrebbe fermarsi più tardi. Nulla è stato scritto',
+            false,
+            true,
+          );
+        }
+      }
+      // un job può essere nato durante le conferme: ultimo controllo prima del primo passo
+      if (!(await noJobs())) {
+        return fin(
+          `${JOBS_ACTIVE}. La CPU è rimasta in STOP, nulla è stato scritto`,
+          stopConfirmed,
+        );
       }
       // 3. i passi
       const failedAt = await this.runRestoreSteps(owner, op, c, plan.steps, rows);
@@ -769,14 +816,14 @@ export class PlcWriteService {
         ok,
         ...(failedAt !== undefined ? { error: failedAt } : {}),
         rows,
-        cpuStopped: stoppedByUs && !restarted,
+        cpuStopped: stopConfirmed && !restarted,
         ...(req.restart && ok ? { restarted } : {}),
         ...(diag ? { diag } : {}),
       };
       return result;
     } catch (err) {
       // errore fuori dai passi (lista dei job, modo, STOP): niente è stato scritto, a parte uno STOP
-      return fin(errText(err), stoppedByUs && !restarted);
+      return fin(errText(err), stopConfirmed && !restarted, stopSent && !stopConfirmed);
     } finally {
       await c.close().catch(() => undefined);
       await this.verifyLoaded(owner, rows);
@@ -807,7 +854,11 @@ export class PlcWriteService {
         const certain =
           err instanceof S7Error && (err.code === 'CPU_ERROR' || err.code === 'FORBIDDEN');
         row.outcome = certain ? 'rejected' : 'unknown';
-        row.error = certain ? `Rifiutato dalla CPU: ${errText(err)}` : 'Esito sconosciuto';
+        row.error = !certain
+          ? 'Esito sconosciuto'
+          : err instanceof S7Error && err.code === 'FORBIDDEN'
+            ? FILTER_REFUSED // l'ha fermato il nostro filtro, non la CPU
+            : `Rifiutato dalla CPU: ${errText(err)}`;
         return `${name}: ${row.error}`;
       }
       row.outcome = s.kind === 'deleteSdb' ? 'deleted' : 'loaded';
@@ -978,6 +1029,28 @@ export class PlcWriteService {
 const RESTORE_NOTICE = 'FUNZIONE SPERIMENTALE, mai provata su una CPU reale. La CPU andrà in STOP.';
 const JOBS_ACTIVE =
   "Una funzione di test attiva impedisce l'assegnazione dei parametri (job di test sulla CPU). Chiudere osservazioni e forzamenti in TIA o STEP 7 e riprovare";
+const FILTER_REFUSED = 'Rifiutato da BaaPortal (frame non ammesso)';
+const FORCE_ACTIVE =
+  'Forzamento attivo sulla CPU: terminarlo con TIA o STEP 7 prima del ripristino';
+const PROTECTED =
+  'La protezione della CPU (livello 2 o 3) non permette la scrittura e BaaPortal non gestisce le password: ripristino rifiutato';
+const PROTECTION_UNREADABLE = 'Livello di protezione della CPU non leggibile: ripristino rifiutato';
+const FORCE_UNREADABLE = 'Stato del forzamento non leggibile dalla CPU: ripristino rifiutato';
+
+/** Forzamento e protezione letti sul collegamento del ripristino; il testo del rifiuto, se c'è. */
+async function safetyRefusal(c: Pick<RestoreClient, 'readSzl'>): Promise<string | undefined> {
+  try {
+    if (forceFrom(await c.readSzl(0x0174, FRCE_LED))) return FORCE_ACTIVE;
+  } catch {
+    return FORCE_UNREADABLE;
+  }
+  try {
+    if ((protectionFrom(await c.readSzl(0x0232, 4)).validLevel ?? 0) >= 2) return PROTECTED;
+  } catch {
+    return PROTECTION_UNREADABLE;
+  }
+  return undefined;
+}
 const POLL_MS = 200;
 const STOP_WAIT_MS = 5000;
 const RUN_WAIT_MS = 10_000;

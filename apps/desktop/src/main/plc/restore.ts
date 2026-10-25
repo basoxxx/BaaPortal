@@ -13,8 +13,6 @@ export interface RestoreStep {
 }
 
 export interface RestorePlan {
-  /** Numero d'ordine del backup diverso da quello della CPU collegata (lo imposta il servizio). */
-  cpuMismatch?: { backup: string; online: string };
   steps: RestoreStep[];
   /** Blocchi che il ripristino non tocca, con il motivo. */
   skipped: { type: RestoreType; number: number; why: string }[];
@@ -41,6 +39,15 @@ export function planRestore(
   files: Record<string, Uint8Array>,
   online: readonly { type: string; number: number }[],
 ): RestorePlan | string {
+  // Un blocco non letto dal backup non è un blocco assente: non si ripristina niente (§19.5)
+  const failedSdb = manifest.failed.find((f) => f.type === 'SDB');
+  if (failedSdb) {
+    return `SDB ${failedSdb.number} non letto durante il backup: ripristino non possibile`;
+  }
+  if (manifest.failed.length > 0) {
+    const list = manifest.failed.map((f) => stepName(f.type, f.number)).join(', ');
+    return `Backup incompleto: blocchi non letti durante il backup (${list}). Ripristino non possibile`;
+  }
   const backup = new Map<string, { type: RestoreType; number: number; file: Uint8Array }>();
   const skipped: RestorePlan['skipped'] = [];
   for (const b of manifest.blocks) {
@@ -66,6 +73,10 @@ export function planRestore(
     backup.set(`${b.type}${b.number}`, { type: b.type, number: b.number, file: bytes });
   }
 
+  // Senza SDB 0 nel backup, quello della CPU resterebbe cancellato o scollegato dal resto
+  if (!backup.has('SDB0') && online.some((o) => o.type === 'SDB' && o.number === 0)) {
+    return 'La CPU ha SDB 0 ma il backup no: ripristino non possibile';
+  }
   const steps: RestoreStep[] = [];
   const cpuSdb = online
     .filter((o) => o.type === 'SDB')
@@ -95,6 +106,10 @@ export function planRestore(
       steps.push({ kind: 'load', type, number: n, file: backup.get(`${type}${n}`)!.file });
     }
   }
+  // SDB 2 lo crea la CPU: se c'è solo online, si dice lo stesso che non si tocca
+  if (cpuSdb.includes(2) && !skipped.some((k) => k.type === 'SDB' && k.number === 2)) {
+    skipped.push({ type: 'SDB', number: 2, why: 'creato dalla CPU' });
+  }
   const cpuOnly: RestorePlan['cpuOnly'] = [];
   for (const o of online) {
     if (!USER_ORDER.includes(o.type as RestoreType) || backup.has(`${o.type}${o.number}`)) continue;
@@ -114,6 +129,7 @@ export function restoreLines(plan: RestorePlan): string[] {
         ? `Cancella ${stepName(s.type, s.number)}`
         : `Carica ${stepName(s.type, s.number)}`,
     ),
+    ...plan.skipped.map((k) => `Non toccato: ${stepName(k.type, k.number)} (${k.why})`),
     ...plan.cpuOnly.map((b) => `Restano nella CPU: ${b.type} ${b.number}`),
   ];
 }

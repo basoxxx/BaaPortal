@@ -60,16 +60,23 @@ describe('finestra di ripristino', () => {
     expect(w).not.toContain('CPU diversa');
   });
 
-  it('cpuMismatch → avviso «CPU diversa» in testa dopo i due fissi iniziali', async () => {
-    await open({ ...PLAN, cpuMismatch: { backup: '6ES7 315', online: '6ES7 317' } });
+  it('STOP inviato ma non confermato → avviso dedicato, diverso da «CPU lasciata in STOP»', async () => {
+    const app = await open();
     await choose();
-    const items = [...screen.getByTestId('restore-warnings').querySelectorAll('li')].map(
-      (l) => l.textContent!,
+    app.bridge.plcRestoreImpl = () => ({
+      ok: false,
+      error: 'STOP inviato ma non confermato',
+      cpuStopped: false,
+      stopUnconfirmed: true,
+      rows: [],
+    });
+    await run();
+    await waitFor(() => screen.getByTestId('restore-result'));
+    expect(screen.getByTestId('restore-stop-unconfirmed').textContent).toContain(
+      'non lo ha confermato',
     );
-    expect(items.findIndex((x) => x.includes('CPU diversa'))).toBeGreaterThan(-1);
-    expect(items.findIndex((x) => x.includes('CPU diversa'))).toBeLessThan(
-      items.findIndex((x) => x.includes('I DB tornano')),
-    );
+    expect(screen.getByTestId('restore-result').textContent).not.toContain('CPU lasciata in STOP');
+    expect(screen.getByTestId('restore-result').textContent).not.toContain('Nessuna modifica');
   });
 
   it('Avvia la CPU spenta per default → plcRestore con restart false; con la casella, true', async () => {

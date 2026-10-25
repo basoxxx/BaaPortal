@@ -97,9 +97,18 @@ const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object
  * la salta). I byte si contano mentre escono: appena un tetto è superato la voce si ferma, senza
  * fidarsi della dimensione dichiarata nell'archivio.
  */
+/** Solo per i test: quanti byte ha gonfiato fflate in tutto. */
+export interface InflateStats {
+  inflated: number;
+}
+
+/** Pezzo di archivio dato a fflate per volta: limita ogni blocco gonfiato (circa 1 MB al massimo). */
+const PUSH_SLICE = 1024;
+
 function inflateCapped(
   bytes: Uint8Array,
   cap: (name: string) => number | undefined,
+  stats?: InflateStats,
 ): Record<string, Uint8Array> {
   const out: Record<string, Uint8Array> = {};
   let total = 0;
@@ -116,6 +125,7 @@ function inflateCapped(
         failure = new BackupFormatError('non è un archivio zip');
         return;
       }
+      if (stats) stats.inflated += chunk.length;
       size += chunk.length;
       total += chunk.length;
       if (size > limit || total > BACKUP_MAX_BYTES) {
@@ -139,7 +149,11 @@ function inflateCapped(
   unzip.register(UnzipInflate);
   unzip.register(UnzipPassThrough);
   try {
-    unzip.push(bytes, true);
+    // A pezzi piccoli, e ci si ferma al primo errore: fflate gonfia ogni pezzo per intero
+    for (let at = 0; at < bytes.length && !failure; at += PUSH_SLICE) {
+      const end = Math.min(at + PUSH_SLICE, bytes.length);
+      unzip.push(bytes.subarray(at, end), end === bytes.length);
+    }
   } catch {
     throw failure ?? new BackupFormatError('non è un archivio zip');
   }
@@ -151,6 +165,7 @@ function inflateCapped(
 export function decodeBackup(
   bytes: Uint8Array,
   hash: HashFn,
+  stats?: InflateStats,
 ): {
   manifest: BackupManifest;
   files: Record<string, Uint8Array>;
@@ -215,7 +230,7 @@ export function decodeBackup(
       throw new BackupFormatError('contenuto troppo grande');
     wanted.set(b['file'], b['length'] as number);
   }
-  const zip = inflateCapped(bytes, (n) => wanted.get(n));
+  const zip = inflateCapped(bytes, (n) => wanted.get(n), stats);
   const files: Record<string, Uint8Array> = {};
   for (const b of m['blocks'] as { file: string; length: number; sha256: string }[]) {
     const data = zip[b.file];

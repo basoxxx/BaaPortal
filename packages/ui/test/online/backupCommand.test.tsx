@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { commands } from '../../src/commands/commands';
 import { ids } from '../../src/project/navigation/treeIds';
 import { getProgress } from '../../src/project/progress';
+import itTexts from '../../src/i18n/it.json';
 import { ctx, PLC, setupOnline } from './downloadHelpers';
 
 const keys = (app: Awaited<ReturnType<typeof setupOnline>>['app']) =>
@@ -36,6 +37,10 @@ describe('online.backup', () => {
       missing: '1',
       list: 'DB3',
     });
+    expect(m?.severity).toBe('warning');
+    expect((itTexts as { messages: Record<string, string> }).messages.backupDonePartial).toMatch(
+      /^Backup incompleto: \{\{missing\}\} blocchi non letti/,
+    );
     expect(getProgress()).toBeNull();
   });
 

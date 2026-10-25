@@ -30,6 +30,8 @@ export interface FaultPlan {
   reuseJobId?: boolean;
   /** I primi N `_INSE` rispondono 0xD2A9 («la CPU sta assegnando nuovi parametri»), per sessione. */
   insertBusy?: number;
+  /** Le prime N richieste di download (0x1A) rispondono 0xD2A9, per sessione. */
+  requestBusy?: number;
   /** Le indication del block status portano `0xD0CC` (dati limitati dal tempo) insieme ai valori. */
   tisPartial?: boolean;
   /** Sottofunzioni TIS che rispondono con dati troncati a 7 byte. */
@@ -65,6 +67,7 @@ export function checkFaults(f: FaultPlan): void {
   int('dropAfterResponses', f.dropAfterResponses, 0);
   int('chunkSize', f.chunkSize, 1);
   int('insertBusy', f.insertBusy, 0, 1000);
+  int('requestBusy', f.requestBusy, 0, 1000);
   int('ignoreFunction', f.ignoreFunction, 0, 0xffff);
   for (const id of f.szlUnavailable ?? []) int('szlUnavailable', id, 0, 0xffff);
   if (f.tisError) {

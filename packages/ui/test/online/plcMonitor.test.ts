@@ -180,6 +180,32 @@ describe('PlcMonitorController', () => {
     expect(bridge.plcStatusReadCalls).toBe(0);
   });
 
+  it('nessuna rete visibile → «noVisible», nessun job; quando una rete torna visibile parte', async () => {
+    const { bridge, ctrl, online } = setup();
+    ctrl.toggle('d1', 'b1');
+    ctrl.setVisible('b1', []);
+    await flush();
+    expect(online().monitor?.reason).toBe('noVisible');
+    expect(bridge.plcStatusStartCalls).toHaveLength(0);
+    ctrl.setVisible('b1', [0]);
+    await flush();
+    expect(bridge.plcStatusStartCalls).toHaveLength(1);
+    expect(online().monitor?.reason).toBe('waiting');
+  });
+
+  it('osservazione in corso e reti che escono dalla vista → job fermato e «noVisible»', async () => {
+    const { bridge, ctrl, online } = setup();
+    ctrl.toggle('d1', 'b1');
+    ctrl.setVisible('b1', [0]);
+    await flush();
+    expect(online().monitor?.reason).toBe('waiting');
+    const stops = bridge.plcStatusStopCalls;
+    ctrl.setVisible('b1', []);
+    await flush();
+    expect(online().monitor?.reason).toBe('noVisible');
+    expect(bridge.plcStatusStopCalls).toBe(stops + 1);
+  });
+
   it('stale e edited → nessuna start', async () => {
     const stale = setup({ reason: 'stale' });
     stale.ctrl.toggle('d1', 'b1');

@@ -138,7 +138,7 @@
     "uploadNothing": "No block uploaded from the CPU: {{reason}}",
     "uploadFirmwareUnknown": "Firmware {{firmware}} is not in the catalog: the project uses {{used}}.",
     "backupDone": "Backup saved to \"{{path}}\": {{count}} blocks.",
-    "backupDonePartial": "Backup saved to \"{{path}}\": {{count}} blocks, {{missing}} not copied ({{list}}).",
+    "backupDonePartial": "Incomplete backup: {{missing}} blocks not read ({{list}}). Saved to \"{{path}}\" ({{count}} blocks); it cannot be restored.",
     "backupFailed": "Backup failed: {{message}}"
   },
   "commands": {
@@ -1414,6 +1414,7 @@
       "busy": "Monitoring is already active on this CPU in another window.",
       "stop": "CPU in STOP: no values.",
       "waiting": "No result: the block is not processed or the window is not reached.",
+      "noVisible": "No visible line to observe",
       "ended": "Monitoring ended."
     }
   },
@@ -1426,7 +1427,6 @@
     "cancel": "Cancel",
     "warnExperimental": "Experimental feature, never tried on a real CPU.",
     "warnStop": "The CPU will go to STOP.",
-    "warnMismatch": "The backup is from a different CPU ({{backup}}); the connected CPU is {{online}}.",
     "warnData": "DBs return to the values saved in the backup; flags, timers and counters do not.",
     "restart": "Start the CPU when finished (warm restart)",
     "colBlock": "Block",
@@ -1459,6 +1459,7 @@
     "failed": "Restore failed.",
     "noChange": "No change to the CPU.",
     "cpuStopped": "CPU left in STOP.",
+    "stopUnconfirmed": "The STOP command was sent but the CPU did not confirm it: it may stop later. Check the CPU mode.",
     "startCpu": "Start CPU",
     "restarted": "CPU started.",
     "diagTitle": "Latest diagnostic buffer entries:"

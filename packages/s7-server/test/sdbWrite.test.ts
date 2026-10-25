@@ -20,10 +20,17 @@ function world(o: FakeCpuOptions = {}): FakeCpu {
 async function connect(
   cpu: FakeCpu,
   mode: 'online-write' | 'online-restore' = 'online-restore',
+  sent?: Uint8Array[],
 ): Promise<S7WriteClient> {
   const transport: TransportFactory = async () => {
     const [a, b] = memoryTransportPair();
     serve(cpu, b);
+    if (!sent) return a;
+    const send = a.send.bind(a);
+    a.send = (bytes) => {
+      sent.push(bytes.slice());
+      send(bytes);
+    };
     return a;
   };
   const o: ConnectOptions = { host: 'finto', transport, timeoutMs: 2000 };
@@ -108,5 +115,37 @@ describe('SDB nel finto PLC (ripristino)', () => {
     expect(waits).toBe(10);
     expect(cpu.block('SDB', 7)).toBeUndefined();
     await c.close();
+  });
+
+  it('requestBusy 2: due 0xD2A9 alla richiesta di download (0x1A), poi riesce', async () => {
+    const cpu = world({ faults: { requestBusy: 2 } });
+    const c = await connect(cpu);
+    const waits: number[] = [];
+    await c.downloadBlock(syntheticSdb(7, 40), {
+      busyRetry: { sleep: async (ms) => void waits.push(ms) },
+    });
+    expect(waits).toEqual([200, 200]);
+    expect(cpu.block('SDB', 7)).toBeDefined();
+    await c.close();
+  });
+
+  it('requestBusy senza busyRetry: errore alla prima richiesta', async () => {
+    const c = await connect(world({ faults: { requestBusy: 1 } }));
+    await expect(c.downloadBlock(syntheticSdb(7, 40))).rejects.toMatchObject(cpuError(0xd2, 0xa9));
+    await c.close();
+  });
+
+  it('i tre _INSE ripetuti sono la stessa richiesta (stessi byte, a parte il numero di PDU)', async () => {
+    const sent: Uint8Array[] = [];
+    const cpu = world({ faults: { insertBusy: 2 } });
+    const c = await connect(cpu, 'online-restore', sent);
+    await c.downloadBlock(syntheticSdb(7, 40), { busyRetry: { sleep: async () => undefined } });
+    await c.close();
+    // TPKT 4 + COTP 3 + S7: il numero di PDU sta ai byte 11-12 del frame
+    const inse = sent
+      .filter((f) => Buffer.from(f).includes('_INSE'))
+      .map((f) => Buffer.from(f.slice()).fill(0, 11, 13).toString('hex'));
+    expect(inse).toHaveLength(3);
+    expect(new Set(inse).size).toBe(1);
   });
 });

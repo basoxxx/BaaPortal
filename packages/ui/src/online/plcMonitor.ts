@@ -243,13 +243,25 @@ export class PlcMonitorController {
       this.setMonitor(base);
       return;
     }
+    // Nessuna riga in vista: non c'è un job da tenere, e non si dice «osservazione attiva»
+    if (this.visible !== null && windowFor(input.lineMap, this.visible, 1).offsets.length === 0) {
+      this.dropRemote();
+      this.setMonitor('noVisible');
+      return;
+    }
     const cur = st.online.monitor?.reason;
     if (cur && REMOTE_REASONS.includes(cur)) {
       // rifiutato o finito: si riprova solo se il compilato è cambiato
       if (this.blockedKey === input.key && this.blockedCompare === st.online.compare) return;
       this.blockedKey = undefined;
     }
-    if (cur === 'stale' || cur === 'noLines' || cur === 'edited' || cur === undefined) {
+    if (
+      cur === 'stale' ||
+      cur === 'noLines' ||
+      cur === 'edited' ||
+      cur === 'noVisible' ||
+      cur === undefined
+    ) {
       this.setMonitor('ok');
     }
     if (!this.remote && !this.starting) void this.startRemote(input);

@@ -73,7 +73,9 @@ export function outcomeText(r: RestoreOutcomeRow): string {
     case 'notDone':
       return t('restore.outcome.notDone');
     case 'rejected': {
-      // il main scrive già «Rifiutato dalla CPU: …»; qui si tiene solo il dettaglio
+      // un rifiuto del nostro filtro il main lo scrive già per intero
+      if ((r.error ?? '').startsWith('Rifiutato da BaaPortal')) return r.error!;
+      // il main scrive «Rifiutato dalla CPU: …»; qui si tiene solo il dettaglio
       const detail = (r.error ?? '').replace(/^Rifiutato dalla CPU:\s*/, '');
       return t('restore.outcome.rejected', { detail });
     }
@@ -83,6 +85,7 @@ export function outcomeText(r: RestoreOutcomeRow): string {
 /** La CPU è stata toccata (o lo si ignora): i blocchi online vanno riletti. */
 export const touchedCpu = (res: PlcRestoreResult): boolean =>
   res.cpuStopped ||
+  res.stopUnconfirmed === true ||
   res.rows.some(
     (r) => r.outcome === 'loaded' || r.outcome === 'deleted' || r.outcome === 'unknown',
   );

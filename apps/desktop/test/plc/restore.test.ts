@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const electronApp = vi.hoisted(() => ({ isPackaged: false }));
 vi.mock('electron', () => ({ app: electronApp }));
 import { createHash } from 'node:crypto';
-import { buildBlockFile, parseBlockFile } from '@baaportal/s7comm';
+import { buildBlockFile, parseBlockFile, S7Error } from '@baaportal/s7comm';
 import { connectTestTcp, connectWriteTcp } from '@baaportal/s7comm/node';
 import { FakeCpu, syntheticSdb } from '@baaportal/s7-server';
 import { listen, type ListeningCpu } from '@baaportal/s7-server/node';
@@ -178,6 +178,54 @@ describe('planRestore', () => {
     );
   });
 
+  const withFailed = (
+    failed: BackupManifest['failed'],
+    backup: [Entry['type'], number][],
+    cpu: [string, number][],
+  ) => {
+    const es = blocks(backup);
+    const { manifest } = backupOf(es, 'X');
+    manifest.failed = failed;
+    const files = Object.fromEntries(es.map((e) => [`blocks/${e.type}${e.number}.blk`, e.file]));
+    return planRestore(
+      manifest,
+      files,
+      cpu.map(([type, number]) => ({ type, number })),
+    );
+  };
+
+  it('SDB non letto durante il backup (failed) → rifiuto, nessun _DELE', () => {
+    const p = withFailed(
+      [{ type: 'SDB', number: 1000, error: 'x' }],
+      [['SDB', 0]],
+      [
+        ['SDB', 0],
+        ['SDB', 1000],
+      ],
+    );
+    expect(p).toMatch(/SDB 1000 non letto durante il backup/);
+  });
+
+  it('qualunque blocco in failed → rifiuto che nomina i blocchi', () => {
+    const p = withFailed(
+      [
+        { type: 'DB', number: 5, error: 'x' },
+        { type: 'FC', number: 7, error: 'y' },
+      ],
+      [['OB', 1]],
+      [],
+    );
+    expect(p).toMatch(/Backup incompleto/);
+    expect(p).toContain('DB5');
+    expect(p).toContain('FC7');
+  });
+
+  it('la CPU ha SDB 0 e il backup no → rifiuto', () => {
+    const p = plan([['SDB', 1]], [['SDB', 0]]);
+    expect(p).toMatch(/SDB 0/);
+    expect(typeof p).toBe('string');
+  });
+
   it('file OB2 dichiarato OB1 nel manifest → rifiuto', () => {
     const e = blocks([['OB', 1]]);
     const { manifest } = backupOf(e, 'X');
@@ -275,15 +323,191 @@ describe('ripristino contro il finto PLC', () => {
     expect(confirm).not.toHaveBeenCalled();
   });
 
-  it('restorePlan: numero d’ordine diverso → cpuMismatch; righe costruite dal main', async () => {
+  it('restorePlan: numero d’ordine diverso → rifiuto (§19.5.0), nessuna conferma; righe dal main', async () => {
     makeBackup('6ES7 999-9XX99-0XX0');
-    const p = await plan();
-    expect(p.cpuMismatch).toEqual({ backup: '6ES7 999-9XX99-0XX0', online: order });
-    expect(p.rows.map((r) => `${r.action} ${r.name}`)).toEqual([
+    const p = await writes.restorePlan(owner);
+    expect(p).toMatchObject({ ok: false });
+    expect((p as { error: string }).error).toContain('tipo diverso');
+    expect(confirm).not.toHaveBeenCalled();
+    expect(writes.pendingPlans()).toBe(0);
+    expect(restoreOpened).toBe(0);
+    makeBackup();
+    const ok = await plan();
+    expect(ok.rows.map((r) => `${r.action} ${r.name}`)).toEqual([
       'load SDB 1',
       'load SDB 0',
       'load OB1',
+      'skip SDB 2',
     ]);
+  });
+
+  it('restorePlan: protezione di livello 2 o 3 → rifiuto prima di ogni conferma', async () => {
+    for (const level of [2, 3] as const) {
+      cpu.config.protectionLevel = level;
+      const p = await writes.restorePlan(owner);
+      expect(p, `livello ${level}`).toMatchObject({ ok: false });
+      expect(confirm).not.toHaveBeenCalled();
+    }
+    cpu.config.protectionLevel = 2;
+    expect(await writes.restorePlan(owner)).toMatchObject({
+      error: expect.stringContaining('protezione'),
+    });
+  });
+
+  it('restore: protezione alzata dopo il piano → rifiuto sul collegamento del ripristino, CPU in RUN', async () => {
+    const p = await plan();
+    cpu.config.protectionLevel = 2;
+    const r = await writes.restore(owner, { token: p.token, restart: false });
+    expect(r).toMatchObject({ ok: false, cpuStopped: false });
+    expect(r.error).toContain('protezione');
+    expect(cpu.mode).toBe('RUN');
+    expect(r.rows.every((x) => x.outcome !== 'loaded')).toBe(true);
+  });
+
+  it('restore: FRCE acceso dopo il piano → rifiuto, CPU in RUN', async () => {
+    const p = await plan();
+    cpu.forceActive = true;
+    const r = await writes.restore(owner, { token: p.token, restart: false });
+    expect(r).toMatchObject({ ok: false, cpuStopped: false });
+    expect(r.error).toContain('Forzamento attivo');
+    expect(cpu.mode).toBe('RUN');
+  });
+
+  it('restore: FRCE illeggibile sul collegamento del ripristino → rifiuto', async () => {
+    wrap = (c) => {
+      const orig = c.readSzl.bind(c);
+      c.readSzl = async (id, idx) => {
+        if (id === 0x0174) throw new S7Error('CPU_ERROR', 'non disponibile');
+        return orig(id, idx);
+      };
+      return c;
+    };
+    const p = await plan();
+    const r = await writes.restore(owner, { token: p.token, restart: false });
+    expect(r).toMatchObject({ ok: false, cpuStopped: false });
+    expect(r.error).toContain('forzamento non leggibile');
+    expect(cpu.mode).toBe('RUN');
+  });
+
+  it('restore: CPU in HOLD → rifiuto, nessun STOP', async () => {
+    const p = await plan();
+    cpu.setMode('HOLD');
+    const r = await writes.restore(owner, { token: p.token, restart: false });
+    expect(r).toMatchObject({ ok: false, cpuStopped: false });
+    expect(r.error).toContain('HOLD');
+    expect(confirm.mock.calls.map((c) => c[1].message)).not.toContain('Portare la CPU in STOP?');
+  });
+
+  it('restore: un job nato dopo lo STOP → rifiuto con la CPU in STOP, niente scritto', async () => {
+    // la CPU di prova non ammette job in STOP: la seconda lettura ne mostra uno di un altro PG
+    wrap = (c) => {
+      const list = c.readJobList.bind(c);
+      let calls = 0;
+      c.readJobList = async () => (++calls === 1 ? list() : [{ fn: 0x13, job: 1 }]);
+      return c;
+    };
+    const p = await plan();
+    const r = await writes.restore(owner, { token: p.token, restart: false });
+    expect(r).toMatchObject({ ok: false, cpuStopped: true });
+    expect(r.error).toContain('Una funzione di test attiva impedisce');
+    expect(r.error).toContain('rimasta in STOP');
+    expect(cpu.mode).toBe('STOP');
+    expect(r.rows.filter((x) => x.outcome === 'loaded' || x.outcome === 'deleted')).toEqual([]);
+    expect(cpu.block('SDB', 0)!.file).not.toEqual(SDB0_NEW);
+  });
+
+  it('restore: STOP non confermato entro il tempo → stopUnconfirmed, cpuStopped false, niente scritto', async () => {
+    wrap = (c) => {
+      c.stop = async () => ({ name: 'ok' }) as never; // il comando "parte" ma la CPU non si ferma
+      return c;
+    };
+    const p = await plan();
+    const r = await writes.restore(owner, { token: p.token, restart: false });
+    expect(r).toMatchObject({ ok: false, cpuStopped: false, stopUnconfirmed: true });
+    expect(r.error).toContain('non confermato');
+    expect(cpu.mode).toBe('RUN');
+    expect(r.rows.every((x) => x.outcome === 'notDone' || x.outcome === 'skipped')).toBe(true);
+  });
+
+  it('restore: riavvio che lascia la CPU in STOP → restarted false, cpuStopped true, diag letta', async () => {
+    wrap = (c) => {
+      c.start = async () => ({ name: 'ok' }) as never; // l'avviamento non porta in RUN
+      return c;
+    };
+    const p = await plan();
+    const r = await writes.restore(owner, { token: p.token, restart: true });
+    expect(r).toMatchObject({ ok: true, restarted: false, cpuStopped: true });
+    expect(r.diag).toBeDefined();
+    expect(cpu.mode).toBe('STOP');
+  });
+
+  it('restore: errore del filtro → «Rifiutato da BaaPortal (frame non ammesso)»; errore della CPU → «dalla CPU»', async () => {
+    for (const [code, want] of [
+      ['FORBIDDEN', 'Rifiutato da BaaPortal (frame non ammesso)'],
+      ['CPU_ERROR', 'Rifiutato dalla CPU'],
+    ] as const) {
+      wrap = (c) => {
+        c.downloadBlock = async () => {
+          throw new S7Error(code, 'x');
+        };
+        return c;
+      };
+      const p = await plan();
+      const r = await writes.restore(owner, { token: p.token, restart: false });
+      expect(r.rows[0]).toMatchObject({ outcome: 'rejected' });
+      expect(r.rows[0]!.error).toContain(want);
+      if (code === 'FORBIDDEN') expect(r.rows[0]!.error).not.toContain('dalla CPU');
+    }
+  });
+
+  it('la conferma nativa elenca gli SDB non toccati: SDB 2 e quelli lasciati sulla CPU', async () => {
+    cpu.addBlock(sdb(998, 32));
+    const p = await plan();
+    await writes.restore(owner, { token: p.token, restart: false });
+    const main = confirm.mock.calls.find(
+      (c) => c[1].confirmLabel === 'Ripristina backup (sperimentale)',
+    )!;
+    expect(main[1].detail).toContain('Non toccato: SDB 2 (creato dalla CPU)');
+    expect(main[1].detail).toContain('Non toccato: SDB 998 (fuori dagli intervalli documentati');
+  });
+
+  it('piani in memoria: nuova preparazione, finestra chiusa e collegamento finito li liberano', async () => {
+    await plan();
+    await plan();
+    expect(writes.pendingPlans()).toBe(1); // il secondo sostituisce il primo
+    await service.disconnect(owner);
+    expect(writes.pendingPlans()).toBe(0); // collegamento finito
+    await service.connect(owner, access());
+    await plan();
+    expect(writes.pendingPlans()).toBe(1);
+    owner.destroy();
+    expect(writes.pendingPlans()).toBe(0); // finestra chiusa
+  });
+
+  it('abortAll durante il ripristino → si ferma prima del passo successivo e aspetta la chiusura', async () => {
+    let aborting: Promise<void> | undefined;
+    wrap = (c) => {
+      const orig = c.downloadBlock.bind(c);
+      c.downloadBlock = async (file, opts) => {
+        await orig(file, opts);
+        aborting ??= writes.abortAll();
+      };
+      return c;
+    };
+    const p = await plan();
+    const r = await writes.restore(owner, { token: p.token, restart: false });
+    await aborting;
+    expect(r.ok).toBe(false);
+    expect(r.rows.map((x) => x.outcome)).toEqual(['loaded', 'notDone', 'notDone', 'skipped']);
+    expect(r.error).toContain('Interrotto');
+    // dopo l'uscita dall'app nessun altro ripristino parte
+    const p2 = await writes.restorePlan(owner);
+    if (p2.ok) {
+      expect(await writes.restore(owner, { token: p2.token, restart: false })).toMatchObject({
+        ok: false,
+        error: expect.stringContaining('Chiusura in corso'),
+      });
+    }
   });
 
   it('restorePlan: file di backup non valido → errore, nessuna conferma', async () => {
@@ -291,16 +515,6 @@ describe('ripristino contro il finto PLC', () => {
     const p = await writes.restorePlan(owner);
     expect(p).toMatchObject({ ok: false });
     expect(confirm).not.toHaveBeenCalled();
-  });
-
-  it('restore: Annulla alla conferma della CPU diversa → nessun collegamento', async () => {
-    makeBackup('6ES7 999-9XX99-0XX0');
-    const p = await plan();
-    deny = (title, message) => message.includes('CPU diversa');
-    const r = await writes.restore(owner, { token: p.token, restart: false });
-    expect(r).toMatchObject({ ok: false, cancelled: true, cpuStopped: false });
-    expect(restoreOpened).toBe(0);
-    expect(cpu.mode).toBe('RUN');
   });
 
   it('restore: un job 0x13 di un altro → rifiuto, CPU non arrestata', async () => {
@@ -332,6 +546,7 @@ describe('ripristino contro il finto PLC', () => {
       'SDB 1:loaded',
       'SDB 0:loaded',
       'OB1:loaded',
+      'SDB 2:skipped',
     ]);
     expect(r.cpuStopped).toBe(true);
     expect(cpu.mode).toBe('STOP');
@@ -380,6 +595,7 @@ describe('ripristino contro il finto PLC', () => {
       'SDB 1:unknown',
       'SDB 0:notDone',
       'OB1:notDone',
+      'SDB 2:skipped',
     ]);
     expect(r.cpuStopped).toBe(true);
   });
@@ -396,7 +612,7 @@ describe('ripristino contro il finto PLC', () => {
     const p = await plan();
     const r = await writes.restore(owner, { token: p.token, restart: false });
     expect(r.ok).toBe(false);
-    expect(r.rows.map((x) => x.outcome)).toEqual(['loaded', 'notDone', 'notDone']);
+    expect(r.rows.map((x) => x.outcome)).toEqual(['loaded', 'notDone', 'notDone', 'skipped']);
     expect(cpu.block('SDB', 0)!.file).not.toEqual(SDB0_NEW);
   });
 

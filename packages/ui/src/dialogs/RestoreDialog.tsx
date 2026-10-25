@@ -83,13 +83,13 @@ export function RestoreDialog({ onClose }: { onClose(): void }) {
 
   const touched = result
     ? result.cpuStopped ||
+      result.stopUnconfirmed === true ||
       result.rows.some((r) => ['loaded', 'deleted', 'unknown'].includes(r.outcome))
     : false;
   const warnings = plan
     ? [
         t('restore.warnExperimental'),
         t('restore.warnStop'),
-        ...(plan.cpuMismatch ? [t('restore.warnMismatch', plan.cpuMismatch)] : []),
         t('restore.warnData'),
         ...plan.warnings,
       ]
@@ -203,6 +203,9 @@ export function RestoreDialog({ onClose }: { onClose(): void }) {
             {result.error ? <p>{result.error}</p> : null}
             {!touched ? <p>{t('restore.noChange')}</p> : null}
             {result.restarted ? <p>{t('restore.restarted')}</p> : null}
+            {result.stopUnconfirmed ? (
+              <p data-testid="restore-stop-unconfirmed">{t('restore.stopUnconfirmed')}</p>
+            ) : null}
             {result.cpuStopped ? (
               <p>
                 {t('restore.cpuStopped')}{' '}

@@ -361,6 +361,19 @@ describe('BlockStatusService', () => {
     });
   });
 
+  it("stopForCpu chiamato da un'altra finestra ferma l'osservazione viva della prima", async () => {
+    access1 = access(103); // le due finestre sulla stessa CPU
+    const svc = newService();
+    await svc.start(owners[1]!, req());
+    expect(svc.active(owners[1]!)).toBe(true);
+    expect(await liveJobs()).toHaveLength(1);
+    // il ripristino parte dalla finestra 0, l'osservazione è della finestra 1 sulla stessa CPU
+    await svc.stopForCpu(owners[0]!);
+    expect(svc.active(owners[1]!)).toBe(false);
+    expect(await liveJobs()).toEqual([]);
+    expect(await svc.read(owners[1]!)).toMatchObject({ ok: false, ended: true });
+  });
+
   it('CPU in ripristino (blocked) → start rifiutata come busy, nessun job né collegamento', async () => {
     let restoring = true;
     const svc = newService({ blocked: () => restoring });

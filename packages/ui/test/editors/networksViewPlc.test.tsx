@@ -115,6 +115,20 @@ describe("osservazione sulla CPU nell'editor del blocco", () => {
   );
 
   it(
+    'nessuna riga visibile: né avviso di ciclo né «Osservazione attiva», ma «Nessuna riga visibile da osservare»',
+    async () => {
+      const { app } = await setup({});
+      const m = app.store.getState().online.monitor!;
+      act(() => app.store.getState().patchOnline({ monitor: { ...m, reason: 'noVisible' } }));
+      expect(screen.queryByTestId('plc-monitor-warning')).toBeNull();
+      const bar = screen.getByTestId('monitor-bar').textContent!;
+      expect(bar).toContain('Nessuna riga visibile da osservare');
+      expect(bar).not.toContain('Osservazione attiva');
+    },
+    T,
+  );
+
+  it(
     'barra di stato: nessun avviso se non esiste un job (different) e indicatore «parziale» nella barra',
     async () => {
       const { app } = await setup({});
