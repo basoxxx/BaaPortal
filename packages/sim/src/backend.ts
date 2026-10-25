@@ -8,20 +8,25 @@ import {
   type BlockListEntry,
   type BlockType,
   type ReadItem,
+  type Regs,
   type S7DateTime,
   type TransportFactory,
   type WriteItem,
 } from '@baaportal/s7comm';
 import {
+  bstackEntry,
   encodeStoredBlockInfo,
+  istackBytes,
   modeByte,
   serve,
+  type BackendChange,
   type CpuBackend,
   type CpuConfig,
   type ItemRead,
   type StoredBlock,
 } from '@baaportal/s7-server';
 import type { SimCpu } from './cpu';
+import type { MonitorStep } from './executor';
 import { isDiagError, type DiagEntry } from './diagnostics';
 
 const BLOCK_TYPES: readonly BlockType[] = ['OB', 'DB', 'SDB', 'FC', 'SFC', 'FB', 'SFB'];
@@ -164,6 +169,52 @@ export function simBackend(
   /** File dei blocchi scaricati dal server: servono a upload e block info. */
   const files = new Map<string, StoredBlock>();
   const keyOf = (type: string, number: number): string => `${type}:${number}`;
+
+  // Job di test (proto §18): cambi di modo e di blocco per la tabella dei job del server.
+  const listeners = new Set<(e: BackendChange) => void>();
+  const emit = (e: BackendChange): void => {
+    for (const cb of listeners) cb(e);
+  };
+  cpu.onEvent((e) => {
+    if (e.type === 'mode') emit({ kind: 'mode' });
+  });
+  /** Un'osservazione alla volta: il monitor della CPU e' uno solo. */
+  let observing: Promise<unknown> = Promise.resolve();
+
+  /** Registri della riga dal passo del monitor, secondo la maschera chiesta. */
+  const regsOf = (s: MonitorStep, mask: number): Regs => {
+    const r: Regs = {};
+    if (mask & 0x01) r.stw = s.stw;
+    if (mask & 0x02) r.accu1 = s.accu1;
+    if (mask & 0x04) r.accu2 = s.accu2;
+    if (mask & 0x08) r.ar1 = s.ar1;
+    return r;
+  };
+
+  /** Osserva `type`/`number` per il **prossimo** ciclo: alla fine del ciclo legge le righe richieste. */
+  const observe = (
+    type: 'OB' | 'FB' | 'FC',
+    number: number,
+    lines: { offset: number; mask: number }[],
+  ): Promise<(Regs | null)[] | undefined> =>
+    new Promise((resolve) => {
+      if (cpu.mode !== 'RUN') return resolve(undefined);
+      cpu.setMonitor({ kind: type, number });
+      const off = cpu.onEvent((e) => {
+        if (e.type !== 'cycle' && e.type !== 'mode') return;
+        off();
+        const steps = e.type === 'cycle' ? cpu.monitorSnapshot() : undefined;
+        cpu.setMonitor(undefined);
+        // nessun passo = blocco non eseguito nel ciclo; riga senza passo = riga non eseguita (null)
+        if (!steps || steps.length === 0) return resolve(undefined);
+        resolve(
+          lines.map((l) => {
+            const st = steps.find((x) => x.offset === l.offset);
+            return st ? regsOf(st, l.mask) : null;
+          }),
+        );
+      });
+    });
 
   const present = (type: BlockType, number: number): boolean =>
     type === 'SDB'
@@ -331,12 +382,45 @@ export function simBackend(
       }
       cpu.loadBlock(copy); // un blocco non caricabile lancia: la sessione risponde con un errore
       files.set(keyOf(type, number), { type, number, file: copy, parsed });
+      emit({ kind: 'block', type, number });
     },
     deleteBlock(type, number) {
       if (type === 'SDB' || !present(type, number)) return false;
       cpu.deleteBlock(type, number);
       files.delete(keyOf(type, number));
+      emit({ kind: 'block', type, number });
       return true;
+    },
+    onChange(cb) {
+      listeners.add(cb);
+      return () => listeners.delete(cb);
+    },
+    blockExists: present,
+    blockStatus(type, number, lines) {
+      const run = observing.then(() => observe(type, number, lines));
+      observing = run.catch(() => undefined);
+      return run;
+    },
+    stacks() {
+      // solo in STOP (la sessione lo controlla): BSTACK = OB1 se esiste, ISTACK e LSTACK a zero
+      const t = clock();
+      return {
+        bstack: present('OB', 1)
+          ? Uint8Array.from(bstackEntry(0x08, 1, 0, { priority: 1, time: t }))
+          : new Uint8Array(0),
+        istack: istackBytes({
+          resume: [0, 0, 0],
+          interrupted: [0, 0, 0],
+          stw: 0,
+          accu1: 0,
+          accu2: 0,
+          ar1: 0,
+          ar2: 0,
+          obStart: new Array<number>(12).fill(0),
+          time: t,
+        }),
+        lstack: () => new Uint8Array(20),
+      };
     },
     // la CPU simulata non ha ROM né memoria da compattare: restano senza effetto
     copyRamToRom() {},

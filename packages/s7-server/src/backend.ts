@@ -4,6 +4,7 @@ import type {
   CpuMode,
   ParsedBlock,
   ReadItem,
+  Regs,
   S7DateTime,
   WriteItem,
 } from '@baaportal/s7comm';
@@ -70,6 +71,16 @@ export interface StoredBlock {
 
 export type ItemRead = { data: Uint8Array } | { rc: number };
 
+/** Cambi della CPU che chiudono o rendono incoerenti i job di test (proto §18.4.1). */
+export type BackendChange = { kind: 'mode' } | { kind: 'block'; type: BlockType; number: number };
+
+/** Dati TIS grezzi degli stack (proto §18.6), pronti per la risposta. */
+export interface StackData {
+  bstack: Uint8Array;
+  istack: Uint8Array;
+  lstack(priority: number, depth: number): Uint8Array;
+}
+
 /**
  * Tutto ciò che il server S7 (`serve`, il catalogo SZL) chiede a una CPU: lo realizzano il finto
  * PLC (`FakeCpu`) e la CPU simulata (`simBackend` in `@baaportal/sim`).
@@ -110,6 +121,26 @@ export interface CpuBackend {
   /** `_GARB`: comprime la memoria. Assente: il server risponde "non implementato". */
   compressMemory?(): void;
   block(type: BlockType, number: number): StoredBlock | undefined;
+  /** Il blocco c'e' nel programma (anche se non ha un file). Assente: vale `block(...) !== undefined`. */
+  blockExists?(type: BlockType, number: number): boolean;
+  /**
+   * Block status (proto §18.4): i registri dopo ogni riga richiesta, nel **prossimo** ciclo; `null`
+   * per una riga non eseguita, `undefined` se il blocco non e' stato eseguito (nessun risultato).
+   * Assente: le funzioni di test rispondono "non supportata".
+   */
+  blockStatus?(
+    type: 'OB' | 'FB' | 'FC',
+    number: number,
+    lines: { offset: number; mask: number }[],
+  ): Promise<(Regs | null)[] | undefined>;
+  /** Stack (proto §18.6). Assente: le funzioni di test rispondono "non supportata". */
+  stacks?(): StackData | undefined;
+  /** Funzioni TIS v2 (block status `0x13`) nella SZL `0x0131` indice 2. Assente: si'. */
+  readonly tisV2?: boolean;
+  /** Forzamento attivo: accende il LED FRCE. Il server non implementa il forzamento. */
+  readonly forceActive?: boolean;
+  /** Notifica i cambi di modo e di blocco ai job di test. Assente: i job non si accorgono di nulla. */
+  onChange?(cb: (e: BackendChange) => void): () => void;
   blockCounts(): Record<BlockType, number>;
   blockList(type: BlockType): BlockListEntry[];
   /** Payload (78 byte) della risposta di block info. */
