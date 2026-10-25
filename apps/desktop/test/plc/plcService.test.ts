@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { encodeWriteRequest, S7Error } from '@baaportal/s7comm';
-import { connectTcp, openTcp } from '@baaportal/s7comm/node';
+import { buildBlockFile, encodeWriteRequest, S7Error } from '@baaportal/s7comm';
+import { connectTcp, connectTestTcp, connectWriteTcp, openTcp } from '@baaportal/s7comm/node';
 import { FakeCpu, type FakeCpuOptions } from '@baaportal/s7-server';
 import { listen, type ListeningCpu } from '@baaportal/s7-server/node';
 import { SimCpu, simBackend } from '@baaportal/sim';
@@ -341,6 +341,52 @@ describe('startTestPlc e parsePlcAccess', () => {
   it('non parte senza BAAPORTAL_TEST_PLC=1', async () => {
     vi.stubEnv('BAAPORTAL_TEST_PLC', '');
     await expect(startTestPlc()).rejects.toThrow(/BAAPORTAL_TEST_PLC/);
+  });
+
+  it('tisJobs() elenca i job di stato del blocco vivi nel PLC di prova', async () => {
+    vi.stubEnv('BAAPORTAL_TEST_PLC', '1');
+    const t = await startTestPlc();
+    try {
+      expect(await t.tisJobs()).toEqual([]);
+      const opts = {
+        host: '127.0.0.1',
+        port: t.port,
+        rack: 0,
+        slot: 2,
+        connectionType: 'pg' as const,
+      };
+      const w = await connectWriteTcp(opts);
+      const T0 = { year: 2020, month: 5, day: 17, hour: 10, minute: 20, second: 30, ms: 0 };
+      await w.downloadBlock(
+        buildBlockFile(
+          {
+            type: 'OB',
+            number: 1,
+            language: 1,
+            flags: 0x01,
+            security: 0,
+            codeTime: T0,
+            interfaceTime: T0,
+            ssbLength: 0,
+            addLength: 0,
+            localDataLength: 0,
+            mc7Length: 20,
+          },
+          Uint8Array.from({ length: 20 }, (_, i) => 2 + i),
+          { author: 'BAA', family: 'TEST', name: 'OB1', version: '1.1', checksum: 0x1234 },
+        ),
+      );
+      await w.close();
+      const c = await connectTestTcp({ ...opts, connectionType: 'pg' });
+      await c.createBlockStatus(
+        { type: 'OB', number: 1, initMask: 3, lines: [{ offset: 0, mask: 3 }] },
+        4,
+      );
+      expect(await t.tisJobs()).toHaveLength(1);
+      await c.close();
+    } finally {
+      await t.close();
+    }
   });
 
   it('con la variabile parte su 127.0.0.1 e il servizio ci si collega', async () => {
