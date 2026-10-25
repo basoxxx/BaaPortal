@@ -39,6 +39,13 @@ Per ogni voce si indica che cosa succede oggi. "Errore chiaro" vuol dire che Baa
   - I DB si confrontano come elenco di membri.
   - Con un compilato assente o non aggiornato il confronto è sul testo sorgente e gli operandi simbolici possono risultare diversi.
   - I blocchi molto grandi ricadono su un confronto per posizione, con una nota.
+- **Caricamento interrotto senza ripristino.** Se un caricamento si interrompe (finestra chiusa dopo la conferma, uscita dall'app, cavo staccato, un blocco rifiutato) non c'è nessun ripristino: la CPU tiene un programma parziale e può essere ancora in RUN. Uno STOP fatto da BaaPortal non viene annullato dopo un errore o un annullamento. Chiudendo la finestra o uscendo durante la scrittura, l'app chiede prima se interromperla.
+- **Un secondo collegamento PG per ogni scrittura.** Ogni scrittura apre un collegamento PG in più accanto a quello della sorveglianza. Se la CPU non ha collegamenti liberi (per esempio sono tutti usati da pannelli HMI), la scrittura fallisce alla connessione.
+- **L'avviso RUN è un'euristica.** Non vede un cambio di interfaccia di un FC; tratta «diverso» come «interfaccia cambiata».
+- **Nessuna gestione di password o livelli di protezione.** Una CPU protetta in scrittura rifiuta le scritture e BaaPortal non può inserire la password.
+- **Conferme native solo in italiano.** Le finestre di conferma del processo principale non sono tradotte.
+- **«Avviare la CPU?» anche se era già in STOP.** Dopo un caricamento BaaPortal fa la domanda anche quando la CPU era già in STOP prima.
+- **Cerca/Sostituisci nella scheda di confronto.** Agisce sul blocco sorgente del progetto, non sul testo mostrato (il compilato decodificato).
 - **Firmware del progetto nuovo.** Un progetto creato dalla CPU usa il firmware letto dalla CPU solo se è nel catalogo; altrimenti usa il più recente e mostra un avviso.
 - **DB creati con SFC 22 (CREAT_DB).** Vengono cancellati da un nuovo caricamento (vedi «Simulatore (piano 2A)», «Blocchi cancellati»). Su una CPU reale non è provato.
 

@@ -16,9 +16,9 @@ Guida breve al collegamento a una CPU S7-300 (piano 3A) e alle operazioni sulla 
 Con il collegamento attivo, _Carica nel dispositivo_ (barra degli strumenti, menu _Online_, o menu contestuale di uno o più blocchi nell'albero) scrive i blocchi del progetto nella CPU.
 
 1. **Anteprima.** BaaPortal compila ciò che è cambiato e mostra una riga per blocco, con lo stato del confronto e l'azione: _Carica_, _Nessuna azione_ oppure _Cancella_. Un blocco che c'è solo nella CPU non si cancella mai da solo: la riga parte con _Nessuna azione_ e la cancellazione va scelta a mano. Un blocco da compilare (errori o non ancora compilato) non si può caricare.
-2. **Avviso RUN.** Se la CPU è in RUN e il caricamento contiene OB o cambia l'interfaccia di un FB o di un DB, compare un avviso: caricare in RUN può portare la CPU in STOP. Si può spuntare _Arresta la CPU_: la CPU si arresta prima del caricamento e resta in STOP alla fine.
-3. **Conferma.** Premendo _Carica_ compare una finestra di conferma del sistema. Il pulsante predefinito è _Annulla_: se si chiude la finestra, non si scrive nulla.
-4. **STOP e avvio.** Se si è arrestata la CPU, dopo il caricamento resta in STOP. Per riavviarla si usa _Avvia CPU_ (con una sua conferma).
+2. **Avviso RUN.** Se la CPU è in RUN e il caricamento contiene un OB, cancella un blocco (di qualunque tipo) che c'è solo nella CPU, oppure tocca un FB o un DB non uguale a quello della CPU (diverso o non leggibile), compare un avviso: caricare in RUN può portare la CPU in STOP. Si può spuntare _Arresta la CPU_.
+3. **Conferme.** Con _Arresta la CPU_ spuntato compaiono due finestre di conferma del sistema: prima quella per lo STOP, poi quella per il caricamento. Senza la spunta, solo quella del caricamento. Il pulsante predefinito è _Annulla_: se si chiude la finestra, non si scrive nulla.
+4. **Avvio.** Dopo un caricamento riuscito, se la CPU è stata arrestata da BaaPortal o non era in RUN, BaaPortal chiede «Avviare la CPU?» (predefinito _No_). Con _Sì_ compare la conferma del sistema per il RUN. Se si risponde _No_, la CPU resta com'è e si può riavviare più tardi con _Avvia CPU_ (con una sua conferma).
 5. **Controllo prima di scrivere.** Prima di ogni scrittura BaaPortal rilegge il modulo e controlla che sia quello previsto (numero d'ordine, e numero di serie se lo conosce); se non coincide, non scrive.
 6. **Esito.** L'esito (caricati, cancellati, fallito) resta nella finestra. Alla fine il confronto riparte da solo.
 
