@@ -74,6 +74,8 @@ export function registerPlc(
   closeAll(): Promise<void>;
   writing(): boolean;
   busy(): boolean;
+  /** Annulla `closeAll`: scritture, caricamenti e backup possono ripartire. */
+  resume(): void;
   interruptWrites(): void;
 } {
   handle('plc:connect', async (e, raw): Promise<PlcConnectResult> => {
@@ -149,6 +151,11 @@ export function registerPlc(
     },
     writing: () => writes.writing(),
     // Operazioni che un aggiornamento non deve interrompere: scrittura, caricamento dalla CPU, backup.
+    resume: () => {
+      writes.resume();
+      uploads.resume();
+      backups.resume();
+    },
     busy: () => writes.writing() || uploads.active() || backups.active(),
     interruptWrites: () => writes.interruptAll(),
   };

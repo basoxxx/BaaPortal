@@ -103,6 +103,7 @@ function make(over: Partial<UpdateServiceDeps> = {}) {
   const prepareQuit = vi.fn(() => {
     updater.order.push('prepare');
   });
+  const cancelQuit = vi.fn();
   const deps: UpdateServiceDeps = {
     updater: async () => updater as unknown as UpdaterPort,
     newToken: async () => new FakeToken(),
@@ -113,6 +114,7 @@ function make(over: Partial<UpdateServiceDeps> = {}) {
     busy: () => busy,
     closeOnline,
     prepareQuit,
+    cancelQuit,
     send: (e) => events.push(e),
     openExternal: async (u) => {
       opened.push(u);
@@ -131,6 +133,7 @@ function make(over: Partial<UpdateServiceDeps> = {}) {
     opened,
     closeOnline,
     prepareQuit,
+    cancelQuit,
     setBusy: (b: boolean) => {
       busy = b;
     },
@@ -285,7 +288,56 @@ describe('errori', () => {
   });
 });
 
+describe('stato scaricato e controlli successivi', () => {
+  it('un controllo a mano dopo lo scaricamento non sovrascrive downloaded', async () => {
+    const m = make();
+    await m.svc.check();
+    await m.svc.download();
+    m.updater.emit('update-downloaded', { version: '0.12.1' });
+    m.updater.version = '0.12.2';
+    await m.svc.check();
+    expect(m.svc.state()).toEqual({ type: 'downloaded', version: '0.12.1' });
+    expect(m.events.filter((e) => e.type === 'available')).toHaveLength(1);
+  });
+
+  it("update-downloaded di un'altra versione è ignorato", async () => {
+    const m = make();
+    await m.svc.check();
+    await m.svc.download();
+    m.updater.emit('update-downloaded', { version: '0.13.0' });
+    expect(m.svc.canInstall()).toEqual({ ok: false, reason: 'notReady' });
+  });
+
+  it('download chiamato due volte di fila: un solo downloadUpdate', async () => {
+    const m = make();
+    await m.svc.check();
+    await Promise.all([m.svc.download(), m.svc.download()]);
+    expect(m.updater.downloadUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('un controllo a mano che si unisce a uno automatico emette checking manual', async () => {
+    const m = make();
+    let release!: () => void;
+    m.updater.checkImpl = () => new Promise<void>((r) => (release = r));
+    await m.svc.setPrefs(PREFS_ON);
+    await m.clock.advance(10 * SEC);
+    const p = m.svc.check();
+    release();
+    await p;
+    expect(m.events.filter((e) => e.type === 'checking')).toEqual([
+      { type: 'checking', manual: false },
+      { type: 'checking', manual: true },
+    ]);
+  });
+});
+
 describe('«Più tardi»', () => {
+  it('versioni non semver sono ignorate', () => {
+    const m = make();
+    m.svc.later('x');
+    m.svc.later(5 as unknown as string);
+  });
+
   it('il controllo automatico dopo non avvisa; quello a mano sì', async () => {
     const m = make();
     m.svc.later('0.12.1');
@@ -368,7 +420,6 @@ describe('installazione', () => {
   });
 
   it('closeOnline che non risponde: dopo 1 s si installa lo stesso', async () => {
-    const m = await ready();
     const hung = vi.fn(() => new Promise<void>(() => undefined));
     const m2 = make({ closeOnline: hung });
     await m2.svc.check();
@@ -380,7 +431,43 @@ describe('installazione', () => {
     await m2.clock.advance(1000);
     await p;
     expect(m2.updater.quits).toEqual([[false, true]]);
+  });
+
+  it('quitAndInstall che emette error invece di uscire: error install e annullamento', async () => {
+    const m = await ready();
+    m.updater.quitAndInstall.mockImplementationOnce(() => {
+      m.updater.emit('error', new Error('spawn fallito'));
+    });
+    await m.svc.install();
+    expect(m.events.at(-1)).toMatchObject({ type: 'error', phase: 'install', manual: false });
+    expect(m.cancelQuit).toHaveBeenCalledTimes(1);
+    // dopo il fallimento si può riprovare
+    await m.svc.install();
+    expect(m.updater.quitAndInstall).toHaveBeenCalledTimes(2);
+  });
+
+  it('busy diventato vero durante closeOnline: nessun quitAndInstall, annullato', async () => {
+    const m = make({
+      closeOnline: async () => {
+        m.setBusy(true);
+      },
+    });
+    await m.svc.check();
+    await m.svc.download();
+    m.updater.emit('update-downloaded', { version: '0.12.1' });
+    expect(await m.svc.install()).toEqual({ ok: false, reason: 'busy' });
     expect(m.updater.quitAndInstall).not.toHaveBeenCalled();
+    expect(m.prepareQuit).not.toHaveBeenCalled();
+    expect(m.cancelQuit).toHaveBeenCalledTimes(1);
+  });
+
+  it('due install di fila: il secondo è rifiutato, un solo quitAndInstall', async () => {
+    const m = await ready();
+    const a = m.svc.install();
+    const b = m.svc.install();
+    expect(await b).toEqual({ ok: false, reason: 'busy' });
+    await a;
+    expect(m.updater.quitAndInstall).toHaveBeenCalledTimes(1);
   });
 });
 

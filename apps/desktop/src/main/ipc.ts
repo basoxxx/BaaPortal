@@ -56,6 +56,7 @@ export function registerIpc(
   onCloseConfirmed: () => void,
   onRendererReady: () => void,
   prepareQuit: () => void,
+  cancelQuit: () => void,
 ): {
   closeOnline(): Promise<void>;
   writing(): boolean;
@@ -241,6 +242,10 @@ export function registerIpc(
         busy: () => plc.busy(),
         closeOnline: () => plc.closeAll(),
         prepareQuit,
+        cancelQuit: () => {
+          cancelQuit();
+          plc.resume();
+        },
         send: (e) => {
           const w = getWindow();
           if (w && !w.isDestroyed()) w.webContents.send('update:event', e);

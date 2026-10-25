@@ -85,6 +85,8 @@ const ABORTED = Symbol('aborted');
  */
 export class UploadService {
   private readonly runs = new Map<UploadOwner, Run>();
+  /** Dopo `abortAll` (uscita o aggiornamento) non parte più nessun caricamento. */
+  private closing = false;
   private readonly connectFn: UploadConnectFn;
   private readonly connectTimeoutMs: number;
   private readonly progressIntervalMs: number;
@@ -110,6 +112,7 @@ export class UploadService {
     access: PlcAccess,
     opts: CollectOptions = {},
   ): Promise<CollectResult> {
+    if (this.closing) return { ok: false, error: 'Aggiornamento in corso' };
     if (this.runs.has(owner)) return { ok: false, error: 'Un caricamento è già in corso' };
     if (owner.isDestroyed()) return { ok: false, error: 'Finestra chiusa' };
     const ctl = new AbortController();
@@ -135,7 +138,12 @@ export class UploadService {
   }
 
   /** Uscita dall'app: interrompe tutto e aspetta che i collegamenti siano chiusi. */
+  resume(): void {
+    this.closing = false;
+  }
+
   async abortAll(): Promise<void> {
+    this.closing = true;
     const runs = [...this.runs.values()];
     for (const r of runs) r.ctl.abort();
     await Promise.all(runs.map((r) => r.finished.catch(() => undefined)));

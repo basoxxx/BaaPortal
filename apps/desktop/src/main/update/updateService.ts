@@ -22,6 +22,8 @@ export interface UpdateServiceDeps {
   closeOnline(): Promise<void>;
   /** Prepara l'uscita: né la finestra né before-quit devono più rimandarla. */
   prepareQuit(): void;
+  /** Annulla `prepareQuit` e riabilita le operazioni online (installazione fallita o rinviata). */
+  cancelQuit(): void;
   send(e: UpdateEvent): void;
   openExternal(url: string): Promise<void>;
   setTimeout(fn: () => void, ms: number): unknown;
@@ -41,6 +43,7 @@ export class UpdateService {
   private availableVersion: string | null = null;
   private downloadedVersion: string | null = null;
   private downloading = false;
+  private installing = false;
   private token: { cancel(): void } | null = null;
   private cancelling = false;
   private lastProgress = -Infinity;
@@ -64,7 +67,10 @@ export class UpdateService {
   check(manual = true): Promise<void> {
     if (this.d.platform === 'linux') return Promise.resolve();
     if (this.checking) {
-      if (manual) this.checking.manual = true;
+      if (manual && !this.checking.manual) {
+        this.checking.manual = true;
+        this.d.send({ type: 'checking', manual: true });
+      }
       return this.checking.promise;
     }
     const run = { promise: Promise.resolve(), manual };
@@ -77,6 +83,7 @@ export class UpdateService {
   }
 
   later(version: string): void {
+    if (typeof version !== 'string' || semver.valid(version) !== version) return;
     this.dismissed.add(version);
     if (this.last?.type === 'available' && this.last.version === version) this.last = null;
   }
@@ -93,25 +100,32 @@ export class UpdateService {
       return;
     }
     if (this.d.platform !== 'win32') return;
-    const updater = await this.updater();
-    const token = await this.d.newToken();
-    this.token = token;
-    this.cancelling = false;
+    // Subito, prima di ogni attesa: una seconda chiamata non deve partire.
     this.downloading = true;
+    this.cancelling = false;
     this.lastProgress = -Infinity;
-    // `download-progress` e `update-downloaded` arrivano dai gestori fissati in `updater()`.
-    updater
-      .downloadUpdate(token as never)
-      .then(() => undefined)
-      .catch((err: unknown) => {
-        if (this.cancelling) this.send({ type: 'cancelled' });
-        else
-          this.send({ type: 'error', phase: 'download', message: errorText(err), manual: false });
-      })
-      .finally(() => {
-        this.downloading = false;
-        this.token = null;
-      });
+    try {
+      const updater = await this.updater();
+      const token = await this.d.newToken();
+      this.token = token;
+      // `download-progress` e `update-downloaded` arrivano dai gestori fissati in `updater()`.
+      updater
+        .downloadUpdate(token as never)
+        .then(() => undefined)
+        .catch((err: unknown) => this.downloadFailed(err))
+        .finally(() => {
+          this.downloading = false;
+          this.token = null;
+        });
+    } catch (err) {
+      this.downloading = false;
+      this.downloadFailed(err);
+    }
+  }
+
+  private downloadFailed(err: unknown): void {
+    if (this.cancelling) this.send({ type: 'cancelled' });
+    else this.send({ type: 'error', phase: 'download', message: errorText(err), manual: false });
   }
 
   cancelDownload(): void {
@@ -130,23 +144,41 @@ export class UpdateService {
 
   /** Con successo l'app esce e non restituisce nulla. */
   async install(): Promise<{ ok: false; reason: 'busy' | 'notReady' } | undefined> {
+    if (this.installing) return { ok: false, reason: 'busy' };
     // Fra canInstall e qui potrebbe essere partita una scrittura: si ricontrolla.
     const can = this.canInstall();
     if (!can.ok) return can;
-    const updater = await this.updater();
-    let timer: unknown;
-    const cap = new Promise<void>((r) => {
-      timer = this.d.setTimeout(r, CLOSE_ONLINE_MS);
-    });
-    await Promise.race([this.d.closeOnline().catch(() => undefined), cap]);
-    this.d.clearTimeout(timer);
-    this.d.prepareQuit();
+    this.installing = true; // subito: un secondo clic non deve ripartire
     try {
+      const updater = await this.updater();
+      let timer: unknown;
+      const cap = new Promise<void>((r) => {
+        timer = this.d.setTimeout(r, CLOSE_ONLINE_MS);
+      });
+      await Promise.race([this.d.closeOnline().catch(() => undefined), cap]);
+      this.d.clearTimeout(timer);
+      // Durante la chiusura può essere partita un'operazione, o l'updater può aver già fallito.
+      if (!this.installing) return { ok: false, reason: 'busy' };
+      if (this.d.busy()) {
+        this.rollbackInstall();
+        return { ok: false, reason: 'busy' };
+      }
+      this.d.prepareQuit();
       updater.quitAndInstall(false, true);
     } catch (err) {
-      this.send({ type: 'error', phase: 'install', message: errorText(err), manual: false });
+      this.installFailed(err);
     }
     return undefined;
+  }
+
+  private rollbackInstall(): void {
+    this.installing = false;
+    this.d.cancelQuit();
+  }
+
+  private installFailed(err: unknown): void {
+    this.rollbackInstall();
+    this.send({ type: 'error', phase: 'install', message: errorText(err), manual: false });
   }
 
   private send(e: UpdateEvent): void {
@@ -177,7 +209,11 @@ export class UpdateService {
     if (!this.port) {
       const u = await this.d.updater();
       u.logger = console;
-      u.on('error', (e) => console.warn('[aggiornamenti]', e));
+      u.on('error', (e) => {
+        // quitAndInstall non lancia: se fallisce emette 'error' e non esce.
+        if (this.installing) this.installFailed(e);
+        else console.warn('[aggiornamenti]', e);
+      });
       u.on('download-progress', (p) => {
         const t = this.d.now();
         if (t - this.lastProgress < PROGRESS_MIN_MS) return;
@@ -185,6 +221,8 @@ export class UpdateService {
         this.send({ type: 'progress', transferred: p.transferred, total: p.total });
       });
       u.on('update-downloaded', (i) => {
+        if (!isNewer(i.version, this.d.current)) return;
+        if (this.availableVersion && i.version !== this.availableVersion) return;
         this.downloadedVersion = i.version;
         this.send({ type: 'downloaded', version: i.version });
       });
@@ -206,6 +244,11 @@ export class UpdateService {
       );
       const r = await u.checkForUpdates();
       const version = r?.updateInfo.version;
+      // Con uno scaricamento in corso o già fatto lo stato non si tocca: prima si installa o si scarta.
+      if (this.downloading || this.downloadedVersion) {
+        if (run.manual && this.last?.type === 'downloaded') this.d.send(this.last);
+        return;
+      }
       // Si decide con le nostre regole, anche se electron-updater dice altro.
       if (!version || !isNewer(version, this.d.current)) {
         this.availableVersion = null;

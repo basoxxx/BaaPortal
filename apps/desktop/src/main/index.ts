@@ -196,6 +196,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on('window-all-closed', () => app.quit());
 
   let onlineClosed = false;
+  let quitUndo: { allowClose: boolean; onlineClosed: boolean } | null = null;
   const ipc = registerIpc(
     () => win,
     trust,
@@ -209,8 +210,15 @@ if (!app.requestSingleInstanceLock()) {
     },
     // Uscita per aggiornamento: l'installatore parte da solo, né la finestra né before-quit rimandano.
     () => {
+      quitUndo = { allowClose, onlineClosed };
       allowClose = true;
       onlineClosed = true;
+    },
+    // Installazione fallita o rinviata: si torna com'era prima di prepareQuit.
+    () => {
+      if (!quitUndo) return;
+      ({ allowClose, onlineClosed } = quitUndo);
+      quitUndo = null;
     },
   );
   writeGuard = new WriteCloseGuard(

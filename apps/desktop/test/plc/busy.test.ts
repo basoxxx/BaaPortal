@@ -93,4 +93,24 @@ describe('busy di registerPlc', () => {
     await p;
     expect(plc.busy()).toBe(false);
   });
+
+  it('dopo closeAll nessun caricamento né backup parte, finché non si chiama resume', async () => {
+    const { handlers, plc } = setup();
+    const e = { sender: new Owner() };
+    await plc.closeAll();
+    expect(await handlers.get('plc:uploadAll')!(e, access)).toMatchObject({
+      ok: false,
+      error: 'Aggiornamento in corso',
+    });
+    expect(await handlers.get('plc:backup')!(e)).toMatchObject({
+      ok: false,
+      error: 'Aggiornamento in corso',
+    });
+    expect(await handlers.get('plc:control')!(e, 'STOP')).toMatchObject({ ok: false });
+    plc.resume();
+    const p = handlers.get('plc:uploadAll')!(e, access);
+    await vi.waitFor(() => expect(plc.busy()).toBe(true));
+    await plc.closeAll();
+    await p;
+  });
 });
