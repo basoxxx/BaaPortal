@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import projectPackage from '../../../../project/package.json';
 import uiPackage from '../../../package.json';
+import { checkNow, useUpdateState } from '../../update/updateController';
 import { useServices } from '../../state/AppContext';
 
 export function InstalledSoftwarePane() {
   const { t } = useTranslation();
   const { bridge } = useServices();
+  const { info } = useUpdateState();
   const [appVersion, setAppVersion] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -30,6 +32,14 @@ export function InstalledSoftwarePane() {
           <li key={r}>{r}</li>
         ))}
       </ul>
+      {info ? (
+        <p data-testid="update-channel">
+          {info.prereleaseBuild ? t('update.channel') : t('update.channelStable')}
+        </p>
+      ) : null}
+      <button type="button" disabled={info?.enabled !== true} onClick={checkNow}>
+        {t('update.check')}
+      </button>
     </>
   );
 }

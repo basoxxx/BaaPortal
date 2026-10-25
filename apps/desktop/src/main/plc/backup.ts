@@ -46,6 +46,7 @@ const sameCpu = (a: PlcIdentity, b: PlcIdentity): boolean =>
  */
 export class BackupService {
   private readonly running = new Map<BackupOwner, { cancelled: boolean }>();
+  private closing = false;
 
   constructor(private readonly o: BackupServiceOptions) {}
 
@@ -56,12 +57,23 @@ export class BackupService {
     this.o.uploads.cancel(owner, 'backup');
   }
 
+  /** C'è un backup in corso, anche con la finestra di salvataggio ancora aperta. */
+  active(): boolean {
+    return this.running.size > 0;
+  }
+
   /** Uscita dall'app: nessun backup prosegue dopo la finestra di salvataggio. */
+  resume(): void {
+    this.closing = false;
+  }
+
   abortAll(): void {
+    this.closing = true;
     for (const owner of [...this.running.keys()]) this.cancel(owner);
   }
 
   async backup(owner: BackupOwner): Promise<PlcBackupResult> {
+    if (this.closing) return { ok: false, error: 'Chiusura in corso' };
     if (this.running.has(owner)) return { ok: false, error: 'Un backup è già in corso' };
     const state = { cancelled: false };
     this.running.set(owner, state);

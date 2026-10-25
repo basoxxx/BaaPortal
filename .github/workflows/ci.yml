@@ -34,10 +34,12 @@ jobs:
           path: apps/desktop/test-results
           if-no-files-found: ignore
       - run: npm run dist
+      - run: node apps/desktop/scripts/check-dist.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: installers-${{ matrix.os }}
           path: |
             apps/desktop/dist/*.exe
             apps/desktop/dist/*.dmg
+            apps/desktop/dist/latest*.yml
           if-no-files-found: error

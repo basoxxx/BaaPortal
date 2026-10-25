@@ -51,7 +51,8 @@
     "online": "Online: {{module}} {{host}} - {{mode}}",
     "onlineConnecting": "Going online…",
     "onlineTitleSuffix": " — Online",
-    "restore": "Restoring…"
+    "restore": "Restoring…",
+    "downloadingUpdate": "Downloading update {{version}}"
   },
   "messages": {
     "replaced": "Replaced {{replaced}} texts, skipped {{skipped}}.",
@@ -195,7 +196,8 @@
     "help.about": "About BaaPortal",
     "tools.collectCpuData": "Collect CPU data (read-only)…",
     "edit.compileFull": "Compile → Software (full compile)",
-    "online.restore": "Restore backup to device… (experimental)"
+    "online.restore": "Restore backup to device… (experimental)",
+    "help.checkUpdates": "Check for updates…"
   },
   "menu": {
     "project": "Project",
@@ -639,7 +641,13 @@
       "title": "Online",
       "experimental": "Experimental features (not tried on a real CPU)",
       "note": "Enables features based on documentation and not verified: for now the call stacks. They are only used with the CPU in STOP."
-    }
+    },
+    "updates": "Updates",
+    "updatesCheck": "Check for updates at startup",
+    "updatesPrerelease": "Also receive test versions",
+    "updatesChannelBeta": "This is a test version",
+    "updatesChannelStable": "This is a stable version",
+    "updatesDisabled": "Updates only work in the installed app"
   },
   "dialog": {
     "ok": "OK",
@@ -1463,5 +1471,28 @@
     "startCpu": "Start CPU",
     "restarted": "CPU started.",
     "diagTitle": "Latest diagnostic buffer entries:"
+  },
+  "update": {
+    "available": "BaaPortal {{version}} is available",
+    "download": "Download",
+    "later": "Later",
+    "notes": "Release notes",
+    "downloading": "Downloading BaaPortal {{version}}: {{percent}}%",
+    "cancel": "Cancel",
+    "ready": "BaaPortal {{version}} is ready",
+    "restart": "Restart and update",
+    "nextStart": "At next start",
+    "macReady": "The file is open in Finder. Quit BaaPortal, drag BaaPortal into the Applications folder replacing the old one, then reopen it.",
+    "showInFinder": "Show in Finder",
+    "quit": "Quit BaaPortal",
+    "ok": "OK",
+    "upToDate": "BaaPortal {{version}} is up to date",
+    "close": "Close",
+    "busy": "Wait for the PLC operation (upload, write or backup) to finish, then try again",
+    "notReady": "The update is not ready: try again",
+    "check": "Check for updates",
+    "channel": "Test version",
+    "channelStable": "Stable version",
+    "region": "Updates"
   }
 }

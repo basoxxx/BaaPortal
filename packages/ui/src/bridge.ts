@@ -1,4 +1,10 @@
 import type {
+  UpdateCanInstall,
+  UpdateEvent,
+  UpdateInfoView,
+  UpdatePrefs,
+} from './update/updateTypes';
+import type {
   DiagPart,
   NetInterface,
   PlcClockRequest,
@@ -131,6 +137,8 @@ export interface BaaBridge {
   onOpenFileRequest(cb: (path: string) => void): () => void; // associazione file / seconda istanza
   onCloseRequest(cb: () => void): () => void;
   closeWindowConfirmed(): void;
+  /** La chiusura è stata annullata dall'utente (es. «Annulla» al salvataggio). */
+  closeWindowCancelled(): void;
   rendererReady(): void; // sblocca le richieste di apertura in coda
   clipboardWriteText(text: string): void;
   clipboardReadText(): Promise<string>;
@@ -206,5 +214,21 @@ export interface BaaBridge {
   plcRestorePlan(): Promise<PlcRestorePlanResult>;
   plcRestore(req: { token: string; restart: boolean }): Promise<PlcRestoreResult>;
   plcRestoreInterrupt(): Promise<void>;
+  /** Aggiornamenti dell'app (solo build pacchettizzate; altrove `enabled` è falso). */
+  updateInfo(): Promise<UpdateInfoView>;
+  /** L'ultimo evento significativo, per ricostruire l'avviso dopo una ricarica. */
+  updateState(): Promise<UpdateEvent | null>;
+  updateSetPrefs(p: UpdatePrefs): Promise<void>;
+  updateCheck(): Promise<void>;
+  updateDownload(): Promise<void>;
+  updateCancelDownload(): Promise<void>;
+  updateCanInstall(): Promise<UpdateCanInstall>;
+  /** Con successo l'app esce; altrimenti dice perché non può. */
+  updateInstall(): Promise<{ ok: false; reason: 'busy' | 'notReady' } | undefined>;
+  /** macOS: mostra nel Finder il DMG scaricato (il percorso lo tiene il main). */
+  updateShowInFolder(): Promise<void>;
+  updateLater(version: string): Promise<void>;
+  updateOpenNotes(version: string): Promise<void>;
+  onUpdateEvent(cb: (e: UpdateEvent) => void): () => void;
   testOverrides(): Promise<{ recoveryIntervalMs?: number }>; // sempre {} nelle build pacchettizzate
 }

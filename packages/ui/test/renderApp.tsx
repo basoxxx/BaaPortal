@@ -18,6 +18,8 @@ export interface RenderAppOptions {
   /** Il progetto contiene un PLC_1 (CPU 315-2 PN/DP) con id prevedibili. */
   withPlc?: boolean;
   platform?: 'win32' | 'darwin' | 'linux';
+  /** Prepara il bridge finto prima dell'avvio dell'app. */
+  configure?: (bridge: FakeBridge) => void;
 }
 
 export interface RenderedApp {
@@ -38,6 +40,7 @@ export async function renderApp(opts: RenderAppOptions = {}): Promise<RenderedAp
 
   const bridge = new FakeBridge();
   if (opts.platform) bridge.platform = opts.platform;
+  opts.configure?.(bridge);
   if (opts.withProject) {
     const project = createProject(
       { name: 'Linea 3', author: 'Mario', comment: '' },

@@ -354,6 +354,20 @@ describe('ripristino contro il finto PLC', () => {
     });
   });
 
+  it('restore: finché dura conta come lavoro sul PLC (restoring), poi no', async () => {
+    const p = await plan();
+    expect(writes.restoring()).toBe(false);
+    const seen: boolean[] = [];
+    deny = () => {
+      seen.push(writes.restoring());
+      return true; // rifiuta la prima conferma: il ripristino finisce lì
+    };
+    await writes.restore(owner, { token: p.token, restart: false });
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every(Boolean)).toBe(true);
+    expect(writes.restoring()).toBe(false);
+  });
+
   it('restore: protezione alzata dopo il piano → rifiuto sul collegamento del ripristino, CPU in RUN', async () => {
     const p = await plan();
     cpu.config.protectionLevel = 2;

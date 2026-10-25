@@ -1,6 +1,14 @@
 export { App } from './App';
 export type { AppProps } from './App';
 export type {
+  UpdatePrefs,
+  UpdateInfoView,
+  UpdatePhase,
+  UpdateEvent,
+  UpdateBlockReason,
+  UpdateCanInstall,
+} from './update/updateTypes';
+export type {
   BaaBridge,
   FileFilter,
   RecentEntry,

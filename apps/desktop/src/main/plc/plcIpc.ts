@@ -82,7 +82,14 @@ export function registerPlc(
   appVersion: () => string = () => '',
   jobs: TisJobStore = memoryJobStore(),
   restoreFile?: RestoreFileIo,
-): { closeAll(): Promise<void>; writing(): boolean; interruptWrites(): void } {
+): {
+  closeAll(): Promise<void>;
+  writing(): boolean;
+  busy(): boolean;
+  /** Annulla `closeAll`: scritture, ripristini, caricamenti e backup possono ripartire. */
+  resume(): void;
+  interruptWrites(): void;
+} {
   const status = new BlockStatusService({ service, jobs, blocked: (a) => writes.restoringOn(a) });
   if (restoreFile) writes.setRestoreFile(restoreFile);
   writes.beforeRestore = (owner) => status.stopForCpu(owner);
@@ -174,6 +181,13 @@ export function registerPlc(
       ]);
     },
     writing: () => writes.writing(),
+    // Operazioni che un aggiornamento non deve interrompere: scrittura, caricamento dalla CPU, backup.
+    resume: () => {
+      writes.resume();
+      uploads.resume();
+      backups.resume();
+    },
+    busy: () => writes.writing() || writes.restoring() || uploads.active() || backups.active(),
     interruptWrites: () => writes.interruptAll(),
   };
 }

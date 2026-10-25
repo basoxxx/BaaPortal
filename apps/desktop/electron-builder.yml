@@ -6,6 +6,10 @@ directories:
 files:
   - out/**
   - package.json
+publish:
+  provider: github
+  owner: basoxxx
+  repo: BaaPortal
 fileAssociations:
   - ext: baap
     name: Progetto BaaPortal

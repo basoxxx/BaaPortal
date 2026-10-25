@@ -44,6 +44,13 @@ import type {
   PlcStacksResult,
 } from '../src/online/plcTypes';
 
+import type {
+  UpdateCanInstall,
+  UpdateEvent,
+  UpdateInfoView,
+  UpdatePrefs,
+} from '../src/update/updateTypes';
+
 type Answer = 'save' | 'discard' | 'cancel';
 
 export class FakeBridge implements BaaBridge {
@@ -188,6 +195,10 @@ export class FakeBridge implements BaaBridge {
   }
   closeWindowConfirmed() {
     this.closeConfirmed = true;
+  }
+  closeCancelled = false;
+  closeWindowCancelled() {
+    this.closeCancelled = true;
   }
   rendererReady() {
     this.readyCalls++;
@@ -470,6 +481,61 @@ export class FakeBridge implements BaaBridge {
   }
   emitPlcScanEvent(e: PlcScanEvent): void {
     for (const cb of [...this.plcScanCbs]) cb(e);
+  }
+  updateInfoValue: UpdateInfoView = {
+    enabled: false,
+    prereleaseBuild: false,
+    current: '0.0.0',
+    platform: 'win32',
+    mode: 'none',
+  };
+  updateStateValue: UpdateEvent | null = null;
+  updatePrefsCalls: UpdatePrefs[] = [];
+  updateCalls: string[] = [];
+  updateCanInstallValue: UpdateCanInstall = { ok: true };
+  private updateCbs = new Set<(e: UpdateEvent) => void>();
+  async updateInfo() {
+    return this.updateInfoValue;
+  }
+  async updateState() {
+    return this.updateStateValue;
+  }
+  async updateSetPrefs(p: UpdatePrefs) {
+    this.updatePrefsCalls.push(p);
+  }
+  async updateCheck() {
+    this.updateCalls.push('check');
+  }
+  async updateDownload() {
+    this.updateCalls.push('download');
+  }
+  async updateCancelDownload() {
+    this.updateCalls.push('cancel');
+  }
+  async updateCanInstall() {
+    return this.updateCanInstallValue;
+  }
+  async updateInstall(): Promise<{ ok: false; reason: 'busy' | 'notReady' } | undefined> {
+    this.updateCalls.push('install');
+    return { ok: false, reason: 'notReady' };
+  }
+  async updateShowInFolder() {
+    this.updateCalls.push('showInFolder');
+  }
+  async updateLater(version: string) {
+    this.updateCalls.push(`later:${version}`);
+  }
+  async updateOpenNotes(version: string) {
+    this.updateCalls.push(`notes:${version}`);
+  }
+  onUpdateEvent(cb: (e: UpdateEvent) => void) {
+    this.updateCbs.add(cb);
+    return () => {
+      this.updateCbs.delete(cb);
+    };
+  }
+  emitUpdateEvent(e: UpdateEvent): void {
+    for (const cb of [...this.updateCbs]) cb(e);
   }
   async testOverrides() {
     return this.testOverridesValue;

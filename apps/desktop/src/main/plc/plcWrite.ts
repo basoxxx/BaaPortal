@@ -310,6 +310,11 @@ export class PlcWriteService {
     return this.restoringCpus.has(cpuKey(access));
   }
 
+  /** C'è un ripristino in corso su una qualunque CPU (conta come lavoro sul PLC per `busy`). */
+  restoring(): boolean {
+    return this.restoringCpus.size > 0;
+  }
+
   /** C'è una scrittura con il collegamento aperto (serve all'uscita dall'app). */
   writing(): boolean {
     return [...this.ops.values()].some((op) => op.stage === 'running');
@@ -333,6 +338,11 @@ export class PlcWriteService {
   interrupt(owner: PlcOwner): void {
     const op = this.ops.get(owner);
     if (op) op.aborted = true;
+  }
+
+  /** Annulla `abortAll`: l'uscita o l'aggiornamento sono stati rinviati. */
+  resume(): void {
+    this.closing = false;
   }
 
   async abortAll(): Promise<void> {

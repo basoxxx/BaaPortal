@@ -6,6 +6,7 @@ import type {
   PlcScanEvent,
   PlcWriteProgress,
   PlcUploadProgress,
+  UpdateEvent,
 } from '@baaportal/ui';
 import type { RawBridge } from '../shared/rawBridge';
 
@@ -38,6 +39,7 @@ const bridge: RawBridge = {
   onOpenFileRequest: (cb) => subscribe<[string]>('app:open-file', cb),
   onCloseRequest: (cb) => subscribe<[]>('app:close-requested', cb),
   closeWindowConfirmed: () => ipcRenderer.send('window:close-confirmed'),
+  closeWindowCancelled: () => ipcRenderer.send('window:close-cancelled'),
   rendererReady: () => ipcRenderer.send('app:renderer-ready'),
   clipboardWriteText: (text) => ipcRenderer.send('clipboard:write-text', text),
   clipboardReadText: () => ipcRenderer.invoke('clipboard:read-text'),
@@ -88,6 +90,18 @@ const bridge: RawBridge = {
   plcRestorePlan: () => ipcRenderer.invoke('plc:restorePlan'),
   plcRestore: (req) => ipcRenderer.invoke('plc:restore', req),
   plcRestoreInterrupt: () => ipcRenderer.invoke('plc:restoreInterrupt'),
+  updateInfo: () => ipcRenderer.invoke('update:info'),
+  updateState: () => ipcRenderer.invoke('update:state'),
+  updateSetPrefs: (p) => ipcRenderer.invoke('update:prefs', p),
+  updateCheck: () => ipcRenderer.invoke('update:check'),
+  updateDownload: () => ipcRenderer.invoke('update:download'),
+  updateCancelDownload: () => ipcRenderer.invoke('update:cancelDownload'),
+  updateCanInstall: () => ipcRenderer.invoke('update:canInstall'),
+  updateInstall: () => ipcRenderer.invoke('update:install'),
+  updateShowInFolder: () => ipcRenderer.invoke('update:showInFolder'),
+  updateLater: (version) => ipcRenderer.invoke('update:later', version),
+  updateOpenNotes: (version) => ipcRenderer.invoke('update:openNotes', version),
+  onUpdateEvent: (cb) => subscribe<[UpdateEvent]>('update:event', cb),
   testOverrides: () => ipcRenderer.invoke('app:test-overrides'),
 };
 

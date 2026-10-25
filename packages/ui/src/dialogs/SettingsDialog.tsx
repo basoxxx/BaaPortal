@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Dialog } from '../components/Dialog';
 import { i18next } from '../i18n';
+import { useUpdateState } from '../update/updateController';
 import {
   DEFAULT_SETTINGS,
   FONT_SIZES,
@@ -26,11 +27,18 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 /** Impostazioni dell'applicazione: si modifica una bozza, applicata solo con OK. Non fanno parte del progetto. */
 export function SettingsDialog({ onClose }: { onClose(): void }) {
   const { t } = useTranslation();
+  const { info } = useUpdateState();
+  const updatesOn = info?.enabled === true;
   const [draft, setDraft] = useState<Settings>(() => structuredClone(getSettings()));
   const general = (patch: Partial<Settings['general']>) =>
     setDraft((d) => ({ ...d, general: { ...d.general, ...patch } }));
   const editor = (patch: Partial<Settings['editor']>) =>
     setDraft((d) => ({ ...d, editor: { ...d.editor, ...patch } }));
+
+  const updates = (patch: Partial<Settings['updates']>) =>
+    setDraft((d) => ({ ...d, updates: { ...d.updates, ...patch } }));
+  // Senza valore esplicito la casella segue il canale della build.
+  const prereleaseShown = draft.updates.prerelease ?? info?.prereleaseBuild ?? false;
 
   const apply = () => {
     saveSettings(draft);
@@ -186,6 +194,33 @@ export function SettingsDialog({ onClose }: { onClose(): void }) {
             />
           </Row>
           <p className="baa-settings-note">{t('settings.online.note')}</p>
+        </section>
+        <section data-testid="settings-updates">
+          <h3>{t('settings.updates')}</h3>
+          <Row label={t('settings.updatesCheck')}>
+            <input
+              type="checkbox"
+              disabled={!updatesOn}
+              checked={draft.updates.checkOnStartup}
+              onChange={(e) => updates({ checkOnStartup: e.target.checked })}
+            />
+          </Row>
+          <Row label={t('settings.updatesPrerelease')}>
+            <input
+              type="checkbox"
+              disabled={!updatesOn}
+              checked={prereleaseShown}
+              onChange={(e) => updates({ prerelease: e.target.checked })}
+            />
+          </Row>
+          {info ? (
+            <p>
+              {info.prereleaseBuild
+                ? t('settings.updatesChannelBeta')
+                : t('settings.updatesChannelStable')}
+            </p>
+          ) : null}
+          {updatesOn ? null : <p>{t('settings.updatesDisabled')}</p>}
         </section>
       </div>
     </Dialog>

@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, Menu } from 'electron';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { registerIpc } from './ipc';
+import { OnlineCloseLatch } from './onlineCloseLatch';
 import { createInterruptAsk, WriteCloseGuard } from './plc/closeGuard';
 import { startTestPlc } from './plc/testPlc';
 import type { Platform } from './recentProjects';
@@ -45,6 +46,8 @@ let win: BrowserWindow | null = null;
 let allowClose = false;
 let rendererIsReady = false;
 let writeGuard: WriteCloseGuard | undefined;
+// Chiusura annullata dalla conferma di scrittura: il collegamento online torna utilizzabile.
+let closeCancelled = (): void => undefined;
 const pendingOpen: string[] = [];
 
 const isBaap = (p: string) => p.toLowerCase().endsWith('.baap');
@@ -122,6 +125,7 @@ function createWindow(): void {
       e.preventDefault();
       void writeGuard.confirm().then((yes) => {
         if (yes) win?.close();
+        else closeCancelled();
       });
       return;
     }
@@ -195,6 +199,8 @@ if (!app.requestSingleInstanceLock()) {
   }
   app.on('window-all-closed', () => app.quit());
 
+  const online = new OnlineCloseLatch();
+  let quitUndo: { allowClose: boolean; onlineClosed: boolean } | null = null;
   const ipc = registerIpc(
     () => win,
     trust,
@@ -206,7 +212,25 @@ if (!app.requestSingleInstanceLock()) {
       rendererIsReady = true;
       for (const p of pendingOpen.splice(0)) win?.webContents.send('app:open-file', p);
     },
+    // Uscita per aggiornamento: l'installatore parte da solo, né la finestra né before-quit rimandano.
+    () => {
+      quitUndo = { allowClose, onlineClosed: online.closed };
+      allowClose = true;
+      online.closed = true;
+    },
+    // Installazione fallita o rinviata: si torna com'era prima di prepareQuit.
+    () => {
+      if (!quitUndo) return;
+      allowClose = quitUndo.allowClose;
+      online.closed = quitUndo.onlineClosed;
+      quitUndo = null;
+    },
+    // Chiusura annullata («Annulla» al salvataggio): il collegamento online torna utilizzabile.
+    () => {
+      if (!quitUndo) online.cancel(() => ipc.resume());
+    },
   );
+  closeCancelled = () => online.cancel(() => ipc.resume());
   writeGuard = new WriteCloseGuard(
     () => ipc.writing(),
     createInterruptAsk(dialog, () => win),
@@ -214,19 +238,21 @@ if (!app.requestSingleInstanceLock()) {
   );
   // Prima di uscire si chiude il collegamento online (al massimo 1 s), poi si esce davvero. Con una
   // scrittura nella CPU in corso si ferma prima del blocco successivo (al massimo 15 s).
-  let onlineClosed = false;
   app.on('before-quit', (e) => {
     // Anche l'uscita (Cmd+Q) chiede prima di interrompere una scrittura in corso.
     if (writeGuard?.needsConfirm()) {
       e.preventDefault();
       void writeGuard.confirm().then((yes) => {
         if (yes) app.quit();
+        else online.cancel(() => ipc.resume());
       });
       return;
     }
-    if (onlineClosed) return;
+    // Uscendo, un eventuale scaricamento si interrompe e il suo file parziale si cancella.
+    ipc.abortDownload();
+    if (online.closed) return;
     e.preventDefault();
-    onlineClosed = true;
+    online.closed = true;
     const cap = new Promise<void>((r) => setTimeout(r, ipc.writing() ? 15000 : 1000));
     void Promise.race([ipc.closeOnline().catch(() => undefined), cap]).finally(() => app.quit());
   });

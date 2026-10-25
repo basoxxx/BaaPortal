@@ -1,5 +1,6 @@
 import { defineConfig } from 'electron-vite';
 import react from '@vitejs/plugin-react';
+import { prereleaseBuild } from './src/main/update/buildChannel';
 
 // CSP rigida solo nelle build di produzione: in sviluppo il plugin React inietta uno script inline.
 const productionCsp = {
@@ -19,6 +20,9 @@ const productionCsp = {
 
 export default defineConfig({
   main: {
+    define: {
+      __BAA_PRERELEASE_BUILD__: JSON.stringify(prereleaseBuild(process.env.BAAPORTAL_PRERELEASE)),
+    },
     resolve: {
       // La build per Node di fflate dichiara `require` e collide con lo shim CommonJS di electron-vite;
       // il kit usa solo le funzioni sincrone, uguali nella build "browser" (JavaScript puro).
