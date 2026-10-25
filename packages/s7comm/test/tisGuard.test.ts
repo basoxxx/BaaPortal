@@ -3,7 +3,12 @@ import {
   MGMT_PARAM,
   assertOnlineTest,
   assertOnlineWrite,
+  assertOutgoingFrame,
   assertReadOnly,
+  blockStatusProblem,
+  encodeCotp,
+  encodeS7,
+  encodeTpkt,
   encodeInsertBlock,
   encodePlcStop,
   encodeRequestDownload,
@@ -13,6 +18,7 @@ import {
   reqDeleteJob,
   reqEnableJob,
   reqReadJobList,
+  reqReadSzl,
   reqStack,
   type BlockStatusRequest,
   type S7Pdu,
@@ -78,7 +84,15 @@ describe('assertOnlineTest', () => {
   });
 
   it('continua ad ammettere ciò che ammette la sola lettura', () => {
+    expect(() => assertOnlineTest(ud(reqReadSzl(0x0131, 2)), 240)).not.toThrow();
     expect(() => assertOnlineTest(job(Uint8Array.of(0xf0)), 240)).toThrow(); // setup non canonico
+  });
+
+  it('rifiuta 24 righe con maschera 0x03 e maschera iniziale 0x0F con PDU 240', () => {
+    const r = { ...lines(24, 0x03), initMask: 0x0f };
+    expect(() => assertOnlineTest(ud(reqBlockStatus(r, 0x80)), 240)).toThrowError(forbidden);
+    expect(blockStatusProblem(r, 0x80, 240)).toBeDefined();
+    expect(blockStatusProblem(lines(24, 0x03), 0x80, 240)).toBeUndefined();
   });
 
   it('rifiuta block status non canonici', () => {
@@ -155,6 +169,25 @@ describe('assertOnlineTest', () => {
       job(encodeInsertBlock('DB', 1, 'P')),
     ];
     for (const p of bad) expect(() => assertOnlineTest(p, 240)).toThrowError(forbidden);
+  });
+
+  it('online-restore (provvisorio) ammette solo la lettura: rifiuta write var, download e PI', () => {
+    const dt = (p: S7Pdu): Uint8Array =>
+      encodeTpkt(encodeCotp({ type: 'DT', eot: true, data: encodeS7(p) }));
+    const w = encodeWriteRequest([
+      { area: 'M', db: 0, start: 0, size: 'BYTE', count: 1, data: Uint8Array.of(1) },
+    ]);
+    for (const p of [
+      job(w.param, w.data),
+      job(encodeRequestDownload('DB', 1, 'P', 100, 2)),
+      job(encodePlcStop()),
+      job(encodeInsertBlock('DB', 1, 'P')),
+    ]) {
+      expect(() => assertOutgoingFrame(dt(p), 'online-restore', 240)).toThrowError(forbidden);
+    }
+    expect(() =>
+      assertOutgoingFrame(dt(ud(reqReadSzl(0x0131, 2))), 'online-restore', 240),
+    ).not.toThrow();
   });
 
   it('read-only e online-write rifiutano lista dei job e block status', () => {

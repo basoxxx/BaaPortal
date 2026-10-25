@@ -19,7 +19,7 @@ import {
   parseBlockFile,
   type TransportFactory,
 } from '@baaportal/s7comm';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { SimCpu, connectToSim, simBackend, type SimCpuOptions } from '../src';
 import { buildFiles, buildProgram } from './programHelpers';
 
@@ -331,6 +331,23 @@ describe('CPU simulata: funzioni di test TIS', () => {
     expect(dec.lines[1]).toBeNull();
     expect(dec.lines[3]).toMatchObject({ accu1: 5 });
     await c.close();
+  });
+
+  it("senza cicli l'osservazione scade e non blocca quella dopo", async () => {
+    vi.useFakeTimers();
+    try {
+      const cpu = runningCpu([{ kind: 'OB', number: 1, networks: ['\tL 5;\n\tT MW 10;'] }]);
+      const b = simBackend(cpu);
+      const first = b.blockStatus!('OB', 1, [{ offset: 0, mask: 3 }]);
+      const second = b.blockStatus!('OB', 1, [{ offset: 0, mask: 3 }]);
+      await vi.advanceTimersByTimeAsync(3000);
+      await expect(first).resolves.toBeUndefined();
+      await vi.advanceTimersByTimeAsync(3000);
+      await expect(second).resolves.toBeUndefined();
+      expect(cpu.monitorSnapshot()).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('FC mai chiamato → nessuna indication; il monitor torna libero', async () => {

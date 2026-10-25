@@ -36,7 +36,7 @@ const E = {
   BAD_PARAM: 0xd0ab,
 } as const;
 
-/** Job di test per CPU (proto §18.4.1: da 4 in su la CPU risponde "lista dei job piena"). */
+/** Scelta del server di prova: §18.4.1 non dà il massimo dei job di una CPU reale (sconosciuto). */
 const MAX_JOBS = 4;
 /** Scelta del server di prova: i dati troncati di `tisMalformed` sono lunghi 7 byte. */
 const MALFORMED_BYTES = 7;

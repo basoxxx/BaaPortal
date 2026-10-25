@@ -106,6 +106,7 @@ describe('indication in modo online-test', () => {
     conn.discardIndications(1, 0x13, 3);
     indicate(cpu, 0x13, 3);
     await flush();
+    expect(conn.ignoredCount).toBe(1);
     vi.useFakeTimers();
     const p = conn.nextIndication({ group: 1, sub: 0x13, seq: 3 }, 100);
     await vi.advanceTimersByTimeAsync(150);

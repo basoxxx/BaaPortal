@@ -1,6 +1,5 @@
 import { hex, readU16, writeU16 } from '../bytes';
 import { S7Error } from '../errors';
-import { blockTypeFromCode, type BlockType } from './blocks';
 import { decodeUserdata } from './userdata';
 import type { UserdataFrame } from './userdataRequests';
 
@@ -253,6 +252,10 @@ export function blockStatusProblem(
   if (r.lines.length > maxBlockStatusLines(pduLength, mask)) {
     return `${r.lines.length} righe oltre il limite della PDU`;
   }
+  // con la maschera iniziale più larga la formula sopra non basta: si controlla il risultato vero
+  if (blockStatusResultSize(r) > pduLength - 34 || 62 + 4 * r.lines.length > pduLength) {
+    return 'risultato o richiesta oltre la PDU';
+  }
   for (const [i, l] of r.lines.entries()) {
     if (l.offset % 2 !== 0) return 'offset dispari';
     if (i > 0 && l.offset <= r.lines[i - 1]!.offset) return 'offset non crescenti';
@@ -302,7 +305,7 @@ export function decodeTisReply(param: Uint8Array, data: Uint8Array): TisReply {
     job: u.param.sequence,
     errorCode: u.param.errorCode ?? 0,
   };
-  if (data.length >= 4 && data[1] === 0x09) {
+  if (data.length >= 4 && data[0] === 0xff && data[1] === 0x09) {
     const split = splitTisPayload(data.subarray(4));
     if (split) {
       reply.tisParam = split.tisParam;
@@ -452,9 +455,4 @@ export function tisErrorText(code: number): string {
   return (
     TIS_ERRORS.get(code)?.text ?? `errore TIS 0x${code.toString(16).toUpperCase().padStart(4, '0')}`
   );
-}
-
-/** Nome del tipo di blocco dal codice di §18.2 (`undefined` se sconosciuto). */
-export function tisBlockType(code: number): BlockType | undefined {
-  return blockTypeFromCode(code);
 }

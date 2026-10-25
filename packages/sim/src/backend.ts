@@ -59,6 +59,8 @@ const EPOCH_2000: S7DateTime = {
 
 /** Quanti record di diagnostica e di cambi di modo il buffer tiene (come i 100 della CPU). */
 const MAX_LOG = 200;
+/** Attesa massima di un ciclo per l'osservazione di un blocco. */
+const OBSERVE_TIMEOUT_MS = 3000;
 
 /** Legge `len` byte (o i bit) di `buf` secondo `it`; `rc` 0x05 se fuori area. */
 function sliceOf(buf: Uint8Array, it: ReadItem, len: number): ItemRead {
@@ -178,7 +180,10 @@ export function simBackend(
   cpu.onEvent((e) => {
     if (e.type === 'mode') emit({ kind: 'mode' });
   });
-  /** Un'osservazione alla volta: il monitor della CPU e' uno solo. */
+  /**
+   * Un'osservazione alla volta: il monitor della CPU e' uno solo, quindi un'osservazione online
+   * sullo stesso `SimCpu` sostituisce (e alla fine azzera) il monitor dell'editor.
+   */
   let observing: Promise<unknown> = Promise.resolve();
 
   /** Registri della riga dal passo del monitor, secondo la maschera chiesta. */
@@ -199,9 +204,16 @@ export function simBackend(
   ): Promise<(Regs | null)[] | undefined> =>
     new Promise((resolve) => {
       if (cpu.mode !== 'RUN') return resolve(undefined);
-      cpu.setMonitor({ kind: type, number });
+      cpu.setMonitor({ kind: type, number, last: true }); // §18.4.1: ultimo passaggio
+      // senza cicli la catena non deve restare appesa
+      const timer = setTimeout(() => {
+        off();
+        cpu.setMonitor(undefined);
+        resolve(undefined);
+      }, OBSERVE_TIMEOUT_MS);
       const off = cpu.onEvent((e) => {
         if (e.type !== 'cycle' && e.type !== 'mode') return;
+        clearTimeout(timer);
         off();
         const steps = e.type === 'cycle' ? cpu.monitorSnapshot() : undefined;
         cpu.setMonitor(undefined);

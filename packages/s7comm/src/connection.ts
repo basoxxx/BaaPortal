@@ -356,7 +356,10 @@ export class S7Connection {
       }
     }
     if (!d) return this.#ignore(pdu);
-    if (this.#deadJobs.has(`${d.param.group}/${d.param.subfunction}/${d.param.sequence}`)) return;
+    if (this.#deadJobs.has(`${d.param.group}/${d.param.subfunction}/${d.param.sequence}`)) {
+      this.ignoredCount++;
+      return;
+    }
     const w = this.#indicationWaiters.find((x) => matches(d, x.match));
     if (w) return this.#endWaiter(w, undefined, d);
     this.#indications.push(d);

@@ -36,6 +36,8 @@ export interface MonitorStep {
 export interface MonitorRequest {
   kind: 'OB' | 'FB' | 'FC';
   number: number;
+  /** Tiene l'ultima esecuzione di ogni offset nel ciclo (proto §18.4.1) invece della prima. */
+  last?: boolean;
 }
 
 /** Registro dell'osservazione condiviso dai contesti di esecuzione del ciclo. */
@@ -131,10 +133,10 @@ function restore(st: ExecState, s: Saved): void {
 
 /** Registra lo stato del blocco osservato; solo la prima esecuzione dell'offset nel ciclo. */
 function recordStep(mon: MonitorSink, st: ExecState, at: number): void {
-  if (mon.seen.has(at)) return;
+  if (mon.seen.has(at) && !mon.last) return;
   mon.seen.add(at);
   const { regs } = st;
-  mon.steps.push({
+  const step = {
     offset: at,
     rlo: regs.stw.rlo,
     sta: regs.stw.sta,
@@ -144,7 +146,10 @@ function recordStep(mon: MonitorSink, st: ExecState, at: number): void {
     ar1: regs.ar1,
     db: regs.db,
     di: regs.di,
-  });
+  };
+  const prev = mon.last ? mon.steps.findIndex((x) => x.offset === at) : -1;
+  if (prev >= 0) mon.steps[prev] = step;
+  else mon.steps.push(step);
 }
 
 /** Ogni quante istruzioni si controlla il tempo di ciclo (Global Constraints, piano 2A). */

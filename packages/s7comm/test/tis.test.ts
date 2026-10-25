@@ -226,6 +226,13 @@ describe('risposte e liste', () => {
     expect(hex(r.tisData!)).toBe('aabbccdd');
   });
 
+  it('return code dei dati diverso da ff → nessuna parte TIS', () => {
+    const data = fromHex('0a09 0008 0004 0004 01000001 aabbccdd'.replace(/ /g, ''));
+    const r = decodeTisReply(hdr('01', '13', '03'), data);
+    expect(r.tisParam).toBeUndefined();
+    expect(r.tisData).toBeUndefined();
+  });
+
   it("risposta con dati subito (job list) e codice d'errore", () => {
     const r = decodeTisReply(
       hdr('81', '10', '03'),

@@ -61,7 +61,7 @@ import {
 /**
  * Modo della connessione, fissato all'apertura (mai modificabile su una connessione viva).
  * `online-test` ammette in più le funzioni di test TIS (proto §18); `online-restore` è il modo
- * del ripristino (il suo filtro è del Task 6: per ora coincide con `online-write`).
+ * del ripristino (il suo filtro è del Task 6: per ora coincide con la sola lettura).
  */
 export type ConnectionMode = 'read-only' | 'online-write' | 'online-test' | 'online-restore';
 
@@ -427,10 +427,10 @@ export function assertOutgoingFrame(
         const raw = payload.subarray(3);
         const pdu = decodeS7(raw);
         if (!sameBytes(raw, encodeS7(pdu))) refuse('intestazione S7 non canonica');
-        // provvisorio: il filtro di `online-restore` arriva con il Task 6
-        if (mode === 'online-write' || mode === 'online-restore') assertOnlineWrite(pdu);
+        // provvisorio: finché non arriva il filtro del Task 6, `online-restore` ammette solo la lettura
+        if (mode === 'online-write') assertOnlineWrite(pdu);
         else if (mode === 'online-test') assertOnlineTest(pdu, pduLength);
-        else if (mode === 'read-only') assertReadOnly(pdu);
+        else if (mode === 'read-only' || mode === 'online-restore') assertReadOnly(pdu);
         else refuse(`modo "${String(mode)}" sconosciuto`);
         return;
       }
