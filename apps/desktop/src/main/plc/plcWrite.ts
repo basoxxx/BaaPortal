@@ -120,6 +120,11 @@ function listLines(lines: string[]): string {
   );
 }
 
+/** Identifica una CPU: indirizzo, porta, rack e slot. */
+function cpuKey(a: PlcAccess): string {
+  return `${a.host.toLowerCase()}:${a.port ?? DEFAULT_PORT}/${a.rack}/${a.slot}`;
+}
+
 function errText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
@@ -144,6 +149,8 @@ type Prepared =
  */
 export class PlcWriteService {
   private readonly ops = new Map<PlcOwner, Op>();
+  /** Le CPU (host:porta/rack/slot) con una scrittura in corso, da qualunque finestra. */
+  private readonly busyCpus = new Set<string>();
   /** Dopo `abortAll` (uscita dall'app) non parte più nessuna scrittura. */
   private closing = false;
   private readonly connectFn: PlcWriteConnectFn;
@@ -177,9 +184,10 @@ export class PlcWriteService {
 
   async download(
     owner: PlcWriteOwner,
-    files: Uint8Array[],
-    opts: { deleteBlocks?: PlcBlockRef[] } = {},
+    files: unknown,
+    opts: unknown = {},
   ): Promise<PlcDownloadResult> {
+    // L'unico controllo dei dati del renderer: il canale IPC li passa così come arrivano.
     const req = parseDownloadRequest(files, opts);
     if (typeof req === 'string') return fail(req);
     const names: string[] = [];
@@ -217,7 +225,7 @@ export class PlcWriteService {
     ];
     return this.exclusive<PlcDownloadResult>(
       owner,
-      fail('Operazione già in corso'),
+      (m) => fail(m),
       (err) => fail(errText(err)), // mai un'eccezione verso il renderer
       async (op) => {
         const p = await this.prepare(owner, op, (t) => ({
@@ -237,7 +245,7 @@ export class PlcWriteService {
     const t = CONTROL_TEXTS[cmd];
     return this.exclusive<PlcControlResult>(
       owner,
-      { ok: false, error: 'Operazione già in corso' },
+      (m) => ({ ok: false, error: m }),
       (err) => ({ ok: false, error: errText(err) }),
       async (op) => {
         const p = await this.prepare(owner, op, (target) => ({
@@ -258,15 +266,24 @@ export class PlcWriteService {
     );
   }
 
-  /** Una scrittura per finestra, anche durante la conferma; registra l'operazione per `abortAll`. */
+  /**
+   * Una scrittura per finestra, anche durante la conferma, e una per CPU fra tutte le finestre;
+   * registra l'operazione per `abortAll`.
+   */
   private async exclusive<R>(
     owner: PlcOwner,
-    busy: R,
+    busy: (message: string) => R,
     onError: (err: unknown) => R,
     fn: (op: Op) => Promise<R>,
   ): Promise<R> {
     if (this.closing) return onError(new Error('Chiusura in corso'));
-    if (this.ops.has(owner)) return busy;
+    if (this.ops.has(owner)) return busy('Operazione già in corso');
+    const t = this.o.service.target(owner);
+    const cpu = t && cpuKey(t.access);
+    if (cpu !== undefined && this.busyCpus.has(cpu)) {
+      return busy('Operazione già in corso su questa CPU');
+    }
+    if (cpu !== undefined) this.busyCpus.add(cpu);
     let settle!: () => void;
     const op: Op = {
       aborted: false,
@@ -280,6 +297,7 @@ export class PlcWriteService {
       return onError(err);
     } finally {
       this.ops.delete(owner);
+      if (cpu !== undefined) this.busyCpus.delete(cpu);
       settle();
     }
   }

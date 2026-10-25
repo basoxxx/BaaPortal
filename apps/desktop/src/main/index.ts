@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, Menu } from 'electron';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { registerIpc } from './ipc';
+import { createInterruptAsk, WriteCloseGuard } from './plc/closeGuard';
 import { startTestPlc } from './plc/testPlc';
 import type { Platform } from './recentProjects';
 import { isTrustedUrl, type TrustOptions } from './trust';
@@ -43,6 +44,7 @@ const EDITOR_FRAME_NAME = /^baa-editor-[A-Za-z0-9-]+$/;
 let win: BrowserWindow | null = null;
 let allowClose = false;
 let rendererIsReady = false;
+let writeGuard: WriteCloseGuard | undefined;
 const pendingOpen: string[] = [];
 
 const isBaap = (p: string) => p.toLowerCase().endsWith('.baap');
@@ -115,6 +117,14 @@ function createWindow(): void {
   });
   // Se il renderer non è pronto (avvio fallito, crash, caricamento) non c'è chi possa confermare: si chiude.
   win.on('close', (e) => {
+    // Con una scrittura nella CPU in corso si chiede prima di tutto, anche dopo la conferma del renderer.
+    if (writeGuard?.needsConfirm()) {
+      e.preventDefault();
+      void writeGuard.confirm().then((yes) => {
+        if (yes) win?.close();
+      });
+      return;
+    }
     if (allowClose || !rendererIsReady || win?.webContents.isCrashed()) return;
     e.preventDefault();
     win?.webContents.send('app:close-requested');
@@ -197,10 +207,22 @@ if (!app.requestSingleInstanceLock()) {
       for (const p of pendingOpen.splice(0)) win?.webContents.send('app:open-file', p);
     },
   );
+  writeGuard = new WriteCloseGuard(
+    () => ipc.writing(),
+    createInterruptAsk(dialog, () => win),
+  );
   // Prima di uscire si chiude il collegamento online (al massimo 1 s), poi si esce davvero. Con una
   // scrittura nella CPU in corso si ferma prima del blocco successivo (al massimo 15 s).
   let onlineClosed = false;
   app.on('before-quit', (e) => {
+    // Anche l'uscita (Cmd+Q) chiede prima di interrompere una scrittura in corso.
+    if (writeGuard?.needsConfirm()) {
+      e.preventDefault();
+      void writeGuard.confirm().then((yes) => {
+        if (yes) app.quit();
+      });
+      return;
+    }
     if (onlineClosed) return;
     e.preventDefault();
     onlineClosed = true;

@@ -745,6 +745,53 @@ describe('registerPlc: canali di scrittura', () => {
   });
 });
 
+describe('PlcWriteService: una scrittura per CPU fra tutte le finestre', () => {
+  const target = (host = '192.0.2.10', slot = 2) => ({
+    access: { host, rack: 0, slot, connectionType: 'PG' as const },
+    identity: { orderNumber: '6ES7 315-2EH14-0AB0' },
+    linkId: 1,
+  });
+
+  it("la seconda finestra sulla stessa CPU è rifiutata; un'altra CPU o a fine operazione no", async () => {
+    const a = new FakeOwner();
+    const b = new FakeOwner();
+    const c = new FakeOwner();
+    const targets = new Map<unknown, ReturnType<typeof target>>([
+      [a, target()],
+      [b, target('192.0.2.10')],
+      [c, target('192.0.2.11')],
+    ]);
+    const releases: ((v: boolean) => void)[] = [];
+    const confirm = vi.fn<ConfirmFn>(() => new Promise<boolean>((r) => releases.push(r)));
+    const writes = new PlcWriteService({
+      service: { target: (o) => targets.get(o) },
+      confirm,
+    });
+    const first = writes.control(a, 'STOP');
+    await vi.waitFor(() => expect(confirm).toHaveBeenCalledTimes(1));
+    expect(await writes.control(b, 'RUN')).toEqual({
+      ok: false,
+      error: 'Operazione già in corso su questa CPU',
+    });
+    expect(await writes.download(b, [compile('FC', 1)])).toMatchObject({
+      ok: false,
+      error: 'Operazione già in corso su questa CPU',
+    });
+    expect(confirm).toHaveBeenCalledTimes(1);
+    // Un'altra CPU non è bloccata.
+    const other = writes.control(c, 'RUN');
+    await vi.waitFor(() => expect(confirm).toHaveBeenCalledTimes(2));
+    releases.forEach((r) => r(false));
+    await first;
+    await other;
+    // Finita la prima, la CPU è libera.
+    const again = writes.control(b, 'RUN');
+    await vi.waitFor(() => expect(confirm).toHaveBeenCalledTimes(3));
+    releases[2]!(false);
+    expect(await again).toEqual({ ok: false, cancelled: true });
+  });
+});
+
 describe('parseDownloadRequest: dimensione complessiva', () => {
   it('oltre 32 MB in totale è rifiutato', () => {
     const f = new Uint8Array(1024 * 1024);

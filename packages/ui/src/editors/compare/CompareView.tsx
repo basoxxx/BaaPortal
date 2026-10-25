@@ -136,7 +136,11 @@ export function CompareView({ editor }: { editor: EditorRef }) {
   if (!block) return null;
   const dash = '-';
   const fromSource = leftDecoded === null;
-  const notCompiled = offlineFile === undefined ? t('compareView.notCompiled') : undefined;
+  // Un compilato c'è ma non è più quello del sorgente: «non aggiornata», non «non compilato».
+  const notCompiled =
+    offlineFile !== undefined
+      ? undefined
+      : t(compile.files[block.id] ? 'compareView.staleCompile' : 'compareView.notCompiled');
   const num = (v: number | undefined) => (v === undefined ? dash : String(v));
   const hex = (v: number | undefined) =>
     v === undefined ? dash : `0x${v.toString(16).toUpperCase().padStart(4, '0')}`;

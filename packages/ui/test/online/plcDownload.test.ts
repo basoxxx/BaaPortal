@@ -4,6 +4,7 @@ import { parseBlockFile } from '@baaportal/s7comm';
 import { commands } from '../../src/commands/commands';
 import type { PlcDownloadResult } from '../../src/online/plcTypes';
 import { createInstanceDb, findDevice, type CodeBlock } from '@baaportal/project';
+import { runWarning, type DownloadRow } from '../../src/online/plcDownload';
 import { PLC, cpuBlock, runDownload, setupOnline } from './downloadHelpers';
 
 const st = (app: Awaited<ReturnType<typeof setupOnline>>['app']) => app.store.getState();
@@ -366,4 +367,75 @@ describe('Carica nel dispositivo (PLC vero)', () => {
     );
     expect(order).toEqual(['DB8', 'FB7']);
   }, 30_000);
+});
+
+describe('Carica nel dispositivo: esiti dopo un STOP', () => {
+  it('annullato dopo il nostro STOP: non dice «nessuna modifica»', async () => {
+    const { app } = await setupOnline([['OB', 35]]);
+    app.bridge.plcDownloadResults.push({ ok: false, cancelled: true });
+    await runDownload(app);
+    await ok();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Arresta la CPU' }));
+    await press();
+    const res = await screen.findByTestId('download-result');
+    expect(res).toHaveTextContent('Caricamento annullato. CPU lasciata in STOP.');
+    expect(res).not.toHaveTextContent('nessuna modifica');
+  }, 30_000);
+
+  it('collegamento perso dopo il STOP riuscito: «CPU arrestata, nessun blocco caricato»', async () => {
+    const { app } = await setupOnline([['OB', 35]]);
+    app.bridge.plcControl = async () => {
+      await commands['online.goOffline'].run({
+        store: app.store,
+        service: app.service,
+        bridge: app.bridge,
+      });
+      return { ok: true, result: 'STOP' } as never;
+    };
+    await runDownload(app);
+    await ok();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Arresta la CPU' }));
+    await press();
+    const res = await screen.findByTestId('download-result');
+    expect(res).toHaveTextContent(
+      'CPU arrestata, nessun blocco caricato: collegamento o progetto cambiati.',
+    );
+    expect(app.bridge.plcDownloadCalls).toHaveLength(0);
+  }, 30_000);
+});
+
+describe('runWarning', () => {
+  const row = (
+    type: DownloadRow['type'],
+    state: DownloadRow['state'],
+    cpuOnly = false,
+  ): DownloadRow => ({
+    key: `${type}1`,
+    type,
+    number: 1,
+    state,
+    ...(cpuOnly ? {} : { blockId: 'b' }),
+  });
+  const warn = (r: DownloadRow, mode = 'RUN') => runWarning([r], new Set([r.key]), mode);
+
+  it('cancellare un FC solo della CPU in RUN avvisa', () => {
+    expect(warn(row('FC', 'onlineOnly', true))).toBe(true);
+  });
+  it('un DB non leggibile in RUN avvisa', () => {
+    expect(warn(row('DB', 'unreadable'))).toBe(true);
+  });
+  it('FC diverso, FB uguale o nuovo: nessun avviso; modo STOP: mai', () => {
+    expect(warn(row('FC', 'different'))).toBe(false);
+    expect(warn(row('FB', 'same'))).toBe(false);
+    expect(warn(row('DB', 'offlineOnly'))).toBe(false);
+    expect(warn(row('FC', 'onlineOnly', true), 'STOP')).toBe(false);
+  });
+  it('OB e modo ignoto avvisano ancora', () => {
+    expect(warn(row('OB', 'same'))).toBe(true);
+    expect(warn(row('DB', 'different'), 'UNKNOWN')).toBe(true);
+  });
+  it('riga non spuntata: nessun avviso', () => {
+    const r = row('FC', 'onlineOnly', true);
+    expect(runWarning([r], new Set(), 'RUN')).toBe(false);
+  });
 });

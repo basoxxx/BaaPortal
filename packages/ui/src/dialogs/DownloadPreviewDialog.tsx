@@ -15,6 +15,10 @@ import type { PlcWriteProgress } from '../online/plcTypes';
 import { useAppStore, useServices } from '../state/AppContext';
 import './settingsDialog.css';
 
+/** Un annullamento con la CPU rimasta in STOP non è «nessuna modifica». */
+const resultKey = (o: DownloadOutcome) =>
+  o.status === 'cancelled' && o.cpuStopped ? 'cancelledStopped' : o.status;
+
 /**
  * «Carica nel dispositivo» con la CPU vera: una riga per blocco con lo stato del confronto e
  * l'azione (Carica / Nessuna azione / Cancella). «Carica» esegue; l'avanzamento e l'esito
@@ -182,7 +186,7 @@ export function DownloadPreviewDialog({ plan, onClose }: { plan: DownloadPlan; o
         ) : null}
         {outcome ? (
           <div role={outcome.status === 'done' ? 'status' : 'alert'} data-testid="download-result">
-            <p>{t(`download.result.${outcome.status}`)}</p>
+            <p>{t(`download.result.${resultKey(outcome)}`)}</p>
             {outcome.error ? <p>{outcome.error}</p> : null}
             {outcome.loaded.length > 0 ? (
               <p>{t('download.loaded', { list: outcome.loaded.join(', ') })}</p>
@@ -190,7 +194,9 @@ export function DownloadPreviewDialog({ plan, onClose }: { plan: DownloadPlan; o
             {outcome.deleted.length > 0 ? (
               <p>{t('download.deleted', { list: outcome.deleted.join(', ') })}</p>
             ) : null}
-            {outcome.cpuStopped ? <p>{t('download.cpuStopped')}</p> : null}
+            {outcome.cpuStopped && resultKey(outcome) === outcome.status ? (
+              <p>{t('download.cpuStopped')}</p>
+            ) : null}
             {outcome.failedAt ? <p>{t('download.failedAt', { block: outcome.failedAt })}</p> : null}
           </div>
         ) : null}

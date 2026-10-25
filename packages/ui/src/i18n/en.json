@@ -324,6 +324,7 @@
     "codeTime": "Code date",
     "reload": "Reload from CPU",
     "notCompiled": "not compiled",
+    "staleCompile": "compilation out of date",
     "approximate": "Very large block: lines are compared by position, without fine alignment.",
     "sourceFallback": "Block not compiled: comparing the source text, symbolic operands may show as different.",
     "network": "Network {{n}}",
@@ -1230,7 +1231,9 @@
       "cancelled": "Download cancelled: nothing changed.",
       "stopFailed": "Stopping the CPU failed: nothing downloaded.",
       "stale": "The project changed after the preview: nothing downloaded.",
-      "ended": "Download done, but the connection or project changed."
+      "ended": "Download done, but the connection or project changed.",
+      "stoppedOnly": "CPU stopped, no block downloaded: connection or project changed.",
+      "cancelledStopped": "Download cancelled. CPU left in STOP."
     },
     "cpuStopped": "CPU left in STOP."
   },

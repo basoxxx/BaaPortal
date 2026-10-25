@@ -324,6 +324,7 @@
     "codeTime": "Data del codice",
     "reload": "Ricarica dalla CPU",
     "notCompiled": "non compilato",
+    "staleCompile": "compilazione non aggiornata",
     "approximate": "Blocco molto grande: le righe sono confrontate per posizione, senza allineamento fine.",
     "sourceFallback": "Blocco non compilato: confronto sul testo sorgente, gli operandi simbolici possono risultare diversi.",
     "network": "Rete {{n}}",
@@ -1230,7 +1231,9 @@
       "cancelled": "Caricamento annullato: nessuna modifica.",
       "stopFailed": "Arresto della CPU non riuscito: nessun caricamento.",
       "stale": "Il progetto è cambiato dopo l'anteprima: nessun caricamento.",
-      "ended": "Caricamento eseguito, ma il collegamento o il progetto sono cambiati."
+      "ended": "Caricamento eseguito, ma il collegamento o il progetto sono cambiati.",
+      "stoppedOnly": "CPU arrestata, nessun blocco caricato: collegamento o progetto cambiati.",
+      "cancelledStopped": "Caricamento annullato. CPU lasciata in STOP."
     },
     "cpuStopped": "CPU lasciata in STOP."
   },

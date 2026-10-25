@@ -108,6 +108,21 @@ describe('editor di confronto', () => {
     expect((await screen.findAllByText('non compilato')).length).toBe(4);
   }, 30_000);
 
+  it('compilato presente ma non aggiornato: «compilazione non aggiornata», non «non compilato»', async () => {
+    const { app, blocks } = await setupOnline([['FC', 1]]);
+    const b = blocks[0]!;
+    app.bridge.plcUploadBlockResults.set('FC1', { ok: true, bytes: cpuFile(app, b, () => {}) });
+    act(() => {
+      app.store.getState().edit('test.edit', (p) => {
+        const x = findDevice(p, PLC)!.blocks.find((k) => k.id === b.id) as CodeBlock;
+        x.networks[0]!.source = 'A %I0.1\n= %Q0.1';
+      });
+    });
+    await openCompare(app, b);
+    expect((await screen.findAllByText('compilazione non aggiornata')).length).toBe(4);
+    expect(screen.queryByText('non compilato')).toBeNull();
+  }, 30_000);
+
   it('fuori linea: nota e nessuna richiesta; errore del caricamento con role=alert e Ricarica', async () => {
     const { app, blocks } = await setupOnline([['FC', 1]]);
     const b = blocks[0]!;
@@ -265,6 +280,18 @@ describe('editor di confronto', () => {
     expect(changed('L "MW1"', 'L "%MW1"')).toBe('changed');
     expect(changed('A I0.0 // Uno', 'A I0.0 // UNO')).toBe('changed');
     expect(normLine('A I0.0; // x')).toBe(normLine('A I0.0 // x'));
+  });
+
+  it("lessico: «''» dentro una stringa, «//» in una stringa, apice non chiuso", () => {
+    // '' dentro una stringa: le due metà restano esatte (maiuscole comprese).
+    expect(normLine("l 'it''S'  ;")).toBe("L 'it''S'");
+    expect(normLine("L 'it''s'")).not.toBe(normLine("L 'it''S'"));
+    // // in una stringa non è un commento: il codice dopo la stringa si normalizza ancora.
+    expect(normLine("a 'x//Y'  i0.0 ;")).toBe("A 'x//Y' I0.0");
+    expect(normLine("L 'a//b'")).not.toBe(normLine("L 'a//B'"));
+    // Apice non chiuso: il resto della riga è testo esatto.
+    expect(normLine("l 'aBc  d")).toBe("L'aBc  d");
+    expect(normLine("L 'abc d")).not.toBe(normLine("L 'ABC d"));
   });
 
   it('grande input: veloce e corretto, e oltre il tetto per posizione con nota', () => {

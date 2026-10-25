@@ -125,7 +125,7 @@ test('Piano 3B: carica nel dispositivo, confronto, STOP/RUN, editor di confronto
     const view = page.getByTestId('compare-view');
     await expect(view).toBeVisible();
     await expect(
-      view.locator('[data-diff="changed"], [data-diff="added"], [data-diff="removed"]'),
+      view.locator('[data-diff="changed"], [data-diff="added"], [data-diff="missing"]'),
     ).not.toHaveCount(0);
     await expect(view).toContainText('= %Q4.1;');
     await expect(view).toContainText('= %Q4.0;');

@@ -51,7 +51,7 @@ export interface DownloadChoice {
 }
 
 export interface DownloadOutcome {
-  status: 'done' | 'failed' | 'cancelled' | 'stopFailed' | 'stale' | 'ended';
+  status: 'done' | 'failed' | 'cancelled' | 'stopFailed' | 'stale' | 'ended' | 'stoppedOnly';
   loaded: string[];
   deleted: string[];
   failedAt?: string;
@@ -72,8 +72,8 @@ export function defaultLoad(r: DownloadRow): boolean {
 export const isCpuOnly = (r: DownloadRow) => r.blockId === undefined;
 
 /**
- * L'avviso «CPU in RUN»: il caricamento (o la cancellazione) tocca un OB, o un FB/DB diverso da
- * quello della CPU o solo della CPU.
+ * L'avviso «CPU in RUN»: il caricamento tocca un OB, o un FB/DB non uguale a quello della CPU
+ * (diverso o non leggibile); oppure c'è una cancellazione di un blocco solo della CPU, di qualunque tipo.
  * L'impronta d'interfaccia della CPU non è nota: «diverso» è un'approssimazione per eccesso del
  * «cambia l'interfaccia».
  */
@@ -88,7 +88,8 @@ export function runWarning(
     (r) =>
       active.has(r.key) &&
       (r.type === 'OB' ||
-        ((r.type === 'FB' || r.type === 'DB') && (isCpuOnly(r) || r.state === 'different'))),
+        isCpuOnly(r) ||
+        ((r.type === 'FB' || r.type === 'DB') && r.state !== 'same' && r.state !== 'offlineOnly')),
   );
 }
 
@@ -259,7 +260,7 @@ export async function executePlcDownload(
       return { status: 'stopFailed', ...none, error: stop.error };
     }
     stopped = true;
-    if (!sameSession(store, plan)) return { status: 'ended', ...none, cpuStopped: true };
+    if (!sameSession(store, plan)) return { status: 'stoppedOnly', ...none, cpuStopped: true };
   }
   let res: Awaited<ReturnType<BaaBridge['plcDownload']>>;
   try {
@@ -282,8 +283,12 @@ export async function executePlcDownload(
         ...(res.failedAt ? { failedAt: res.failedAt } : {}),
         ...(stopped ? { cpuStopped: true } : {}),
       };
-  if (!live) return { ...outcome, status: outcome.status === 'done' ? 'ended' : outcome.status };
   const something = res.loaded.length > 0 || res.deleted.length > 0;
+  if (!live) {
+    if (outcome.status !== 'done') return outcome;
+    // Riuscito ma senza nulla di scritto e con la CPU arrestata da noi: non è «caricamento eseguito».
+    return { ...outcome, status: something ? 'ended' : stopped ? 'stoppedOnly' : 'ended' };
+  }
   if (res.ok) {
     push(store, 'info', 'plcDownloaded', {
       loaded: String(res.loaded.length),
@@ -305,6 +310,7 @@ export async function executePlcDownload(
         message: t('sim.startCpuMessage'),
         yes: t('sim.yes'),
         no: t('sim.no'),
+        defaultNo: true,
       });
     } catch {
       yes = false;

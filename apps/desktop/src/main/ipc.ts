@@ -154,7 +154,8 @@ export function registerIpc(
       title: t.title,
       message: t.message,
       buttons: [t.yes, t.no],
-      defaultId: 0,
+      // Con `defaultNo` (es. «Avviare la CPU?») il predefinito e la fuga sono «No».
+      defaultId: t.defaultNo ? 1 : 0,
       cancelId: 1,
     };
     const win = getWindow();

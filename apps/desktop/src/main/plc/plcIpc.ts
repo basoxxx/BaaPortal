@@ -10,7 +10,7 @@ import type {
   PlcUploadBlockResult,
 } from '@baaportal/ui';
 import type { ConfirmFn } from './confirm';
-import { PlcWriteService, isControlOp, parseDownloadRequest } from './plcWrite';
+import { PlcWriteService, isControlOp } from './plcWrite';
 import { isUploadableType, listOnlineBlocks, uploadOneBlock } from './onlineBlocks';
 import { PlcService } from './plcService';
 import { ScanService } from './scanService';
@@ -77,9 +77,8 @@ export function registerPlc(
   handle('plc:scanCancel', (e) => scans.cancel(e.sender));
   // Scritture: la conferma nativa la chiede il servizio, qualunque cosa faccia il renderer.
   handle('plc:download', async (e, files, opts): Promise<PlcDownloadResult> => {
-    const req = parseDownloadRequest(files, opts);
-    if (typeof req === 'string') return { ok: false, loaded: [], deleted: [], error: req };
-    return writes.download(e.sender, req.files, { deleteBlocks: req.deleteBlocks });
+    // Il servizio controlla i dati (una volta sola) prima di qualunque conferma.
+    return writes.download(e.sender, files, opts);
   });
   handle('plc:control', async (e, op): Promise<PlcControlResult> => {
     if (!isControlOp(op)) return { ok: false, error: 'Comando non valido' };

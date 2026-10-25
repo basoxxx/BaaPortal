@@ -147,12 +147,22 @@ export function CpuPanel() {
   );
 }
 
+const CPU_BUTTONS = [
+  ['cpu-run', 'online.startCpu', 'cpuPanel.runBtn'],
+  ['cpu-stop', 'online.stopCpu', 'cpuPanel.stopBtn'],
+  ['cpu-copy-ram-rom', 'online.copyRamToRom', 'cpuPanel.copyRamToRomBtn'],
+  ['cpu-compress', 'online.compress', 'cpuPanel.compressBtn'],
+] as const;
+
 /** Pannello della CPU vera: LED, identità e comandi (RUN, STOP, copia RAM in ROM, comprimi). */
 function OnlineCpuPanel() {
   const { t } = useTranslation();
   const { store, bridge, service } = useServices();
-  const state = useAppStore((s) => s);
-  const online = state.online;
+  const online = useAppStore((s) => s.online);
+  // Solo l'abilitazione dei comandi (una stringa), non tutto lo stato: il pannello non si ridisegna a ogni modifica.
+  const enabled = useAppStore((s) =>
+    CPU_BUTTONS.map(([, cmd]) => (commands[cmd].isEnabled(s) ? '1' : '0')).join(''),
+  );
   const mode = online.mode ?? 'UNKNOWN';
   const id = online.identity;
   const ledLabel = (k: 'run' | 'stop', on: boolean) =>
@@ -178,18 +188,11 @@ function OnlineCpuPanel() {
         </span>
       </div>
       <div className="baa-cpu-buttons">
-        {(
-          [
-            ['cpu-run', 'online.startCpu', 'cpuPanel.runBtn'],
-            ['cpu-stop', 'online.stopCpu', 'cpuPanel.stopBtn'],
-            ['cpu-copy-ram-rom', 'online.copyRamToRom', 'cpuPanel.copyRamToRomBtn'],
-            ['cpu-compress', 'online.compress', 'cpuPanel.compressBtn'],
-          ] as const
-        ).map(([testId, cmd, label]) => (
+        {CPU_BUTTONS.map(([testId, cmd, label], i) => (
           <button
             key={testId}
             type="button"
-            disabled={!commands[cmd].isEnabled(state)}
+            disabled={enabled[i] !== '1'}
             onClick={() => void commands[cmd].run({ store, service, bridge })}
             data-testid={testId}
           >

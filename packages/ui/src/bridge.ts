@@ -37,6 +37,8 @@ export interface QuestionTexts {
   message: string;
   yes: string;
   no: string;
+  /** «No» è il pulsante predefinito (azioni che toccano l'impianto). */
+  defaultNo?: boolean;
 }
 
 export interface RecoveryInfo {
