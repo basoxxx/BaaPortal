@@ -7,6 +7,7 @@ import type { BlockType } from './s7/blocks';
 import { decodeDownloadBlockJob, decodeDownloadEnded, encodeDownloadBlockAck } from './s7/download';
 import { decodeS7, encodeS7, type S7Pdu } from './s7/header';
 import { decodeSetup, encodeSetup } from './s7/setup';
+import { decodeUserdata, type DecodedUserdata } from './s7/userdata';
 import type { CaptureRecorder } from './capture/captureLog';
 import type { Transport, TransportFactory } from './transport';
 
@@ -36,6 +37,8 @@ const TPDU_SIZE = 0x0a; // 1024
 const MAX_FRAGMENTS = 64; // proto §2.6
 const MAX_REASSEMBLED = 0xffff + 16;
 const MAX_IGNORED_LOG = 100;
+/** Indication (proto §18.1) tenute in coda in modo `online-test`: le più vecchie si scartano. */
+const MAX_INDICATIONS = 8;
 
 /** Riferimento PDU successivo: cresce di uno, salta lo 0 e si riavvolge a 16 bit. */
 export function nextPduRef(prev: number): number {
@@ -53,11 +56,12 @@ export function guardedSender(
   recorder: CaptureRecorder | undefined,
   onRefused: () => void,
   mode: ConnectionMode = 'read-only',
+  pduLength?: () => number,
 ): (frame: Uint8Array) => void {
   return (frame) => {
     const out = frame.slice();
     try {
-      assertOutgoingFrame(out, mode);
+      assertOutgoingFrame(out, mode, pduLength?.());
     } catch (e) {
       onRefused();
       throw e;
@@ -97,6 +101,22 @@ interface DownloadState {
   timer?: ReturnType<typeof setTimeout>;
 }
 
+/** Quale indication si aspetta: gruppo, sottofunzione e seq (il numero del job). */
+export interface IndicationMatch {
+  group: number;
+  sub: number;
+  seq: number;
+}
+
+interface IndicationWaiter {
+  match: IndicationMatch;
+  resolve(d: DecodedUserdata | undefined): void;
+  reject(e: Error): void;
+  timer: ReturnType<typeof setTimeout>;
+  onAbort?: () => void;
+  signal?: AbortSignal;
+}
+
 interface CcWaiter {
   resolve(cc: Extract<CotpPdu, { type: 'CR' | 'CC' }>): void;
   reject(e: Error): void;
@@ -104,6 +124,10 @@ interface CcWaiter {
 }
 
 const h = (n: number): string => `0x${n.toString(16).padStart(2, '0')}`;
+
+function matches(d: DecodedUserdata, m: IndicationMatch): boolean {
+  return d.param.group === m.group && d.param.subfunction === m.sub && d.param.sequence === m.seq;
+}
 
 /**
  * Connessione S7 in sola lettura: un solo job in volo, timeout, annullamento, registratore.
@@ -138,6 +162,10 @@ export class S7Connection {
   #download: DownloadState | undefined;
   readonly #mode: ConnectionMode;
   #tpduCap = Infinity;
+  readonly #indications: DecodedUserdata[] = [];
+  readonly #indicationWaiters: IndicationWaiter[] = [];
+  /** Job cancellati (`gruppo/sub/seq`): le indication tardive si scartano (proto §18.4.1). */
+  readonly #deadJobs = new Set<string>();
   readonly #rec: CaptureRecorder | undefined;
 
   private constructor(
@@ -160,6 +188,7 @@ export class S7Connection {
         this.refusedCount++;
       },
       mode,
+      () => this.#pduLength,
     );
     this.#closeTransport = () => transport.close();
     transport.onData((chunk) => this.#onData(chunk));
@@ -194,7 +223,12 @@ export class S7Connection {
 
   static async open(o: ConnectOptions): Promise<S7Connection> {
     const mode = o.mode ?? 'read-only';
-    if (mode !== 'read-only' && mode !== 'online-write') {
+    if (
+      mode !== 'read-only' &&
+      mode !== 'online-write' &&
+      mode !== 'online-test' &&
+      mode !== 'online-restore'
+    ) {
       throw new RangeError(`modo "${String(mode)}" sconosciuto`);
     }
     const timeoutMs = o.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -251,6 +285,92 @@ export class S7Connection {
       this.#queue.push({ param, data, rosctr, timeoutMs: t, resolve, reject });
       this.#pump();
     });
+  }
+
+  /**
+   * Aspetta una indication (proto §18.1), solo in modo `online-test`. Una già in coda si
+   * consegna subito. `undefined` vuol dire tempo scaduto: la connessione resta aperta.
+   */
+  nextIndication(
+    match: IndicationMatch,
+    timeoutMs: number,
+    signal?: AbortSignal,
+  ): Promise<DecodedUserdata | undefined> {
+    if (this.#mode !== 'online-test') {
+      return Promise.reject(new RangeError('indication ammesse solo in modo online-test'));
+    }
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+      return Promise.reject(new RangeError(`timeoutMs ${timeoutMs} deve essere > 0`));
+    }
+    const at = this.#indications.findIndex((d) => matches(d, match));
+    if (at >= 0) return Promise.resolve(this.#indications.splice(at, 1)[0]);
+    if (this.#closed) return Promise.reject(new S7Error('CLOSED', 'connessione chiusa'));
+    if (signal?.aborted) return Promise.reject(new S7Error('ABORTED', 'operazione annullata'));
+    return new Promise((resolve, reject) => {
+      const w: IndicationWaiter = {
+        match,
+        resolve,
+        reject,
+        timer: setTimeout(() => this.#endWaiter(w, undefined), timeoutMs),
+        signal,
+      };
+      if (signal) {
+        w.onAbort = () => this.#endWaiter(w, new S7Error('ABORTED', 'operazione annullata'));
+        signal.addEventListener('abort', w.onAbort, { once: true });
+      }
+      this.#indicationWaiters.push(w);
+    });
+  }
+
+  #endWaiter(w: IndicationWaiter, err: Error | undefined, value?: DecodedUserdata): void {
+    const i = this.#indicationWaiters.indexOf(w);
+    if (i < 0) return;
+    this.#indicationWaiters.splice(i, 1);
+    clearTimeout(w.timer);
+    if (w.signal && w.onAbort) w.signal.removeEventListener('abort', w.onAbort);
+    if (err) w.reject(err);
+    else w.resolve(value);
+  }
+
+  /** Dopo un delete: toglie dalla coda le indication del job e scarta quelle che arriveranno. */
+  discardIndications(group: number, sub: number, seq: number): void {
+    this.#deadJobs.add(`${group}/${sub}/${seq}`);
+    const keep = this.#indications.filter((d) => !matches(d, { group, sub, seq }));
+    this.#indications.length = 0;
+    this.#indications.push(...keep);
+  }
+
+  /** Un job appena creato con questo numero: le sue indication tornano a valere. */
+  reviveIndications(group: number, sub: number, seq: number): void {
+    this.#deadJobs.delete(`${group}/${sub}/${seq}`);
+  }
+
+  /** Indication non sollecitata (type 0): coda in `online-test`, altrimenti scartata (come prima). */
+  #onIndication(pdu: S7Pdu): void {
+    let d: DecodedUserdata | undefined;
+    if (this.#mode === 'online-test') {
+      try {
+        d = decodeUserdata(pdu.param, pdu.data);
+      } catch {
+        d = undefined;
+      }
+    }
+    if (!d) return this.#ignore(pdu);
+    if (this.#deadJobs.has(`${d.param.group}/${d.param.subfunction}/${d.param.sequence}`)) return;
+    const w = this.#indicationWaiters.find((x) => matches(d, x.match));
+    if (w) return this.#endWaiter(w, undefined, d);
+    this.#indications.push(d);
+    if (this.#indications.length > MAX_INDICATIONS) {
+      this.#indications.shift();
+      this.ignoredCount++;
+    }
+  }
+
+  #ignore(pdu: S7Pdu): void {
+    this.ignoredCount++;
+    if (this.ignoredLog.length < MAX_IGNORED_LOG) {
+      this.ignoredLog.push(`risposta ignorata: ROSCTR ${pdu.rosctr}, riferimento ${pdu.pduRef}`);
+    }
   }
 
   /**
@@ -593,14 +713,16 @@ export class S7Connection {
       const fn = pdu.param.length > 0 ? h(pdu.param[0]!) : 'vuota';
       throw new S7Error('PROTOCOL', `job dalla CPU (funzione ${fn}): connessione chiusa`);
     }
+    if (pdu.rosctr === 7 && pdu.param.length > 5 && pdu.param[5]! >> 4 === 0) {
+      // Indication (tg 0x?1 con nibble 0): non risolve mai la richiesta in corso, il pduRef e' ignoto.
+      this.#onIndication(pdu);
+      return;
+    }
     const cur = this.#current;
     const consistent =
       cur !== undefined && (cur.rosctr === 7 ? pdu.rosctr === 7 : pdu.rosctr !== 7);
     if (!cur || pdu.pduRef !== cur.ref || !consistent) {
-      this.ignoredCount++;
-      if (this.ignoredLog.length < MAX_IGNORED_LOG) {
-        this.ignoredLog.push(`risposta ignorata: ROSCTR ${pdu.rosctr}, riferimento ${pdu.pduRef}`);
-      }
+      this.#ignore(pdu);
       return;
     }
     this.#current = undefined;
@@ -630,6 +752,8 @@ export class S7Connection {
       if (dl.timer) clearTimeout(dl.timer);
       dl.reject(err);
     }
+    for (const w of this.#indicationWaiters.slice()) this.#endWaiter(w, err);
+    this.#indications.length = 0;
     const cur = this.#current;
     this.#current = undefined;
     const queued = this.#queue.splice(0);

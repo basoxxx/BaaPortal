@@ -9,6 +9,17 @@ import { decodeReadRequest, encodeReadRequest } from './s7/readVar';
 import { decodeSetup, encodeSetup } from './s7/setup';
 import { decodeSzlRequest } from './s7/szl';
 import {
+  TIS_SUB,
+  decodeBlockStatusRequest,
+  decodeTisRequest,
+  blockStatusProblem,
+  reqBlockStatus,
+  reqDeleteJob,
+  reqEnableJob,
+  reqReadJobList,
+} from './s7/tis';
+import { reqStack } from './s7/tisStacks';
+import {
   decodePlcControlRequest,
   encodeCompressMemory,
   encodeCopyRamToRom,
@@ -47,8 +58,12 @@ import {
   type UserdataFrame,
 } from './s7/userdataRequests';
 
-/** Modo della connessione, fissato all'apertura (mai modificabile su una connessione viva). */
-export type ConnectionMode = 'read-only' | 'online-write';
+/**
+ * Modo della connessione, fissato all'apertura (mai modificabile su una connessione viva).
+ * `online-test` ammette in più le funzioni di test TIS (proto §18); `online-restore` è il modo
+ * del ripristino (il suo filtro è del Task 6: per ora coincide con `online-write`).
+ */
+export type ConnectionMode = 'read-only' | 'online-write' | 'online-test' | 'online-restore';
 
 /** Richieste userdata ammesse (proto §15.1): SZL, conteggi/lista/info blocchi, lettura orologio. */
 const USERDATA_ALLOWED = new Set(['4/1', '3/1', '3/2', '3/3', '7/1', '7/3']);
@@ -310,13 +325,84 @@ function assertDownloadAck(pdu: S7Pdu): void {
   }
 }
 
+function refuseTest(msg: string): never {
+  throw new S7Error('FORBIDDEN', `${msg}: non ammesso nemmeno in modo online-test`);
+}
+
+/** Userdata del gruppo 1 con la testa delle richieste TIS (`00 01 12 08 12 41`, proto §18.1). */
+function isTisShape(pdu: S7Pdu): boolean {
+  const head = [0x00, 0x01, 0x12, 0x08, 0x12, 0x41];
+  return pdu.rosctr === 7 && pdu.param.length >= 6 && head.every((b, i) => pdu.param[i] === b);
+}
+
+/**
+ * Filtro del modo `online-test` (proto §18): `assertReadOnly` PIU' le richieste TIS canoniche per
+ * il block status (create, enable, delete), la lista dei job e gli stack. Come negli altri filtri
+ * i byte devono coincidere con la ricodifica del loro significato. Ogni altra sottofunzione del
+ * gruppo 1 (variable status, modify, force, breakpoint, memory reset...) e' FORBIDDEN.
+ * `pduLength` e' la PDU negoziata: limita le righe di un block status.
+ */
+export function assertOnlineTest(pdu: S7Pdu, pduLength = 240): void {
+  if (!isTisShape(pdu)) return assertReadOnly(pdu);
+  const sub = pdu.param[6]!;
+  const label = `TIS sottofunzione ${h2(sub)}`;
+  try {
+    const t = decodeTisRequest(pdu.param, pdu.data);
+    must(t !== undefined, 'forma TIS non valida');
+    const { tisData: d } = t!;
+    let want: UserdataFrame;
+    switch (sub) {
+      case TIS_SUB.BLOCK_STATUS: {
+        const b = decodeBlockStatusRequest(t!.tisParam, d);
+        must(b !== undefined, 'block status senza la struttura attesa');
+        const why = blockStatusProblem(b!.r, b!.saz, pduLength);
+        must(why === undefined, why ?? '');
+        want = reqBlockStatus(b!.r, b!.saz);
+        break;
+      }
+      case TIS_SUB.ENABLE:
+        must(d.length === 2 && d[0] === TIS_SUB.BLOCK_STATUS, 'enable solo del block status');
+        want = reqEnableJob(d[0]!, d[1]!);
+        break;
+      case TIS_SUB.DELETE:
+        must(
+          d.length === 4 && d[0] === 0 && d[1] === 1 && d[2] === TIS_SUB.BLOCK_STATUS,
+          'delete solo del block status, con 00 01',
+        );
+        want = reqDeleteJob(d[2]!, d[3]!);
+        break;
+      case TIS_SUB.JOB_LIST:
+        want = reqReadJobList();
+        break;
+      case TIS_SUB.ISTACK:
+      case TIS_SUB.BSTACK:
+        want = reqStack(sub === TIS_SUB.ISTACK ? 'ISTACK' : 'BSTACK');
+        break;
+      case TIS_SUB.LSTACK:
+        must(d.length === 2, 'LSTACK con dati diversi da 2 byte');
+        want = reqStack('LSTACK', { priority: d[0]!, depth: d[1]! });
+        break;
+      default:
+        refuseTest(`${label} non ammessa`);
+    }
+    must(sameBytes(pdu.param, want.param) && sameBytes(pdu.data, want.data), 'forma non canonica');
+  } catch (e) {
+    if (e instanceof S7Error && e.code === 'FORBIDDEN') throw e;
+    refuseTest(`${label} non canonica (${e instanceof Error ? e.message : String(e)})`);
+  }
+}
+
 /**
  * Controllo sui byte che stanno per uscire (TPKT, COTP, S7). Ammette solo: COTP CR, COTP DR
  * e COTP DT con EOT che porta una PDU S7 accettata da `assertReadOnly` (default) o, solo in
  * modo `online-write`, da `assertOnlineWrite`. Un frame che non si
  * decodifica, con byte in più, con più frame o di un altro tipo (CC, ER...) dà FORBIDDEN.
  */
-export function assertOutgoingFrame(bytes: Uint8Array, mode: ConnectionMode = 'read-only'): void {
+export function assertOutgoingFrame(
+  bytes: Uint8Array,
+  mode: ConnectionMode = 'read-only',
+  pduLength = 240,
+): void {
   try {
     if (
       bytes.length < 7 ||
@@ -341,7 +427,9 @@ export function assertOutgoingFrame(bytes: Uint8Array, mode: ConnectionMode = 'r
         const raw = payload.subarray(3);
         const pdu = decodeS7(raw);
         if (!sameBytes(raw, encodeS7(pdu))) refuse('intestazione S7 non canonica');
-        if (mode === 'online-write') assertOnlineWrite(pdu);
+        // provvisorio: il filtro di `online-restore` arriva con il Task 6
+        if (mode === 'online-write' || mode === 'online-restore') assertOnlineWrite(pdu);
+        else if (mode === 'online-test') assertOnlineTest(pdu, pduLength);
         else if (mode === 'read-only') assertReadOnly(pdu);
         else refuse(`modo "${String(mode)}" sconosciuto`);
         return;
