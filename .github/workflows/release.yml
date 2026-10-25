@@ -50,6 +50,14 @@ jobs:
             exit 1
           fi
           echo "BAAPORTAL_PRERELEASE=$value" >> "$GITHUB_ENV"
+      - name: Il tag deve essere v + versione del pacchetto
+        shell: bash
+        run: |
+          version=$(node -p "require('./apps/desktop/package.json').version")
+          if [ "$TAG" != "v$version" ]; then
+            echo "il tag $TAG non corrisponde alla versione $version di apps/desktop/package.json" >&2
+            exit 1
+          fi
       - run: npm run dist
       - name: Allega gli installatori alla release
         shell: bash

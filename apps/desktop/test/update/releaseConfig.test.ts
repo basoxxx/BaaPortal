@@ -51,6 +51,13 @@ describe('configurazione di rilascio', () => {
     expect(rel).toContain('--repo "$GITHUB_REPOSITORY"');
     expect(rel).toContain('exit 1');
   });
+  it('release.yml: il tag è confrontato con la versione del pacchetto prima di npm run dist', () => {
+    const rel = read('../../.github/workflows/release.yml');
+    const cmp = rel.indexOf('"v$version"');
+    expect(rel).toContain('apps/desktop/package.json');
+    expect(cmp).toBeGreaterThan(-1);
+    expect(cmp).toBeLessThan(rel.indexOf('npm run dist'));
+  });
   it("release.yml: carica exe, dmg, latest*.yml e blockmap, e lancia check-dist prima dell'upload", () => {
     const rel = read('../../.github/workflows/release.yml');
     for (const g of ['*.exe', '*.dmg', 'latest*.yml', '*.blockmap'])

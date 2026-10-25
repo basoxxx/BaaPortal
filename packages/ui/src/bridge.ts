@@ -130,6 +130,8 @@ export interface BaaBridge {
   onOpenFileRequest(cb: (path: string) => void): () => void; // associazione file / seconda istanza
   onCloseRequest(cb: () => void): () => void;
   closeWindowConfirmed(): void;
+  /** La chiusura è stata annullata dall'utente (es. «Annulla» al salvataggio). */
+  closeWindowCancelled(): void;
   rendererReady(): void; // sblocca le richieste di apertura in coda
   clipboardWriteText(text: string): void;
   clipboardReadText(): Promise<string>;

@@ -104,6 +104,32 @@ describe('downloadDmg', () => {
     expect(await readdir(dir)).toEqual([]);
   });
 
+  it('errore alla chiusura del file (disco pieno): errore, niente .dmg né .part', async () => {
+    const d = deps(() => respond(chunks()));
+    d.fs = {
+      ...nodeMacFs,
+      createWriter: (p) => {
+        const w = nodeMacFs.createWriter(p);
+        return {
+          write: (c) => w.write(c),
+          close: async () => {
+            await w.close();
+            throw new Error('disco pieno');
+          },
+        };
+      },
+    };
+    await expect(run(d).p).rejects.toThrow('disco pieno');
+    expect(await readdir(dir)).toEqual([]);
+  });
+
+  it('il file su disco diverso dai byte arrivati: non viene rinominato', async () => {
+    const d = deps(() => respond(chunks()));
+    d.sha512Of = async () => 'altro';
+    await expect(run(d).p).rejects.toThrow('non corrisponde');
+    expect(await readdir(dir)).toEqual([]);
+  });
+
   it('rete interrotta a metà: nessun .part', async () => {
     await expect(run(deps(() => respond([BYTES.slice(0, 300)], { fail: true }))).p).rejects.toThrow(
       'rete interrotta',

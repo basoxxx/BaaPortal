@@ -52,6 +52,8 @@ export class UpdateService {
   private downloadedVersion: string | null = null;
   private downloading = false;
   private installing = false;
+  /** Vero solo da quitAndInstall in poi: prima, un errore dell'updater non è dell'installazione. */
+  private installArmed = false;
   private token: { cancel(): void } | null = null;
   private abort: AbortController | null = null;
   private availableFiles: MacFile[] = [];
@@ -217,6 +219,7 @@ export class UpdateService {
         return { ok: false, reason: 'busy' };
       }
       this.d.prepareQuit();
+      this.installArmed = true;
       updater.quitAndInstall(false, true);
     } catch (err) {
       this.installFailed(err);
@@ -226,6 +229,7 @@ export class UpdateService {
 
   private rollbackInstall(): void {
     this.installing = false;
+    this.installArmed = false;
     this.d.cancelQuit();
   }
 
@@ -264,7 +268,7 @@ export class UpdateService {
       u.logger = console;
       u.on('error', (e) => {
         // quitAndInstall non lancia: se fallisce emette 'error' e non esce.
-        if (this.installing) this.installFailed(e);
+        if (this.installArmed) this.installFailed(e);
         else console.warn('[aggiornamenti]', e);
       });
       u.on('download-progress', (p) => {

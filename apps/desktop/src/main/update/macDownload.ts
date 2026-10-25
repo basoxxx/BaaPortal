@@ -92,7 +92,7 @@ export async function downloadDmg(
   const close = async () => {
     if (!closed) {
       closed = true;
-      await writer.close().catch(() => undefined);
+      await writer.close();
     }
   };
   try {
@@ -133,13 +133,14 @@ export async function downloadDmg(
       onProgress(got, total);
     }
     await close();
-    if (hash.digest('base64') !== file.sha512) {
+    // Si ricontrolla il file scritto su disco, non solo i byte arrivati dalla rete.
+    if (hash.digest('base64') !== file.sha512 || (await d.sha512Of(part)) !== file.sha512) {
       throw new Error('Il file scaricato non corrisponde: non è stato aperto');
     }
     await d.fs.rename(part, target);
     return { path: target, reused: false };
   } catch (e) {
-    await close();
+    await close().catch(() => undefined);
     await d.fs.remove(part).catch(() => undefined);
     throw e;
   }
@@ -166,7 +167,7 @@ export const nodeMacFs: MacFs = {
           }),
           failed,
         ]),
-      close: () => new Promise<void>((res) => s.end(() => res())),
+      close: () => Promise.race([new Promise<void>((res) => s.end(() => res())), failed]),
     };
   },
   rename,

@@ -394,7 +394,10 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
   }
 
   async function handleCloseRequest(): Promise<void> {
-    if (!(await prepareForUpdate())) return;
+    if (!(await prepareForUpdate())) {
+      bridge.closeWindowCancelled();
+      return;
+    }
     bridge.closeWindowConfirmed();
   }
 

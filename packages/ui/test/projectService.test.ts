@@ -219,6 +219,8 @@ describe('projectService', () => {
     bridge.confirmAnswers.push('cancel');
     await bridge.emitCloseRequest();
     expect(bridge.closeConfirmed).toBe(false);
+    // Il main viene avvisato, così riapre il collegamento online già chiuso.
+    expect(bridge.closeCancelled).toBe(true);
   });
 
   it('richiesta di apertura dal sistema con modifiche non salvate chiede prima di sostituire', async () => {

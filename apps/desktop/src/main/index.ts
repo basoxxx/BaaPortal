@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, Menu } from 'electron';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { registerIpc } from './ipc';
+import { OnlineCloseLatch } from './onlineCloseLatch';
 import { createInterruptAsk, WriteCloseGuard } from './plc/closeGuard';
 import { startTestPlc } from './plc/testPlc';
 import type { Platform } from './recentProjects';
@@ -122,6 +123,7 @@ function createWindow(): void {
       e.preventDefault();
       void writeGuard.confirm().then((yes) => {
         if (yes) win?.close();
+        else online.cancel(() => ipc.resume());
       });
       return;
     }
@@ -195,7 +197,7 @@ if (!app.requestSingleInstanceLock()) {
   }
   app.on('window-all-closed', () => app.quit());
 
-  let onlineClosed = false;
+  const online = new OnlineCloseLatch();
   let quitUndo: { allowClose: boolean; onlineClosed: boolean } | null = null;
   const ipc = registerIpc(
     () => win,
@@ -210,15 +212,20 @@ if (!app.requestSingleInstanceLock()) {
     },
     // Uscita per aggiornamento: l'installatore parte da solo, né la finestra né before-quit rimandano.
     () => {
-      quitUndo = { allowClose, onlineClosed };
+      quitUndo = { allowClose, onlineClosed: online.closed };
       allowClose = true;
-      onlineClosed = true;
+      online.closed = true;
     },
     // Installazione fallita o rinviata: si torna com'era prima di prepareQuit.
     () => {
       if (!quitUndo) return;
-      ({ allowClose, onlineClosed } = quitUndo);
+      allowClose = quitUndo.allowClose;
+      online.closed = quitUndo.onlineClosed;
       quitUndo = null;
+    },
+    // Chiusura annullata («Annulla» al salvataggio): il collegamento online torna utilizzabile.
+    () => {
+      if (!quitUndo) online.cancel(() => ipc.resume());
     },
   );
   writeGuard = new WriteCloseGuard(
@@ -234,12 +241,15 @@ if (!app.requestSingleInstanceLock()) {
       e.preventDefault();
       void writeGuard.confirm().then((yes) => {
         if (yes) app.quit();
+        else online.cancel(() => ipc.resume());
       });
       return;
     }
-    if (onlineClosed) return;
+    // Uscendo, un eventuale scaricamento si interrompe e il suo file parziale si cancella.
+    ipc.abortDownload();
+    if (online.closed) return;
     e.preventDefault();
-    onlineClosed = true;
+    online.closed = true;
     const cap = new Promise<void>((r) => setTimeout(r, ipc.writing() ? 15000 : 1000));
     void Promise.race([ipc.closeOnline().catch(() => undefined), cap]).finally(() => app.quit());
   });

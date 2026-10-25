@@ -164,19 +164,27 @@ export function setMessage(message: string | null): void {
   set({ message });
 }
 
+let installingNow = false;
+
 /** «Riavvia e aggiorna»: PLC libero, poi domanda di salvataggio e chiusura online, poi installa. */
 export async function installNow(
   prepare: () => Promise<boolean>,
   messages: { busy: string; notReady: string },
 ): Promise<void> {
   const b = bridge;
-  if (!b) return;
-  const can = await b.updateCanInstall();
-  if (!can.ok) {
-    set({ message: can.reason === 'busy' ? messages.busy : messages.notReady });
-    return;
+  if (!b || installingNow) return;
+  // Un secondo clic mentre la prima richiesta è in corso non deve fare nulla.
+  installingNow = true;
+  try {
+    const can = await b.updateCanInstall();
+    if (!can.ok) {
+      set({ message: can.reason === 'busy' ? messages.busy : messages.notReady });
+      return;
+    }
+    if (!(await prepare())) return;
+    const r = await b.updateInstall();
+    if (r && !r.ok) set({ message: r.reason === 'busy' ? messages.busy : messages.notReady });
+  } finally {
+    installingNow = false;
   }
-  if (!(await prepare())) return;
-  const r = await b.updateInstall();
-  if (r && !r.ok) set({ message: r.reason === 'busy' ? messages.busy : messages.notReady });
 }

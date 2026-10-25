@@ -462,6 +462,21 @@ describe('installazione', () => {
     expect(m.cancelQuit).toHaveBeenCalledTimes(1);
   });
 
+  it("errore dell'updater durante la chiusura online: non annulla l'installazione", async () => {
+    const m = make({
+      closeOnline: async () => {
+        m.updater.emit('error', new Error('controllo concorrente fallito'));
+      },
+    });
+    await m.svc.check();
+    await m.svc.download();
+    m.updater.emit('update-downloaded', { version: '0.12.1' });
+    await m.svc.install();
+    expect(m.cancelQuit).not.toHaveBeenCalled();
+    expect(m.updater.quitAndInstall).toHaveBeenCalledTimes(1);
+    expect(m.events.some((e) => e.type === 'error' && e.phase === 'install')).toBe(false);
+  });
+
   it('due install di fila: il secondo è rifiutato, un solo quitAndInstall', async () => {
     const m = await ready();
     const a = m.svc.install();

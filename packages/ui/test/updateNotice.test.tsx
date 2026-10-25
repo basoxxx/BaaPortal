@@ -1,7 +1,7 @@
 import { act, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { i18next } from '../src/i18n';
-import { getUpdateState } from '../src/update/updateController';
+import { getUpdateState, installNow } from '../src/update/updateController';
 import type { UpdateEvent, UpdateInfoView } from '../src/update/updateTypes';
 import { flush } from './fakeBridge';
 import { renderApp, type RenderedApp } from './renderApp';
@@ -111,6 +111,25 @@ describe('avviso degli aggiornamenti', () => {
       expect(app.bridge.closeConfirmed).toBe(false);
       // updateInstall del finto risponde notReady: il messaggio compare
       expect(await screen.findByTestId('update-message')).toBeInTheDocument();
+    },
+    T,
+  );
+
+  it(
+    'doppio clic su «Riavvia e aggiorna»: una sola preparazione e un solo updateInstall',
+    async () => {
+      const app = await setup();
+      await emit(app, { type: 'downloaded', version: '0.12.1' });
+      let release!: (v: boolean) => void;
+      const prepare = vi.fn(() => new Promise<boolean>((r) => (release = r)));
+      const msgs = { busy: 'b', notReady: 'n' };
+      const first = installNow(prepare, msgs);
+      await flush();
+      await installNow(prepare, msgs); // secondo clic mentre il primo è in corso
+      expect(prepare).toHaveBeenCalledTimes(1);
+      release(true);
+      await first;
+      expect(app.bridge.updateCalls.filter((c) => c === 'install')).toHaveLength(1);
     },
     T,
   );

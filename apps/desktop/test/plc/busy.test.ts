@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 const electronApp = vi.hoisted(() => ({ isPackaged: false }));
 vi.mock('electron', () => ({ app: electronApp }));
 import type { ConfirmFn } from '../../src/main/plc/confirm';
+import { OnlineCloseLatch } from '../../src/main/onlineCloseLatch';
 import { registerPlc } from '../../src/main/plc/plcIpc';
 import { PlcService } from '../../src/main/plc/plcService';
 import { PlcWriteService, type PlcWriteOwner } from '../../src/main/plc/plcWrite';
@@ -112,5 +113,24 @@ describe('busy di registerPlc', () => {
     await vi.waitFor(() => expect(plc.busy()).toBe(true));
     await plc.closeAll();
     await p;
+  });
+
+  it('uscita annullata dopo closeAll: caricamento, backup e scrittura tornano possibili', async () => {
+    const { handlers, plc, g } = setup();
+    const e = { sender: new Owner() };
+    const latch = new OnlineCloseLatch();
+    await plc.closeAll();
+    latch.closed = true;
+    latch.cancel(() => plc.resume());
+    expect(latch.closed).toBe(false);
+    const up = handlers.get('plc:uploadAll')!(e, access);
+    await vi.waitFor(() => expect(plc.busy()).toBe(true));
+    g.release();
+    const r1 = await up;
+    expect(r1).not.toMatchObject({ error: 'Chiusura in corso' });
+    const r2 = await handlers.get('plc:backup')!(e);
+    expect(r2).not.toMatchObject({ error: 'Chiusura in corso' });
+    const r3 = await handlers.get('plc:control')!(e, 'STOP');
+    expect(r3).not.toMatchObject({ error: 'Chiusura in corso' });
   });
 });

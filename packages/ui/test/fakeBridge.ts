@@ -189,6 +189,10 @@ export class FakeBridge implements BaaBridge {
   closeWindowConfirmed() {
     this.closeConfirmed = true;
   }
+  closeCancelled = false;
+  closeWindowCancelled() {
+    this.closeCancelled = true;
+  }
   rendererReady() {
     this.readyCalls++;
   }

@@ -59,11 +59,14 @@ export function registerIpc(
   onRendererReady: () => void,
   prepareQuit: () => void,
   cancelQuit: () => void,
+  onCloseCancelled: () => void = () => undefined,
 ): {
   closeOnline(): Promise<void>;
   writing(): boolean;
   busy(): boolean;
   interruptWrites(): void;
+  resume(): void;
+  abortDownload(): void;
 } {
   // Ogni canale risponde solo al frame principale della pagina dell'app.
   const trusted = (e: IpcMainEvent | IpcMainInvokeEvent) =>
@@ -145,6 +148,7 @@ export function registerIpc(
 
   on('window:set-title', (_e, title: string) => getWindow()?.setTitle(title));
   on('window:close-confirmed', () => onCloseConfirmed());
+  on('window:close-cancelled', () => onCloseCancelled());
   // Anche "pronta" deve venire dalla pagina dell'app: un messaggio rimasto in coda da una pagina in
   // crash (senderFrame non più valido) non deve far credere al main che ci sia chi conferma la chiusura.
   on('app:renderer-ready', () => onRendererReady());
@@ -292,5 +296,7 @@ export function registerIpc(
     writing: () => plc.writing(),
     busy: () => plc.busy(),
     interruptWrites: () => plc.interruptWrites(),
+    resume: () => plc.resume(),
+    abortDownload: () => updates?.cancelDownload(),
   };
 }

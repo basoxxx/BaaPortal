@@ -39,6 +39,7 @@ const bridge: RawBridge = {
   onOpenFileRequest: (cb) => subscribe<[string]>('app:open-file', cb),
   onCloseRequest: (cb) => subscribe<[]>('app:close-requested', cb),
   closeWindowConfirmed: () => ipcRenderer.send('window:close-confirmed'),
+  closeWindowCancelled: () => ipcRenderer.send('window:close-cancelled'),
   rendererReady: () => ipcRenderer.send('app:renderer-ready'),
   clipboardWriteText: (text) => ipcRenderer.send('clipboard:write-text', text),
   clipboardReadText: () => ipcRenderer.invoke('clipboard:read-text'),
