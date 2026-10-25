@@ -41,6 +41,7 @@
     }
   },
   "status": {
+    "backup": "Backing up…",
     "compiling": "Compiling…",
     "cancel": "Stop",
     "progress": "Progress",
@@ -134,7 +135,10 @@
     "uploadBlockSkipped": "{{block}}: not imported ({{reason}})",
     "uploadDonePartial": "Uploaded {{count}} blocks, {{missing}} not uploaded (see the project comment).",
     "uploadNothing": "No block uploaded from the CPU: {{reason}}",
-    "uploadFirmwareUnknown": "Firmware {{firmware}} is not in the catalog: the project uses {{used}}."
+    "uploadFirmwareUnknown": "Firmware {{firmware}} is not in the catalog: the project uses {{used}}.",
+    "backupDone": "Backup saved to \"{{path}}\": {{count}} blocks.",
+    "backupDonePartial": "Backup saved to \"{{path}}\": {{count}} blocks, {{missing}} not copied ({{list}}).",
+    "backupFailed": "Backup failed: {{message}}"
   },
   "commands": {
     "project.new": "New…",
@@ -178,6 +182,7 @@
     "online.stopCpu": "Stop CPU",
     "online.copyRamToRom": "Copy RAM to ROM",
     "online.compress": "Compress",
+    "online.backup": "Upload backup from online device…",
     "online.diagnostics": "Online and diagnostics",
     "options.settings": "Settings",
     "tools.crossReferences": "Cross-references",

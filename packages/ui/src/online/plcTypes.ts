@@ -121,6 +121,20 @@ export type PlcUploadAllResult =
   | { ok: false; error: string }
   | { ok: false; cancelled: true };
 
+/**
+ * Esito di `plcBackup`: il file `.baapbak` scritto, i blocchi copiati e quelli che la CPU non ha
+ * dato (`failed`). `cancelled`: finestra di salvataggio annullata o backup interrotto, nessun file.
+ */
+export type PlcBackupResult =
+  | {
+      ok: true;
+      path: string;
+      count: number;
+      failed: { type: 'OB' | 'FB' | 'FC' | 'DB' | 'SDB'; number: number; error: string }[];
+    }
+  | { ok: false; error: string }
+  | { ok: false; cancelled: true };
+
 /** Le parti della diagnostica online che si possono chiedere (ognuna una o due SZL, proto §7.5.1). */
 export type DiagPart =
   | 'identity'

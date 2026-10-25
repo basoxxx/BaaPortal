@@ -37,6 +37,7 @@ export type {
   PlcUploadBlockResult,
   PlcUploadProgress,
   PlcUploadAllResult,
+  PlcBackupResult,
   DiagPart,
   DiagValue,
   DiagEventView,

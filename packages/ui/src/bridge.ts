@@ -21,6 +21,7 @@ import type {
   PlcScanStartResult,
   PlcStatus,
   PlcUploadAllResult,
+  PlcBackupResult,
   PlcUploadProgress,
   PlcWriteProgress,
 } from './online/plcTypes';
@@ -176,5 +177,12 @@ export interface BaaBridge {
   plcUploadAll(access: PlcAccess): Promise<PlcUploadAllResult>;
   plcUploadCancel(): Promise<void>;
   onPlcUploadProgress(cb: (p: PlcUploadProgress) => void): () => void;
+  /**
+   * Backup online: chiede il file con la finestra nativa, carica OB, FB, FC, DB e SDB su un
+   * collegamento proprio in sola lettura e scrive il `.baapbak`. L'avanzamento arriva da
+   * `onPlcUploadProgress`; mai eccezioni.
+   */
+  plcBackup(): Promise<PlcBackupResult>;
+  plcBackupCancel(): Promise<void>;
   testOverrides(): Promise<{ recoveryIntervalMs?: number }>; // sempre {} nelle build pacchettizzate
 }

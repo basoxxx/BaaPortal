@@ -57,6 +57,7 @@ import type { CompareState } from '../../online/compare';
 import { preparePlcDownload } from '../../online/plcDownload';
 import { buildTree, type TreeNode } from './treeModel';
 import { getProgress } from '../progress';
+import { plcControllerFor } from '../../online/plcController';
 import { parseNodeId } from './treeIds';
 
 const TARGET_ID = 'tree';
@@ -397,6 +398,21 @@ export function ProjectTree() {
           run: () => compileProgram(ctx, parsed.dev, 'full'),
         },
       );
+    }
+    if (parsed.kind === 'folder' && parsed.folder === 'backup') {
+      const o = store.getState().online;
+      compileItems.push({
+        id: 'backupOnline',
+        label: t('commands.online.backup'),
+        disabled:
+          o.status !== 'on' ||
+          o.deviceId !== parsed.dev ||
+          !!o.comparing ||
+          !!o.downloading ||
+          !!o.commanding ||
+          !!getProgress(),
+        run: () => void plcControllerFor(store, bridge).backup(),
+      });
     }
     if (parsed.kind === 'folder' && parsed.folder === 'blocks') {
       compileItems.push({

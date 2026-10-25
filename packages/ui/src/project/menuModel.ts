@@ -81,6 +81,7 @@ export const MENUS: MenuDef[] = [
       'online.compress',
       'sep',
       'online.diagnostics',
+      'online.backup',
     ],
   },
   { id: 'options', items: ['options.settings'] },

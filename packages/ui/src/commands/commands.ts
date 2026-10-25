@@ -57,6 +57,7 @@ export type CommandId =
   | 'online.copyRamToRom'
   | 'online.compress'
   | 'online.diagnostics'
+  | 'online.backup'
   | 'options.settings'
   | 'tools.crossReferences'
   | 'tools.callStructure'
@@ -337,6 +338,15 @@ const list: Command[] = [
       const id = targetPlcId(store.getState());
       if (id) store.getState().openEditor({ kind: 'onlineDiag', deviceId: id, objectId: '' });
     },
+  }),
+  def('online.backup', {
+    isEnabled: (s) =>
+      s.online.status === 'on' &&
+      !s.online.comparing &&
+      !s.online.downloading &&
+      !s.online.commanding &&
+      !getProgress(),
+    run: ({ store, bridge }) => plcControllerFor(store, bridge).backup(),
   }),
   def('options.settings', {
     isEnabled: always,

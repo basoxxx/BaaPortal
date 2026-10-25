@@ -25,6 +25,7 @@ import type {
   PlcDownloadResult,
   PlcWriteProgress,
   PlcUploadAllResult,
+  PlcBackupResult,
   PlcUploadProgress,
   DiagPart,
   PlcClockRequest,
@@ -344,6 +345,19 @@ export class FakeBridge implements BaaBridge {
     );
   }
   // Ricerca dei dispositivi accessibili.
+  plcBackupResults: PlcBackupResult[] = [];
+  plcBackupCalls = 0;
+  plcBackupCancelCalls = 0;
+  /** Se c'è, plcBackup attende questa promessa prima di rispondere. */
+  plcBackupGate: Promise<void> | null = null;
+  async plcBackup(): Promise<PlcBackupResult> {
+    this.plcBackupCalls++;
+    if (this.plcBackupGate) await this.plcBackupGate;
+    return this.plcBackupResults.shift() ?? { ok: false, error: 'nessun risultato previsto' };
+  }
+  async plcBackupCancel() {
+    this.plcBackupCancelCalls++;
+  }
   plcUploadResults: PlcUploadAllResult[] = [];
   plcUploadCalls: PlcAccess[] = [];
   plcUploadCancelCalls = 0;

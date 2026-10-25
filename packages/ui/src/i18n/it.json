@@ -41,6 +41,7 @@
     }
   },
   "status": {
+    "backup": "Backup in corso…",
     "compiling": "Compilazione in corso…",
     "cancel": "Interrompi",
     "progress": "Avanzamento",
@@ -134,7 +135,10 @@
     "uploadBlockSkipped": "{{block}}: non importato ({{reason}})",
     "uploadDonePartial": "Caricati {{count}} blocchi, {{missing}} non caricati (vedi commento del progetto).",
     "uploadNothing": "Nessun blocco caricato dalla CPU: {{reason}}",
-    "uploadFirmwareUnknown": "Firmware {{firmware}} non presente nel catalogo: il progetto usa {{used}}."
+    "uploadFirmwareUnknown": "Firmware {{firmware}} non presente nel catalogo: il progetto usa {{used}}.",
+    "backupDone": "Backup salvato in «{{path}}»: {{count}} blocchi.",
+    "backupDonePartial": "Backup salvato in «{{path}}»: {{count}} blocchi, {{missing}} non copiati ({{list}}).",
+    "backupFailed": "Backup non riuscito: {{message}}"
   },
   "commands": {
     "project.new": "Nuovo…",
@@ -178,6 +182,7 @@
     "online.stopCpu": "Arresta CPU",
     "online.copyRamToRom": "Copia RAM in ROM",
     "online.compress": "Comprimi",
+    "online.backup": "Carica backup dal dispositivo online…",
     "online.diagnostics": "Online e diagnostica",
     "options.settings": "Impostazioni",
     "tools.crossReferences": "Riferimenti incrociati",

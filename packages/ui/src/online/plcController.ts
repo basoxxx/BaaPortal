@@ -3,7 +3,7 @@ import { findDevice } from '@baaportal/project';
 import type { BaaBridge } from '../bridge';
 import { targetPlcId } from '../project/navigation/treeIds';
 import { compileProgram, contextHashOf, hashOf } from '../project/compile/compileActions';
-import { getProgress } from '../project/progress';
+import { beginProgress, getProgress } from '../project/progress';
 import { ONLINE_OFF, type AppState } from '../state/store';
 import { compareBlocks, type CompareProjectBlock } from './compare';
 import type { PlcControlOp, PlcEvent, PlcLostReason } from './plcTypes';
@@ -211,6 +211,45 @@ export class PlcController {
     }
     if (op === 'COPY_RAM_TO_ROM') this.push('info', 'plcCopiedRamToRom');
     else if (op === 'COMPRESS') this.push('info', 'plcCompressed');
+  }
+
+  /**
+   * Backup online: il processo principale chiede il file, carica OB, FB, FC, DB e SDB su un
+   * collegamento proprio (sola lettura) e scrive il `.baapbak`. L'avanzamento sta nella barra di
+   * stato con Interrompi; il backup non cambia nulla nel progetto.
+   */
+  async backup(): Promise<void> {
+    const { online } = this.store.getState();
+    if (online.status !== 'on' || online.comparing || online.downloading || online.commanding) {
+      return;
+    }
+    if (getProgress()) return;
+    const bar = beginProgress('status.backup', () => void this.bridge.plcBackupCancel());
+    const off = this.bridge.onPlcUploadProgress((p) => bar.update(p.done, p.total));
+    let res: Awaited<ReturnType<BaaBridge['plcBackup']>>;
+    try {
+      res = await this.bridge.plcBackup();
+    } catch (e) {
+      res = { ok: false, error: errorText(e) };
+    } finally {
+      off();
+      bar.end();
+    }
+    if (!res.ok) {
+      if (!('cancelled' in res)) this.push('error', 'backupFailed', { message: res.error });
+      return;
+    }
+    const list = res.failed.map((f) => `${f.type}${f.number}`).join(', ');
+    if (res.failed.length === 0) {
+      this.push('info', 'backupDone', { path: res.path, count: String(res.count) });
+    } else {
+      this.push('warning', 'backupDonePartial', {
+        path: res.path,
+        count: String(res.count),
+        missing: String(res.failed.length),
+        list,
+      });
+    }
   }
 
   private onEvent(gen: number, e: PlcEvent): void {

@@ -9,10 +9,12 @@ import type {
   PlcDownloadResult,
   PlcScanStartResult,
   PlcUploadAllResult,
+  PlcBackupResult,
   PlcUploadBlockResult,
   PlcReadWatchResult,
   PlcWriteVarsResult,
 } from '@baaportal/ui';
+import { BackupService, type PickBackupPath } from './backup';
 import type { ConfirmFn } from './confirm';
 import { readDiagnostics } from './diagnostics';
 import { PlcWriteService, isControlOp } from './plcWrite';
@@ -66,6 +68,8 @@ export function registerPlc(
   scans = new ScanService(),
   writes = new PlcWriteService({ service, confirm }),
   uploads = new UploadService(),
+  pickBackupPath: PickBackupPath = async () => null,
+  appVersion: () => string = () => '',
 ): { closeAll(): Promise<void>; writing(): boolean; interruptWrites(): void } {
   handle('plc:connect', async (e, raw): Promise<PlcConnectResult> => {
     const access = parsePlcAccess(raw);
@@ -120,6 +124,15 @@ export function registerPlc(
     return uploads.start(e.sender, access);
   });
   handle('plc:uploadCancel', (e) => uploads.cancel(e.sender));
+  // Backup online: file scelto con la finestra nativa, poi collegamento proprio in sola lettura.
+  const backups = new BackupService({
+    service,
+    uploads,
+    pick: pickBackupPath,
+    appVersion,
+  });
+  handle('plc:backup', (e): Promise<PlcBackupResult> => backups.backup(e.sender));
+  handle('plc:backupCancel', (e) => backups.cancel(e.sender));
   return {
     closeAll: async () => {
       await Promise.all([

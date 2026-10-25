@@ -189,6 +189,20 @@ export function registerIpc(
   const plc = registerPlc(
     handle,
     createConfirm(dialog, (o) => BrowserWindow.fromWebContents(o as WebContents)),
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    async (owner, defaultName) => {
+      const win = BrowserWindow.fromWebContents(owner as WebContents);
+      const opts = {
+        defaultPath: defaultName,
+        filters: [{ name: 'Backup BaaPortal', extensions: ['baapbak'] }],
+      };
+      const r = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts);
+      return r.canceled || !r.filePath ? null : r.filePath;
+    },
+    () => app.getVersion(),
   );
 
   // Valori solo per i test e2e: come BAA_USER_DATA, mai onorati nelle build pacchettizzate.

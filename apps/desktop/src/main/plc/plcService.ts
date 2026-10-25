@@ -212,6 +212,11 @@ export class PlcService {
     return link ? { access: link.access, identity: link.identity, linkId: link.id } : undefined;
   }
 
+  /** Il modo noto della CPU collegata alla finestra (l'ultimo letto dalla sorveglianza). */
+  modeOf(owner: PlcOwner): PlcMode | undefined {
+    return this.links.get(owner)?.mode;
+  }
+
   /**
    * Una lettura fatta di più passi sul collegamento della finestra. `body` riceve `run`, che prende
    * un posto in coda per ogni passo: tra un passo e l'altro la sorveglianza può girare e sulla

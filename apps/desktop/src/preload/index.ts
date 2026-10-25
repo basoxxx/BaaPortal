@@ -78,6 +78,8 @@ const bridge: RawBridge = {
   plcUploadAll: (access) => ipcRenderer.invoke('plc:uploadAll', access),
   plcUploadCancel: () => ipcRenderer.invoke('plc:uploadCancel'),
   onPlcUploadProgress: (cb) => subscribe<[PlcUploadProgress]>('plc:uploadProgress', cb),
+  plcBackup: () => ipcRenderer.invoke('plc:backup'),
+  plcBackupCancel: () => ipcRenderer.invoke('plc:backupCancel'),
   testOverrides: () => ipcRenderer.invoke('app:test-overrides'),
 };
 

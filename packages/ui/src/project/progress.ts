@@ -60,3 +60,22 @@ export async function runWithProgress<T>(
     set(null);
   }
 }
+
+/**
+ * Avanzamento guidato da fuori (un'operazione del processo principale): `update` ne dà lo stato,
+ * `end` lo toglie. `cancel` è il pulsante Interrompi. Una sola operazione alla volta.
+ */
+export function beginProgress(
+  labelKey: string,
+  cancel: () => void,
+): { update(done: number, total: number): void; end(): void } {
+  set({ labelKey, done: 0, total: 0, cancel });
+  return {
+    update: (done, total) => {
+      if (current?.labelKey === labelKey) set({ ...current, done, total });
+    },
+    end: () => {
+      if (current?.labelKey === labelKey) set(null);
+    },
+  };
+}

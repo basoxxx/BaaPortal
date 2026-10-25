@@ -24,8 +24,33 @@ export type UploadConnectFn = (
   o: Omit<ConnectOptions, 'transport'> & { signal?: AbortSignal },
 ) => Promise<UploadClient>;
 
-/** Tipi che si caricano: SFC, SFB e SDB no (il backup degli SDB è un altro compito). */
+/** Tipi che si caricano da «Carica dal dispositivo»: SFC, SFB e SDB no. */
 const TYPES: BlockType[] = ['OB', 'FB', 'FC', 'DB'];
+/** Tipi del backup: in più gli SDB; SFC e SFB stanno nel sistema operativo della CPU. */
+export const BACKUP_TYPES: BlockType[] = ['OB', 'FB', 'FC', 'DB', 'SDB'];
+
+export type CollectedType = PlcUploadedFile['type'] | 'SDB';
+export interface CollectedFile {
+  type: CollectedType;
+  number: number;
+  bytes: Uint8Array;
+}
+export type CollectResult =
+  | {
+      ok: true;
+      files: CollectedFile[];
+      identity: PlcIdentity;
+      failed: { type: CollectedType; number: number; error: string }[];
+    }
+  | { ok: false; error: string }
+  | { ok: false; cancelled: true };
+
+export interface CollectOptions {
+  /** I tipi da elencare e caricare (predefiniti: OB, FB, FC e DB). */
+  types?: readonly BlockType[];
+  /** Controlla l'identità appena letta: una stringa è il motivo per cui non si prosegue. */
+  verifyIdentity?: (id: PlcIdentity) => string | undefined;
+}
 export const MAX_BLOCKS = 4096;
 export const MAX_BYTES = 64 * 1024 * 1024;
 const CONNECTION_TYPES = { PG: 'pg', OP: 'op', S7_BASIC: 'basic' } as const;
@@ -69,12 +94,22 @@ export class UploadService {
   }
 
   async start(owner: UploadOwner, access: PlcAccess): Promise<PlcUploadAllResult> {
+    // Con i tipi predefiniti i file sono solo OB, FB, FC e DB.
+    return this.collect(owner, access) as Promise<PlcUploadAllResult>;
+  }
+
+  /** Il giro generico: `start` lo usa con i tipi predefiniti, il backup con gli SDB in più. */
+  async collect(
+    owner: UploadOwner,
+    access: PlcAccess,
+    opts: CollectOptions = {},
+  ): Promise<CollectResult> {
     if (this.runs.has(owner)) return { ok: false, error: 'Un caricamento è già in corso' };
     if (owner.isDestroyed()) return { ok: false, error: 'Finestra chiusa' };
     const ctl = new AbortController();
     const onGone = (): void => ctl.abort();
     owner.once('destroyed', onGone);
-    const finished = this.run(owner, access, ctl.signal).finally(() => {
+    const finished = this.run(owner, access, ctl.signal, opts).finally(() => {
       owner.removeListener('destroyed', onGone);
       if (this.runs.get(owner)?.ctl === ctl) this.runs.delete(owner);
     });
@@ -97,8 +132,10 @@ export class UploadService {
     owner: UploadOwner,
     access: PlcAccess,
     signal: AbortSignal,
-  ): Promise<PlcUploadAllResult> {
-    const cancelled = (): PlcUploadAllResult => ({ ok: false, cancelled: true });
+    opts: CollectOptions,
+  ): Promise<CollectResult> {
+    const types = opts.types ?? TYPES;
+    const cancelled = (): CollectResult => ({ ok: false, cancelled: true });
     const aborted = new Promise<typeof ABORTED>((resolve) => {
       if (signal.aborted) resolve(ABORTED);
       else signal.addEventListener('abort', () => resolve(ABORTED), { once: true });
@@ -130,13 +167,14 @@ export class UploadService {
       const idRaw = await raced(c.identity());
       if (idRaw === ABORTED) return cancelled();
       const identity: PlcIdentity = toPlcIdentity(idRaw);
+      const refusal = opts.verifyIdentity?.(identity);
+      if (refusal !== undefined) return { ok: false, error: refusal };
 
-      const todo: { type: PlcUploadedFile['type']; number: number }[] = [];
-      for (const type of TYPES) {
+      const todo: { type: CollectedType; number: number }[] = [];
+      for (const type of types) {
         const list = await raced(c.listBlocks(type));
         if (list === ABORTED) return cancelled();
-        for (const e of list)
-          todo.push({ type: type as PlcUploadedFile['type'], number: e.number });
+        for (const e of list) todo.push({ type: type as CollectedType, number: e.number });
         if (todo.length > this.maxBlocks) {
           return {
             ok: false,
@@ -145,8 +183,8 @@ export class UploadService {
         }
       }
 
-      const files: PlcUploadedFile[] = [];
-      const failed: Extract<PlcUploadAllResult, { ok: true }>['failed'] = [];
+      const files: CollectedFile[] = [];
+      const failed: Extract<CollectResult, { ok: true }>['failed'] = [];
       let bytes = 0;
       let last = 0;
       const emit = (done: number, current: string): void => {

@@ -11,3 +11,4 @@ export * from './codeRename';
 export * from './mc7Bridge';
 export * from './watchOperand';
 export * from './plcAccess';
+export * from './backupFile';
