@@ -110,7 +110,9 @@
     "plcDisconnected": "Collegamento online interrotto.",
     "plcConnectFailed": "Collegamento non riuscito: {{message}}",
     "plcLost": "Collegamento interrotto: {{reason}}",
-    "plcMismatch": "La CPU collegata ({{connected}}) è diversa da quella del progetto ({{project}})."
+    "plcMismatch": "La CPU collegata ({{connected}}) è diversa da quella del progetto ({{project}}).",
+    "plcBlockedBySim": "Termina la simulazione prima di collegarti al PLC.",
+    "simBlockedByOnline": "Interrompi il collegamento online prima di avviare la simulazione."
   },
   "commands": {
     "project.new": "Nuovo…",

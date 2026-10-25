@@ -2,6 +2,8 @@ import { act } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { findDevice } from '@baaportal/project';
 import { commands } from '../../src/commands/commands';
+import { plcControllerFor, shutdownOnline } from '../../src/online/plcController';
+import { simControllerFor } from '../../src/sim/simController';
 import type { PlcConnectResult } from '../../src/online/plcTypes';
 import { renderApp } from '../renderApp';
 
@@ -32,6 +34,7 @@ function gate(app: Awaited<ReturnType<typeof setup>>['app']) {
   let resolve!: (r: PlcConnectResult) => void;
   app.bridge.plcConnect = (access) => {
     app.bridge.plcConnectCalls.push(access);
+    app.bridge.plcState = { connected: true, access };
     return new Promise<PlcConnectResult>((r) => (resolve = r));
   };
   return (r: PlcConnectResult) => act(async () => resolve(r));
@@ -154,5 +157,83 @@ describe('collegamento online', () => {
     expect(s.app.bridge.plcDisconnectCalls).toBe(1);
     act(() => s.app.bridge.emitPlcEvent({ kind: 'lost', reason: 'x' }));
     expect(s.messages()).not.toContain('messages.plcLost');
+  });
+
+  it('plcStatus dice non collegato dopo il collegamento: off con plcLost', async () => {
+    const s = await setup();
+    s.app.bridge.plcResults.push(OK);
+    s.app.bridge.plcStatus = async () => ({ connected: false });
+    await s.run('online.goOnline');
+    expect(s.online().status).toBe('off');
+    expect(s.messages()).toContain('messages.plcLost');
+    expect(s.messages()).not.toContain('messages.plcConnected');
+  });
+
+  it('la simulazione rifiuta di partire con un collegamento online, con un messaggio', async () => {
+    const s = await setup();
+    s.app.bridge.plcResults.push(OK);
+    await s.run('online.goOnline');
+    await act(async () => {
+      await simControllerFor(s.app.store).toggle();
+    });
+    expect(s.app.store.getState().sim.phase).toBe('off');
+    expect(s.messages().at(-1)).toBe('messages.simBlockedByOnline');
+  });
+
+  it('goOnline con la simulazione accesa (anche in avvio) mostra un messaggio', async () => {
+    const s = await setup();
+    act(() => s.app.store.getState().setSim({ phase: 'starting', deviceId: 'id1' }));
+    expect(commands['online.goOnline'].isEnabled(s.app.store.getState())).toBe(false);
+    await act(async () => {
+      await plcControllerFor(s.app.store, s.app.bridge).goOnline();
+    });
+    expect(s.online().status).toBe('off');
+    expect(s.app.bridge.plcConnectCalls).toHaveLength(0);
+    expect(s.messages().at(-1)).toBe('messages.plcBlockedBySim');
+  });
+
+  it('goOffline durante connecting annulla; la risposta tardiva non risuscita nulla', async () => {
+    const s = await setup();
+    const answer = gate(s.app);
+    const p = s.run('online.goOnline');
+    await s.run('online.goOffline');
+    expect(s.online().status).toBe('off');
+    await answer(OK);
+    await p;
+    expect(s.online().status).toBe('off');
+    expect(s.app.bridge.plcDisconnectCalls).toBe(2);
+  });
+
+  it('un lost durante connecting si ignora; la simulazione è disabilitata', async () => {
+    const s = await setup();
+    const answer = gate(s.app);
+    const p = s.run('online.goOnline');
+    expect(commands['online.simulation'].isEnabled(s.app.store.getState())).toBe(false);
+    act(() => s.app.bridge.emitPlcEvent({ kind: 'lost', reason: 'x' }));
+    expect(s.online().status).toBe('connecting');
+    await answer(OK);
+    await p;
+    expect(s.online().status).toBe('on');
+    expect(s.messages()).not.toContain('messages.plcLost');
+  });
+
+  it('aprire un altro progetto da online scollega', async () => {
+    const s = await setup();
+    s.app.bridge.plcResults.push(OK);
+    await s.run('online.goOnline');
+    await act(async () => {
+      await s.app.service.open('/doc/BaaPortal/Linea 3.baap');
+    });
+    expect(s.online().status).toBe('off');
+    expect(s.app.bridge.plcDisconnectCalls).toBe(1);
+  });
+
+  it('shutdownOnline (chiusura della finestra) scollega', async () => {
+    const s = await setup();
+    s.app.bridge.plcResults.push(OK);
+    await s.run('online.goOnline');
+    shutdownOnline(s.app.store);
+    expect(s.online().status).toBe('off');
+    expect(s.app.bridge.plcDisconnectCalls).toBe(1);
   });
 });

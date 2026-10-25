@@ -41,11 +41,18 @@ export class PlcController {
     });
   }
 
-  /** Collega la CPU selezionata (o la prima); senza impostazioni di accesso apre «Dispositivi accessibili». */
-  async goOnline(): Promise<void> {
+  /**
+   * Collega la CPU `deviceId` (predefinita: quella selezionata nell'albero, o la prima); senza
+   * impostazioni di accesso apre «Dispositivi accessibili».
+   */
+  async goOnline(deviceId?: string): Promise<void> {
     const st = this.store.getState();
-    if (st.online.status !== 'off' || st.sim.phase !== 'off') return;
-    const id = targetPlcId(st);
+    if (st.online.status !== 'off') return;
+    if (st.sim.phase !== 'off') {
+      this.push('warning', 'plcBlockedBySim');
+      return;
+    }
+    const id = deviceId ?? targetPlcId(st);
     const dev = st.doc && id ? findDevice(st.doc.project, id) : undefined;
     if (!dev) return;
     const access = dev.properties.access;
@@ -84,6 +91,13 @@ export class PlcController {
       identity: result.identity,
       mode: result.mode,
     });
+    // Verifica: l'esito dice «collegato», ma il processo principale potrebbe aver già perso il PLC.
+    const status = await this.bridge.plcStatus().catch(() => undefined);
+    if (gen !== this.generation) return;
+    if (status && !status.connected) {
+      this.lose(gen, 'connection closed');
+      return;
+    }
     this.push('info', 'plcConnected', { name: dev.name, host: access.host });
     if (norm(result.identity.orderNumber) !== norm(dev.cpu.orderNumber)) {
       this.push('warning', 'plcMismatch', {
@@ -99,11 +113,16 @@ export class PlcController {
       this.store.getState().patchOnline({ mode: e.mode });
       return;
     }
+    this.lose(gen, e.reason);
+  }
+
+  private lose(gen: number, reason: string): void {
+    if (gen !== this.generation) return;
     this.generation++;
     this.unlisten?.();
     this.unlisten = undefined;
     this.store.getState().setOnline(ONLINE_OFF);
-    this.push('error', 'plcLost', { reason: e.reason });
+    this.push('error', 'plcLost', { reason });
   }
 
   /** «Interrompi collegamento online». */

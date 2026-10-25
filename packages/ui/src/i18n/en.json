@@ -110,7 +110,9 @@
     "plcDisconnected": "Online connection closed.",
     "plcConnectFailed": "Connection failed: {{message}}",
     "plcLost": "Connection lost: {{reason}}",
-    "plcMismatch": "The connected CPU ({{connected}}) differs from the project CPU ({{project}})."
+    "plcMismatch": "The connected CPU ({{connected}}) differs from the project CPU ({{project}}).",
+    "plcBlockedBySim": "Stop the simulation before going online with the PLC.",
+    "simBlockedByOnline": "Go offline before starting the simulation."
   },
   "commands": {
     "project.new": "New…",

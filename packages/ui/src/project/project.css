@@ -966,9 +966,9 @@
 .baa-app.online .baa-menubar,
 .baa-app.online [data-panel='navigation'] > .baa-panel-header,
 .baa-app.online .baa-editor-header {
-  background: var(--online-accent);
-  color: var(--online-accent-text);
+  background: var(--baa-online);
+  color: var(--baa-online-text);
 }
 .baa-app.online .baa-menubar-title {
-  color: var(--online-accent-text);
+  color: var(--baa-online-text);
 }

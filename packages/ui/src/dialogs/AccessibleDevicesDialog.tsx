@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { PlcAccess } from '@baaportal/project';
-import { commands } from '../commands/commands';
+import { plcControllerFor } from '../online/plcController';
 import { Dialog } from '../components/Dialog';
 import { parseAccessInput, parseTsap } from '../online/accessInput';
 import type { FoundDevice, NetInterface, PlcScanEvent } from '../online/plcTypes';
@@ -28,7 +28,7 @@ const toInt = (s: string): number | null => (/^\d+$/.test(s.trim()) ? Number(s) 
  */
 export function AccessibleDevicesDialog({ onClose }: { onClose(): void }) {
   const { t } = useTranslation();
-  const { bridge, store, service } = useServices();
+  const { bridge, store } = useServices();
   const projectDevices = useAppStore((s) => s.doc?.project.devices ?? []);
   const ids = {
     iface: useId(),
@@ -206,7 +206,7 @@ export function AccessibleDevicesDialog({ onClose }: { onClose(): void }) {
       if (d) d.properties.access = access;
     });
     onClose();
-    void commands['online.goOnline'].run({ store, service, bridge });
+    void plcControllerFor(store, bridge).goOnline(cpu.id);
   };
 
   const typeText = (r: Row): string =>

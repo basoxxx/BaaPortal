@@ -114,6 +114,8 @@ export class SimController {
       const wasOn = sim.phase === 'on';
       this.shutdown();
       if (wasOn) this.push('info', 'simStopped');
+    } else if (this.store.getState().online.status !== 'off') {
+      this.push('warning', 'simBlockedByOnline');
     } else await this.startSession();
   }
 

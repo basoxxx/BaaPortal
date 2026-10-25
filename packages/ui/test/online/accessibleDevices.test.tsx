@@ -2,6 +2,7 @@ import { act, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { findDevice } from '@baaportal/project';
 import { commands } from '../../src/commands/commands';
+import { PlcController } from '../../src/online/plcController';
 import { parseAccessInput, parseTsap } from '../../src/online/accessInput';
 import { renderApp } from '../renderApp';
 
@@ -138,7 +139,9 @@ describe('finestra «Dispositivi accessibili»', () => {
 
   it('Collega salva access (annullabile) ed esegue goOnline', async () => {
     const { user, store, bridge, dlg } = await openDialog();
-    const goOnline = vi.spyOn(commands['online.goOnline'], 'run').mockImplementation(() => {});
+    const goOnline = vi
+      .spyOn(PlcController.prototype, 'goOnline')
+      .mockImplementation(async () => {});
     bridge.plcScanResults = [{ ok: true, scanId: 1, total: 254 }];
     await user.click(within(dlg).getByRole('button', { name: 'Avvia ricerca' }));
     await waitFor(() => expect(bridge.plcScanStartCalls).toHaveLength(1));
@@ -165,7 +168,9 @@ describe('finestra «Dispositivi accessibili»', () => {
 
   it('gateway RFC 1006: il TSAP si valida e finisce in remoteTsap', async () => {
     const { user, store, dlg } = await openDialog();
-    const goOnline = vi.spyOn(commands['online.goOnline'], 'run').mockImplementation(() => {});
+    const goOnline = vi
+      .spyOn(PlcController.prototype, 'goOnline')
+      .mockImplementation(async () => {});
     await user.type(within(dlg).getByLabelText('Indirizzo manuale'), '192.0.2.30');
     await user.click(within(dlg).getByRole('button', { name: 'Aggiungi indirizzo' }));
     await user.click(within(dlg).getByRole('row', { name: /192\.0\.2\.30/ }));
@@ -242,7 +247,7 @@ describe('finestra «Dispositivi accessibili»: chiusura e casi limite', () => {
   });
 
   describe('più CPU', () => {
-    async function twoCpus(select: 'second' | 'none') {
+    async function twoCpus(select: 'first' | 'second' | 'none') {
       const app = await renderApp({ view: 'project', withProject: true, withPlc: true });
       app.store.getState().edit('history.addDevice', (p) => {
         const d = JSON.parse(JSON.stringify(p.devices[0]));
@@ -251,6 +256,7 @@ describe('finestra «Dispositivi accessibili»: chiusura e casi limite', () => {
         p.devices.push(d);
       });
       if (select === 'second') app.store.getState().select('plc:id2');
+      if (select === 'first') app.store.getState().select('plc:id1');
       app.bridge.plcInterfacesValue = [IFACE];
       await act(async () => {
         await commands['online.accessibleDevices'].run({
@@ -270,7 +276,9 @@ describe('finestra «Dispositivi accessibili»: chiusura e casi limite', () => {
 
     it('senza selezione parte dalla prima e Collega salva sulla scelta', async () => {
       const { user, store, dlg } = await twoCpus('none');
-      const goOnline = vi.spyOn(commands['online.goOnline'], 'run').mockImplementation(() => {});
+      const goOnline = vi
+        .spyOn(PlcController.prototype, 'goOnline')
+        .mockImplementation(async () => {});
       const sel = within(dlg).getByLabelText('CPU del progetto');
       expect(sel).toHaveValue('id1');
       await user.selectOptions(sel, 'id2');
@@ -280,7 +288,24 @@ describe('finestra «Dispositivi accessibili»: chiusura e casi limite', () => {
       const devs = store.getState().doc!.project.devices;
       expect(devs[1]!.properties.access?.host).toBe('192.0.2.40');
       expect(devs[0]!.properties.access).toBeUndefined();
+      expect(goOnline).toHaveBeenCalledWith('id2');
       goOnline.mockRestore();
+    });
+
+    it('albero su PLC_1, finestra su PLC_2: si collega PLC_2', async () => {
+      const { user, store, bridge, dlg } = await twoCpus('first');
+      bridge.plcResults.push({
+        ok: true,
+        mode: 'RUN',
+        identity: { orderNumber: '6ES7 315-2EH14-0AB0' },
+      });
+      await user.selectOptions(within(dlg).getByLabelText('CPU del progetto'), 'id2');
+      await user.type(within(dlg).getByLabelText('Indirizzo manuale'), '192.0.2.40');
+      await user.click(within(dlg).getByRole('button', { name: 'Aggiungi indirizzo' }));
+      await user.click(within(dlg).getByRole('button', { name: 'Collega' }));
+      await waitFor(() => expect(store.getState().online.status).toBe('on'));
+      expect(store.getState().online.deviceId).toBe('id2');
+      expect(bridge.plcConnectCalls[0]!.host).toBe('192.0.2.40');
     });
   });
 });

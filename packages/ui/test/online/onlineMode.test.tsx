@@ -75,3 +75,14 @@ describe('modalità online nell interfaccia', () => {
     ).toHaveAttribute('data-on', 'true');
   });
 });
+
+describe('chiusura della finestra', () => {
+  it('handleCloseRequest scollega il PLC', async () => {
+    const app = await online();
+    await act(async () => {
+      await app.service.handleCloseRequest();
+    });
+    expect(app.store.getState().online.status).toBe('off');
+    expect(app.bridge.plcDisconnectCalls).toBe(1);
+  });
+});
