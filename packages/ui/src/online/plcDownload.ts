@@ -134,8 +134,9 @@ export function releaseDownload(store: StoreApi<AppState>, plan: DownloadPlan): 
 export async function preparePlcDownload(ctx: DownloadCtx, blockIds?: string[]): Promise<void> {
   const { store, bridge } = ctx;
   const st = store.getState();
-  const { status, deviceId, comparing, downloading, identity } = st.online;
-  if (status !== 'on' || !deviceId || comparing || downloading || getProgress()) return;
+  const { status, deviceId, comparing, downloading, commanding, identity } = st.online;
+  if (status !== 'on' || !deviceId || comparing || downloading || commanding || getProgress())
+    return;
   const load = st.docLoadId;
   const live = () => {
     const s = store.getState();

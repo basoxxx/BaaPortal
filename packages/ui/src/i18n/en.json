@@ -1057,7 +1057,6 @@
     },
     "ledOn": "on",
     "ledOff": "off",
-    "readOnly": "Read-only connection",
     "mresHint": "Use the CPU mode selector (MRES)",
     "copyRamToRomBtn": "Copy RAM to ROM",
     "compressBtn": "Compress",

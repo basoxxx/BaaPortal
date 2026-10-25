@@ -1,6 +1,7 @@
 import { act, fireEvent, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { commands } from '../../src/commands/commands';
+import { preparePlcDownload } from '../../src/online/plcDownload';
 import { ctx, setupOnline } from './downloadHelpers';
 
 type App = Awaited<ReturnType<typeof setupOnline>>['app'];
@@ -64,6 +65,7 @@ describe('comandi della CPU sul PLC', () => {
     await click(p.getByTestId('cpu-run'));
     const m = app.store.getState().messages.find((x) => x.textKey === 'messages.plcCommandFailed');
     expect(m?.params).toEqual({ message: 'rifiutato' });
+    expect(app.store.getState().online.commanding).toBe(false);
   });
 
   it('un comando alla volta e non durante il caricamento', async () => {
@@ -89,5 +91,48 @@ describe('comandi della CPU sul PLC', () => {
     act(() => app.store.getState().patchOnline({ downloading: true }));
     for (const id of ['online.startCpu', 'online.copyRamToRom', 'online.compress'] as const)
       expect(commands[id].isEnabled(app.store.getState())).toBe(false);
+  });
+
+  it('durante un comando il caricamento è bloccato', async () => {
+    const { app } = await setupOnline([], 'STOP');
+    app.bridge.plcControl = () => new Promise(() => undefined);
+    act(() => {
+      void commands['online.compress'].run(ctx(app));
+    });
+    expect(commands['online.download'].isEnabled(app.store.getState())).toBe(false);
+    await act(async () => {
+      await preparePlcDownload(ctx(app));
+    });
+    expect(app.store.getState().online.downloading).toBeFalsy();
+    expect(screen.queryByTestId('download-preview')).toBeNull();
+  });
+
+  it('collegamento perso a metà comando: la risposta tardiva non tocca la nuova sessione', async () => {
+    const { app } = await setupOnline([], 'STOP');
+    let release!: () => void;
+    app.bridge.plcControl = () =>
+      new Promise((r) => {
+        release = () => r({ ok: false, error: 'tardivo' });
+      });
+    act(() => {
+      void commands['online.compress'].run(ctx(app));
+    });
+    act(() => app.bridge.emitPlcEvent({ kind: 'lost', reason: 'closed' }));
+    expect(app.store.getState().online.commanding).toBeFalsy();
+    app.bridge.plcResults.push({
+      ok: true,
+      mode: 'STOP',
+      identity: { orderNumber: '6ES7 315-2EH14-0AB0', moduleName: 'CPU 315-2 PN/DP' },
+    });
+    await act(async () => {
+      await commands['online.goOnline'].run(ctx(app));
+    });
+    app.store.getState().patchOnline({ commanding: true });
+    const n = app.store.getState().messages.length;
+    await act(async () => {
+      release();
+    });
+    expect(app.store.getState().messages.length).toBe(n);
+    expect(app.store.getState().online.commanding).toBe(true);
   });
 });

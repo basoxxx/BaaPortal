@@ -276,7 +276,11 @@ const list: Command[] = [
     // Le due strade sono esclusive: col PLC online si carica nella CPU, con la simulazione nel simulatore.
     isEnabled: (s) =>
       (s.sim.phase === 'on' && !s.sim.downloading && !getProgress()) ||
-      (s.online.status === 'on' && !s.online.downloading && !s.online.comparing && !getProgress()),
+      (s.online.status === 'on' &&
+        !s.online.downloading &&
+        !s.online.comparing &&
+        !s.online.commanding &&
+        !getProgress()),
     run: ({ store, bridge }) =>
       store.getState().online.status === 'on'
         ? preparePlcDownload({ store, bridge })

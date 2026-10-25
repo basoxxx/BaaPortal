@@ -1057,7 +1057,6 @@
     },
     "ledOn": "acceso",
     "ledOff": "spento",
-    "readOnly": "Collegamento in sola lettura",
     "mresHint": "Usa il selettore della CPU (MRES)",
     "copyRamToRomBtn": "Copia RAM in ROM",
     "compressBtn": "Comprimi",

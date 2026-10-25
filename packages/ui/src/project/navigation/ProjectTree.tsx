@@ -428,7 +428,12 @@ export function ProjectTree() {
         compileItems.push({
           id: 'downloadToDevice',
           label: t('objects.downloadToDevice'),
-          disabled: !blocks || !!online.downloading || !!online.comparing || !!getProgress(),
+          disabled:
+            !blocks ||
+            !!online.downloading ||
+            !!online.comparing ||
+            !!online.commanding ||
+            !!getProgress(),
           run: () => blocks && void settle(preparePlcDownload(ctx, blocks.ids)),
         });
       }
