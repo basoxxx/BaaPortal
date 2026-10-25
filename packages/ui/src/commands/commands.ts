@@ -9,6 +9,7 @@ import { openReference } from '../project/reference/referenceStore';
 import { requestFind } from '../search/findActions';
 import { activeCodeBlock } from '../sim/monitorStatus';
 import { plcControllerFor } from '../online/plcController';
+import { preparePlcDownload } from '../online/plcDownload';
 import { simControllerFor } from '../sim/simController';
 import { targetPlcId } from '../project/navigation/treeIds';
 
@@ -267,8 +268,14 @@ const list: Command[] = [
   }),
   def('online.download', {
     icon: 'download',
-    isEnabled: (s) => s.sim.phase === 'on' && !s.sim.downloading && !getProgress(),
-    run: ({ store, bridge }) => simControllerFor(store).download({ store, bridge }),
+    // Le due strade sono esclusive: col PLC online si carica nella CPU, con la simulazione nel simulatore.
+    isEnabled: (s) =>
+      (s.sim.phase === 'on' && !s.sim.downloading && !getProgress()) ||
+      (s.online.status === 'on' && !s.online.downloading && !s.online.comparing && !getProgress()),
+    run: ({ store, bridge }) =>
+      store.getState().online.status === 'on'
+        ? preparePlcDownload({ store, bridge })
+        : simControllerFor(store).download({ store, bridge }),
   }),
   def('online.monitor', {
     icon: 'monitor',

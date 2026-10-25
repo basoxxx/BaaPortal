@@ -116,7 +116,13 @@
     "plcLostErrors": "Collegamento interrotto: errori ripetuti di comunicazione.",
     "plcMismatch": "La CPU collegata ({{connected}}) è diversa da quella del progetto ({{project}}).",
     "plcBlockedBySim": "Termina la simulazione prima di collegarti al PLC.",
-    "simBlockedByOnline": "Interrompi il collegamento online prima di avviare la simulazione."
+    "simBlockedByOnline": "Interrompi il collegamento online prima di avviare la simulazione.",
+    "plcDownloaded": "Caricati {{loaded}} blocchi nella CPU, cancellati {{deleted}}.",
+    "plcDownloadFailed": "Caricamento nella CPU non riuscito: {{message}}. Caricati: {{loaded}}. Fallito: {{failedAt}}.",
+    "plcDownloadCancelled": "Caricamento annullato.",
+    "plcDownloadChanged": "Il progetto è cambiato dopo l'anteprima: ripetere il caricamento.",
+    "plcStopFailed": "Arresto della CPU non riuscito: {{message}}. Nessun caricamento.",
+    "plcRunFailed": "Avvio della CPU non riuscito: {{message}}"
   },
   "commands": {
     "project.new": "Nuovo…",
@@ -597,7 +603,8 @@
     "compileChanges": "Compila → Software (solo modifiche)",
     "compileFull": "Compila → Software (compilazione completa)",
     "importBlocks": "Importa blocchi (.blk o raccolta del kit)…",
-    "exportCompiled": "Esporta blocco compilato (.blk)…"
+    "exportCompiled": "Esporta blocco compilato (.blk)…",
+    "downloadToDevice": "Carica nel dispositivo"
   },
   "grid": {
     "addRow": "<Aggiungi>",
@@ -1158,5 +1165,33 @@
     "errInterfaces": "Impossibile leggere le interfacce di rete: {{error}}",
     "rackInvalid": "Il rack deve essere un numero tra 0 e 7.",
     "slotInvalid": "Lo slot deve essere un numero tra 0 e 31."
+  },
+  "download": {
+    "title": "Carica nel dispositivo",
+    "run": "Carica",
+    "close": "Chiudi",
+    "empty": "Nessun blocco da caricare.",
+    "colBlock": "Blocco",
+    "colState": "Stato",
+    "colAction": "Azione",
+    "load": "Carica",
+    "none": "Nessuna azione",
+    "delete": "Cancella",
+    "unreadableNote": "informazioni della CPU non lette, si carica comunque",
+    "runWarning": "La CPU è in RUN e il caricamento contiene OB o cambia l'interfaccia di un FB o di un DB: caricare a CPU in RUN può portarla in STOP.",
+    "stopCpu": "Arresta la CPU",
+    "waiting": "In attesa di conferma...",
+    "progress": "{{done}} di {{total}} ({{current}})",
+    "loaded": "Caricati: {{list}}",
+    "deleted": "Cancellati: {{list}}",
+    "failedAt": "Fallito: {{block}}",
+    "result": {
+      "done": "Caricamento completato.",
+      "failed": "Caricamento non riuscito.",
+      "cancelled": "Caricamento annullato: nessuna modifica.",
+      "stopFailed": "Arresto della CPU non riuscito: nessun caricamento.",
+      "stale": "Il progetto è cambiato dopo l'anteprima: nessun caricamento.",
+      "ended": "Caricamento eseguito, ma il collegamento o il progetto sono cambiati."
+    }
   }
 }

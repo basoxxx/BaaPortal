@@ -3,6 +3,7 @@ import type { Mc7Diagnostic, Project } from '@baaportal/project';
 import type { DiagEntry, MonitorStep, SimMode } from '@baaportal/sim';
 import type { LineMapRow } from '../editors/awl/monitorExtension';
 import type { OnlineCompare } from '../online/compare';
+import type { DownloadPlan } from '../online/plcDownload';
 import type { PlcAccess, PlcIdentity, PlcMode } from '../online/plcTypes';
 import type { SimStats, SimWarning, WatchValue } from '../sim/protocol';
 import type { ImportSummary } from '../project/navigation/tagTableIo';
@@ -25,6 +26,7 @@ export type DialogState =
   | { kind: 'collectKit' }
   | { kind: 'settings' }
   | { kind: 'accessibleDevices' }
+  | { kind: 'download'; plan: DownloadPlan }
   | { kind: 'importTagsReport'; fileName: string; tableName: string; summary: ImportSummary }
   | null;
 
@@ -191,6 +193,8 @@ export interface OnlineUiState {
   compare?: OnlineCompare;
   /** Un confronto è in corso. */
   comparing?: boolean;
+  /** Un «Carica nel dispositivo» è in preparazione, in anteprima o in corso. */
+  downloading?: boolean;
 }
 
 export const ONLINE_OFF: OnlineUiState = { status: 'off' };

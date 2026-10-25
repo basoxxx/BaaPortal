@@ -19,6 +19,11 @@ import type {
   PlcScanStartResult,
   PlcStatus,
   PlcBlocksResult,
+  PlcBlockRef,
+  PlcControlOp,
+  PlcControlResult,
+  PlcDownloadResult,
+  PlcWriteProgress,
 } from '../src/online/plcTypes';
 
 type Answer = 'save' | 'discard' | 'cancel';
@@ -252,6 +257,36 @@ export class FakeBridge implements BaaBridge {
     const r =
       this.plcBlocksResults.length > 1 ? this.plcBlocksResults.shift() : this.plcBlocksResults[0];
     return r ?? { ok: false, error: 'nessun risultato previsto' };
+  }
+  // Scritture nella CPU: una risposta per chiamata (a coda vuota, riuscite); le chiamate si registrano.
+  plcDownloadResults: PlcDownloadResult[] = [];
+  plcDownloadCalls: { files: Uint8Array[]; deleteBlocks: PlcBlockRef[] }[] = [];
+  plcControlResults: PlcControlResult[] = [];
+  plcControlCalls: PlcControlOp[] = [];
+  /** Registro ordinato di tutte le scritture (per verificare la sequenza). */
+  plcWriteLog: string[] = [];
+  private plcWriteCbs = new Set<(p: PlcWriteProgress) => void>();
+  async plcDownload(
+    files: Uint8Array[],
+    opts?: { deleteBlocks?: PlcBlockRef[] },
+  ): Promise<PlcDownloadResult> {
+    this.plcDownloadCalls.push({ files, deleteBlocks: opts?.deleteBlocks ?? [] });
+    this.plcWriteLog.push('download');
+    return this.plcDownloadResults.shift() ?? { ok: true, loaded: [], deleted: [] };
+  }
+  async plcControl(op: PlcControlOp): Promise<PlcControlResult> {
+    this.plcControlCalls.push(op);
+    this.plcWriteLog.push(op);
+    return this.plcControlResults.shift() ?? { ok: true, result: 'ok' };
+  }
+  onPlcWriteProgress(cb: (p: PlcWriteProgress) => void) {
+    this.plcWriteCbs.add(cb);
+    return () => {
+      this.plcWriteCbs.delete(cb);
+    };
+  }
+  emitPlcWriteProgress(p: PlcWriteProgress): void {
+    for (const cb of [...this.plcWriteCbs]) cb(p);
   }
   // Ricerca dei dispositivi accessibili.
   plcInterfacesValue: NetInterface[] = [];

@@ -54,6 +54,7 @@ import {
 import { exportTagTable, importTagTable } from './tagTableIo';
 import { RenameInput } from './RenameInput';
 import type { CompareState } from '../../online/compare';
+import { preparePlcDownload } from '../../online/plcDownload';
 import { buildTree, type TreeNode } from './treeModel';
 import { getProgress } from '../progress';
 import { parseNodeId } from './treeIds';
@@ -421,6 +422,16 @@ export function ProjectTree() {
           run: () => void settle(exportCompiledBlock(ctx, parsed.dev, parsed.id)),
         },
       );
+      // Solo col PLC online: i blocchi scelti nell'albero, con l'anteprima del confronto.
+      const online = store.getState().online;
+      if (online.status === 'on' && online.deviceId === parsed.dev) {
+        compileItems.push({
+          id: 'downloadToDevice',
+          label: t('objects.downloadToDevice'),
+          disabled: !blocks || !!online.downloading || !!online.comparing || !!getProgress(),
+          run: () => blocks && void settle(preparePlcDownload(ctx, blocks.ids)),
+        });
+      }
     }
     return [
       {
