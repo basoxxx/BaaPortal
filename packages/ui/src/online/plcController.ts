@@ -2,8 +2,11 @@ import type { StoreApi } from 'zustand/vanilla';
 import { findDevice } from '@baaportal/project';
 import type { BaaBridge } from '../bridge';
 import { targetPlcId } from '../project/navigation/treeIds';
+import { compileProgram, contextHashOf, hashOf } from '../project/compile/compileActions';
+import { getProgress } from '../project/progress';
 import { ONLINE_OFF, type AppState } from '../state/store';
-import type { PlcEvent, PlcLostReason } from './plcTypes';
+import { compareBlocks, type CompareProjectBlock } from './compare';
+import type { PlcControlOp, PlcEvent, PlcLostReason } from './plcTypes';
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const norm = (s: string) => s.replace(/\s+/g, '').toUpperCase();
@@ -15,6 +18,8 @@ const norm = (s: string) => s.replace(/\s+/g, '').toUpperCase();
  */
 export class PlcController {
   private generation = 0;
+  /** Un numero per confronto: chi non è più il corrente non tocca `comparing`. */
+  private compareToken = 0;
   private unlisten: (() => void) | undefined;
 
   constructor(
@@ -61,6 +66,7 @@ export class PlcController {
       return;
     }
     const gen = ++this.generation;
+    this.compareToken++;
     this.unlisten?.();
     this.unlisten = this.bridge.onPlcEvent((e) => this.onEvent(gen, e));
     st.setOnline({ status: 'connecting', access, deviceId: dev.id });
@@ -105,6 +111,106 @@ export class PlcController {
         project: dev.cpu.orderNumber,
       });
     }
+    void this.compare(false);
+  }
+
+  /**
+   * Confronta i blocchi del progetto con quelli della CPU collegata: compila ciò che è cambiato,
+   * elenca i blocchi della CPU (sola lettura) e tiene l'esito in `online.compare`. Parte da sola
+   * al collegamento (`explicit` falso: compila in silenzio, senza aprire la scheda Compila e solo
+   * se serve) e col comando «Confronta» (`explicit`: come la compilazione normale); non a ogni
+   * modifica. Se un'altra operazione lunga impedisce di compilare, si confronta con ciò che c'è e
+   * i blocchi cambiati risultano da compilare.
+   */
+  async compare(explicit = true): Promise<void> {
+    const st = this.store.getState();
+    const { status, deviceId, comparing } = st.online;
+    if (status !== 'on' || !deviceId || comparing) return;
+    const gen = this.generation;
+    const token = ++this.compareToken;
+    const live = () => gen === this.generation && this.store.getState().online.status === 'on';
+    st.patchOnline({ comparing: true });
+    try {
+      const dev0 = st.doc && findDevice(st.doc.project, deviceId);
+      if (!dev0) return;
+      const ctx0 = contextHashOf(dev0);
+      const upToDate = dev0.blocks.every((b) => st.compile.hashes[b.id] === hashOf(b, ctx0));
+      if (explicit || !upToDate) {
+        if (getProgress()) this.push('warning', 'plcCompareSkipped');
+        else {
+          await compileProgram(
+            { store: this.store, bridge: this.bridge },
+            deviceId,
+            'changes',
+            undefined,
+            {
+              silent: !explicit,
+            },
+          );
+          if (!live()) return;
+        }
+      }
+      let res: Awaited<ReturnType<BaaBridge['plcBlocks']>>;
+      try {
+        res = await this.bridge.plcBlocks();
+      } catch (e) {
+        res = { ok: false, error: errorText(e) };
+      }
+      if (!live()) return;
+      if (!res.ok) {
+        this.push('error', 'plcCompareFailed', { message: res.error });
+        return;
+      }
+      const { doc, compile } = this.store.getState();
+      const dev = doc && findDevice(doc.project, deviceId);
+      if (!dev) return;
+      const context = contextHashOf(dev);
+      const hashes: Record<string, string> = {};
+      const project: CompareProjectBlock[] = dev.blocks.map((b) => {
+        const hash = hashOf(b, context);
+        hashes[b.id] = hash;
+        const file = compile.hashes[b.id] === hash ? compile.files[b.id] : undefined;
+        return {
+          id: b.id,
+          type: b.kind === 'IDB' ? 'DB' : b.kind,
+          number: b.number,
+          ...(file ? { file } : {}),
+        };
+      });
+      this.store.getState().patchOnline({
+        compare: { deviceId, rows: compareBlocks(project, res.blocks), hashes },
+      });
+    } finally {
+      if (token === this.compareToken && this.store.getState().online.status !== 'off') {
+        this.store.getState().patchOnline({ comparing: false });
+      }
+    }
+  }
+
+  /**
+   * Comando della CPU (RUN, STOP, copia RAM in ROM, comprimi). La conferma è nativa, nel processo
+   * principale; il modo non si forza: lo porta l'evento `mode` della sorveglianza.
+   */
+  async control(op: PlcControlOp): Promise<void> {
+    const st = this.store.getState();
+    const { status, downloading, commanding } = st.online;
+    if (status !== 'on' || downloading || commanding) return;
+    const gen = this.generation;
+    st.patchOnline({ commanding: true });
+    let res: Awaited<ReturnType<BaaBridge['plcControl']>>;
+    try {
+      res = await this.bridge.plcControl(op);
+    } catch (e) {
+      res = { ok: false, error: errorText(e) };
+    }
+    if (gen !== this.generation) return;
+    this.store.getState().patchOnline({ commanding: false });
+    if (!res.ok) {
+      if (!('cancelled' in res)) this.push('error', 'plcCommandFailed', { message: res.error });
+      return;
+    }
+    if (op === 'COPY_RAM_TO_ROM') this.push('info', 'plcCopiedRamToRom');
+    else if (op === 'COMPRESS') this.push('info', 'plcCompressed');
   }
 
   private onEvent(gen: number, e: PlcEvent): void {
@@ -119,6 +225,7 @@ export class PlcController {
   private lose(gen: number, reason: PlcLostReason): void {
     if (gen !== this.generation) return;
     this.generation++;
+    this.compareToken++;
     this.unlisten?.();
     this.unlisten = undefined;
     this.store.getState().setOnline(ONLINE_OFF);
@@ -142,6 +249,7 @@ export class PlcController {
   /** Chiude il collegamento (progetto chiuso o cambiato, finestra in chiusura). */
   shutdown(): void {
     this.generation++;
+    this.compareToken++;
     this.unlisten?.();
     this.unlisten = undefined;
     if (this.store.getState().online.status === 'off') return;

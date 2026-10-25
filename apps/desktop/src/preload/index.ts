@@ -1,5 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { BaaBridge, KitProgress, PlcEvent, PlcScanEvent } from '@baaportal/ui';
+import type {
+  BaaBridge,
+  KitProgress,
+  PlcEvent,
+  PlcScanEvent,
+  PlcWriteProgress,
+  PlcUploadProgress,
+} from '@baaportal/ui';
 import type { RawBridge } from '../shared/rawBridge';
 
 function subscribe<T extends unknown[]>(channel: string, cb: (...args: T) => void): () => void {
@@ -59,6 +66,14 @@ const bridge: RawBridge = {
   plcScanStart: (address) => ipcRenderer.invoke('plc:scanStart', address),
   plcScanCancel: () => ipcRenderer.invoke('plc:scanCancel'),
   onPlcScanEvent: (cb) => subscribe<[PlcScanEvent]>('plc:scanEvent', cb),
+  plcDownload: (files, opts) => ipcRenderer.invoke('plc:download', files, opts),
+  plcControl: (op) => ipcRenderer.invoke('plc:control', op),
+  plcBlocks: () => ipcRenderer.invoke('plc:blocks'),
+  plcUploadBlock: (type, number) => ipcRenderer.invoke('plc:uploadBlock', type, number),
+  onPlcWriteProgress: (cb) => subscribe<[PlcWriteProgress]>('plc:writeProgress', cb),
+  plcUploadAll: (access) => ipcRenderer.invoke('plc:uploadAll', access),
+  plcUploadCancel: () => ipcRenderer.invoke('plc:uploadCancel'),
+  onPlcUploadProgress: (cb) => subscribe<[PlcUploadProgress]>('plc:uploadProgress', cb),
   testOverrides: () => ipcRenderer.invoke('app:test-overrides'),
 };
 

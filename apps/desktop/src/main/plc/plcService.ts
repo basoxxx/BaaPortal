@@ -20,7 +20,19 @@ export interface PlcOwner {
   removeListener(event: 'destroyed', cb: () => void): unknown;
 }
 
-type Client = Pick<S7Client, 'identity' | 'mode' | 'protection' | 'close' | 'closed'>;
+type Client = Pick<
+  S7Client,
+  | 'identity'
+  | 'mode'
+  | 'protection'
+  | 'close'
+  | 'closed'
+  | 'listBlocks'
+  | 'blockInfo'
+  | 'uploadWithInfo'
+>;
+/** Il collegamento in sola lettura, come lo vedono le richieste di lettura (elenco blocchi). */
+export type ReadClient = Pick<Client, 'listBlocks' | 'blockInfo' | 'uploadWithInfo'>;
 export type PlcConnectFn = (o: Omit<ConnectOptions, 'transport'>) => Promise<Client>;
 
 export interface PlcServiceOptions {
@@ -38,17 +50,23 @@ const DEFAULT_PORT = 102;
 const CONNECTION_TYPES = { PG: 'pg', OP: 'op', S7_BASIC: 'basic' } as const;
 
 interface Link {
+  /** Numero progressivo: distingue un collegamento da uno successivo allo stesso indirizzo. */
+  id: number;
   access: PlcAccess;
+  identity: PlcIdentity;
   client: Client;
   mode: PlcMode;
   timer: NodeJS.Timeout;
   onGone: () => void;
-  reading: boolean;
+  /** Un giro di sorveglianza è in coda o in corso: il prossimo salta (ne basta uno). */
+  polling: boolean;
+  /** Coda: una sola richiesta alla volta sulla connessione. */
+  chain: Promise<unknown>;
   failures: number;
   done: boolean;
 }
 
-function connectMessage(err: unknown, access: PlcAccess): string {
+export function connectMessage(err: unknown, access: PlcAccess): string {
   const port = access.port ?? DEFAULT_PORT;
   if (err instanceof S7Error) {
     if (err.code === 'COTP_REJECTED')
@@ -69,6 +87,7 @@ function connectMessage(err: unknown, access: PlcAccess): string {
  */
 export class PlcService {
   private readonly links = new Map<PlcOwner, Link>();
+  private linkSeq = 0;
   /** Per finestra: numero dell'ultimo connect, per scartare quelli superati mentre attendono. */
   private readonly epochs = new WeakMap<PlcOwner, number>();
   /** Finestre con un connect in attesa: servono a `closeAll` per annullarlo. */
@@ -141,12 +160,15 @@ export class PlcService {
       return { ok: false, error: 'Collegamento annullato' };
     }
     const link: Link = {
+      id: ++this.linkSeq,
       access,
+      identity,
       client,
       mode,
       timer: setInterval(() => void this.tick(owner, link), this.intervalMs),
       onGone: () => void this.drop(owner),
-      reading: false,
+      polling: false,
+      chain: Promise.resolve(),
       failures: 0,
       done: false,
     };
@@ -171,6 +193,58 @@ export class PlcService {
   status(owner: PlcOwner): PlcStatus {
     const link = this.links.get(owner);
     return link ? { connected: true, access: link.access } : { connected: false };
+  }
+
+  /**
+   * Bersaglio delle scritture: indirizzo e identità del collegamento attivo della stessa finestra.
+   * Il renderer non passa mai un indirizzo, lo decide solo questo.
+   */
+  target(
+    owner: PlcOwner,
+  ): { access: PlcAccess; identity: PlcIdentity; linkId: number } | undefined {
+    const link = this.links.get(owner);
+    return link ? { access: link.access, identity: link.identity, linkId: link.id } : undefined;
+  }
+
+  /**
+   * Una lettura fatta di più passi sul collegamento della finestra. `body` riceve `run`, che prende
+   * un posto in coda per ogni passo: tra un passo e l'altro la sorveglianza può girare e sulla
+   * connessione non corrono mai due richieste insieme. Se un passo trova il collegamento chiuso o
+   * senza risposta, il collegamento è perso come nella sorveglianza (la finestra riceve `lost`).
+   * Oltre `deadlineMs` i passi successivi non partono. Senza collegamento dà
+   * `{ ok: false, error }`; mai eccezioni.
+   */
+  async read<T>(
+    owner: PlcOwner,
+    body: (run: <R>(fn: (client: ReadClient) => Promise<R>) => Promise<R>) => Promise<T>,
+    deadlineMs = 60_000,
+  ): Promise<{ ok: true; value: T } | { ok: false; error: string }> {
+    const link = this.links.get(owner);
+    if (!link) return { ok: false, error: 'Nessun collegamento online' };
+    const end = Date.now() + deadlineMs;
+    const run = <R>(fn: (client: ReadClient) => Promise<R>): Promise<R> =>
+      this.exclusive(link, async () => {
+        if (link.done) throw new S7Error('CLOSED', 'collegamento chiuso');
+        if (Date.now() > end) {
+          throw new S7Error('ABORTED', `Lettura troppo lunga: oltre ${deadlineMs / 1000} s`);
+        }
+        return fn(link.client);
+      });
+    try {
+      return { ok: true, value: await body(run) };
+    } catch (err) {
+      if (err instanceof S7Error && (err.code === 'CLOSED' || err.code === 'TIMEOUT')) {
+        this.lost(owner, link, err.code === 'TIMEOUT' ? 'timeout' : 'closed');
+      }
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  /** Accoda `fn` dietro alle richieste precedenti del collegamento. */
+  private exclusive<T>(link: Link, fn: () => Promise<T>): Promise<T> {
+    const run = link.chain.then(fn, fn);
+    link.chain = run.catch(() => undefined);
+    return run;
   }
 
   /** Chiude tutto (uscita dall'app). */
@@ -208,12 +282,22 @@ export class PlcService {
 
   /** Un giro di sorveglianza; se la lettura precedente non è finita, salta. */
   private async tick(owner: PlcOwner, link: Link): Promise<void> {
-    if (link.done || link.reading) return;
+    if (link.done || link.polling) return;
     if (link.client.closed) {
       this.lost(owner, link, 'closed');
       return;
     }
-    link.reading = true;
+    // In coda dietro ciò che c'è: una lettura a lotti cede il posto alla sorveglianza tra un lotto e l'altro.
+    link.polling = true;
+    try {
+      await this.exclusive(link, () => this.poll(owner, link));
+    } finally {
+      link.polling = false;
+    }
+  }
+
+  private async poll(owner: PlcOwner, link: Link): Promise<void> {
+    if (link.done) return;
     let timer: NodeJS.Timeout | undefined;
     try {
       const timeout = new Promise<never>((_, reject) => {
@@ -246,7 +330,6 @@ export class PlcService {
       }
     } finally {
       if (timer) clearTimeout(timer);
-      link.reading = false;
     }
   }
 }

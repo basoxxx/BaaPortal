@@ -32,7 +32,9 @@ describe('vista portale: struttura', () => {
       'Guida',
       "Lingua dell'interfaccia utente",
       'Raccolta dati CPU (sola lettura)',
+      'Carica dal dispositivo',
     ]);
+    expect(screen.getByTestId('action-uploadDevice')).toBeEnabled();
     expect(screen.getByTestId('action-migrate')).toBeDisabled();
     expect(screen.getByTestId('action-help')).toBeDisabled();
   });

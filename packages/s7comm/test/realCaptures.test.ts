@@ -35,7 +35,9 @@ import {
   encodeBlockInfo,
   encodeBlockInfoRequest,
   encodeBlockListOfTypeRequest,
+  encodeCompressMemory,
   encodeControlResponse,
+  encodeCopyRamToRom,
   encodeDownloadBlockAck,
   encodeDownloadBlockJob,
   encodeDownloadEnded,
@@ -556,7 +558,7 @@ describe('snap7.pcap (sempre eseguito): write var, stop e riavvii', () => {
     expect(ress).toBe(reqs);
   });
 
-  it('PLC stop, cold restart, _MODU e _GARB: giro identico; i codec ricostruiscono stop e rifiutano il resto', () => {
+  it('PLC stop, cold restart, _MODU e _GARB: giro identico; i codec ricostruiscono stop, _MODU, _GARB e rifiutano il cold restart', () => {
     let stop = 0;
     let cold = 0;
     let other = 0;
@@ -582,7 +584,11 @@ describe('snap7.pcap (sempre eseguito): write var, stop e riavvii', () => {
         expect(hex(encodeWarmRestart())).not.toBe(hex(pdu.param));
         cold++;
       } else {
-        expect(req.service).toBeUndefined(); // _MODU, _GARB: non ammessi
+        // _MODU e _GARB: ora ammessi, e ricodificati byte per byte come la cattura
+        expect(['_MODU', '_GARB']).toContain(req.service);
+        expect(hex(req.service === '_MODU' ? encodeCopyRamToRom() : encodeCompressMemory())).toBe(
+          hex(pdu.param),
+        );
         other++;
       }
     }

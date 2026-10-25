@@ -69,6 +69,12 @@ export interface CpuBackend {
   /** 0x00 ok, 0x03 se già in RUN. */
   applyWarmRestart(): number;
   applyDownloadedBlock(type: BlockType, number: number, file: Uint8Array): void;
+  /** Cancella un blocco; `false` se non c'era. Assente: il server risponde "non implementato". */
+  deleteBlock?(type: BlockType, number: number): boolean;
+  /** `_MODU`: copia la RAM in ROM. Assente: il server risponde "non implementato". */
+  copyRamToRom?(): void;
+  /** `_GARB`: comprime la memoria. Assente: il server risponde "non implementato". */
+  compressMemory?(): void;
   block(type: BlockType, number: number): StoredBlock | undefined;
   blockCounts(): Record<BlockType, number>;
   blockList(type: BlockType): BlockListEntry[];

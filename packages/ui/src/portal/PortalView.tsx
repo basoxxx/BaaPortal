@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import type { IconName } from '../icons';
 import { useAppStore, useServices } from '../state/AppContext';
 import type { PortalId, StartAction } from '../state/store';
+import { commands } from '../commands/commands';
 import { targetPlcId } from '../project/navigation/treeIds';
 import { ActionList, type ActionItem } from './ActionList';
 import { PortalList } from './PortalList';
@@ -56,6 +57,7 @@ export function PortalView() {
   const hasPlc = (doc?.project.devices.length ?? 0) > 0;
   const portal: PortalId = doc ? storedPortal : 'start';
 
+  const canUpload = useAppStore((s) => commands['online.upload'].isEnabled(s));
   const startItems: ActionItem[] = START_ACTIONS.map(({ id, icon }) => ({
     id,
     icon,
@@ -65,6 +67,13 @@ export function PortalView() {
   }));
   // Il portale non ha la barra dei menu: la raccolta dati CPU si apre anche da qui.
   startItems.push({ id: 'collectCpu', icon: 'portalOnline', label: t('portal.action.collectCpu') });
+  // Come in TIA, si carica da un dispositivo anche senza progetto: crea un progetto nuovo.
+  startItems.push({
+    id: 'uploadDevice',
+    icon: 'portalOnline',
+    label: t('portal.action.uploadDevice'),
+    disabled: !canUpload,
+  });
   const otherItems: ActionItem[] =
     portal === 'start'
       ? []
@@ -87,6 +96,8 @@ export function PortalView() {
           current={portal === 'start' ? startAction : null}
           onSelect={(id) => {
             if (id === 'close') void service.close();
+            else if (id === 'uploadDevice')
+              store.getState().openDialog({ kind: 'accessibleDevices' });
             else if (id === 'collectCpu') store.getState().openDialog({ kind: 'collectKit' });
             else if (portal === 'start') store.getState().setStartAction(id as StartAction);
             else if (id === 'openView') store.getState().setView('project');

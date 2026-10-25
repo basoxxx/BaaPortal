@@ -1,7 +1,20 @@
 import type { IpcMainInvokeEvent } from 'electron';
-import type { PlcAccess, PlcConnectResult, PlcScanStartResult } from '@baaportal/ui';
+import type {
+  PlcAccess,
+  PlcConnectResult,
+  PlcBlocksResult,
+  PlcControlResult,
+  PlcDownloadResult,
+  PlcScanStartResult,
+  PlcUploadAllResult,
+  PlcUploadBlockResult,
+} from '@baaportal/ui';
+import type { ConfirmFn } from './confirm';
+import { PlcWriteService, isControlOp } from './plcWrite';
+import { isUploadableType, listOnlineBlocks, uploadOneBlock } from './onlineBlocks';
 import { PlcService } from './plcService';
 import { ScanService } from './scanService';
+import { UploadService } from './uploadAll';
 
 type Handle = (
   channel: string,
@@ -42,9 +55,12 @@ export function parsePlcAccess(raw: unknown): PlcAccess | string {
 /** Canali del collegamento online; il servizio tiene un collegamento per finestra (`e.sender`). */
 export function registerPlc(
   handle: Handle,
+  confirm: ConfirmFn,
   service = new PlcService(),
   scans = new ScanService(),
-): { closeAll(): Promise<void> } {
+  writes = new PlcWriteService({ service, confirm }),
+  uploads = new UploadService(),
+): { closeAll(): Promise<void>; writing(): boolean; interruptWrites(): void } {
   handle('plc:connect', async (e, raw): Promise<PlcConnectResult> => {
     const access = parsePlcAccess(raw);
     if (typeof access === 'string') return { ok: false, error: access };
@@ -59,9 +75,41 @@ export function registerPlc(
     return scans.start(e.sender, address);
   });
   handle('plc:scanCancel', (e) => scans.cancel(e.sender));
+  // Scritture: la conferma nativa la chiede il servizio, qualunque cosa faccia il renderer.
+  handle('plc:download', async (e, files, opts): Promise<PlcDownloadResult> => {
+    // Il servizio controlla i dati (una volta sola) prima di qualunque conferma.
+    return writes.download(e.sender, files, opts);
+  });
+  handle('plc:control', async (e, op): Promise<PlcControlResult> => {
+    if (!isControlOp(op)) return { ok: false, error: 'Comando non valido' };
+    return writes.control(e.sender, op);
+  });
+  // Elenco dei blocchi della CPU: sola lettura, sul collegamento della finestra.
+  handle('plc:blocks', (e): Promise<PlcBlocksResult> => listOnlineBlocks(service, e.sender));
+  // Un solo blocco della CPU collegata: sola lettura, solo OB, FB, FC e DB.
+  handle('plc:uploadBlock', (e, type, number): Promise<PlcUploadBlockResult> => {
+    if (!isUploadableType(type))
+      return Promise.resolve({ ok: false, error: 'Tipo di blocco non valido' });
+    if (!int(number, 0, 65535))
+      return Promise.resolve({ ok: false, error: 'Numero di blocco non valido' });
+    return uploadOneBlock(service, e.sender, type, number);
+  });
+  // Caricamento dalla CPU: collegamento proprio, in sola lettura, dall'accesso dato dalla finestra.
+  handle('plc:uploadAll', async (e, raw): Promise<PlcUploadAllResult> => {
+    const access = parsePlcAccess(raw);
+    if (typeof access === 'string') return { ok: false, error: access };
+    return uploads.start(e.sender, access);
+  });
+  handle('plc:uploadCancel', (e) => uploads.cancel(e.sender));
   return {
     closeAll: async () => {
-      await Promise.all([scans.cancelAll(), service.closeAll()]);
+      await Promise.all([
+        scans.cancelAll(),
+        uploads.abortAll(),
+        writes.abortAll().then(() => service.closeAll()),
+      ]);
     },
+    writing: () => writes.writing(),
+    interruptWrites: () => writes.interruptAll(),
   };
 }

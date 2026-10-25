@@ -9,6 +9,7 @@ import { openReference } from '../project/reference/referenceStore';
 import { requestFind } from '../search/findActions';
 import { activeCodeBlock } from '../sim/monitorStatus';
 import { plcControllerFor } from '../online/plcController';
+import { preparePlcDownload } from '../online/plcDownload';
 import { simControllerFor } from '../sim/simController';
 import { targetPlcId } from '../project/navigation/treeIds';
 
@@ -45,6 +46,7 @@ export type CommandId =
   | 'insert.block'
   | 'online.goOnline'
   | 'online.goOffline'
+  | 'online.compare'
   | 'online.simulation'
   | 'online.download'
   | 'online.monitor'
@@ -52,6 +54,8 @@ export type CommandId =
   | 'online.accessibleDevices'
   | 'online.startCpu'
   | 'online.stopCpu'
+  | 'online.copyRamToRom'
+  | 'online.compress'
   | 'online.diagnostics'
   | 'options.settings'
   | 'tools.crossReferences'
@@ -82,6 +86,9 @@ export interface Command {
 
 const hasDoc = (s: AppState) => s.doc !== null;
 const hasPlc = (s: AppState) => (s.doc?.project.devices.length ?? 0) > 0;
+/** PLC online e libero: nessun caricamento né altro comando della CPU in corso. */
+const plcFree = (s: AppState) =>
+  s.online.status === 'on' && !s.online.downloading && !s.online.commanding;
 const always = () => true;
 const never = () => false;
 const noop = () => {};
@@ -254,6 +261,10 @@ const list: Command[] = [
     isEnabled: (s) => s.online.status !== 'off',
     run: ({ store, bridge }) => plcControllerFor(store, bridge).goOffline(),
   }),
+  def('online.compare', {
+    isEnabled: (s) => s.online.status === 'on' && !s.online.comparing && !getProgress(),
+    run: ({ store, bridge }) => plcControllerFor(store, bridge).compare(),
+  }),
   def('online.simulation', {
     icon: 'simulation',
     isEnabled: (s) => (hasPlc(s) && s.online.status === 'off') || s.sim.phase !== 'off',
@@ -262,8 +273,18 @@ const list: Command[] = [
   }),
   def('online.download', {
     icon: 'download',
-    isEnabled: (s) => s.sim.phase === 'on' && !s.sim.downloading && !getProgress(),
-    run: ({ store, bridge }) => simControllerFor(store).download({ store, bridge }),
+    // Le due strade sono esclusive: col PLC online si carica nella CPU, con la simulazione nel simulatore.
+    isEnabled: (s) =>
+      (s.sim.phase === 'on' && !s.sim.downloading && !getProgress()) ||
+      (s.online.status === 'on' &&
+        !s.online.downloading &&
+        !s.online.comparing &&
+        !s.online.commanding &&
+        !getProgress()),
+    run: ({ store, bridge }) =>
+      store.getState().online.status === 'on'
+        ? preparePlcDownload({ store, bridge })
+        : simControllerFor(store).download({ store, bridge }),
   }),
   def('online.monitor', {
     icon: 'monitor',
@@ -272,7 +293,13 @@ const list: Command[] = [
     isChecked: (s) => s.sim.monitor !== null,
     run: ({ store }) => simControllerFor(store).toggleMonitor(),
   }),
-  def('online.upload', { icon: 'upload' }),
+  // Come in TIA, si carica da un dispositivo anche senza progetto aperto: crea un progetto nuovo.
+  // Disponibile finché nessuna operazione lunga o comando della CPU è in corso.
+  def('online.upload', {
+    icon: 'upload',
+    isEnabled: (s) => !getProgress() && !s.online.downloading && !s.online.commanding,
+    run: ({ store }) => store.getState().openDialog({ kind: 'accessibleDevices' }),
+  }),
   def('online.accessibleDevices', {
     icon: 'accessibleDevices',
     isEnabled: hasDoc,
@@ -280,13 +307,29 @@ const list: Command[] = [
   }),
   def('online.startCpu', {
     icon: 'startCpu',
-    isEnabled: (s) => s.sim.phase === 'on' && s.sim.mode === 'STOP',
-    run: ({ store }) => simControllerFor(store).setMode('RUN'),
+    isEnabled: (s) =>
+      (s.sim.phase === 'on' && s.sim.mode === 'STOP') || (plcFree(s) && s.online.mode !== 'RUN'),
+    run: ({ store, bridge }) =>
+      store.getState().online.status === 'on'
+        ? plcControllerFor(store, bridge).control('RUN')
+        : simControllerFor(store).setMode('RUN'),
   }),
   def('online.stopCpu', {
     icon: 'stopCpu',
-    isEnabled: (s) => s.sim.phase === 'on' && s.sim.mode !== 'STOP',
-    run: ({ store }) => simControllerFor(store).setMode('STOP'),
+    isEnabled: (s) =>
+      (s.sim.phase === 'on' && s.sim.mode !== 'STOP') || (plcFree(s) && s.online.mode !== 'STOP'),
+    run: ({ store, bridge }) =>
+      store.getState().online.status === 'on'
+        ? plcControllerFor(store, bridge).control('STOP')
+        : simControllerFor(store).setMode('STOP'),
+  }),
+  def('online.copyRamToRom', {
+    isEnabled: plcFree,
+    run: ({ store, bridge }) => plcControllerFor(store, bridge).control('COPY_RAM_TO_ROM'),
+  }),
+  def('online.compress', {
+    isEnabled: plcFree,
+    run: ({ store, bridge }) => plcControllerFor(store, bridge).control('COMPRESS'),
   }),
   def('online.diagnostics'),
   def('options.settings', {

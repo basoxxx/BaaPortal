@@ -548,13 +548,13 @@ describe('write var e stop/avvio (allowlist)', () => {
     expect(decodeReadResponse(back!.param, back!.data)[0]).toMatchObject({ ok: true });
   });
 
-  it('0x28 con servizio _MODU resta ERR.PROTECTED (fuori allowlist)', async () => {
+  it('0x28 con servizio _MRES resta ERR.PROTECTED (fuori allowlist)', async () => {
     const cpu = new FakeCpu();
     const p = await new TestPeer(cpu).open();
     const before = cpu.snapshot();
     const modu = Uint8Array.from([
       ...[0x28, 0, 0, 0, 0, 0, 0, 0xfd, 0, 0, 5],
-      ...[...'_MODU'].map((c) => c.charCodeAt(0)),
+      ...[...'_MRES'].map((c) => c.charCodeAt(0)),
     ]);
     const r = await p.job(modu);
     expect(r).toMatchObject({ rosctr: 2, errorClass: 0xd2, errorCode: 0x41 });

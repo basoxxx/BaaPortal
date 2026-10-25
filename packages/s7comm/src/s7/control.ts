@@ -6,11 +6,12 @@ import { blockFileName, parseBlockFileName, type BlockFilesystem } from './uploa
 /**
  * Codec PLC control `0x28` e stop `0x29` (proto §10.4, §11).
  *
- * Allowlist di questo piano: solo `P_PROGRAM` (stop e warm restart) e `_INSE` (attivazione blocco).
- * `_DELE`, `_GARB`, `_MODU` e il cold restart NON sono implementati: in decodifica risultano
- * "non ammessi" (`service` assente). Nessuna gestione password (proto §14).
+ * Allowlist: `P_PROGRAM` (stop e warm restart), `_INSE` (attivazione blocco), `_DELE` (cancella
+ * blocco), `_MODU` (copia RAM in ROM) e `_GARB` (comprimi memoria). Il cold restart NON è
+ * implementato: in decodifica risulta "non ammesso" (`service` assente). Nessuna gestione
+ * password (proto §14).
  */
-export type PiService = 'P_PROGRAM' | '_INSE';
+export type PiService = 'P_PROGRAM' | '_INSE' | '_DELE' | '_MODU' | '_GARB';
 
 function bad(msg: string): S7Error {
   return new S7Error('PROTOCOL', `control: ${msg}`);
@@ -55,6 +56,50 @@ export function encodeInsertBlock(
     5,
     ...ascii('_INSE'),
   ]);
+}
+
+/**
+ * `_DELE` (proto §10.5): stessa struttura di `_INSE` con servizio `"_DELE"`. L'argomento è il
+ * nome del blocco come in `_INSE` (tipo, numero, filesystem); la "subfun" 0x42 del proto è il filesystem `B`. Non verificato su CPU reale;
+ * provato contro il server di prova.
+ */
+export function encodeDeleteBlock(
+  type: BlockType,
+  number: number,
+  fs: BlockFilesystem,
+): Uint8Array {
+  const name = blockFileName(type, number, fs).slice(1); // 8 caratteri
+  return Uint8Array.from([
+    ...[0x28, 0, 0, 0, 0, 0, 0, 0xfd],
+    ...[0, 2 + name.length, 1, 0],
+    ...ascii(name),
+    5,
+    ...ascii('_DELE'),
+  ]);
+}
+
+/** `_MODU`, copia RAM in ROM (proto §11.3, §17.11): argomento `"EP"`, len1 `0x0002`. */
+export function encodeCopyRamToRom(): Uint8Array {
+  return Uint8Array.from([
+    0x28,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0xfd,
+    0,
+    2,
+    ...ascii('EP'),
+    5,
+    ...ascii('_MODU'),
+  ]);
+}
+
+/** `_GARB`, comprimi la memoria (proto §11.3, §17.11): nessun argomento, len1 `0x0000`. */
+export function encodeCompressMemory(): Uint8Array {
+  return Uint8Array.from([0x28, 0, 0, 0, 0, 0, 0, 0xfd, 0, 0, 5, ...ascii('_GARB')]);
 }
 
 // ---- risposte --------------------------------------------------------------------------------
@@ -117,14 +162,18 @@ export function decodePlcControlRequest(param: Uint8Array): {
   if (param.length !== l2 + 1 + len2) throw bad('control: lunghezza del servizio incoerente');
   const svc = text(param, l2 + 1, len2);
   if (svc === 'P_PROGRAM' && len1 === 0) return { function: 0x28, service: 'P_PROGRAM' };
-  if (svc === '_INSE' && len1 === 10 && param[10] === 1 && param[11] === 0) {
+  if ((svc === '_INSE' || svc === '_DELE') && len1 === 10 && param[10] === 1 && param[11] === 0) {
     try {
       const f = parseBlockFileName('_' + text(param, 12, 8));
-      return { function: 0x28, service: '_INSE', block: { type: f.type, number: f.number } };
+      return { function: 0x28, service: svc, block: { type: f.type, number: f.number } };
     } catch {
       return { function: 0x28 };
     }
   }
-  // cold restart (argomento "C "), _DELE, _GARB, _MODU, ...: non ammessi
+  if (svc === '_GARB' && len1 === 0) return { function: 0x28, service: '_GARB' };
+  if (svc === '_MODU' && len1 === 2 && text(param, 10, 2) === 'EP') {
+    return { function: 0x28, service: '_MODU' };
+  }
+  // cold restart (argomento "C "), altri servizi, varianti con argomenti diversi: non ammessi
   return { function: 0x28 };
 }

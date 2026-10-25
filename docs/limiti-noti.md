@@ -13,7 +13,7 @@ Per ogni voce si indica che cosa succede oggi. "Errore chiaro" vuol dire che Baa
 
 ## Online (piano 3A)
 
-- **Sola lettura.** Il collegamento online non carica, non avvia e non arresta la CPU e non dà MRES: i pulsanti sono disabilitati. Queste funzioni arrivano con il piano 3B.
+- **Sola lettura.** Il solo collegamento (sorveglianza, LED) è in sola lettura. Le scritture sono del piano 3B, sotto.
 - **Mai provato su una CPU reale.** Il collegamento è provato solo contro il PLC di prova (server S7 locale con CPU simulata). Non è stato provato né su una CPU reale, né su un CP 343-1, né su un gateway RFC 1006.
 - **Ricerca limitata.** La ricerca trova solo dispositivi con un indirizzo IPv4 nella stessa sottorete dell'interfaccia scelta. Non c'è DCP, quindi una CPU senza indirizzo IP non compare; il DCP arriva nella tappa 6.
 - **MPI/DP.** Solo attraverso un gateway RFC 1006.
@@ -21,6 +21,33 @@ Per ogni voce si indica che cosa succede oggi. "Errore chiaro" vuol dire che Baa
 - **Eventi di ricerca.** Gli eventi della ricerca non hanno una protezione contro un renderer sostituito: se la pagina viene ricaricata durante una ricerca, gli eventi restano indirizzati alla finestra.
 - **Campi di rack e slot.** Rack da 0 a 7 e slot da 0 a 31.
 - **Impostazioni di accesso salvate nel progetto.** Indirizzo, porta, rack e slot restano nel file del progetto, nelle proprietà della CPU; non sono impostazioni dell'utente.
+
+## Caricamento e confronto (piano 3B)
+
+- **Mai provato su una CPU reale.** Ogni scrittura (carica nel dispositivo, cancellazione, RUN/STOP, copia RAM in ROM, comprimi) è provata solo contro il PLC di prova e il simulatore. Prima di usarla su una macchina, provarla su una CPU che non è in produzione.
+- **MRES non disponibile da remoto.** Non c'è un servizio documentato nelle fonti pubbliche per una S7-300: si usa il selettore di modo della CPU. Il pulsante è disabilitato.
+- **Il confronto usa checksum e lunghezze (lunghezza MC7), non il contenuto byte per byte.** Che il checksum letto dalla CPU coincida con quello del file compilato è un'ipotesi non verificata su una CPU reale.
+- **Blocchi di sistema (SDB).** Non si caricano né si confrontano. Il backup arriva nel 3C.
+- **Carica dal dispositivo senza simboli né commenti.** Il progetto nuovo ha solo i blocchi in AWL.
+- **Blocchi non caricati.** I blocchi che la CPU rifiuta o che non si decodificano non vengono caricati: sono elencati nel commento del progetto nuovo. I loro byte originali non si conservano.
+- **Cancellazione dei blocchi.** Usa `_DELE` con il filesystem 'B', verificato solo contro il server di prova.
+- **Controllo dell'identità prima di scrivere.** Confronta il numero d'ordine, e il numero di serie solo se ce l'hanno entrambi i lati.
+- **Il confronto non si aggiorna a ogni modifica.** Parte al collegamento, dopo ogni caricamento e col comando _Confronta con la CPU_. Dopo una modifica di un blocco il suo distintivo passa a «Da compilare» e resta tale finché non si rilancia il confronto; una modifica fatta sulla CPU da altri non si vede finché non lo si rilancia.
+- **Editor di confronto.**
+  - Le reti si allineano per posizione.
+  - I titoli e i commenti delle reti non si confrontano.
+  - I DB si confrontano come elenco di membri.
+  - Con un compilato assente o non aggiornato il confronto è sul testo sorgente e gli operandi simbolici possono risultare diversi.
+  - I blocchi molto grandi ricadono su un confronto per posizione, con una nota.
+- **Caricamento interrotto senza ripristino.** Se un caricamento si interrompe (finestra chiusa dopo la conferma, uscita dall'app, cavo staccato, un blocco rifiutato) non c'è nessun ripristino: la CPU tiene un programma parziale e può essere ancora in RUN. Uno STOP fatto da BaaPortal non viene annullato dopo un errore o un annullamento. Chiudendo la finestra o uscendo durante la scrittura, l'app chiede prima se interromperla.
+- **Un secondo collegamento PG per ogni scrittura.** Ogni scrittura apre un collegamento PG in più accanto a quello della sorveglianza. Se la CPU non ha collegamenti liberi (per esempio sono tutti usati da pannelli HMI), la scrittura fallisce alla connessione.
+- **L'avviso RUN è un'euristica.** Non vede un cambio di interfaccia di un FC; tratta «diverso» come «interfaccia cambiata».
+- **Nessuna gestione di password o livelli di protezione.** Una CPU protetta in scrittura rifiuta le scritture e BaaPortal non può inserire la password.
+- **Conferme native solo in italiano.** Le finestre di conferma del processo principale non sono tradotte.
+- **«Avviare la CPU?» anche se era già in STOP.** Dopo un caricamento BaaPortal fa la domanda anche quando la CPU era già in STOP prima.
+- **Cerca/Sostituisci nella scheda di confronto.** Agisce sul blocco sorgente del progetto, non sul testo mostrato (il compilato decodificato).
+- **Firmware del progetto nuovo.** Un progetto creato dalla CPU usa il firmware letto dalla CPU solo se è nel catalogo; altrimenti usa il più recente e mostra un avviso.
+- **DB creati con SFC 22 (CREAT_DB).** Vengono cancellati da un nuovo caricamento (vedi «Simulatore (piano 2A)», «Blocchi cancellati»). Su una CPU reale non è provato.
 
 ## Simulatore (piano 2A)
 

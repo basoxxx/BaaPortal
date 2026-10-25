@@ -1,0 +1,57 @@
+.baa-compare {
+  height: 100%;
+  overflow: auto;
+  padding: 8px;
+  color: var(--baa-text);
+  font-size: 13px;
+}
+.baa-compare table {
+  border-collapse: collapse;
+}
+.baa-compare-head th,
+.baa-compare-head td {
+  padding: 2px 12px 2px 0;
+  text-align: left;
+  font-weight: normal;
+}
+.baa-compare-head thead th {
+  font-weight: 600;
+}
+.baa-compare-note {
+  margin: 8px 0;
+}
+.baa-compare-note.is-error {
+  color: var(--baa-error);
+}
+.baa-compare-hex {
+  font-family: monospace;
+  white-space: pre;
+  border: 1px solid var(--baa-border);
+  padding: 6px;
+}
+.baa-compare-net {
+  margin: 10px 0;
+  border: 1px solid var(--baa-border);
+}
+.baa-compare-net h4 {
+  margin: 0;
+  padding: 3px 6px;
+  background: var(--baa-surface);
+}
+.baa-compare-net table {
+  width: 100%;
+  table-layout: fixed;
+}
+.baa-compare-net td {
+  width: 50%;
+  padding: 0 6px;
+  font-family: monospace;
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.baa-compare-net tr.is-changed td,
+.baa-compare-net tr.is-missing .baa-compare-l,
+.baa-compare-net tr.is-added .baa-compare-r {
+  background: color-mix(in srgb, var(--baa-online) 25%, transparent);
+}

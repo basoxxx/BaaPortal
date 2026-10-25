@@ -67,6 +67,7 @@ export const MENUS: MenuDef[] = [
     items: [
       'online.goOnline',
       'online.goOffline',
+      'online.compare',
       'online.simulation',
       'sep',
       'online.download',
@@ -76,6 +77,8 @@ export const MENUS: MenuDef[] = [
       'online.accessibleDevices',
       'online.startCpu',
       'online.stopCpu',
+      'online.copyRamToRom',
+      'online.compress',
       'sep',
       'online.diagnostics',
     ],

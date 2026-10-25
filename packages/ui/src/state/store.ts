@@ -2,6 +2,8 @@ import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { Mc7Diagnostic, Project } from '@baaportal/project';
 import type { DiagEntry, MonitorStep, SimMode } from '@baaportal/sim';
 import type { LineMapRow } from '../editors/awl/monitorExtension';
+import type { OnlineCompare } from '../online/compare';
+import type { DownloadPlan } from '../online/plcDownload';
 import type { PlcAccess, PlcIdentity, PlcMode } from '../online/plcTypes';
 import type { SimStats, SimWarning, WatchValue } from '../sim/protocol';
 import type { ImportSummary } from '../project/navigation/tagTableIo';
@@ -24,6 +26,7 @@ export type DialogState =
   | { kind: 'collectKit' }
   | { kind: 'settings' }
   | { kind: 'accessibleDevices' }
+  | { kind: 'download'; plan: DownloadPlan }
   | { kind: 'importTagsReport'; fileName: string; tableName: string; summary: ImportSummary }
   | null;
 
@@ -186,6 +189,14 @@ export interface OnlineUiState {
   identity?: PlcIdentity;
   mode?: PlcMode;
   deviceId?: string;
+  /** Confronto con la CPU: assente finché non è fatto; sparisce andando offline. */
+  compare?: OnlineCompare;
+  /** Un confronto è in corso. */
+  comparing?: boolean;
+  /** Un «Carica nel dispositivo» è in preparazione, in anteprima o in corso. */
+  downloading?: boolean;
+  /** Un comando della CPU (RUN, STOP, copia RAM in ROM, comprimi) è in corso. */
+  commanding?: boolean;
 }
 
 export const ONLINE_OFF: OnlineUiState = { status: 'off' };

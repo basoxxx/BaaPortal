@@ -74,7 +74,7 @@ La ditta per ora non ha una CPU S7-300; un amico che userà BaaPortal ce l'ha. I
 | Piano                            | Contenuto                                                                                                                                                                                                                            |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **3A Online**                    | Dispositivi accessibili (scansione sottorete e IP manuale), collegamento online/interruzione, CPU PN, CP 343-1, gateway RFC 1006, modalità online arancione **Stato: fatto** (v0.9.0), in sola lettura. Mai provato su una CPU reale |
-| **3B Caricamento e confronto**   | Carica nel dispositivo con conferma, carica dal dispositivo in un progetto nuovo, confronto online/offline ed editor di confronto, RUN/STOP/MRES, copia RAM→ROM, compressione                                                        |
+| **3B Caricamento e confronto**   | Carica nel dispositivo con conferma, carica dal dispositivo in un progetto nuovo, confronto online/offline ed editor di confronto, RUN/STOP/MRES, copia RAM→ROM, compressione **Stato: fatto** (v0.10.0). Mai provato su una CPU reale |
 | **3C Diagnostica e test online** | Info CPU, buffer di diagnostica, tempo di ciclo, memoria, ora; osservazione online; tabelle di controllo e forzamento; stack di chiamata; backup online con SDB e ripristino                                                         |
 
 ## Tappa 4 — KOP e FUP

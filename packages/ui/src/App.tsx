@@ -10,6 +10,7 @@ import { flushPendingEdits } from './flushPendingEdits';
 import { createProjectService } from './services/projectService';
 import { createRecoveryService, type RecoveryService } from './services/recoveryService';
 import { AccessibleDevicesDialog } from './dialogs/AccessibleDevicesDialog';
+import { DownloadPreviewDialog } from './dialogs/DownloadPreviewDialog';
 import { SettingsDialog } from './dialogs/SettingsDialog';
 import { applyDisplaySettings, useSettings } from './settings/settings';
 import { AddBlockDialog } from './project/dialogs/AddBlockDialog';
@@ -58,6 +59,9 @@ function Shell() {
       {dialog?.kind === 'addDevice' ? <AddDeviceDialog onClose={close} /> : null}
       {dialog?.kind === 'settings' ? <SettingsDialog onClose={close} /> : null}
       {dialog?.kind === 'accessibleDevices' ? <AccessibleDevicesDialog onClose={close} /> : null}
+      {dialog?.kind === 'download' ? (
+        <DownloadPreviewDialog plan={dialog.plan} onClose={close} />
+      ) : null}
       {dialog?.kind === 'collectKit' ? <KitDialog onClose={close} /> : null}
       {dialog?.kind === 'addBlock' ? (
         <AddBlockDialog

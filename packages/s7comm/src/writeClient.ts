@@ -3,8 +3,12 @@ import { S7Connection, type ConnectOptions } from './connection';
 import { S7Error } from './errors';
 import { itemReturnName } from './s7/errorCodes';
 import { parseBlockFile } from './s7/blockFile';
+import type { BlockType } from './s7/blocks';
 import {
   decodeControlResponse,
+  encodeCompressMemory,
+  encodeCopyRamToRom,
+  encodeDeleteBlock,
   encodeInsertBlock,
   encodePlcStop,
   encodeWarmRestart,
@@ -23,6 +27,10 @@ import {
 const NOTHING = new Uint8Array(0);
 /** Filesystem dei blocchi scaricati: il passivo `P`, come STEP 7 (proto §10.1, §10.4). */
 const DOWNLOAD_FS = 'P';
+/** Filesystem della cancellazione: `B`, la "subfun" 0x42 di proto §10.5. */
+const DELETE_FS = 'B';
+/** Tipi cancellabili con `_DELE`: SDB, SFC e SFB non si cancellano. */
+const DELETABLE: readonly BlockType[] = ['OB', 'FB', 'FC', 'DB'];
 
 const h2 = (n: number): string => `0x${n.toString(16).padStart(2, '0')}`;
 
@@ -139,6 +147,35 @@ export class S7WriteClient extends S7Client {
   /** Riavvio a caldo. "Già RUN" è un risultato; un errore nell'header lancia CPU_ERROR. */
   start(): Promise<ControlResult> {
     return this.#control(encodeWarmRestart(), 'avvio');
+  }
+
+  /** Cancella un blocco nel filesystem B (proto §10.5); solo OB, FB, FC, DB. Un esito diverso da 0 lancia CPU_ERROR. */
+  deleteBlock(type: BlockType, number: number): Promise<void> {
+    if (!DELETABLE.includes(type)) {
+      return Promise.reject(
+        new S7Error('PROTOCOL', `_DELE: il tipo ${type} non si cancella (solo OB, FB, FC, DB)`),
+      );
+    }
+    return this.#controlOk(encodeDeleteBlock(type, number, DELETE_FS), `_DELE ${type}${number}`);
+  }
+
+  /** Copia la RAM in ROM (`_MODU`, proto §11.3). Un esito diverso da 0 lancia CPU_ERROR. */
+  copyRamToRom(): Promise<void> {
+    return this.#controlOk(encodeCopyRamToRom(), '_MODU');
+  }
+
+  /** Comprime la memoria (`_GARB`, proto §11.3). Un esito diverso da 0 lancia CPU_ERROR. */
+  compressMemory(): Promise<void> {
+    return this.#controlOk(encodeCompressMemory(), '_GARB');
+  }
+
+  async #controlOk(param: Uint8Array, what: string): Promise<void> {
+    const r = await this.#control(param, what);
+    if (r.code !== 0) {
+      throw new S7Error('CPU_ERROR', `${what} non eseguito dalla CPU: ${r.name} (${h2(r.code)})`, {
+        returnCode: r.code,
+      });
+    }
   }
 
   async #control(param: Uint8Array, what: string): Promise<ControlResult> {

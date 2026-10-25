@@ -6,6 +6,7 @@ import {
   ipcMain,
   type IpcMainEvent,
   type IpcMainInvokeEvent,
+  type WebContents,
 } from 'electron';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
@@ -17,6 +18,7 @@ import { isTrustedFrame, type FrameLike, type TrustOptions } from './trust';
 import { deleteRecovery, listRecovery, readRecovery, writeRecovery } from './recoveryStore';
 import { parseOpenOptions, parseSaveOptions } from './fileDialogOptions';
 import { registerKit } from './kit';
+import { createConfirm } from './plc/confirm';
 import { registerPlc } from './plc/plcIpc';
 import { addRecent, removeRecent, type Platform, type StoredRecent } from './recentProjects';
 
@@ -48,7 +50,7 @@ export function registerIpc(
   trust: TrustOptions,
   onCloseConfirmed: () => void,
   onRendererReady: () => void,
-): { closeOnline(): Promise<void> } {
+): { closeOnline(): Promise<void>; writing(): boolean; interruptWrites(): void } {
   // Ogni canale risponde solo al frame principale della pagina dell'app.
   const trusted = (e: IpcMainEvent | IpcMainInvokeEvent) =>
     isTrustedFrame(e.senderFrame as FrameLike | null, trust);
@@ -152,7 +154,8 @@ export function registerIpc(
       title: t.title,
       message: t.message,
       buttons: [t.yes, t.no],
-      defaultId: 0,
+      // Con `defaultNo` (es. «Avviare la CPU?») il predefinito e la fuga sono «No».
+      defaultId: t.defaultNo ? 1 : 0,
       cancelId: 1,
     };
     const win = getWindow();
@@ -183,7 +186,10 @@ export function registerIpc(
   );
 
   registerKit(handle);
-  const plc = registerPlc(handle);
+  const plc = registerPlc(
+    handle,
+    createConfirm(dialog, (o) => BrowserWindow.fromWebContents(o as WebContents)),
+  );
 
   // Valori solo per i test e2e: come BAA_USER_DATA, mai onorati nelle build pacchettizzate.
   handle('app:test-overrides', () => {
@@ -191,5 +197,9 @@ export function registerIpc(
     const enabled = !app.isPackaged && !!process.env['BAA_USER_DATA'];
     return enabled && Number.isInteger(ms) && ms > 0 ? { recoveryIntervalMs: ms } : {};
   });
-  return { closeOnline: () => plc.closeAll() };
+  return {
+    closeOnline: () => plc.closeAll(),
+    writing: () => plc.writing(),
+    interruptWrites: () => plc.interruptWrites(),
+  };
 }

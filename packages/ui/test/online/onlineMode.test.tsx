@@ -57,7 +57,7 @@ describe('modalità online nell interfaccia', () => {
     );
   });
 
-  it('il pannello CPU mostra LED e identità; RUN, STOP e MRES sono disabilitati', async () => {
+  it('il pannello CPU mostra LED e identità; solo MRES è disabilitato', async () => {
     const app = await online('RUN');
     act(() => app.store.getState().setTaskCard('test'));
     const panels = screen.getAllByTestId('cpu-panel-online');
@@ -66,8 +66,8 @@ describe('modalità online nell interfaccia', () => {
     expect(p.getByTestId('led-stop')).toHaveAttribute('data-on', 'false');
     expect(p.getByTestId('cpu-identity')).toHaveTextContent('6ES7 315-2EH14-0AB0');
     expect(p.getByTestId('cpu-identity')).toHaveTextContent('CPU 315-2 PN/DP');
-    for (const id of ['cpu-run', 'cpu-stop', 'cpu-mres']) expect(p.getByTestId(id)).toBeDisabled();
-    expect(p.getByTestId('cpu-readonly')).toHaveTextContent('Collegamento in sola lettura');
+    expect(p.getByTestId('cpu-mres')).toBeDisabled();
+    expect(p.getByTestId('cpu-stop')).toBeEnabled();
     expect(p.getAllByText('Non disponibile in sola lettura').length).toBeGreaterThan(0);
     act(() => app.bridge.emitPlcEvent({ kind: 'mode', mode: 'STOP' }));
     expect(

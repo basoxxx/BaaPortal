@@ -18,6 +18,14 @@ import type {
   PlcScanEvent,
   PlcScanStartResult,
   PlcStatus,
+  PlcBlocksResult,
+  PlcBlockRef,
+  PlcControlOp,
+  PlcControlResult,
+  PlcDownloadResult,
+  PlcWriteProgress,
+  PlcUploadAllResult,
+  PlcUploadProgress,
 } from '../src/online/plcTypes';
 
 type Answer = 'save' | 'discard' | 'cancel';
@@ -243,7 +251,78 @@ export class FakeBridge implements BaaBridge {
   emitPlcEvent(e: PlcEvent): void {
     for (const cb of [...this.plcCbs]) cb(e);
   }
+  // Elenco blocchi della CPU: una risposta per chiamata (l'ultima resta).
+  plcBlocksResults: PlcBlocksResult[] = [{ ok: true, blocks: [] }];
+  plcBlocksCalls = 0;
+  async plcBlocks(): Promise<PlcBlocksResult> {
+    this.plcBlocksCalls++;
+    const r =
+      this.plcBlocksResults.length > 1 ? this.plcBlocksResults.shift() : this.plcBlocksResults[0];
+    return r ?? { ok: false, error: 'nessun risultato previsto' };
+  }
+  // Scritture nella CPU: una risposta per chiamata (a coda vuota, riuscite); le chiamate si registrano.
+  plcDownloadResults: PlcDownloadResult[] = [];
+  plcDownloadCalls: { files: Uint8Array[]; deleteBlocks: PlcBlockRef[] }[] = [];
+  plcControlResults: PlcControlResult[] = [];
+  plcControlCalls: PlcControlOp[] = [];
+  /** Registro ordinato di tutte le scritture (per verificare la sequenza). */
+  plcWriteLog: string[] = [];
+  private plcWriteCbs = new Set<(p: PlcWriteProgress) => void>();
+  async plcDownload(
+    files: Uint8Array[],
+    opts?: { deleteBlocks?: PlcBlockRef[] },
+  ): Promise<PlcDownloadResult> {
+    this.plcDownloadCalls.push({ files, deleteBlocks: opts?.deleteBlocks ?? [] });
+    this.plcWriteLog.push('download');
+    return this.plcDownloadResults.shift() ?? { ok: true, loaded: [], deleted: [] };
+  }
+  async plcControl(op: PlcControlOp): Promise<PlcControlResult> {
+    this.plcControlCalls.push(op);
+    this.plcWriteLog.push(op);
+    return this.plcControlResults.shift() ?? { ok: true, result: 'ok' };
+  }
+  onPlcWriteProgress(cb: (p: PlcWriteProgress) => void) {
+    this.plcWriteCbs.add(cb);
+    return () => {
+      this.plcWriteCbs.delete(cb);
+    };
+  }
+  emitPlcWriteProgress(p: PlcWriteProgress): void {
+    for (const cb of [...this.plcWriteCbs]) cb(p);
+  }
+  plcUploadBlockResults = new Map<string, PlcUploadBlockResult>();
+  plcUploadBlockCalls: string[] = [];
+  async plcUploadBlock(type: string, number: number): Promise<PlcUploadBlockResult> {
+    this.plcUploadBlockCalls.push(`${type}${number}`);
+    return (
+      this.plcUploadBlockResults.get(`${type}${number}`) ?? { ok: false, error: 'nessun blocco' }
+    );
+  }
   // Ricerca dei dispositivi accessibili.
+  plcUploadResults: PlcUploadAllResult[] = [];
+  plcUploadCalls: PlcAccess[] = [];
+  plcUploadCancelCalls = 0;
+  /** Se c'è, plcUploadAll attende questa promessa prima di rispondere. */
+  plcUploadGate: Promise<void> | null = null;
+  private plcUploadCbs = new Set<(p: PlcUploadProgress) => void>();
+  async plcUploadAll(access: PlcAccess): Promise<PlcUploadAllResult> {
+    this.plcUploadCalls.push(access);
+    if (this.plcUploadGate) await this.plcUploadGate;
+    return this.plcUploadResults.shift() ?? { ok: false, error: 'nessun risultato previsto' };
+  }
+  async plcUploadCancel() {
+    this.plcUploadCancelCalls++;
+  }
+  onPlcUploadProgress(cb: (p: PlcUploadProgress) => void) {
+    this.plcUploadCbs.add(cb);
+    return () => {
+      this.plcUploadCbs.delete(cb);
+    };
+  }
+  emitPlcUploadProgress(p: PlcUploadProgress): void {
+    for (const cb of [...this.plcUploadCbs]) cb(p);
+  }
+
   plcInterfacesValue: NetInterface[] = [];
   plcScanResults: PlcScanStartResult[] = [];
   plcScanStartCalls: string[] = [];

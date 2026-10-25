@@ -1,6 +1,8 @@
 import { findCpu } from '@baaportal/catalog';
 import type { Block, ObjectRef, PlcDevice } from '@baaportal/project';
 import type { IconName } from '../../icons';
+import { contextHashOf, hashOf } from '../compile/compileActions';
+import type { CompareState, OnlineCompare } from '../../online/compare';
 import type { OpenDoc } from '../../state/store';
 import { systemBlocksOf, type SystemBlockUse } from './systemBlocks';
 import { ids, type PlcFolder, type TreeArea } from './treeIds';
@@ -14,6 +16,10 @@ export interface TreeNode {
   enabled: boolean;
   children: TreeNode[];
   ref?: ObjectRef;
+  /** Stato del confronto con la CPU (solo online). */
+  compare?: CompareState;
+  /** Blocco presente solo nella CPU: sola lettura, senza menu, trascinamento o rinomina. */
+  onlineOnly?: boolean;
   /** Blocco di sistema richiamato (nodo in sola lettura). */
   system?: SystemBlockUse;
   /** Cartelle e gruppi dove si può rilasciare un oggetto (Task 9). */
@@ -99,7 +105,31 @@ function folderNode(
   };
 }
 
-function deviceNode(dev: PlcDevice): TreeNode {
+/**
+ * Stato di confronto di ogni blocco del PLC. Un blocco cambiato dopo il confronto (impronta
+ * diversa) è «da compilare» finché non si ricompila e si confronta di nuovo.
+ */
+function compareStates(
+  dev: PlcDevice,
+  compare: OnlineCompare | undefined,
+): Map<string, CompareState> {
+  const out = new Map<string, CompareState>();
+  if (!compare || compare.deviceId !== dev.id) return out;
+  const context = contextHashOf(dev);
+  const known = new Map(dev.blocks.map((b) => [b.id, b]));
+  for (const r of compare.rows) {
+    if (!r.blockId) continue;
+    const b = known.get(r.blockId);
+    if (!b) continue;
+    out.set(b.id, compare.hashes[b.id] === hashOf(b, context) ? r.state : 'notCompiled');
+  }
+  return out;
+}
+
+function deviceNode(dev: PlcDevice, compare?: OnlineCompare): TreeNode {
+  const states = compareStates(dev, compare);
+  const onlineOnly =
+    compare && compare.deviceId === dev.id ? compare.rows.filter((r) => !r.blockId) : [];
   const blockObjects = dev.blocks.map((b) => ({
     name: b.name,
     group: b.group,
@@ -111,6 +141,7 @@ function deviceNode(dev: PlcDevice): TreeNode {
       enabled: true,
       children: [],
       ref: { kind: 'block', deviceId: dev.id, id: b.id },
+      ...(states.has(b.id) ? { compare: states.get(b.id)! } : {}),
     } satisfies TreeNode,
   }));
   const tableObjects = dev.tagTables.map((t) => ({
@@ -203,6 +234,23 @@ function deviceNode(dev: PlcDevice): TreeNode {
             ...leaf(ids.folder(dev.id, 'system-blocks'), 'tree.plc.systemBlocks', 'objGroup'),
             children: systemNodes,
           },
+          ...(onlineOnly.length > 0
+            ? [
+                {
+                  ...leaf(ids.folder(dev.id, 'online-only'), 'tree.plc.onlineOnly', 'objGroup'),
+                  children: onlineOnly.map((r): TreeNode => ({
+                    id: ids.onlineBlock(dev.id, `${r.type}${r.number}`),
+                    labelKey: '',
+                    label: `${r.type}${r.number}`,
+                    icon: BLOCK_ICON[r.type === 'DB' ? 'DB' : (r.type as 'OB' | 'FB' | 'FC')],
+                    enabled: true,
+                    children: [],
+                    compare: r.state,
+                    onlineOnly: true,
+                  })),
+                } satisfies TreeNode,
+              ]
+            : []),
         ],
         'blocks',
       ),
@@ -242,7 +290,10 @@ function deviceNode(dev: PlcDevice): TreeNode {
   };
 }
 
-export function buildTree(doc: OpenDoc | null): {
+export function buildTree(
+  doc: OpenDoc | null,
+  compare?: OnlineCompare,
+): {
   project: TreeNode | null;
   onlineAccess: TreeNode;
 } {
@@ -258,7 +309,7 @@ export function buildTree(doc: OpenDoc | null): {
       children: [
         leaf('add-device', 'tree.addDevice', 'treeAddDevice'),
         leaf('devices-networks', 'tree.devicesNetworks', 'treeDevicesNetworks'),
-        ...doc.project.devices.map(deviceNode),
+        ...doc.project.devices.map((d) => deviceNode(d, compare)),
         leaf('common-data', 'tree.commonData', 'treeCommonData'),
         leaf('doc-settings', 'tree.docSettings', 'treeDocSettings'),
         leaf('languages', 'tree.languages', 'treeLanguages'),

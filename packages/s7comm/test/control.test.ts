@@ -6,6 +6,9 @@ import {
   decodePlcControlRequest,
   decodeS7,
   encodeControlResponse,
+  encodeCompressMemory,
+  encodeCopyRamToRom,
+  encodeDeleteBlock,
   encodeInsertBlock,
   encodePlcStop,
   encodeWarmRestart,
@@ -100,18 +103,44 @@ describe('PLC control (0x28) e stop (0x29)', () => {
     expect(decodeControlResponse(encodeControlResponse(0x28, 0x03)).code).toBe(0x03);
   });
 
-  it('decodePlcControlRequest rifiuta _MODU/_GARB/cold come "non ammesso"', () => {
-    for (const h of [COLD, MODU, GARB]) {
-      const r = decodePlcControlRequest(fromHex(h));
+  it('_MODU e _GARB uguali ai vettori §17.11', () => {
+    expect(hex(encodeCopyRamToRom())).toBe(MODU);
+    expect(hex(encodeCompressMemory())).toBe(GARB);
+    expect(decodePlcControlRequest(fromHex(MODU)).service).toBe('_MODU');
+    expect(decodePlcControlRequest(fromHex(GARB)).service).toBe('_GARB');
+    // _MODU con un argomento diverso da "EP" e _GARB con argomenti: non ammessi
+    expect(decodePlcControlRequest(fromHex(MODU.replace('4550', '4551'))).service).toBeUndefined();
+    expect(
+      decodePlcControlRequest(fromHex(INSE_DB1.replace('5f494e5345', '5f47415242'))).service,
+    ).toBeUndefined();
+  });
+
+  it('_DELE OB1 canonico: struttura di _INSE con servizio _DELE', () => {
+    const b = encodeDeleteBlock('OB', 1, 'B');
+    expect(hex(b)).toBe('28000000000000fd000a01003038303030303142055f44454c45');
+    expect(decodePlcControlRequest(b)).toEqual({
+      function: 0x28,
+      service: '_DELE',
+      block: { type: 'OB', number: 1 },
+    });
+  });
+
+  it('decodePlcControlRequest rifiuta il cold restart come "non ammesso"', () => {
+    {
+      const r = decodePlcControlRequest(fromHex(COLD));
       expect(r.function).toBe(0x28);
       expect(r.service).toBeUndefined();
       expect(r.block).toBeUndefined();
     }
     // le richieste reali della cattura: le ammesse sono riconosciute, le altre no
     const real = controlParams(1).map((p) => decodePlcControlRequest(p));
-    expect(real.map((r) => r.service)).toEqual(['P_PROGRAM', undefined, undefined, undefined]);
-    // _INSE con conteggio/lunghezza diversi, _DELE: non ammessi
-    const dele = fromHex('28000000000000fd000a01003041303030303142055f44454c45');
+    expect(real.map((r) => r.service)).toEqual(['P_PROGRAM', '_MODU', '_GARB', undefined]);
+    // _DELE con conteggio diverso da 1: non ammesso
+    // il vecchio vettore con filesystem B (DB1) è un _DELE canonico
+    const old = fromHex('28000000000000fd000a01003041303030303142055f44454c45');
+    expect(hex(encodeDeleteBlock('DB', 1, 'B'))).toBe(hex(old));
+    expect(decodePlcControlRequest(old).service).toBe('_DELE');
+    const dele = fromHex('28000000000000fd000a02003041303030303142055f44454c45');
     expect(decodePlcControlRequest(dele).service).toBeUndefined();
   });
 

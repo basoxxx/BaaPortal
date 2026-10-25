@@ -10,7 +10,8 @@ import {
 import type { MonitorRequest, SimCpuProps } from '@baaportal/sim';
 import type { BaaBridge } from '../bridge';
 import { t } from '../i18n';
-import { compileProgram, contextHashOf, hashOf } from '../project/compile/compileActions';
+import { hashOf } from '../project/compile/compileActions';
+import { prepareCompiledBlocks } from '../project/compile/downloadFiles';
 import { targetPlcId } from '../project/navigation/treeIds';
 import { getProgress } from '../project/progress';
 import {
@@ -477,30 +478,22 @@ export class SimController {
   private async downloadTo(s: SimSession, deviceId: string, ctx: SimCtx): Promise<void> {
     const { store } = this;
     const load = store.getState().docLoadId;
-    await compileProgram(ctx, deviceId, 'changes');
-    if (this.session !== s || store.getState().docLoadId !== load) return;
-    const { compile, doc } = store.getState();
-    const dev = doc && findDevice(doc.project, deviceId);
-    if (!dev || !compile.summary) return; // compilazione non eseguita o fallita (già segnalata)
-    if (compile.interrupted) return;
-    if (compile.summary.errors > 0) {
-      this.push('error', 'simDownloadBlocked', { errors: String(compile.summary.errors) });
+    const prep = await prepareCompiledBlocks(
+      ctx,
+      deviceId,
+      () => this.session === s && store.getState().docLoadId === load,
+    );
+    if (prep.status === 'aborted') return;
+    if (prep.status === 'errors') {
+      this.push('error', 'simDownloadBlocked', { errors: String(prep.errors) });
       return;
     }
-    // Si carica solo ciò che è stato compilato con il contenuto e il contesto di adesso: una
-    // compilazione interrotta da un'eccezione lascia blocchi vecchi, che non vanno caricati.
-    const context = contextHashOf(dev);
-    const items = dev.blocks.map((b) => ({
-      kind: b.kind,
-      number: b.number,
-      file: compile.hashes[b.id] === hashOf(b, context) ? compile.files[b.id] : undefined,
-    }));
-    const stale = items.filter((i) => !i.file).length;
-    if (stale > 0) {
-      this.push('error', 'simDownloadStale', { count: String(stale) });
+    if (prep.status === 'stale') {
+      this.push('error', 'simDownloadStale', { count: String(prep.count) });
       return;
     }
-    const files = downloadOrder(items).map((i) => i.file!);
+    const { dev, context } = prep;
+    const files = downloadOrder(prep.blocks).map((i) => i.file);
     const wasStopped = store.getState().sim.mode === 'STOP';
     let failure: unknown;
     try {

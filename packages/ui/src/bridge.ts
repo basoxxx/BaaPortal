@@ -1,11 +1,20 @@
 import type {
   NetInterface,
   PlcAccess,
+  PlcBlockRef,
+  PlcBlocksResult,
+  PlcUploadBlockResult,
   PlcConnectResult,
+  PlcControlOp,
+  PlcControlResult,
+  PlcDownloadResult,
   PlcEvent,
   PlcScanEvent,
   PlcScanStartResult,
   PlcStatus,
+  PlcUploadAllResult,
+  PlcUploadProgress,
+  PlcWriteProgress,
 } from './online/plcTypes';
 
 export interface RecentEntry {
@@ -28,6 +37,8 @@ export interface QuestionTexts {
   message: string;
   yes: string;
   no: string;
+  /** «No» è il pulsante predefinito (azioni che toccano l'impianto). */
+  defaultNo?: boolean;
 }
 
 export interface RecoveryInfo {
@@ -130,5 +141,24 @@ export interface BaaBridge {
   plcScanStart(address: string): Promise<PlcScanStartResult>;
   plcScanCancel(): Promise<void>;
   onPlcScanEvent(cb: (e: PlcScanEvent) => void): () => void;
+  // Scritture nella CPU del collegamento online di questa finestra: l'indirizzo lo decide il processo
+  // principale e ogni operazione passa da una conferma nativa. Mai eccezioni: l'esito dice tutto.
+  plcDownload(
+    files: Uint8Array[],
+    opts?: { deleteBlocks?: PlcBlockRef[] },
+  ): Promise<PlcDownloadResult>;
+  plcControl(op: PlcControlOp): Promise<PlcControlResult>;
+  /** Elenco dei blocchi della CPU collegata (sola lettura); mai eccezioni: l'esito dice tutto. */
+  plcBlocks(): Promise<PlcBlocksResult>;
+  /** Carica un solo blocco OB, FB, FC o DB dalla CPU collegata (sola lettura); mai eccezioni. */
+  plcUploadBlock(type: PlcBlockRef['type'], number: number): Promise<PlcUploadBlockResult>;
+  onPlcWriteProgress(cb: (p: PlcWriteProgress) => void): () => void;
+  /**
+   * Carica OB, FB, FC e DB da una CPU in sola lettura, su un collegamento proprio (non serve essere
+   * online). Uno per finestra; mai eccezioni: l'esito dice tutto.
+   */
+  plcUploadAll(access: PlcAccess): Promise<PlcUploadAllResult>;
+  plcUploadCancel(): Promise<void>;
+  onPlcUploadProgress(cb: (p: PlcUploadProgress) => void): () => void;
   testOverrides(): Promise<{ recoveryIntervalMs?: number }>; // sempre {} nelle build pacchettizzate
 }

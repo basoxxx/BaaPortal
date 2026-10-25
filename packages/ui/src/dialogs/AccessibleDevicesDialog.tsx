@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { PlcAccess } from '@baaportal/project';
 import { plcControllerFor } from '../online/plcController';
+import { uploadFromDevice } from '../online/uploadProject';
 import { Dialog } from '../components/Dialog';
 import { parseAccessInput, parseTsap } from '../online/accessInput';
 import type { FoundDevice, NetInterface, PlcScanEvent } from '../online/plcTypes';
@@ -18,6 +19,9 @@ interface Row {
   manual?: boolean;
 }
 
+/** Riferimento stabile: senza progetto il selettore non deve dare un array nuovo a ogni lettura. */
+const NO_DEVICES: never[] = [];
+
 const rowKey = (r: Row): string => (r.port ? `${r.host}:${r.port}` : r.host);
 const toInt = (s: string): number | null => (/^\d+$/.test(s.trim()) ? Number(s) : null);
 
@@ -28,8 +32,8 @@ const toInt = (s: string): number | null => (/^\d+$/.test(s.trim()) ? Number(s) 
  */
 export function AccessibleDevicesDialog({ onClose }: { onClose(): void }) {
   const { t } = useTranslation();
-  const { bridge, store } = useServices();
-  const projectDevices = useAppStore((s) => s.doc?.project.devices ?? []);
+  const { bridge, store, service } = useServices();
+  const projectDevices = useAppStore((s) => s.doc?.project.devices ?? NO_DEVICES);
   const ids = {
     iface: useId(),
     type: useId(),
@@ -56,6 +60,10 @@ export function AccessibleDevicesDialog({ onClose }: { onClose(): void }) {
   const [manual, setManual] = useState('');
   const [manualError, setManualError] = useState<string | null>(null);
   const [connectError, setConnectError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState<
+    { done: number; total: number; current: string } | 'starting' | null
+  >(null);
+  const uploadingRef = useRef(false);
 
   // Il numero della ricerca è noto solo alla risposta di `plcScanStart`, ma gli eventi possono
   // arrivare prima: finché è ignoto si accumulano, poi si tengono solo quelli della ricerca giusta.
@@ -110,6 +118,9 @@ export function AccessibleDevicesDialog({ onClose }: { onClose(): void }) {
       .catch((e: unknown) => {
         if (alive) setScanError(t('accessDevices.errInterfaces', { error: String(e) }));
       });
+    const offUpload = bridge.onPlcUploadProgress((p) => {
+      if (uploadingRef.current) setUploading(p);
+    });
     const off = bridge.onPlcScanEvent((e) => {
       if (startingRef.current) bufferRef.current.push(e);
       else if (scanIdRef.current === e.scanId) applyRef.current(e);
@@ -118,7 +129,9 @@ export function AccessibleDevicesDialog({ onClose }: { onClose(): void }) {
     return () => {
       alive = false;
       off();
+      offUpload();
       if (scanningRef.current) void bridge.plcScanCancel();
+      if (uploadingRef.current) void bridge.plcUploadCancel();
     };
   }, [bridge]);
 
@@ -192,14 +205,44 @@ export function AccessibleDevicesDialog({ onClose }: { onClose(): void }) {
   const tsapBad = kind === 'gateway' && tsap.trim() !== '' && tsapN === null;
   const row = rows.find((r) => rowKey(r) === selected);
   const cpu = projectDevices.find((d) => d.id === cpuId) ?? projectDevices[0];
-  const canConnect =
+  const accessOk =
     !!row &&
-    !!cpu &&
     rackN !== null &&
     rackN <= 7 &&
     slotN !== null &&
     slotN <= 31 &&
     (kind === 'direct' || tsapN !== null);
+  const canConnect = accessOk && !!cpu && !uploading;
+  const canUpload = accessOk && !uploading && !scanning;
+
+  const accessOf = (): PlcAccess | null => {
+    if (!accessOk || !row || rackN === null || slotN === null) return null;
+    return {
+      host: row.host,
+      ...(row.port !== undefined ? { port: row.port } : {}),
+      rack: rackN,
+      slot: slotN,
+      connectionType: 'PG',
+      ...(kind === 'gateway' && tsapN !== null ? { remoteTsap: tsapN } : {}),
+    };
+  };
+
+  /** «Carica dal dispositivo»: crea un progetto nuovo dalla CPU scelta; non serve un progetto aperto. */
+  const upload = async (): Promise<void> => {
+    const access = accessOf();
+    if (!access || uploadingRef.current) return;
+    setConnectError(null);
+    uploadingRef.current = true;
+    setUploading('starting');
+    let outcome: Awaited<ReturnType<typeof uploadFromDevice>>;
+    try {
+      outcome = await uploadFromDevice({ store, bridge, service }, access);
+    } finally {
+      uploadingRef.current = false;
+      setUploading(null);
+    }
+    if (outcome === 'done') onClose();
+  };
 
   const connect = (): void => {
     if (!canConnect || !row || !cpu || rackN === null || slotN === null) return;
@@ -208,14 +251,8 @@ export function AccessibleDevicesDialog({ onClose }: { onClose(): void }) {
       return;
     }
     setConnectError(null);
-    const access: PlcAccess = {
-      host: row.host,
-      ...(row.port !== undefined ? { port: row.port } : {}),
-      rack: rackN,
-      slot: slotN,
-      connectionType: 'PG',
-      ...(kind === 'gateway' && tsapN !== null ? { remoteTsap: tsapN } : {}),
-    };
+    const access = accessOf();
+    if (!access) return;
     store.getState().edit('history.setAccess', (p) => {
       const d = p.devices.find((x) => x.id === cpu.id);
       if (d) d.properties.access = access;
@@ -243,6 +280,14 @@ export function AccessibleDevicesDialog({ onClose }: { onClose(): void }) {
           <button type="button" disabled={!canConnect} onClick={connect}>
             {t('accessDevices.connect')}
           </button>
+          <button type="button" disabled={!canUpload} onClick={() => void upload()}>
+            {t('upload.dialogButton')}
+          </button>
+          {uploading ? (
+            <button type="button" onClick={() => void bridge.plcUploadCancel()}>
+              {t('upload.stop')}
+            </button>
+          ) : null}
           <button type="button" data-testid="dialog-cancel" onClick={onClose}>
             {t('accessDevices.close')}
           </button>
@@ -347,6 +392,17 @@ export function AccessibleDevicesDialog({ onClose }: { onClose(): void }) {
             </span>
           ) : null}
         </div>
+        {uploading ? (
+          <p role="status">
+            {uploading === 'starting'
+              ? t('upload.starting')
+              : t('upload.progress', {
+                  done: uploading.done,
+                  total: uploading.total,
+                  current: uploading.current,
+                })}
+          </p>
+        ) : null}
         {connectError ? (
           <p role="alert" className="baa-field-error">
             {connectError}

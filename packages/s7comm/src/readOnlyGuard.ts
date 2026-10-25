@@ -9,6 +9,9 @@ import { decodeSetup, encodeSetup } from './s7/setup';
 import { decodeSzlRequest } from './s7/szl';
 import {
   decodePlcControlRequest,
+  encodeCompressMemory,
+  encodeCopyRamToRom,
+  encodeDeleteBlock,
   encodeInsertBlock,
   encodePlcStop,
   encodeWarmRestart,
@@ -172,9 +175,9 @@ function refuseWrite(msg: string): never {
 /**
  * Filtro del modo `online-write` (proto §15): allowlist di lettura (delegata a `assertReadOnly`,
  * invariato) PIU': write var 0x05, request download 0x1A, download ended 0x1C, 0x28 solo warm
- * restart (`P_PROGRAM`) e `_INSE`, 0x29 stop `P_PROGRAM`, ack-data 0x1B (ROSCTR 3). Come in sola
+ * restart (`P_PROGRAM`), `_INSE`, `_DELE`, `_MODU` e `_GARB`, 0x29 stop `P_PROGRAM`, ack-data 0x1B (ROSCTR 3). Come in sola
  * lettura, ogni PDU deve combaciare byte per byte con la ricodifica del suo significato.
- * Tutto il resto (`_DELE`, `_GARB`, `_MODU`, cold/hot restart, MRES, force...) e' FORBIDDEN.
+ * Tutto il resto (cold/hot restart, MRES, force...) e' FORBIDDEN.
  */
 export function assertOnlineWrite(pdu: S7Pdu): void {
   if (pdu.rosctr === 3) return assertDownloadAck(pdu);
@@ -229,8 +232,19 @@ export function assertOnlineWrite(pdu: S7Pdu): void {
             sameBytes(p, encodeInsertBlock(r.block.type, r.block.number, fs as 'A' | 'P' | 'B')),
             '_INSE non canonico',
           );
+        } else if (r.service === '_DELE' && r.block) {
+          // solo la forma canonica, filesystem B, solo OB/FB/FC/DB
+          must(['OB', 'FB', 'FC', 'DB'].includes(r.block.type), '_DELE: tipo non cancellabile');
+          must(
+            sameBytes(p, encodeDeleteBlock(r.block.type, r.block.number, 'B')),
+            '_DELE non canonico',
+          );
+        } else if (r.service === '_MODU') {
+          must(sameBytes(p, encodeCopyRamToRom()), '_MODU non canonico');
+        } else if (r.service === '_GARB') {
+          must(sameBytes(p, encodeCompressMemory()), '_GARB non canonico');
         } else {
-          refuseWrite(`${label} (servizio diverso da warm restart e _INSE)`);
+          refuseWrite(`${label} (servizio fuori allowlist)`);
         }
         break;
       }

@@ -53,6 +53,8 @@ import {
 } from './sourceActions';
 import { exportTagTable, importTagTable } from './tagTableIo';
 import { RenameInput } from './RenameInput';
+import type { CompareState } from '../../online/compare';
+import { preparePlcDownload } from '../../online/plcDownload';
 import { buildTree, type TreeNode } from './treeModel';
 import { getProgress } from '../progress';
 import { parseNodeId } from './treeIds';
@@ -67,6 +69,60 @@ function ancestorsOf(node: TreeNode, id: string): TreeNode[] | null {
     if (inner) return [node, ...inner];
   }
   return null;
+}
+
+const BADGE_COLOR: Record<CompareState, string> = {
+  same: 'var(--baa-awl-constant)',
+  different: 'var(--baa-online)',
+  offlineOnly: 'var(--baa-text-muted)',
+  onlineOnly: 'var(--baa-text-muted)',
+  notCompiled: 'var(--baa-disabled)',
+  unreadable: 'var(--baa-online)',
+};
+
+/** Distintivo del confronto con la CPU, come in TIA: cerchio, cerchio pieno, mezzo cerchio, grigio. */
+function CompareBadge({ state }: { state: CompareState }) {
+  const { t } = useTranslation();
+  const label = t(`compare.${state}`);
+  const c = BADGE_COLOR[state];
+  return (
+    <svg
+      role="img"
+      aria-label={label}
+      data-compare={state}
+      width="10"
+      height="10"
+      viewBox="0 0 10 10"
+      style={{ flex: 'none', marginLeft: 2 }}
+    >
+      <title>{label}</title>
+      {state === 'same' ? (
+        <circle cx="5" cy="5" r="3.5" fill="none" stroke={c} strokeWidth="1.5" />
+      ) : state === 'different' ? (
+        <circle cx="5" cy="5" r="4" fill={c} />
+      ) : state === 'unreadable' ? (
+        <path d="M5 1.5v4M5 7v1.5" stroke={c} strokeWidth="1.5" fill="none" />
+      ) : state === 'notCompiled' ? (
+        <circle
+          cx="5"
+          cy="5"
+          r="3.5"
+          fill="none"
+          stroke={c}
+          strokeWidth="1.5"
+          strokeDasharray="2 1.5"
+        />
+      ) : (
+        <>
+          <circle cx="5" cy="5" r="3.5" fill="none" stroke={c} strokeWidth="1" />
+          <path
+            d={state === 'offlineOnly' ? 'M5 1.5a3.5 3.5 0 0 0 0 7z' : 'M5 1.5a3.5 3.5 0 0 1 0 7z'}
+            fill={c}
+          />
+        </>
+      )}
+    </svg>
+  );
 }
 
 interface Row {
@@ -92,7 +148,8 @@ export function ProjectTree() {
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [, setClipboardTick] = useState(0);
 
-  const { project, onlineAccess } = useMemo(() => buildTree(doc), [doc]);
+  const compare = useAppStore((s) => s.online.compare);
+  const { project, onlineAccess } = useMemo(() => buildTree(doc, compare), [doc, compare]);
   const rows = useMemo(() => {
     const out: Row[] = [];
     const walk = (node: TreeNode, level: number, parent: TreeNode | null) => {
@@ -243,6 +300,7 @@ export function ProjectTree() {
   };
 
   const openMenuAt = (nodeId: string, x: number, y: number) => {
+    if (rows.find((r) => r.node.id === nodeId)?.node.onlineOnly) return; // sola lettura: nessun menu
     if (!selected.has(nodeId)) pick(nodeId, false);
     setMenu({ x, y, nodeId });
   };
@@ -349,6 +407,7 @@ export function ProjectTree() {
     }
     if (parsed.kind === 'block') {
       const blocks = blockNodesOf(inNodes);
+      const online0 = store.getState().online;
       compileItems.push(
         {
           id: 'compileBlock',
@@ -364,6 +423,37 @@ export function ProjectTree() {
           run: () => void settle(exportCompiledBlock(ctx, parsed.dev, parsed.id)),
         },
       );
+      // Solo online e per i blocchi diversi dalla CPU.
+      const row =
+        online0.compare?.deviceId === parsed.dev
+          ? online0.compare.rows.find((r) => r.blockId === parsed.id)
+          : undefined;
+      if (online0.status === 'on' && online0.deviceId === parsed.dev) {
+        compileItems.push({
+          id: 'compareOnline',
+          label: t('objects.compareOnline'),
+          disabled: inNodes.length !== 1 || row?.state !== 'different',
+          run: () =>
+            store
+              .getState()
+              .openEditor({ kind: 'compare', deviceId: parsed.dev, objectId: parsed.id }),
+        });
+      }
+      // Solo col PLC online: i blocchi scelti nell'albero, con l'anteprima del confronto.
+      const online = store.getState().online;
+      if (online.status === 'on' && online.deviceId === parsed.dev) {
+        compileItems.push({
+          id: 'downloadToDevice',
+          label: t('objects.downloadToDevice'),
+          disabled:
+            !blocks ||
+            !!online.downloading ||
+            !!online.comparing ||
+            !!online.commanding ||
+            !!getProgress(),
+          run: () => blocks && void settle(preparePlcDownload(ctx, blocks.ids)),
+        });
+      }
     }
     return [
       {
@@ -548,6 +638,7 @@ export function ProjectTree() {
                 {hasKids ? (collapsed.has(node.id) ? '▸' : '▾') : ''}
               </span>
               <Icon name={node.icon} size={16} />
+              {node.compare ? <CompareBadge state={node.compare} /> : null}
               {renaming === node.id ? (
                 <RenameInput
                   initial={renameInfo(doc, node.id)?.name ?? ''}
