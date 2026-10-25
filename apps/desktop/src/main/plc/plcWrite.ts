@@ -122,7 +122,7 @@ function listLines(lines: string[]): string {
 
 /** Identifica una CPU: indirizzo, porta, rack e slot. */
 function cpuKey(a: PlcAccess): string {
-  return `${a.host.toLowerCase()}:${a.port ?? DEFAULT_PORT}/${a.rack}/${a.slot}`;
+  return `${a.host.trim().toLowerCase()}:${a.port ?? DEFAULT_PORT}/${a.rack}/${a.slot}`;
 }
 
 function errText(err: unknown): string {
@@ -172,6 +172,11 @@ export class PlcWriteService {
    * Uscita dall'app: ferma ogni scrittura prima del passo successivo e aspetta che chiuda il
    * collegamento. Quelle ancora alla finestra di conferma vengono annullate senza attendere.
    */
+  /** Ferma le scritture in corso prima del blocco successivo, senza impedirne di nuove. */
+  interruptAll(): void {
+    for (const op of this.ops.values()) op.aborted = true;
+  }
+
   async abortAll(): Promise<void> {
     this.closing = true;
     const running: Promise<void>[] = [];

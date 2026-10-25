@@ -24,8 +24,11 @@ describe('WriteCloseGuard', () => {
   it('«Interrompi» vale finché la scrittura dura: finestra e uscita non chiedono due volte', async () => {
     let writing = true;
     const ask = vi.fn(async () => true);
-    const g = new WriteCloseGuard(() => writing, ask);
+    const interrupt = vi.fn();
+    const g = new WriteCloseGuard(() => writing, ask, interrupt);
     expect(await g.confirm()).toBe(true);
+    // La scrittura si ferma davvero, anche se poi la chiusura viene annullata.
+    expect(interrupt).toHaveBeenCalledTimes(1);
     expect(g.needsConfirm()).toBe(false);
     writing = false;
     expect(g.needsConfirm()).toBe(false);
@@ -37,12 +40,15 @@ describe('WriteCloseGuard', () => {
   it('una sola domanda alla volta; una domanda che lancia vale «Annulla»', async () => {
     let release!: (v: boolean) => void;
     const ask = vi.fn(() => new Promise<boolean>((r) => (release = r)));
-    const g = new WriteCloseGuard(() => true, ask);
+    const interrupt = vi.fn();
+    const g = new WriteCloseGuard(() => true, ask, interrupt);
     const p1 = g.confirm();
+    // Chi arriva mentre la domanda è aperta (doppio Cmd+Q) non agisce.
     const p2 = g.confirm();
     release(true);
     expect(await p1).toBe(true);
-    expect(await p2).toBe(true);
+    expect(await p2).toBe(false);
+    expect(interrupt).toHaveBeenCalledTimes(1);
     expect(ask).toHaveBeenCalledTimes(1);
     const bad = new WriteCloseGuard(
       () => true,
@@ -73,10 +79,13 @@ describe('createInterruptAsk', () => {
     expect(await ask()).toBe(false);
   });
 
-  it('senza finestra non mostra nulla e non interrompe', async () => {
-    const show = vi.fn();
+  it('senza finestra la domanda si mostra da sola, sempre con «Annulla» predefinito', async () => {
+    const show = vi.fn<(o: unknown) => Promise<{ response: number }>>(async () => ({
+      response: 0,
+    }));
     const ask = createInterruptAsk({ showMessageBox: show } as never, () => null);
     expect(await ask()).toBe(false);
-    expect(show).not.toHaveBeenCalled();
+    expect(show).toHaveBeenCalledTimes(1);
+    expect(show.mock.calls[0]![0]).toMatchObject({ defaultId: 0, cancelId: 0 });
   });
 });

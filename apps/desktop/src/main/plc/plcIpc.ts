@@ -60,7 +60,7 @@ export function registerPlc(
   scans = new ScanService(),
   writes = new PlcWriteService({ service, confirm }),
   uploads = new UploadService(),
-): { closeAll(): Promise<void>; writing(): boolean } {
+): { closeAll(): Promise<void>; writing(): boolean; interruptWrites(): void } {
   handle('plc:connect', async (e, raw): Promise<PlcConnectResult> => {
     const access = parsePlcAccess(raw);
     if (typeof access === 'string') return { ok: false, error: access };
@@ -110,5 +110,6 @@ export function registerPlc(
       ]);
     },
     writing: () => writes.writing(),
+    interruptWrites: () => writes.interruptAll(),
   };
 }

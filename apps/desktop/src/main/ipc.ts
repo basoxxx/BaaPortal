@@ -50,7 +50,7 @@ export function registerIpc(
   trust: TrustOptions,
   onCloseConfirmed: () => void,
   onRendererReady: () => void,
-): { closeOnline(): Promise<void>; writing(): boolean } {
+): { closeOnline(): Promise<void>; writing(): boolean; interruptWrites(): void } {
   // Ogni canale risponde solo al frame principale della pagina dell'app.
   const trusted = (e: IpcMainEvent | IpcMainInvokeEvent) =>
     isTrustedFrame(e.senderFrame as FrameLike | null, trust);
@@ -197,5 +197,9 @@ export function registerIpc(
     const enabled = !app.isPackaged && !!process.env['BAA_USER_DATA'];
     return enabled && Number.isInteger(ms) && ms > 0 ? { recoveryIntervalMs: ms } : {};
   });
-  return { closeOnline: () => plc.closeAll(), writing: () => plc.writing() };
+  return {
+    closeOnline: () => plc.closeAll(),
+    writing: () => plc.writing(),
+    interruptWrites: () => plc.interruptWrites(),
+  };
 }

@@ -210,6 +210,7 @@ if (!app.requestSingleInstanceLock()) {
   writeGuard = new WriteCloseGuard(
     () => ipc.writing(),
     createInterruptAsk(dialog, () => win),
+    () => ipc.interruptWrites(),
   );
   // Prima di uscire si chiude il collegamento online (al massimo 1 s), poi si esce davvero. Con una
   // scrittura nella CPU in corso si ferma prima del blocco successivo (al massimo 15 s).

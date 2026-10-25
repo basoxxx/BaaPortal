@@ -5,6 +5,7 @@ export const INTERRUPT_MESSAGE =
 
 interface DialogLike {
   showMessageBox(win: BrowserWindow, opts: MessageBoxOptions): Promise<{ response: number }>;
+  showMessageBox(opts: MessageBoxOptions): Promise<{ response: number }>;
 }
 
 /**
@@ -17,9 +18,7 @@ export function createInterruptAsk(
 ): () => Promise<boolean> {
   return async () => {
     const win = windowOf();
-    // Senza finestra a cui agganciare la domanda non si può chiedere: si resta, non si interrompe.
-    if (!win || win.isDestroyed()) return false;
-    const r = await dialog.showMessageBox(win, {
+    const opts: MessageBoxOptions = {
       type: 'warning',
       buttons: ['Annulla', 'Interrompi'],
       defaultId: 0,
@@ -27,7 +26,12 @@ export function createInterruptAsk(
       title: 'Caricamento in corso',
       message: INTERRUPT_MESSAGE,
       noLink: true,
-    });
+    };
+    // Senza finestra a cui agganciarla, la domanda si mostra da sola: l'uscita non va persa.
+    const r =
+      win && !win.isDestroyed()
+        ? await dialog.showMessageBox(win, opts)
+        : await dialog.showMessageBox(opts);
     return r.response === 1;
   };
 }
@@ -44,6 +48,7 @@ export class WriteCloseGuard {
   constructor(
     private readonly writing: () => boolean,
     private readonly ask: () => Promise<boolean>,
+    private readonly interrupt: () => void = () => undefined,
   ) {}
 
   /** `true` se prima di chiudere va chiesta conferma. */
@@ -55,12 +60,18 @@ export class WriteCloseGuard {
     return !this.confirmed;
   }
 
-  /** Chiede (una sola domanda alla volta); `true` se l'utente sceglie di interrompere. */
+  /**
+   * Chiede (una sola domanda alla volta); `true` se l'utente sceglie di interrompere, e allora la
+   * scrittura si ferma prima del blocco successivo anche se poi la chiusura viene annullata. Chi
+   * arriva mentre la domanda è aperta riceve `false`: agisce solo chi l'ha posta.
+   */
   confirm(): Promise<boolean> {
-    this.asking ??= this.ask()
+    if (this.asking) return Promise.resolve(false);
+    this.asking = this.ask()
       .catch(() => false)
       .then((yes) => {
         this.confirmed = yes;
+        if (yes) this.interrupt();
         return yes;
       })
       .finally(() => {
