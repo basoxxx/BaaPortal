@@ -18,6 +18,8 @@ export interface FaultPlan {
   chunkSize?: number;
   /** Silenzio (nessuna risposta) alla funzione indicata. */
   ignoreFunction?: number;
+  /** ID di SZL a cui la CPU risponde 0xD402 ("funzione informativa non disponibile"), qualunque indice. */
+  szlUnavailable?: number[];
   /** La funzione indicata riceve sempre questo errore (classe e codice dell'header, come 0x85 0x00). */
   errorFor?: { function: number; errorClass: number; errorCode: number };
 }
@@ -51,6 +53,7 @@ export function checkFaults(f: FaultPlan): void {
   int('dropAfterResponses', f.dropAfterResponses, 0);
   int('chunkSize', f.chunkSize, 1);
   int('ignoreFunction', f.ignoreFunction, 0, 0xffff);
+  for (const id of f.szlUnavailable ?? []) int('szlUnavailable', id, 0, 0xffff);
   if (f.errorFor) {
     int('errorFor.function', f.errorFor.function, 0, 0xffff);
     int('errorFor.errorClass', f.errorFor.errorClass, 0, 0xff);

@@ -115,6 +115,7 @@ export class SimCpu {
   readonly counters: CounterBank;
 
   private readonly props: SimCpuProps;
+  private readonly cpuTypeId: string;
   /** Orologio di sistema: quello iniettato più il tempo di SFC 47 (WAIT), mai indietro. */
   private now: () => number;
   /** Microsecondi di attesa di SFC 47 non ancora trascorsi sull'orologio iniettato. */
@@ -149,13 +150,12 @@ export class SimCpu {
 
   constructor(o: SimCpuOptions) {
     this.props = o.props;
+    this.cpuTypeId = o.cpuTypeId;
     const clock = o.now ?? (() => Date.now());
     this.now = () => clock() + Math.floor(this.waitedUs / 1000);
     this.services = {
-      clockMs: () => this.now() + this.clockOffsetMs,
-      setClockMs: (ms) => {
-        this.clockOffsetMs = ms - this.now();
-      },
+      clockMs: () => this.clockMs(),
+      setClockMs: (ms) => this.setClock(ms),
       tickMs: () => (((this.now() - (this.bootAt ?? 0)) % 2 ** 31) + 2 ** 31) % 2 ** 31,
       wait: (us) => {
         this.waitedUs += us;
@@ -178,6 +178,26 @@ export class SimCpu {
 
   get mode(): SimMode {
     return this._mode;
+  }
+
+  /** Orologio della CPU in ms (data e ora): quello di sistema più lo scarto di SET_CLK. */
+  clockMs(): number {
+    return this.now() + this.clockOffsetMs;
+  }
+
+  /** Imposta l'orologio della CPU a `ms` (data e ora): lo stesso scarto di SFC 0 (SET_CLK). */
+  setClock(ms: number): void {
+    this.clockOffsetMs = ms - this.now();
+  }
+
+  /** Memoria di lavoro in byte, dal catalogo (64 KB se la CPU non c'è). */
+  get workMemoryBytes(): number {
+    return (findCpu(this.cpuTypeId)?.workMemoryKB ?? 64) * 1024;
+  }
+
+  /** Tempi di ciclo configurati (proprietà della CPU), in ms. */
+  get cycleConfig(): { minMs: number; maxMs: number } {
+    return { minMs: this.props.minCycleMs, maxMs: this.props.maxCycleMs };
   }
 
   get diagnostics(): readonly DiagEntry[] {

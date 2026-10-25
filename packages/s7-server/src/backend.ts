@@ -35,6 +35,32 @@ export interface CpuConfig {
   tsaps: number[];
 }
 
+/**
+ * Tempi di ciclo in ms (proto §7.5.2): quelli di OB1 dall'ultimo avviamento e quelli configurati
+ * (OB80: minimo e tempo di sorveglianza).
+ */
+export interface CycleStats {
+  lastMs: number;
+  minMs: number;
+  maxMs: number;
+  configMinMs: number;
+  configMaxMs: number;
+}
+
+/** Memoria in byte (proto §7.5.3): lavoro totale e usato, memoria di caricamento usata. */
+export interface MemoryUsage {
+  workBytes: number;
+  /** Somma delle lunghezze MC7 dei blocchi caricati (SDB esclusi). */
+  workUsedBytes: number;
+  /** Somma delle lunghezze di caricamento dei blocchi, SDB compresi. */
+  loadUsedBytes: number;
+}
+
+/**
+ * Un blocco memorizzato. Gli SDB (`type === 'SDB'`) sono blob opachi: la CPU li elenca, ne dà il
+ * block info e l'upload, ma non li scrive (nessun download né `_DELE`). Le opzioni `systemBlocks` di
+ * `FakeCpu` e di `simBackend` li seminano come file di blocco.
+ */
 export interface StoredBlock {
   type: BlockType;
   number: number;
@@ -61,6 +87,14 @@ export interface CpuBackend {
   attach(session: object): boolean;
   detach(session: object): void;
   now(): S7DateTime;
+  /** Imposta l'ora della CPU (userdata 7/2). Assente: il server risponde "non implementato". */
+  setClock?(t: S7DateTime): void;
+  /** Tempi di ciclo per la SZL 0x0222. Assente: tutti a zero, configurati 0 e 150 ms. */
+  cycleStats?(): CycleStats;
+  /** Memoria per la SZL 0x0013. Assente: lavoro 256 KB, nulla di usato. */
+  memory?(): MemoryUsage;
+  /** LED SF acceso (errore cumulativo). Assente: spento. */
+  readonly faultLed?: boolean;
   readItem(it: ReadItem): ItemRead;
   /** Un return code per item (0xFF ok). */
   applyWrite(items: WriteItem[]): number[];

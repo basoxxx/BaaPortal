@@ -14,6 +14,7 @@ import {
 } from '@baaportal/s7comm';
 import {
   encodeStoredBlockInfo,
+  modeByte,
   serve,
   type CpuBackend,
   type CpuConfig,
@@ -21,7 +22,7 @@ import {
   type StoredBlock,
 } from '@baaportal/s7-server';
 import type { SimCpu } from './cpu';
-import type { DiagEntry } from './diagnostics';
+import { isDiagError, type DiagEntry } from './diagnostics';
 
 const BLOCK_TYPES: readonly BlockType[] = ['OB', 'DB', 'SDB', 'FC', 'SFC', 'FB', 'SFB'];
 
@@ -40,18 +41,19 @@ function dateTimeOf(ms: number, fallback: S7DateTime): S7DateTime {
   };
 }
 
-function wallClock(): S7DateTime {
-  return dateTimeOf(Date.now(), {
-    year: 2000,
-    month: 1,
-    day: 1,
-    hour: 0,
-    minute: 0,
-    second: 0,
-    ms: 0,
-    weekday: 7,
-  });
-}
+const EPOCH_2000: S7DateTime = {
+  year: 2000,
+  month: 1,
+  day: 1,
+  hour: 0,
+  minute: 0,
+  second: 0,
+  ms: 0,
+  weekday: 7,
+};
+
+/** Quanti record di diagnostica e di cambi di modo il buffer tiene (come i 100 della CPU). */
+const MAX_LOG = 200;
 
 /** Legge `len` byte (o i bit) di `buf` secondo `it`; `rc` 0x05 se fuori area. */
 function sliceOf(buf: Uint8Array, it: ReadItem, len: number): ItemRead {
@@ -76,7 +78,16 @@ function sliceOf(buf: Uint8Array, it: ReadItem, len: number): ItemRead {
  * Periferia: la lettura dell'area P vede gli ingressi fisici (`physIn`), la scrittura le uscite
  * fisiche (`physOut`). T e C: zero in lettura e rifiuto in scrittura fino al piano 2B.
  */
-export function simBackend(cpu: SimCpu, o: { orderNumber?: string } = {}): CpuBackend {
+export function simBackend(
+  cpu: SimCpu,
+  o: {
+    orderNumber?: string;
+    /** SDB da esporre in sola lettura, come file di blocco (p.es. `syntheticSdb`). */
+    systemBlocks?: Uint8Array[];
+  } = {},
+): CpuBackend {
+  /** L'ora della CPU: l'orologio di sistema più lo scarto di SET_CLK. */
+  const clock = (): S7DateTime => dateTimeOf(cpu.clockMs(), EPOCH_2000);
   const m = cpu.memory;
   const orderNumber = o.orderNumber ?? '6ES7 315-2EH14-0AB0';
   if (orderNumber.length > 20) throw new RangeError('orderNumber oltre 20 caratteri');
@@ -105,16 +116,61 @@ export function simBackend(cpu: SimCpu, o: { orderNumber?: string } = {}): CpuBa
   };
   const sessions = new Set<object>();
   let refCounter = 0;
-  let modeSince = wallClock();
+  let modeSince = clock();
+  /** SDB sintetici: blob opachi in sola lettura (nessun download né cancellazione). */
+  const sdbs = new Map<number, StoredBlock>();
+  for (const file of o.systemBlocks ?? []) {
+    const parsed = parseBlockFile(file.slice());
+    if (parsed.header.type !== 'SDB') throw new RangeError('systemBlocks accetta solo file SDB');
+    sdbs.set(parsed.header.number, { type: 'SDB', number: parsed.header.number, file, parsed });
+  }
+
+  // Buffer diagnostico: le voci della CPU e i cambi di modo (proto §7.6.1), dal più vecchio. I cambi
+  // di modo hanno gli event ID 0x4301/0x4302/0x4304 e il byte di modo (nibble alto = prima).
+  const log: Uint8Array[] = [];
+  const push = (rec: Uint8Array): void => {
+    log.push(rec);
+    if (log.length > MAX_LOG) log.shift();
+  };
+  const diagRecord = (e: DiagEntry): Uint8Array => {
+    const rec = new Uint8Array(20);
+    // Id del manuale quando c'è (16#25xx, 16#29xx, 16#35xx…), altrimenti sintetico (⚠️).
+    rec[0] = e.eventId >>> 8;
+    rec[1] = e.eventId & 0xff;
+    rec.set(encodeBcdDateTimeShort(dateTimeOf(e.time, EPOCH_2000)), 12);
+    return rec;
+  };
+  const modeRecord = (id: number, from: SimCpu['mode'], to: SimCpu['mode']): Uint8Array => {
+    const rec = new Uint8Array(20);
+    rec[0] = id >>> 8;
+    rec[1] = id & 0xff;
+    rec[2] = 0xff; // nessun OB coinvolto
+    rec[3] = modeByte(from, to);
+    rec.set(encodeBcdDateTimeShort(clock()), 12);
+    return rec;
+  };
+  for (const e of cpu.diagnostics) push(diagRecord(e));
+  let lastMode = cpu.mode;
   cpu.onEvent((e) => {
-    if (e.type === 'mode') modeSince = wallClock();
+    if (e.type === 'diagnostic') push(diagRecord(e.entry));
+    if (e.type !== 'mode') return;
+    modeSince = clock();
+    const from = lastMode;
+    lastMode = e.mode;
+    if (e.mode === 'STARTUP') push(modeRecord(0x4301, from, e.mode));
+    else if (e.mode === 'RUN') push(modeRecord(0x4302, from, e.mode));
+    else push(modeRecord(0x4304, from, e.mode));
   });
   /** File dei blocchi scaricati dal server: servono a upload e block info. */
   const files = new Map<string, StoredBlock>();
   const keyOf = (type: string, number: number): string => `${type}:${number}`;
 
   const present = (type: BlockType, number: number): boolean =>
-    type === 'DB' ? m.dbs.has(number) : cpu.program.get(type, number) !== undefined;
+    type === 'SDB'
+      ? sdbs.has(number)
+      : type === 'DB'
+        ? m.dbs.has(number)
+        : cpu.program.get(type, number) !== undefined;
 
   const bufferOf = (it: ReadItem | WriteItem, write: boolean): Uint8Array | undefined => {
     switch (it.area) {
@@ -207,16 +263,34 @@ export function simBackend(cpu: SimCpu, o: { orderNumber?: string } = {}): CpuBa
       return modeSince;
     },
     get diagnosticRecords() {
-      const fallback = wallClock();
-      return [...cpu.diagnostics].reverse().map((e: DiagEntry) => {
-        const rec = new Uint8Array(20);
-        // Id del manuale quando c'è (16#25xx, 16#29xx, 16#35xx…), altrimenti sintetico (⚠️).
-        const id = e.eventId;
-        rec[0] = id >>> 8;
-        rec[1] = id & 0xff;
-        rec.set(encodeBcdDateTimeShort(dateTimeOf(e.time, fallback)), 12);
-        return rec;
-      });
+      return [...log].reverse();
+    },
+    get faultLed() {
+      // come nel pannello della CPU (2C): l'ultima voce del buffer è un errore
+      const last = cpu.diagnostics.at(-1);
+      return !!last && isDiagError(last);
+    },
+    cycleStats() {
+      const st = cpu.stats();
+      const cfg = cpu.cycleConfig;
+      return {
+        lastMs: st.last,
+        minMs: st.min,
+        maxMs: st.max,
+        configMinMs: cfg.minMs,
+        configMaxMs: cfg.maxMs,
+      };
+    },
+    memory() {
+      // solo i blocchi che il server ha ricevuto (download): gli altri non hanno un file
+      let work = 0;
+      let load = 0;
+      for (const b of [...files.values(), ...sdbs.values()]) {
+        if (!present(b.type, b.number)) continue;
+        load += b.file.length;
+        if (b.type !== 'SDB') work += b.parsed.header.mc7Length;
+      }
+      return { workBytes: cpu.workMemoryBytes, workUsedBytes: work, loadUsedBytes: load };
     },
     nextRef() {
       refCounter = (refCounter % 0xffff) + 1;
@@ -230,7 +304,12 @@ export function simBackend(cpu: SimCpu, o: { orderNumber?: string } = {}): CpuBa
     detach(session) {
       sessions.delete(session);
     },
-    now: wallClock,
+    now: clock,
+    setClock(t) {
+      cpu.setClock(
+        new Date(t.year, t.month - 1, t.day, t.hour, t.minute, t.second, t.ms).getTime(),
+      );
+    },
     readItem,
     applyWrite,
     applyStop() {
@@ -244,6 +323,7 @@ export function simBackend(cpu: SimCpu, o: { orderNumber?: string } = {}): CpuBa
       return 0x00;
     },
     applyDownloadedBlock(type, number, file) {
+      if (type === 'SDB') throw new RangeError('gli SDB non si scrivono');
       const copy = file.slice();
       const parsed = parseBlockFile(copy);
       if (parsed.header.type !== type || parsed.header.number !== number) {
@@ -253,7 +333,7 @@ export function simBackend(cpu: SimCpu, o: { orderNumber?: string } = {}): CpuBa
       files.set(keyOf(type, number), { type, number, file: copy, parsed });
     },
     deleteBlock(type, number) {
-      if (!present(type, number)) return false;
+      if (type === 'SDB' || !present(type, number)) return false;
       cpu.deleteBlock(type, number);
       files.delete(keyOf(type, number));
       return true;
@@ -262,26 +342,31 @@ export function simBackend(cpu: SimCpu, o: { orderNumber?: string } = {}): CpuBa
     copyRamToRom() {},
     compressMemory() {},
     block(type, number) {
+      if (type === 'SDB') return sdbs.get(number);
       return present(type, number) ? files.get(keyOf(type, number)) : undefined;
     },
     blockCounts() {
       const out = Object.fromEntries(BLOCK_TYPES.map((t) => [t, 0])) as Record<BlockType, number>;
       for (const b of cpu.program.list()) out[b.kind]++;
       out.DB += m.dbs.size;
+      out.SDB = sdbs.size;
       return out;
     },
     blockList(type) {
       const numbers =
-        type === 'DB'
-          ? [...m.dbs.keys()]
-          : cpu.program
-              .list()
-              .filter((b) => b.kind === type)
-              .map((b) => b.number);
+        type === 'SDB'
+          ? [...sdbs.keys()]
+          : type === 'DB'
+            ? [...m.dbs.keys()]
+            : cpu.program
+                .list()
+                .filter((b) => b.kind === type)
+                .map((b) => b.number);
       return numbers
         .sort((a, b) => a - b)
         .map((number): BlockListEntry => {
-          const h = files.get(keyOf(type, number))?.parsed.header;
+          const h = (type === 'SDB' ? sdbs.get(number) : files.get(keyOf(type, number)))?.parsed
+            .header;
           return { number, flags: h?.flags ?? 0, language: h?.language ?? 0 };
         });
     },

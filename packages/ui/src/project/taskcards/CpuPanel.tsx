@@ -1,35 +1,11 @@
 import { useTranslation } from 'react-i18next';
-import type { DiagCode, DiagEntry } from '@baaportal/sim';
+import { isDiagError } from '@baaportal/sim';
 import { useAppStore, useServices } from '../../state/AppContext';
 import { commands } from '../../commands/commands';
 import { simControllerFor } from '../../sim/simController';
 
-/** Quali codici sono errori della CPU. Esaustivo: un DiagCode nuovo non compila finché non è classificato. */
-const IS_ERROR: Record<DiagCode, boolean> = {
-  AREA_LUNGHEZZA: true,
-  DB_NON_CARICATO: true,
-  DB_NON_APERTO: true,
-  BLOCCO_NON_CARICATO: true,
-  STACK_BLOCCHI_PIENO: true,
-  STACK_ANNIDAMENTO_PIENO: true,
-  STACK_L_PIENO: true,
-  ISTRUZIONE_NON_S7300: true,
-  MC7_NON_ESEGUIBILE: true,
-  BCD_NON_VALIDO: true,
-  NUMERO_TEMPORIZZATORE: true,
-  NUMERO_CONTATORE: true,
-  TEMPO_CICLO_SUPERATO: true,
-  OB_NON_CARICATO: true,
-  STOP_RICHIESTO: false,
-  AVVIO: false,
-  CANCELLAZIONE_TOTALE: false,
-  OB_RICHIAMATO: false,
-  SFC_NON_SIMULATA: false,
-  SFB_NON_SIMULATA: false,
-};
-
-/** La voce di diagnostica è un errore della CPU (DiagEntry non porta una gravità: la si ricava dal codice). */
-export const isDiagError = (d: DiagEntry): boolean => IS_ERROR[d.code];
+// La classificazione degli errori sta in @baaportal/sim: il pannello e la SZL dei LED (SF) la condividono.
+export { isDiagError };
 
 const hex = (n: number, w: number) => `16#${n.toString(16).toUpperCase().padStart(w, '0')}`;
 

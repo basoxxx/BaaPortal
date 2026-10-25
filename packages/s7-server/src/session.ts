@@ -1,5 +1,6 @@
 import {
   FrameReader,
+  decodeBcdDateTime,
   decodeBlockInfoRequest,
   decodeBlockListOfTypeRequest,
   decodeCotp,
@@ -82,6 +83,12 @@ const UD = {
   BLOCK_PARAM: 0xd202,
   NOT_IMPLEMENTED: 0x8104,
   BAD_SEQUENCE: 0x8401,
+  /**
+   * Set clock con la CPU protetta. IPOTESI di proto §12.0 ("non verificato"): livello 3 → 0xD0A1,
+   * livello 2 → 0xD241 (lo stesso codice che le altre scritture hanno nell'header).
+   */
+  SET_CLOCK_LEVEL3: 0xd0a1,
+  SET_CLOCK_LEVEL2: 0xd241,
 } as const;
 
 /** DR: motivi X.224. */
@@ -473,6 +480,7 @@ class Session {
     if (this.writeProtected()) return headerError(p, ERR.PROTECTED);
     if (service === '_DELE') {
       if (!this.cpu.deleteBlock || !block) return headerError(p, ERR.NOT_IMPLEMENTED);
+      if (block.type === 'SDB') return headerError(p, ERR.PROTECTED); // gli SDB non si cancellano
       // il nome e' lungo 8 caratteri e finisce a p[19]: come TIA (proto §10.5), solo il filesystem 'A'
       if (p.param[19] !== 0x41) return headerError(p, ERR.WRONG_FRAMES);
       if (!this.cpu.deleteBlock(block.type, block.number)) {
@@ -498,6 +506,8 @@ class Session {
     } catch {
       return headerError(p, ERR.WRONG_FRAMES);
     }
+    // gli SDB non si scrivono in 3C: la CPU li espone solo in lettura
+    if (req.type === 'SDB') return headerError(p, ERR.PROTECTED);
     // un download già in trasferimento blocca il secondo; uno finito che aspetta solo l'_INSE si sostituisce
     if (this.dl && this.dl.phase !== 'insert') return headerError(p, ERR.NO_PARALLEL_UPLOAD);
     this.dl = { ...req, phase: 'start', ref: 0, pieces: [], received: 0, bad: false };
@@ -662,6 +672,9 @@ class Session {
         } catch {
           return udError(p, u, UD.SZL_UNKNOWN);
         }
+        if (this.cpu.config.faults.szlUnavailable?.includes(req.id)) {
+          return udError(p, u, UD.SZL_UNKNOWN);
+        }
         const list = buildSzl(this.cpu, req.id, req.index);
         if (!list) return udError(p, u, UD.SZL_UNKNOWN);
         return this.pieces(p, u, encodeSzl(list, Math.max(this.pdu - 26, 9)));
@@ -699,20 +712,34 @@ class Session {
       case '7/1':
       case '7/3':
         return this.pieces(p, u, [encodeBcdDateTime(this.cpu.now())]);
+      case '7/2':
+        return this.setClock(p, u);
       default:
         break;
     }
-    // Funzioni che cambierebbero lo stato (TIS, cyclic, security, set clock): rifiutate come da
-    // protezione. Il codec non costruisce risposte userdata per questi gruppi.
-    if (
-      group === 1 ||
-      group === 2 ||
-      group === 5 ||
-      (group === 7 && (subfunction === 2 || subfunction === 4))
-    ) {
+    // Funzioni che cambierebbero lo stato (TIS, cyclic, security, set clock alternativo 7/4):
+    // rifiutate come da protezione. Il codec non costruisce risposte userdata per questi gruppi.
+    if (group === 1 || group === 2 || group === 5 || (group === 7 && subfunction === 4)) {
       return headerError(p, ERR.PROTECTED);
     }
     return udError(p, u, group === 4 ? UD.SZL_UNKNOWN : UD.NOT_IMPLEMENTED);
+  }
+
+  /** Set clock (7/2, proto §12.0): vale in ogni modo; l'ora arriva a 10 byte e il giorno lo calcola la CPU. */
+  private setClock(p: S7Pdu, u: DecodedUserdata): S7Pdu {
+    const level = this.cpu.config.protectionLevel;
+    if (level === 3) return setClockReply(p, u, UD.SET_CLOCK_LEVEL3);
+    if (level === 2) return setClockReply(p, u, UD.SET_CLOCK_LEVEL2);
+    if (!this.cpu.setClock) return setClockReply(p, u, UD.NOT_IMPLEMENTED);
+    let t;
+    try {
+      t = decodeBcdDateTime(u.payload);
+    } catch {
+      return headerError(p, ERR.WRONG_FRAMES);
+    }
+    delete t.weekday; // quello scritto dal PG non conta: la CPU lo ricalcola
+    this.cpu.setClock(t);
+    return setClockReply(p, u, 0);
   }
 
   /** Una risposta in uno o più pezzi: dal secondo in poi servono richieste di continuazione. */
@@ -797,6 +824,36 @@ function udError(p: S7Pdu, u: DecodedUserdata, code: number): S7Pdu {
     // il codec non risponde ai gruppi di modifica: errore di header
     return headerError(p, [code >> 8, code & 0xff]);
   }
+}
+
+/**
+ * Risposta al set clock (proto §12.0): parametro `00 01 12 08 12 87 02 SS 00 00 CC CC` e dati
+ * `0a 00 00 00`, con l'error code nel parametro. Il codec non costruisce questa risposta (il set
+ * clock è fuori dall'allowlist di sola lettura), quindi i byte sono scritti qui.
+ */
+function setClockReply(p: S7Pdu, u: DecodedUserdata, code: number): S7Pdu {
+  const param = Uint8Array.of(
+    0x00,
+    0x01,
+    0x12,
+    0x08,
+    0x12,
+    0x87,
+    0x02,
+    u.param.sequence,
+    0x00,
+    0x00,
+    code >> 8,
+    code & 0xff,
+  );
+  return {
+    rosctr: 7,
+    pduRef: p.pduRef,
+    errorClass: 0,
+    errorCode: 0,
+    param,
+    data: Uint8Array.of(0x0a, 0x00, 0x00, 0x00),
+  };
 }
 
 /**

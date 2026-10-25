@@ -78,3 +78,30 @@ export function diagFromError(time: number, e: SimError): DiagEntry {
   if (e.detail !== undefined) d.detail = e.detail;
   return d;
 }
+
+/** Quali codici sono errori della CPU. Esaustivo: un DiagCode nuovo non compila finché non è classificato. */
+const IS_ERROR: Record<DiagCode, boolean> = {
+  AREA_LUNGHEZZA: true,
+  DB_NON_CARICATO: true,
+  DB_NON_APERTO: true,
+  BLOCCO_NON_CARICATO: true,
+  STACK_BLOCCHI_PIENO: true,
+  STACK_ANNIDAMENTO_PIENO: true,
+  STACK_L_PIENO: true,
+  ISTRUZIONE_NON_S7300: true,
+  MC7_NON_ESEGUIBILE: true,
+  BCD_NON_VALIDO: true,
+  NUMERO_TEMPORIZZATORE: true,
+  NUMERO_CONTATORE: true,
+  TEMPO_CICLO_SUPERATO: true,
+  OB_NON_CARICATO: true,
+  STOP_RICHIESTO: false,
+  AVVIO: false,
+  CANCELLAZIONE_TOTALE: false,
+  OB_RICHIAMATO: false,
+  SFC_NON_SIMULATA: false,
+  SFB_NON_SIMULATA: false,
+};
+
+/** La voce di diagnostica è un errore della CPU (DiagEntry non porta una gravità: la si ricava dal codice). */
+export const isDiagError = (d: DiagEntry): boolean => IS_ERROR[d.code];

@@ -1,3 +1,4 @@
+import { syntheticSdb } from '@baaportal/s7-server';
 import { listen } from '@baaportal/s7-server/node';
 import { SimCpu, simBackend } from '@baaportal/sim';
 
@@ -22,6 +23,9 @@ export async function startTestPlc(
     },
   });
   cpu.run();
-  const server = await listen(simBackend(cpu), { host: '127.0.0.1', port: o.port ?? 0 });
+  const server = await listen(
+    simBackend(cpu, { systemBlocks: [syntheticSdb(0, 64), syntheticSdb(1, 64)] }),
+    { host: '127.0.0.1', port: o.port ?? 0 },
+  );
   return { port: server.port, close: () => server.close() };
 }

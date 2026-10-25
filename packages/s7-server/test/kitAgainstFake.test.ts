@@ -436,7 +436,7 @@ describe('kit: la fine della raccolta non si inghiotte e le riaperture sono semp
 
   it('(a) client chiuso a budget esaurito: la raccolta finisce subito, senza nuove connessioni', async () => {
     // la prima connessione cade a passo finito (si riapre, budget 1 -> 0), la seconda poco dopo
-    const { conns, factory } = rig(cpuWithBlocks(), () => 8);
+    const { conns, factory } = rig(cpuWithBlocks(), () => 10);
     const r = await go(factory, { reconnectDelayMs: 0 }, () => undefined);
     expect(conns).toHaveLength(2);
     // (la finta rifiuta alcune SZL con CPU_ERROR: sono rumore atteso, qui contano le chiusure)

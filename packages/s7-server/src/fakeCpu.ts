@@ -12,8 +12,9 @@ import {
   type S7DateTime,
   type WriteItem,
 } from '@baaportal/s7comm';
-import type { CpuBackend, CpuConfig, ItemRead, StoredBlock } from './backend';
+import type { CpuBackend, CpuConfig, ItemRead, MemoryUsage, StoredBlock } from './backend';
 import { encodeStoredBlockInfo } from './blockInfo';
+import { modeByte } from './szlData';
 import { checkFaults, type FaultPlan } from './faults';
 
 export type { CpuConfig, ItemRead, StoredBlock };
@@ -42,6 +43,10 @@ export interface FakeCpuOptions {
   }; // 2048, 2048, 2048, 256, 256
   clock?: () => S7DateTime;
   faults?: FaultPlan;
+  /** SDB da seminare, come file di blocco (p.es. `syntheticSdb`). Solo SDB: altrimenti RangeError. */
+  systemBlocks?: Uint8Array[];
+  /** Memoria di lavoro in byte, per la SZL 0x0013 (predefinito 256 KB). */
+  memory?: { workBytes: number };
 }
 
 const hexOf = (b: Uint8Array): string =>
@@ -84,6 +89,9 @@ export class FakeCpu implements CpuBackend {
   private readonly diag: Uint8Array[] = [];
   private readonly sessions = new Set<object>();
   private refCounter = 0;
+  private readonly workBytes: number;
+  /** LED SF (errore cumulativo): lo imposta il test. */
+  faultLed = false;
 
   constructor(o: FakeCpuOptions = {}) {
     const sizes = o.sizes ?? {
@@ -143,6 +151,13 @@ export class FakeCpu implements CpuBackend {
     };
     this.cpuMode = o.mode ?? 'RUN';
     this.modeTime = this.clockFn();
+    this.workBytes = int('memory.workBytes', o.memory?.workBytes ?? 256 * 1024, 0, 0x7fffffff);
+    for (const file of o.systemBlocks ?? []) {
+      if (parseBlockFile(file).header.type !== 'SDB') {
+        throw new RangeError('systemBlocks accetta solo file di tipo SDB');
+      }
+      this.addBlock(file);
+    }
   }
 
   // ---- API di prova: solo in memoria, nessun comando di rete la raggiunge --------------------
@@ -270,6 +285,26 @@ export class FakeCpu implements CpuBackend {
     return this.diag;
   }
 
+  /** @internal Memoria per la SZL 0x0013: lavoro = MC7 dei blocchi (SDB esclusi), caricamento = file. */
+  memory(): MemoryUsage {
+    let work = 0;
+    let load = 0;
+    for (const b of this.blockMap.values()) {
+      load += b.file.length;
+      if (b.type !== 'SDB') work += b.parsed.header.mc7Length;
+    }
+    return { workBytes: this.workBytes, workUsedBytes: work, loadUsedBytes: load };
+  }
+
+  /** Voce di cambio di modo nel buffer (proto §7.6.1): event ID, priorità 0xFF e byte di modo. */
+  private modeEntry(eventId: number, from: CpuMode, to: CpuMode): void {
+    this.addDiagnostic({
+      eventId,
+      info: Uint8Array.from([0xff, modeByte(from, to), 0, 0, 0, 0, 0, 0, 0, 0]),
+      time: this.clockFn(),
+    });
+  }
+
   /** @internal Cancella il blocco; `false` se non c'era. Solo dalla sessione (`_DELE`). */
   deleteBlock(type: BlockType, number: number): boolean {
     return this.blockMap.delete(`${type}:${number}`);
@@ -359,6 +394,7 @@ export class FakeCpu implements CpuBackend {
   /** @internal Stop: 0x00 ok, 0x07 se già in STOP. Solo dal gestore 0x29. */
   applyStop(): number {
     if (this.cpuMode === 'STOP') return 0x07;
+    this.modeEntry(0x4304, this.cpuMode, 'STOP'); // STOP da PG
     this.setMode('STOP');
     return 0x00;
   }
@@ -366,6 +402,9 @@ export class FakeCpu implements CpuBackend {
   /** @internal Warm restart: 0x00 ok, 0x03 se già in RUN. Solo dal gestore 0x28 P_PROGRAM. */
   applyWarmRestart(): number {
     if (this.cpuMode === 'RUN') return 0x03;
+    // STOP → avviamento (0x4301), avviamento → RUN (0x4302): il finto PLC non resta in avviamento
+    this.modeEntry(0x4301, this.cpuMode, 'STARTUP');
+    this.modeEntry(0x4302, 'STARTUP', 'RUN');
     this.setMode('RUN');
     return 0x00;
   }

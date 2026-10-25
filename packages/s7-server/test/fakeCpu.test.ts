@@ -154,12 +154,13 @@ describe('SZL', () => {
     const p = await new TestPeer(new FakeCpu({ pduLength: 60 })).open();
     expect(p.pdu).toBe(60);
     const { list, pieces } = await p.readSzl(0x0000, 0);
-    expect(pieces.map((x) => x.payload.length)).toEqual([34, 10]);
+    expect(pieces.map((x) => x.payload.length)).toEqual([34, 30]);
     expect(pieces.map((x) => x.param.lastDataUnit)).toEqual([true, false]);
     const ids = list!.records.map((r) => u16(r, 0));
     expect(ids).toEqual([
-      0x0000, 0x0f00, 0x0011, 0x0111, 0x0f11, 0x001c, 0x011c, 0x0f1c, 0x0424, 0x0f24, 0x0131,
-      0x0f31, 0x0132, 0x0232, 0x0f32, 0x00a0, 0x01a0, 0x0fa0,
+      0x0000, 0x0f00, 0x0011, 0x0111, 0x0f11, 0x0013, 0x0f13, 0x0019, 0x0f19, 0x001c, 0x011c,
+      0x0f1c, 0x0222, 0x0f22, 0x0124, 0x0424, 0x0f24, 0x0131, 0x0f31, 0x0132, 0x0232, 0x0f32,
+      0x0074, 0x0174, 0x0f74, 0x00a0, 0x01a0, 0x0fa0,
     ]);
     // ogni id elencato risponde; uno non elencato no
     const big = await new TestPeer(new FakeCpu()).open();
@@ -170,6 +171,8 @@ describe('SZL', () => {
       0x0132: 4,
       0x0232: 4,
       0x01a0: 2,
+      0x0174: 1,
+      0x0222: 1,
     };
     for (const id of ids) {
       const r = await big.readSzl(id, needsIndex[id] ?? 0);
@@ -187,7 +190,11 @@ describe('SZL', () => {
       [0x0f32, 40, 1],
       [0x0f24, 20, 1],
       [0x0fa0, 20, 0],
-      [0x0f00, 2, 18],
+      [0x0f00, 2, 28],
+      [0x0f13, 36, 5],
+      [0x0f19, 4, 7],
+      [0x0f74, 4, 7],
+      [0x0f22, 28, 2],
     ];
     for (const [id, len, n] of want) {
       const { list, pieces } = await p.readSzl(id, 0);
@@ -408,7 +415,8 @@ describe('lo stato non cambia da rete per le funzioni non ammesse', () => {
         0x00,
       ),
     });
-    expect(setClock).toMatchObject({ rosctr: 2, errorClass: 0xd2, errorCode: 0x41 });
+    // la FakeCpu non ha setClock: userdata 7/2 con error code "non implementato" (0x8104)
+    expect(decodeUserdata(setClock!.param, setClock!.data).param.errorCode).toBe(0x8104);
     // funzione del tutto sconosciuta: servizio non implementato
     expect(await p.job(Uint8Array.of(0x99, 0, 0, 0))).toMatchObject({
       rosctr: 2,

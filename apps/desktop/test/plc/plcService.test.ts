@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { encodeWriteRequest, S7Error } from '@baaportal/s7comm';
-import { openTcp } from '@baaportal/s7comm/node';
+import { connectTcp, openTcp } from '@baaportal/s7comm/node';
 import { listen, type ListeningCpu } from '@baaportal/s7-server/node';
 import { SimCpu, simBackend } from '@baaportal/sim';
 import type { PlcAccess, PlcEvent } from '@baaportal/ui';
@@ -326,6 +326,17 @@ describe('startTestPlc e parsePlcAccess', () => {
     });
     expect(r.ok && r.mode).toBe('RUN');
     await service.closeAll();
+    await t.close();
+  });
+
+  it('il PLC di prova elenca i due SDB sintetici (0 e 1) e li dà in upload', async () => {
+    vi.stubEnv('BAAPORTAL_TEST_PLC', '1');
+    const t = await startTestPlc();
+    const c = await connectTcp({ host: '127.0.0.1', port: t.port, timeoutMs: 3000 });
+    expect((await c.listBlocks('SDB')).map((b) => b.number)).toEqual([0, 1]);
+    const file = await c.upload('SDB', 1);
+    expect(new TextDecoder().decode(file)).toContain('BaaPortal SDB di prova');
+    await c.close();
     await t.close();
   });
 
