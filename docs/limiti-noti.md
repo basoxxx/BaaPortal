@@ -49,6 +49,25 @@ Per ogni voce si indica che cosa succede oggi. "Errore chiaro" vuol dire che Baa
 - **Firmware del progetto nuovo.** Un progetto creato dalla CPU usa il firmware letto dalla CPU solo se è nel catalogo; altrimenti usa il più recente e mostra un avviso.
 - **DB creati con SFC 22 (CREAT_DB).** Vengono cancellati da un nuovo caricamento (vedi «Simulatore (piano 2A)», «Blocchi cancellati»). Su una CPU reale non è provato.
 
+## Diagnostica online (piano 3C)
+
+- **Mai provato su una CPU reale.** La diagnostica, l'impostazione dell'ora, il comando delle variabili e il backup sono provati solo contro il PLC di prova. Impostare l'ora e comandare le variabili non sono mai stati provati su una CPU reale.
+- **Testi degli eventi da documentazione.** Solo 4 ID evento sono stati visti in una cattura; gli altri hanno il testo preso dalla documentazione, oppure quello generico.
+- **«Ritentiva = indice 5» di `0x0013` è un'ipotesi.** La memoria è verificata su una sola cattura.
+- **Il tempo di sorveglianza (OB80) viene dalla documentazione.**
+- **Ora locale del PC.** L'ora si imposta in ora locale del PC, senza fuso né ora legale.
+- **Impostazione dell'ora con protezione di livello 2.** Il PLC di prova risponde `0xD241`, ma è un'ipotesi (§12.0).
+- **Il PLC di prova registra ogni STOP come `0x4304` «STOP da PG».** Una CPU reale distingue altre cause.
+- **L'osservazione usa read var, non lo stato delle variabili TIS.** I valori non sono presi a un punto preciso del ciclo.
+- **Niente PQ online, niente comando di PI, T, C, niente forzamento.** Al massimo 200 righe osservate online.
+- **Scritture da tabella in più richieste.** Se una fallisce, le precedenti restano scritte. La riga che era in corso dice «esito sconosciuto».
+- **Numero di richieste nella conferma.** È un massimo calcolato per PDU 240, non il numero esatto.
+- **Backup in sola esportazione.** Il ripristino arriva nel 3D. Non si sa se i DB caricati hanno i valori attuali o quelli iniziali (§19.4).
+- **Il backup registra il modo visto per ultimo dalla sorveglianza,** non quello riletto all'inizio.
+- **Lettura di un `.baapbak`.** Per il ripristino del 3D, la lettura si fida delle dimensioni dichiarate nello zip.
+- **Niente messaggi push.** Il buffer si aggiorna ogni secondo, solo con l'editor aperto.
+- **`_DELE` usa 'A'.** Vedi «Caricamento e confronto (piano 3B)».
+
 ## Simulatore (piano 2A)
 
 Le scelte sono descritte in `docs/protocollo/sim.md` (§4.1 per la semantica). Tutte restano **non confermate** da una CPU reale.
