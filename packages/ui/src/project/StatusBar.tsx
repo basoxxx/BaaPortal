@@ -34,7 +34,7 @@ export function StatusBar() {
           {t('diag.force.active')}
         </span>
       ) : null}
-      {online.monitor && online.monitor.reason !== 'ended' ? (
+      {online.monitor && (online.monitor.reason === 'ok' || online.monitor.reason === 'waiting') ? (
         <span data-testid="plc-monitor-warning" className="baa-status-warn">
           {t('plcMonitor.cycleWarning')}
         </span>

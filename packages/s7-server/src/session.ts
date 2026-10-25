@@ -183,7 +183,7 @@ class Session implements TisSession {
   }
 
   /** PDU non sollecitata (type indication, proto §18.1): `pduRef` nostro, il client non lo usa. */
-  pushIndication(sub: number, seq: number, tisData: Uint8Array): void {
+  pushIndication(sub: number, seq: number, tisData: Uint8Array, errorCode = 0): void {
     if (this.state !== 'open') return;
     this.jobRef = (this.jobRef % 0xffff) + 1;
     this.sendPdu({
@@ -191,7 +191,7 @@ class Session implements TisSession {
       pduRef: this.jobRef,
       errorClass: 0,
       errorCode: 0,
-      param: tisReplyParam(0x01, sub, seq, 0),
+      param: tisReplyParam(0x01, sub, seq, errorCode),
       data: tisReplyData(tisData),
     });
   }

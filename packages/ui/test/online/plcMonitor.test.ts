@@ -281,8 +281,58 @@ describe('PlcMonitorController', () => {
     ctrl.toggle('d1', 'b1');
     ctrl.setVisible('b1', [0]);
     await flush();
-    expect(bridge.plcStatusStartCalls[0]!.offsets).toHaveLength(40);
-    expect(bridge.plcStatusWindowCalls.at(-1)!.offsets).toHaveLength(24);
+    // la prima start è già tagliata alla PDU di 240: nessuna seconda finestra da ricreare
+    expect(bridge.plcStatusStartCalls[0]!.offsets).toHaveLength(24);
+    expect(bridge.plcStatusStartCalls[0]!.saz).toBe(48);
+    expect(bridge.plcStatusWindowCalls).toHaveLength(0);
     expect(online().monitor?.limit).toBe(24);
+  });
+
+  it('values con partial → stato ok con partial', async () => {
+    const { bridge, ctrl, online } = setup();
+    bridge.plcStatusReadImpl = () => ({
+      ok: true,
+      state: 'values',
+      lines: [{ offset: 0, regs: { accu1: 1 } }],
+      partial: true,
+    });
+    ctrl.toggle('d1', 'b1');
+    ctrl.setVisible('b1', [0, 1, 2]);
+    await flush();
+    expect(online().monitor).toMatchObject({ reason: 'ok', partial: true });
+  });
+
+  it('cambio di finestra → i valori mostrati si azzerano subito', async () => {
+    const { bridge, timers, ctrl, online } = setup();
+    bridge.plcStatusReadImpl = () => ({
+      ok: true,
+      state: 'values',
+      lines: [{ offset: 0, regs: { stw: 0x106, accu1: 5 } }],
+    });
+    ctrl.toggle('d1', 'b1');
+    ctrl.setVisible('b1', [0]);
+    await flush();
+    expect(online().monitorLines?.[0]?.regs).not.toBeNull();
+    timers.t += 1000;
+    bridge.plcStatusReadImpl = () => new Promise(() => undefined);
+    ctrl.setVisible('b1', [1]);
+    await flush();
+    expect(online().monitorLines?.every((l) => l.regs === null)).toBe(true);
+  });
+
+  it('different → si riprova quando cambia il confronto con la CPU', async () => {
+    const { bridge, ctrl, online, store } = setup();
+    bridge.plcStatusStartImpl = () => ({ ok: false, reason: 'different', error: 'diverso' });
+    ctrl.toggle('d1', 'b1');
+    ctrl.setVisible('b1', [0]);
+    await flush();
+    expect(online().monitor?.reason).toBe('different');
+    expect(bridge.plcStatusStartCalls).toHaveLength(1);
+    store.setState((s) => ({ ...s }));
+    await flush();
+    expect(bridge.plcStatusStartCalls).toHaveLength(1);
+    store.getState().patchOnline({ compare: { rows: [] } as never });
+    await flush();
+    expect(bridge.plcStatusStartCalls).toHaveLength(2);
   });
 });

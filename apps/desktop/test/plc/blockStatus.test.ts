@@ -108,6 +108,7 @@ describe('BlockStatusService', () => {
   let owners: FakeOwner[];
   let jobs: ReturnType<typeof memoryJobStore>;
   let access1: PlcAccess;
+  let wantSerial: string | undefined;
 
   const names = (n: string): Call[] => calls.filter((c) => c.name === n);
 
@@ -151,7 +152,7 @@ describe('BlockStatusService', () => {
         owners.includes(owner as FakeOwner)
           ? {
               access: owners.indexOf(owner as FakeOwner) === 0 ? access1 : access(103),
-              identity: { orderNumber: ORDER },
+              identity: { orderNumber: ORDER, ...(wantSerial ? { serial: wantSerial } : {}) },
               linkId: 1,
             }
           : undefined,
@@ -197,6 +198,7 @@ describe('BlockStatusService', () => {
     owners = [new FakeOwner(), new FakeOwner()];
     jobs = memoryJobStore();
     access1 = access();
+    wantSerial = undefined;
   });
   afterEach(() => undefined);
 
@@ -311,6 +313,69 @@ describe('BlockStatusService', () => {
     await svc.stop(owners[0]!);
   });
 
+  it('finestra tagliata: SAZ = inizio della prima riga scartata; la finestra uguale del renderer non ricrea il job', async () => {
+    const svc = newService();
+    await svc.start(owners[0]!, req({ offsets: evens(0, 58), saz: 60 }));
+    expect(names('create')[0]!.args[1]).toBe(48);
+    expect(svc.window(owners[0]!, req({ offsets: evens(0, 46), saz: 48 }))).toEqual({ ok: true });
+    const res = await svc.read(owners[0]!);
+    expect(res).toMatchObject({ ok: true, state: 'values' });
+    expect(names('create')).toHaveLength(1);
+    expect(names('delete')).toHaveLength(0);
+    await svc.stop(owners[0]!);
+  });
+
+  it('start sovrapposte della stessa finestra: la superata non rilascia la CPU; una seconda finestra è busy', async () => {
+    const svc = newService();
+    const a1 = svc.start(owners[0]!, req());
+    const a2 = svc.start(owners[0]!, req());
+    const [r1, r2] = await Promise.all([a1, a2]);
+    expect(r1.ok).toBe(false);
+    expect(r2.ok).toBe(true);
+    expect(await svc.start(owners[1]!, req())).toMatchObject({ ok: false, reason: 'busy' });
+    await svc.stopAll();
+  });
+
+  it('stop durante una start → la start è annullata e non lascia job né collegamenti', async () => {
+    const svc = newService();
+    const st = svc.start(owners[0]!, req());
+    await svc.stop(owners[0]!);
+    expect(await st).toMatchObject({ ok: false });
+    expect(svc.active(owners[0]!)).toBe(false);
+    expect(await liveJobs()).toEqual([]);
+    expect(await svc.start(owners[1]!, req())).toMatchObject({ ok: true });
+    await svc.stopAll();
+  });
+
+  it('0xD0CC con i valori (tisPartial) → values veri con partial true', async () => {
+    backend = world({ faults: { tisPartial: true } });
+    const svc = newService();
+    await svc.start(owners[0]!, req());
+    const res = await svc.read(owners[0]!);
+    if (!res.ok || res.state !== 'values') throw new Error(JSON.stringify(res));
+    expect(res.partial).toBe(true);
+    expect(res.lines.map((l) => l.regs?.accu1)).toEqual([0, 2, 4]);
+    await svc.stop(owners[0]!);
+  });
+
+  it('0xD081 alla creazione → state stop, osservazione ancora accesa', async () => {
+    backend = world({ faults: { tisError: { sub: 0x13, code: 0xd081 } } });
+    const svc = newService();
+    expect(await svc.start(owners[0]!, req())).toMatchObject({ ok: true });
+    expect(await svc.read(owners[0]!)).toEqual({ ok: true, state: 'stop' });
+    expect(svc.active(owners[0]!)).toBe(true);
+    await svc.stopAll();
+  });
+
+  it('il registro porta il numero di serie; cleanup con un altro numero di serie non tocca la CPU', async () => {
+    expect(cpuKey(access(), 'S C-1')).toBe('192.0.2.10:102/0/2#S C-1');
+    wantSerial = 'S C-ALTRO';
+    jobs.add(cpuKey(access(), wantSerial), 0x13, 7);
+    const svc = newService();
+    await svc.cleanup(owners[0]!);
+    expect(jobs.list(cpuKey(access(), wantSerial))).toEqual([{ fn: 0x13, job: 7 }]);
+  });
+
   it('due read di fila → il secondo enable parte ≥ 250 ms dopo il primo (orologio iniettato)', async () => {
     const svc = newService({
       minEnableMs: 250,
@@ -357,6 +422,26 @@ describe('BlockStatusService', () => {
     await svc.read(owners[0]!);
     expect(names('create')).toHaveLength(2);
     expect(names('enable')).toHaveLength(2);
+    await svc.stop(owners[0]!);
+  });
+
+  it('job cancellato con un enable in attesa, numero riusato dal nuovo job → il nuovo enable riceve i suoi valori', async () => {
+    backend = world({ faults: { reuseJobId: true } });
+    const orig = (
+      backend as unknown as { blockStatus: (...a: unknown[]) => Promise<unknown> }
+    ).blockStatus.bind(backend);
+    let gate = false;
+    (backend as unknown as { blockStatus: unknown }).blockStatus = (...a: unknown[]) =>
+      gate ? orig(...a) : Promise.resolve(undefined);
+    const svc = newService({ resultTimeoutMs: 100 });
+    await svc.start(owners[0]!, req({ type: 'OB', number: 1 }));
+    expect(await svc.read(owners[0]!)).toEqual({ ok: true, state: 'waiting' });
+    gate = true;
+    svc.window(owners[0]!, req({ offsets: [0, 2], saz: 6 }));
+    const res = await svc.read(owners[0]!);
+    if (!res.ok || res.state !== 'values') throw new Error(JSON.stringify(res));
+    const created = names('create').length;
+    expect(created).toBe(2);
     await svc.stop(owners[0]!);
   });
 

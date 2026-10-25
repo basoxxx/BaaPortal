@@ -1399,6 +1399,7 @@
     "firstN": "Showing the first {{n}} visible lines.",
     "cycleWarning": "Monitoring active — CPU cycle time increases",
     "compare": "Compare with CPU",
+    "partial": "Partial state: the CPU limited the data to keep the cycle time down.",
     "accu2": "ACCU2",
     "ar1": "AR1",
     "reason": {

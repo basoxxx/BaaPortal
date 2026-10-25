@@ -170,6 +170,16 @@ describe('TIS: block status del finto PLC', () => {
     await never.close();
   });
 
+  it('tisPartial: 0xD0CC con i valori → result con partial true', async () => {
+    const c = await connect(world({ faults: { tisPartial: true } }));
+    const job = await c.createBlockStatus(R, SAZ);
+    const res = await c.enableAndWait(0x13, job, 1000);
+    if (!('result' in res)) throw new Error('nessun risultato');
+    expect(res.partial).toBe(true);
+    expect(res.result.length).toBe(blockStatusResultSize(R));
+    await c.close();
+  });
+
   it('tisMalformed [0x13]: il risultato è troncato a 7 byte', async () => {
     const c = await connect(world({ faults: { tisMalformed: [0x13] } }));
     const job = await c.createBlockStatus(R, SAZ);

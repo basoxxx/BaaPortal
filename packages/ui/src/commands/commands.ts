@@ -300,7 +300,8 @@ const list: Command[] = [
       // Simulazione e CPU online non convivono: l'osservazione segue la sorgente attiva.
       if (st.sim.phase !== 'off' || st.sim.monitor) return simControllerFor(store).toggleMonitor();
       const m = st.online.monitor;
-      const a = m ?? activeCodeBlock(st);
+      // dopo un «terminata» si riparte dal blocco attivo adesso, non da quello finito
+      const a = (m && m.reason !== 'ended' ? m : undefined) ?? activeCodeBlock(st) ?? m;
       if (a) plcMonitorFor(store, bridge).toggle(a.deviceId, a.blockId);
     },
   }),

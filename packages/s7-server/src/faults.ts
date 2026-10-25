@@ -26,6 +26,10 @@ export interface FaultPlan {
   orphanJobs?: boolean;
   /** La sottofunzione TIS indicata riceve sempre questo codice d'errore (p.es. `0xD0A1`). */
   tisError?: { sub: number; code: number };
+  /** I job di test prendono sempre il numero libero più basso (un numero cancellato si riusa subito). */
+  reuseJobId?: boolean;
+  /** Le indication del block status portano `0xD0CC` (dati limitati dal tempo) insieme ai valori. */
+  tisPartial?: boolean;
   /** Sottofunzioni TIS che rispondono con dati troncati a 7 byte. */
   tisMalformed?: number[];
 }

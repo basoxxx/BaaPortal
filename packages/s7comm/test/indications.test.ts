@@ -118,6 +118,18 @@ describe('indication in modo online-test', () => {
     await expect(conn.nextIndication({ group: 1, sub: 0x13, seq: 3 }, 100)).resolves.toBeDefined();
   });
 
+  it("discardIndications chiude l'attesa del job cancellato: il job con lo stesso numero non viene scavalcato", async () => {
+    const { client, cpu } = rig();
+    const conn = await open(client, 'online-test');
+    const vecchia = conn.nextIndication({ group: 1, sub: 0x13, seq: 3 }, 60_000);
+    conn.discardIndications(1, 0x13, 3);
+    await expect(vecchia).resolves.toBeUndefined();
+    conn.reviveIndications(1, 0x13, 3);
+    const nuova = conn.nextIndication({ group: 1, sub: 0x13, seq: 3 }, 60_000);
+    indicate(cpu, 0x13, 3);
+    await expect(nuova).resolves.toMatchObject({ param: { sequence: 3 } });
+  });
+
   it("chiusura della connessione → l'attesa è rifiutata", async () => {
     const { client } = rig();
     const conn = await open(client, 'online-test');

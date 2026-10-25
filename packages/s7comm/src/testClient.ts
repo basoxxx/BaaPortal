@@ -21,6 +21,8 @@ import type { UserdataFrame } from './s7/userdataRequests';
 /** Attesa dell'indication di uno stack, se la CPU risponde con un ack invece dei dati subito. */
 const STACK_INDICATION_MS = 2000;
 
+const PARTIAL_CODE = 0xd0cc;
+
 const h2 = (n: number): string => `0x${n.toString(16).padStart(2, '0')}`;
 
 function tisError(code: number, what: string): S7Error {
@@ -87,14 +89,16 @@ export class S7TestClient extends S7Client {
     fn: number,
     job: number,
     timeoutMs: number,
-  ): Promise<{ result: Uint8Array } | { timeout: true }> {
+  ): Promise<{ result: Uint8Array; partial?: true } | { timeout: true }> {
     const ack = await this.#tis(reqEnableJob(fn, job), 'enable job');
     if (ack.errorCode !== 0) throw tisError(ack.errorCode, 'enable job');
     const ind = await this.#tconn.nextIndication({ group: 1, sub: fn, seq: job }, timeoutMs);
     if (!ind) return { timeout: true };
     const code = ind.param.errorCode ?? 0;
-    if (code !== 0) throw tisError(code, 'risultato del job');
     const split = splitTisPayload(ind.payload);
+    // 0xD0CC: la CPU ha limitato i dati al tempo concesso, ma i valori ci sono (proto §18.7.1)
+    if (code === PARTIAL_CODE && split) return { result: split.tisData, partial: true };
+    if (code !== 0) throw tisError(code, 'risultato del job');
     if (!split) throw new S7Error('PROTOCOL', 'risultato del job senza parametro TIS');
     return { result: split.tisData };
   }

@@ -1399,6 +1399,7 @@
     "firstN": "Osservate le prime {{n}} righe visibili.",
     "cycleWarning": "Osservazione attiva — il tempo di ciclo della CPU aumenta",
     "compare": "Confronta con la CPU",
+    "partial": "Stato parziale: la CPU ha limitato i dati per non allungare il ciclo.",
     "accu2": "ACCU2",
     "ar1": "AR1",
     "reason": {

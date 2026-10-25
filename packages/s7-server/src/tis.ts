@@ -47,7 +47,7 @@ export interface TisSession {
   readonly pduLength: number;
   isClosed(): boolean;
   /** Manda una PDU non sollecitata (type indication) con i dati TIS del risultato. */
-  pushIndication(sub: number, seq: number, tisData: Uint8Array): void;
+  pushIndication(sub: number, seq: number, tisData: Uint8Array, errorCode?: number): void;
 }
 
 export interface TisRequest {
@@ -309,6 +309,10 @@ export class TisTable {
       }
     }
     let id = seq;
+    if (this.cpu.config.faults.reuseJobId) {
+      id = 1;
+      while (this.jobs.has(id)) id++;
+    }
     while (this.jobs.has(id)) id = this.next();
     this.jobs.set(id, { id, owner: session, r: d.r, inconsistent: false, waiting: false });
     return { seq: id, errorCode: 0 };
@@ -346,7 +350,12 @@ export class TisTable {
             if (this.cpu.config.faults.tisMalformed?.includes(TIS_SUB.BLOCK_STATUS)) {
               data = data.slice(0, MALFORMED_BYTES);
             }
-            session.pushIndication(TIS_SUB.BLOCK_STATUS, j.id, data);
+            session.pushIndication(
+              TIS_SUB.BLOCK_STATUS,
+              j.id,
+              data,
+              this.cpu.config.faults.tisPartial ? 0xd0cc : 0,
+            );
           },
           () => {
             j.waiting = false;

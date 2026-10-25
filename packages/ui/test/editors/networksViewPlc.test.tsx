@@ -115,6 +115,24 @@ describe("osservazione sulla CPU nell'editor del blocco", () => {
   );
 
   it(
+    'barra di stato: nessun avviso se non esiste un job (different) e indicatore «parziale» nella barra',
+    async () => {
+      const { app } = await setup({});
+      const m = app.store.getState().online.monitor!;
+      act(() => app.store.getState().patchOnline({ monitor: { ...m, reason: 'different' } }));
+      expect(screen.queryByTestId('plc-monitor-warning')).toBeNull();
+      act(() =>
+        app.store.getState().patchOnline({ monitor: { ...m, reason: 'ok', partial: true } }),
+      );
+      expect(screen.getByTestId('plc-monitor-warning')).toBeTruthy();
+      expect(screen.getByRole('status', { name: /Osservazione/ }).textContent).toContain(
+        'Stato parziale',
+      );
+    },
+    T,
+  );
+
+  it(
     'en: «Monitoring active — CPU cycle time increases»',
     () => {
       expect(en.plcMonitor.cycleWarning).toBe('Monitoring active — CPU cycle time increases');

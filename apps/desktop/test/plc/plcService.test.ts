@@ -138,6 +138,34 @@ describe('PlcService contro il PLC di prova (CPU simulata su 127.0.0.1)', () => 
     expect(owner.sentAfterDestroy).toBe(0);
   });
 
+  it('onConnect a ogni collegamento riuscito; onLinkEnd una volta per disconnect, lost e finestra distrutta', async () => {
+    const connected: PlcOwner[] = [];
+    service.onConnect((o) => connected.push(o));
+    const ends: string[] = [];
+    const a = new FakeOwner();
+    await service.connect(a, access());
+    expect(connected).toEqual([a]);
+    service.onLinkEnd(a, () => ends.push('disconnect'));
+    await service.disconnect(a);
+    expect(ends).toEqual(['disconnect']);
+
+    const b = new FakeOwner();
+    await service.connect(b, access());
+    service.onLinkEnd(b, () => ends.push('destroyed'));
+    b.destroy();
+    expect(ends).toEqual(['disconnect', 'destroyed']);
+
+    const c = new FakeOwner();
+    await service.connect(c, access());
+    service.onLinkEnd(c, () => ends.push('lost'));
+    await plc.close();
+    await waitFor(() => ends.includes('lost'));
+    expect(ends.filter((e) => e === 'lost')).toHaveLength(1);
+    // senza collegamento la richiesta scatta subito
+    service.onLinkEnd(c, () => ends.push('subito'));
+    await waitFor(() => ends.includes('subito'));
+  });
+
   it('rack/slot sbagliati → messaggio sul rifiuto del collegamento', async () => {
     const r = await service.connect(new FakeOwner(), { ...access(), rack: 3 });
     expect(r).toEqual({

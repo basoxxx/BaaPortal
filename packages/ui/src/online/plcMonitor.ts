@@ -19,8 +19,8 @@ const REAL_TIMERS: Timers = {
 
 /** Ritmo delle letture (dalla fine della precedente) e minimo fra due cambi di finestra (ms). */
 export const PLC_MONITOR_PERIOD_MS = 250;
-/** Righe massime accettate dalla richiesta; il limite vero lo dà `start` (PDU e registri). */
-const REQUEST_LINES = 64;
+/** PDU supposta prima della start (la CPU concede 240 byte, di solito); `start` dà il limite vero. */
+const DEFAULT_PDU = 240;
 
 /**
  * Finestra di osservazione: le istruzioni delle reti visibili, dalla prima, al massimo `maxLines`.
@@ -107,6 +107,8 @@ export class PlcMonitorController {
   private timer: unknown;
   private windowTimer: unknown;
   private blockedKey: string | undefined;
+  /** Il confronto con la CPU al momento del rifiuto: se cambia (blocco caricato) si riprova. */
+  private blockedCompare: unknown;
   private unsub: (() => void) | undefined;
 
   constructor(
@@ -244,7 +246,7 @@ export class PlcMonitorController {
     const cur = st.online.monitor?.reason;
     if (cur && REMOTE_REASONS.includes(cur)) {
       // rifiutato o finito: si riprova solo se il compilato è cambiato
-      if (this.blockedKey === input.key) return;
+      if (this.blockedKey === input.key && this.blockedCompare === st.online.compare) return;
       this.blockedKey = undefined;
     }
     if (cur === 'stale' || cur === 'noLines' || cur === 'edited' || cur === undefined) {
@@ -291,7 +293,8 @@ export class PlcMonitorController {
   }
 
   private async startRemote(input: PlcMonitorInput): Promise<void> {
-    const built = this.requestFor(input, REQUEST_LINES);
+    // già tagliata per la PDU di 240 byte: main non deve accorciare né ricreare il job
+    const built = this.requestFor(input, maxBlockStatusLines(DEFAULT_PDU, this.mask()));
     if (!built) return; // nessuna istruzione visibile: si aspetta
     const epoch = ++this.epoch;
     this.starting = true;
@@ -308,6 +311,7 @@ export class PlcMonitorController {
     this.starting = false;
     if (!r.ok) {
       this.blockedKey = input.key;
+      this.blockedCompare = this.store.getState().online.compare;
       const reason: PlcMonitorReason =
         r.reason === 'different' ||
         r.reason === 'missing' ||
@@ -336,6 +340,8 @@ export class PlcMonitorController {
     this.sentKey = key;
     this.offsets = req.offsets;
     this.lastWindowAt = this.timers.now();
+    // finché la CPU non risponde sulla nuova finestra, i valori vecchi non valgono più
+    this.patch({ monitorLines: req.offsets.map((offset) => ({ offset, regs: null })) });
     let ok = true;
     try {
       const r = await this.bridge.plcStatusWindow(req);
@@ -382,6 +388,7 @@ export class PlcMonitorController {
       const input =
         this.spec && this.resolve(this.store.getState(), this.spec.deviceId, this.spec.blockId);
       this.blockedKey = input ? input.key : undefined;
+      this.blockedCompare = this.store.getState().online.compare;
       this.remote = false;
       this.epoch++;
       void Promise.resolve(this.bridge.plcStatusStop()).catch(() => undefined);

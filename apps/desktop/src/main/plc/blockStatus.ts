@@ -24,6 +24,7 @@ const CONNECTION_TYPES = { PG: 'pg', OP: 'op', S7_BASIC: 'basic' } as const;
 const ENABLE_LONG_MS = 30_000;
 const DELETE_LIMIT_MS = 1000;
 const MAX_LINES = 64;
+const STOP_ALL_LIMIT_MS = 2000;
 
 export type StatusClient = Pick<
   S7TestClient,
@@ -98,8 +99,28 @@ export function parseStatusRequest(raw: unknown, maxLines = MAX_LINES): PlcStatu
   };
 }
 
-export const cpuKey = (a: PlcAccess): string =>
-  `${a.host.toLowerCase()}:${a.port ?? DEFAULT_PORT}/${a.rack}/${a.slot}`;
+/** Chiave della CPU nel registro: indirizzo e, se noto, numero di serie (stesso IP, altra CPU). */
+export const cpuKey = (a: PlcAccess, serial?: string): string =>
+  `${a.host.toLowerCase()}:${a.port ?? DEFAULT_PORT}/${a.rack}/${a.slot}${serial ? `#${serial}` : ''}`;
+
+/**
+ * Se la finestra supera le righe concesse, taglia gli offset e la fine insieme: SAZ diventa
+ * l'inizio della prima riga scartata (§18), mai la fine della finestra più lunga.
+ */
+function fitRequest(req: PlcStatusRequest, maxLines: number): PlcStatusRequest {
+  if (req.offsets.length <= maxLines) return req;
+  return { ...req, offsets: req.offsets.slice(0, maxLines), saz: req.offsets[maxLines]! };
+}
+
+const sameWindow = (a: PlcStatusRequest, b: PlcStatusRequest): boolean =>
+  a.saz === b.saz &&
+  a.mask === b.mask &&
+  a.offsets.length === b.offsets.length &&
+  a.offsets.every((o, i) => o === b.offsets[i]);
+
+/** Il modo della CPU è cambiato fra il sondaggio e la creazione: non è un errore dell'osservazione. */
+const isModeCode = (code: number | undefined): boolean =>
+  code === 0xd081 || code === 0xd0c2 || code === 0xd0c7;
 
 /** Codice d'errore della CPU di una S7Error (`classe << 8 | codice`). */
 export function cpuCode(err: unknown): number | undefined {
@@ -151,6 +172,10 @@ interface Pending {
   >;
 }
 
+interface CpuLock {
+  owner: PlcOwner;
+}
+
 interface Session {
   owner: PlcOwner;
   cpu: string;
@@ -167,6 +192,8 @@ interface Session {
   lastEnableAt: number;
   reading: boolean;
   op: Promise<unknown> | null;
+  /** Il possesso della CPU preso da questa start; solo chi lo ha preso lo rilascia. */
+  lock: CpuLock;
   closed: boolean;
   closing?: Promise<void>;
   idle?: NodeJS.Timeout;
@@ -182,7 +209,9 @@ interface Session {
 export class BlockStatusService {
   private readonly sessions = new Map<PlcOwner, Session>();
   /** Chi osserva la CPU (una finestra sola). */
-  private readonly cpuOwner = new Map<string, PlcOwner>();
+  private readonly cpuOwner = new Map<string, CpuLock>();
+  /** Pulizie degli orfani in corso: una start sulla stessa CPU le aspetta. */
+  private readonly cleaning = new Map<string, Promise<void>>();
   private readonly epochs = new WeakMap<PlcOwner, number>();
   /** Perché l'ultima osservazione della finestra è finita (si dice alla prossima lettura). */
   private readonly lastEnd = new WeakMap<PlcOwner, string>();
@@ -230,25 +259,29 @@ export class BlockStatusService {
     this.epochs.set(owner, epoch);
     const old = this.sessions.get(owner);
     if (old) await this.close(old);
+    if (this.epochs.get(owner) !== epoch) {
+      return { ok: false, reason: 'error', error: 'Osservazione annullata' };
+    }
     this.lastEnd.delete(owner);
     const target = this.o.service.target(owner);
     if (!target) {
       return { ok: false, reason: 'offline', error: 'Nessun collegamento online' };
     }
-    const cpu = cpuKey(target.access);
+    const cpu = cpuKey(target.access, target.identity.serial);
     const holder = this.cpuOwner.get(cpu);
-    if (holder && holder !== owner) {
+    if (holder && holder.owner !== owner) {
       return {
         ok: false,
         reason: 'busy',
         error: "Osservazione già attiva su questa CPU in un'altra finestra",
       };
     }
-    this.cpuOwner.set(cpu, owner);
+    const lock: CpuLock = { owner };
+    this.cpuOwner.set(cpu, lock);
     let client: StatusClient | undefined;
     const fail = async (reason: FailReason, error: string): Promise<PlcStatusStartResult> => {
       if (client) await client.close().catch(() => undefined);
-      if (this.cpuOwner.get(cpu) === owner && !this.sessions.has(owner)) this.cpuOwner.delete(cpu);
+      if (this.cpuOwner.get(cpu) === lock) this.cpuOwner.delete(cpu);
       return { ok: false, reason, error };
     };
     const superseded = (): boolean =>
@@ -256,6 +289,7 @@ export class BlockStatusService {
       owner.isDestroyed() ||
       this.o.service.target(owner)?.linkId !== target.linkId;
     try {
+      await this.cleaning.get(cpu);
       client = await this.open(target.access);
     } catch (err) {
       return fail('error', connectMessage(err, target.access));
@@ -295,18 +329,20 @@ export class BlockStatusService {
       const pduLength = client.pduLength;
       const maxLines = maxBlockStatusLines(pduLength, req.mask);
       if (maxLines < 1) return fail('error', 'PDU troppo piccola per lo stato del blocco');
+      if (superseded()) return fail('error', 'Osservazione annullata');
       const s: Session = {
         owner,
         cpu,
         client,
         pduLength,
         maxLines,
-        req: { ...req, offsets: req.offsets.slice(0, maxLines) },
+        req: fitRequest(req, maxLines),
         gen: 0,
         pending: null,
         lastEnableAt: -Infinity,
         reading: false,
         op: null,
+        lock,
         closed: false,
         offLink: () => undefined,
         onDestroyed: () => void this.close(s),
@@ -315,8 +351,11 @@ export class BlockStatusService {
         try {
           await this.createJob(s);
         } catch (err) {
-          const c = classify(err);
-          return fail(c.reason, c.message);
+          // il modo è cambiato di mezzo: l'osservazione resta accesa, il job nascerà in RUN
+          if (!isModeCode(cpuCode(err))) {
+            const c = classify(err);
+            return fail(c.reason, c.message);
+          }
         }
       }
       if (superseded()) {
@@ -351,7 +390,9 @@ export class BlockStatusService {
       return { ok: false, error: 'La finestra riguarda un altro blocco' };
     }
     const maxLines = maxBlockStatusLines(s.pduLength, req.mask);
-    s.want = { ...req, offsets: req.offsets.slice(0, maxLines) };
+    const fit = fitRequest(req, maxLines);
+    // uguale a quella già attiva: nessun delete/create inutile
+    s.want = sameWindow(fit, s.req) ? undefined : fit;
     this.touch(s);
     return { ok: true };
   }
@@ -392,11 +433,13 @@ export class BlockStatusService {
       s.want = undefined;
       await this.dropJob(s);
     }
+    if (s.closed) return this.endedResult(s.owner);
     if (s.job === undefined) {
       if (mode !== 'RUN') return { ok: true, state: 'waiting' };
       try {
         await this.createJob(s);
       } catch (err) {
+        if (isModeCode(cpuCode(err))) return { ok: true, state: 'stop' };
         return this.endWith(s, classify(err).message);
       }
     }
@@ -435,14 +478,25 @@ export class BlockStatusService {
       return { ok: true, state: 'waiting' };
     }
     const bs = this.toRequest(s);
+    const partial = 'partial' in outcome.r && outcome.r.partial === true;
     const dec = decodeBlockStatusResult(outcome.r.result, bs);
     if (!dec.ok) {
+      if (partial) {
+        // dati limitati dal tempo e non leggibili: righe grigie, ma si dice che è parziale
+        return {
+          ok: true,
+          state: 'values',
+          lines: bs.lines.map((l) => ({ offset: l.offset, regs: null })),
+          partial: true,
+        };
+      }
       return this.endWith(s, `Risposta della CPU non riconosciuta (${dec.why}): ${dec.hex}`);
     }
     return {
       ok: true,
       state: 'values',
       lines: bs.lines.map((l, i) => ({ offset: l.offset, regs: dec.lines[i] ?? null })),
+      ...(partial ? { partial: true as const } : {}),
     };
   }
 
@@ -454,7 +508,7 @@ export class BlockStatusService {
       return { ok: true, state: 'waiting' };
     }
     if (code === 0xd0cc) {
-      // dati limitati dal tempo: il testo dell'indication non arriva dal client, nessuna riga
+      // dati limitati dal tempo e senza valori: righe grigie, ma parziale
       const bs = this.toRequest(s);
       return {
         ok: true,
@@ -502,7 +556,7 @@ export class BlockStatusService {
 
   /** Cancella il job (al più 1 s); se fallisce resta nel registro per la pulizia successiva. */
   private async dropJob(s: Session): Promise<void> {
-    if (s.op) await s.op.catch(() => undefined);
+    if (s.op) await this.withLimit(s.op).catch(() => undefined);
     const job = s.job;
     if (job === undefined) return;
     s.job = undefined;
@@ -518,10 +572,10 @@ export class BlockStatusService {
     }
   }
 
-  private async withLimit<T>(p: Promise<T>): Promise<T> {
+  private async withLimit<T>(p: Promise<T>, ms = DELETE_LIMIT_MS): Promise<T> {
     let timer: NodeJS.Timeout | undefined;
     const limit = new Promise<never>((_, rej) => {
-      timer = setTimeout(() => rej(new Error('cancellazione troppo lenta')), DELETE_LIMIT_MS);
+      timer = setTimeout(() => rej(new Error('cancellazione troppo lenta')), ms);
     });
     p.catch(() => undefined);
     try {
@@ -553,7 +607,7 @@ export class BlockStatusService {
         await this.dropJob(s);
       } finally {
         if (this.sessions.get(s.owner) === s) this.sessions.delete(s.owner);
-        if (this.cpuOwner.get(s.cpu) === s.owner) this.cpuOwner.delete(s.cpu);
+        if (this.cpuOwner.get(s.cpu) === s.lock) this.cpuOwner.delete(s.cpu);
         await s.client.close().catch(() => undefined);
       }
     })();
@@ -561,13 +615,21 @@ export class BlockStatusService {
   }
 
   async stop(owner: PlcOwner): Promise<void> {
+    // una start in corso si annulla: non deve lasciare un job che nessuno vuole
+    this.epochs.set(owner, (this.epochs.get(owner) ?? 0) + 1);
     this.lastEnd.delete(owner);
     const s = this.sessions.get(owner);
     if (s) await this.close(s);
   }
 
   async stopAll(): Promise<void> {
-    await Promise.all([...this.sessions.values()].map((s) => this.close(s)));
+    const all = Promise.all([...this.sessions.values()].map((s) => this.close(s)));
+    try {
+      await this.withLimit(all, STOP_ALL_LIMIT_MS);
+    } catch {
+      // oltre il limite: i job rimasti sono nel registro, li pulirà il prossimo collegamento
+    }
+    this.o.jobs.flush?.();
   }
 
   /**
@@ -576,10 +638,10 @@ export class BlockStatusService {
    * registrati non si toccano mai.
    */
   private async sweep(client: StatusClient, cpu: string): Promise<void> {
-    const reg = this.o.jobs.list(cpu);
-    if (reg.length === 0) return;
+    if (this.o.jobs.list(cpu).length === 0) return;
     try {
       const live = await client.readJobList();
+      const reg = this.o.jobs.list(cpu);
       for (const e of reg) {
         if (!live.some((j) => j.fn === e.fn && j.job === e.job))
           this.o.jobs.remove(cpu, e.fn, e.job);
@@ -599,16 +661,38 @@ export class BlockStatusService {
   }
 
   /** A ogni nuovo collegamento: se la CPU ha voci nel registro, cancella i job orfani nostri. */
-  async cleanup(owner: PlcOwner): Promise<void> {
+  cleanup(owner: PlcOwner): Promise<void> {
     const target = this.o.service.target(owner);
-    if (!target) return;
-    const cpu = cpuKey(target.access);
-    if (this.o.jobs.list(cpu).length === 0 || this.cpuOwner.has(cpu)) return;
+    if (!target) return Promise.resolve();
+    const cpu = cpuKey(target.access, target.identity.serial);
+    const running = this.cleaning.get(cpu);
+    if (running) return running;
+    if (this.o.jobs.list(cpu).length === 0 || this.cpuOwner.has(cpu)) return Promise.resolve();
+    const run = this.cleanupCpu(target, cpu).finally(() => {
+      if (this.cleaning.get(cpu) === run) this.cleaning.delete(cpu);
+    });
+    this.cleaning.set(cpu, run);
+    return run;
+  }
+
+  private async cleanupCpu(
+    target: NonNullable<ReturnType<BlockStatusOptions['service']['target']>>,
+    cpu: string,
+  ): Promise<void> {
     let client: StatusClient | undefined;
     try {
       client = await this.open(target.access);
       const id = await client.identity();
-      if (id.orderNumber !== target.identity.orderNumber) return;
+      const want = target.identity;
+      if (id.orderNumber !== want.orderNumber) return;
+      if (
+        id.serialNumber !== undefined &&
+        want.serial !== undefined &&
+        id.serialNumber !== want.serial
+      )
+        return;
+      // una osservazione nata nel frattempo ha il suo job: non si tocca
+      if (this.cpuOwner.has(cpu)) return;
       await this.sweep(client, cpu);
     } catch {
       // niente da fare adesso

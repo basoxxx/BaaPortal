@@ -27,9 +27,8 @@ export function MonitorBar({ deviceId, blockId }: { deviceId: string; blockId: s
   if (plc) {
     const ok = plc.reason === 'ok';
     const text = ok
-      ? plc.limit !== undefined
-        ? t('plcMonitor.firstN', { n: plc.limit })
-        : t('plcMonitor.on')
+      ? (plc.limit !== undefined ? t('plcMonitor.firstN', { n: plc.limit }) : t('plcMonitor.on')) +
+        (plc.partial ? ` ${t('plcMonitor.partial')}` : '')
       : (plc.message ?? t(`plcMonitor.reason.${plc.reason}`));
     return (
       <div

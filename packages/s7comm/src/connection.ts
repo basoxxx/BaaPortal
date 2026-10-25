@@ -338,6 +338,12 @@ export class S7Connection {
     const keep = this.#indications.filter((d) => !matches(d, { group, sub, seq }));
     this.#indications.length = 0;
     this.#indications.push(...keep);
+    // chi aspetta ancora il job cancellato smette subito: non deve prendere il risultato di un job
+    // nuovo con lo stesso numero
+    for (const w of [...this.#indicationWaiters]) {
+      if (w.match.group === group && w.match.sub === sub && w.match.seq === seq)
+        this.#endWaiter(w, undefined);
+    }
   }
 
   /** Un job appena creato con questo numero: le sue indication tornano a valere. */

@@ -6,6 +6,8 @@ export interface TisJobStore {
   add(cpu: string, fn: number, job: number): void;
   remove(cpu: string, fn: number, job: number): void;
   list(cpu: string): { fn: number; job: number }[];
+  /** Scrive subito ciò che è in attesa (all'uscita). */
+  flush?(): void;
 }
 
 interface Entry {
@@ -16,6 +18,7 @@ interface Entry {
 
 /** Al massimo tante voci: la più vecchia esce. */
 export const MAX_TIS_JOBS = 64;
+const SAVE_DEBOUNCE_MS = 500;
 
 const isEntry = (e: unknown): e is Entry => {
   if (typeof e !== 'object' || e === null) return false;
@@ -34,21 +37,25 @@ const isEntry = (e: unknown): e is Entry => {
 class Store implements TisJobStore {
   constructor(
     private entries: Entry[],
-    private readonly save: (entries: Entry[]) => void,
+    private readonly save: (entries: Entry[], urgent: boolean) => void,
   ) {}
+
+  flush(): void {
+    this.save(this.entries, true);
+  }
 
   add(cpu: string, fn: number, job: number): void {
     const rest = this.entries.filter((e) => !(e.cpu === cpu && e.fn === fn && e.job === job));
     rest.push({ cpu, fn, job });
     this.entries = rest.slice(-MAX_TIS_JOBS);
-    this.save(this.entries);
+    this.save(this.entries, true); // un job nuovo si registra subito: è ciò che serve dopo un crash
   }
 
   remove(cpu: string, fn: number, job: number): void {
     const rest = this.entries.filter((e) => !(e.cpu === cpu && e.fn === fn && e.job === job));
     if (rest.length === this.entries.length) return;
     this.entries = rest;
-    this.save(this.entries);
+    this.save(this.entries, false); // una voce in più nel file costa solo un delete inutile
   }
 
   list(cpu: string): { fn: number; job: number }[] {
@@ -79,7 +86,14 @@ export function fileJobStore(
       warn(`Registro dei job di test illeggibile, riparto vuoto: ${String(err)}`);
     }
   }
-  return new Store(entries, (list) => {
+  let timer: NodeJS.Timeout | undefined;
+  let dirty: Entry[] | undefined;
+  const write = (): void => {
+    if (timer) clearTimeout(timer);
+    timer = undefined;
+    const list = dirty;
+    dirty = undefined;
+    if (!list) return;
     try {
       mkdirSync(dirname(path), { recursive: true });
       const tmp = `${path}.tmp`;
@@ -88,5 +102,12 @@ export function fileJobStore(
     } catch (err) {
       warn(`Registro dei job di test non scritto: ${String(err)}`);
     }
+  };
+  return new Store(entries, (list, urgent) => {
+    dirty = list;
+    if (urgent) return write();
+    // durante lo scorrimento i delete arrivano a raffica: una scrittura sola
+    timer ??= setTimeout(write, SAVE_DEBOUNCE_MS);
+    timer.unref?.();
   });
 }
