@@ -124,6 +124,9 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
 
   async function ensureCanDiscard(): Promise<boolean> {
     flush();
+    // Un salvataggio ancora in corso (Ctrl+S e subito Chiudi) si aspetta: altrimenti il documento
+    // risulterebbe modificato e si chiederebbe di salvare quello che si sta già salvando.
+    await chain;
     const doc = store.getState().doc;
     if (!doc?.dirty) return true;
     const answer = await bridge.confirmUnsaved({

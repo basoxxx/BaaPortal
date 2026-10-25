@@ -246,6 +246,25 @@ describe('projectService', () => {
       expect(readBaap(bridge.files.get('/a.baap')!).meta.author).toBe('AB');
     });
 
+    it('chiudere durante il salvataggio aspetta la fine e non chiede di salvare', async () => {
+      await openValid('/a.baap');
+      store.getState().edit('history.author', (p) => {
+        p.meta.author = 'AB';
+      });
+      const releases = deferWrites();
+      const saving = svc.save();
+      await flush();
+      const closing = svc.close();
+      await flush();
+      expect(store.getState().doc).not.toBeNull(); // la chiusura aspetta la scrittura
+      releases[0]!();
+      expect(await saving).toBe(true);
+      expect(await closing).toBe(true);
+      expect(store.getState().doc).toBeNull();
+      expect(bridge.confirmAnswers).toEqual([]); // nessuna domanda consumata
+      expect(readBaap(bridge.files.get('/a.baap')!).meta.author).toBe('AB');
+    });
+
     it('aprire un altro documento durante il salvataggio non viene sovrascritto', async () => {
       await openValid('/a.baap');
       store.getState().edit('history.author', (p) => {
