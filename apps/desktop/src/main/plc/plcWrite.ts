@@ -1,4 +1,4 @@
-import { parseBlockFile, planWrites } from '@baaportal/s7comm';
+import { parseBlockFile, planWrites, S7Error } from '@baaportal/s7comm';
 import type { BlockType, ConnectOptions, S7DateTime, S7WriteClient } from '@baaportal/s7comm';
 import { connectWriteTcp } from '@baaportal/s7comm/node';
 import type {
@@ -444,14 +444,15 @@ export class PlcWriteService {
               for (const rc of rcs) {
                 results.push(rc.returnCode === 0xff ? { ok: true } : { ok: false, error: rc.name });
               }
-            } catch {
-              // La richiesta può essere arrivata alla CPU: l'esito non si conosce. Non si insiste.
-              for (let j = 0; j < group.length; j++) {
-                results.push({
-                  ok: false,
-                  error: 'Esito sconosciuto: la CPU potrebbe averlo scritto',
-                });
-              }
+            } catch (e) {
+              // Un rifiuto nell'intestazione (p. es. protezione 0xD241) è certo: nulla è stato scritto.
+              // Altrimenti la richiesta può essere arrivata alla CPU: l'esito non si conosce.
+              // In ogni caso non si insiste.
+              const error =
+                e instanceof S7Error && e.code === 'CPU_ERROR'
+                  ? `Rifiutato dalla CPU: ${e.message}`
+                  : 'Esito sconosciuto: la CPU potrebbe averlo scritto';
+              for (let j = 0; j < group.length; j++) results.push({ ok: false, error });
               failed = true;
             }
           }
