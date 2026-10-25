@@ -678,6 +678,11 @@ anlinfo1..4(4 byte) + time(8 byte, timestamp S7). Il **bzu-id** codifica il camb
 modo: nibble basso = modo richiesto, nibble alto = modo precedente. Valori nibble:
 `0x1`=STOP(update), `0x2`=STOP(memory reset), `0x3`=STOP(self init), `0x4`=STOP(internal),
 `0x5`=startup(complete restart), `0x7`=restart, `0x8`=**RUN**, `0xA`=HOLD, `0xD`=DEFECT.
+Il valore `0x6` non è nella tabella di Wireshark ma compare nelle catture: nel buffer diagnostico
+di `tia_s300_goOnline.pcapng` l'evento `0x4301` (STOP→avviamento) porta `0x46` e il successivo
+`0x4302` (avviamento→RUN) porta `0x68`, dopo una richiesta di avviamento a caldo manuale (`0x1381`).
+Quindi `0x6` = **avviamento** (variante "a caldo"); la distinzione esatta fra `0x5`/`0x6`/`0x7`
+resta **una sola fonte** (lo stesso byte nei record di diagnostica, vedi §7.6).
 ⚠️ **Posizione del byte di modo**: nel record il byte di modo (bzu-id) è all'**offset 3 del
 record**, cioè offset 11 del payload SZL (8 byte di intestazione + 3) o offset 15 della parte
 dati con i 4 byte return/TS/len. Ne usiamo il **nibble basso** (`0x08` → RUN). snap7 legge
@@ -691,9 +696,10 @@ usato come offset nel record. Evento ereig osservato: `0x5144` o `0x4302` ecc.
 `0x00A0` = tutte le entry nel modo attuale; `0x01A0` = le N più recenti (N in INDEX);
 `0x0FA0` = solo header. **S7-300 restituisce fino a ~10 entry** (default), S7-400 fino
 a 21. Record (20 byte): **ID event**(1 word) + info(5 word=10 byte) + time(4 word=8
-byte, timestamp S7). Il significato dell'event ID si decodifica con STEP 7 (tabelle
-`cpu_diag_eventid_*` in Wireshark, molto ampie; non riprodotte qui). **verificato** su
-`s7comm_reading_plc_status.pcap` (`00a0 0000 0014 000a` + 10 record da 20 byte).
+byte, timestamp S7). Layout fine del record, struttura dell'event ID e tabella degli eventi
+più comuni: vedi **§7.6**. **verificato** su `s7comm_reading_plc_status.pcap`
+(`00a0 0000 0014 000a` + 10 record da 20 byte) e su `tia_s300_goOnline.pcapng` (CPU 315-2PN/DP,
+10 record).
 
 #### `0x0131` index 1 e 2 — capacità di comunicazione (LENTHDR = 40)
 - **Index 0x0001** (dati generali comunicazione): Index(1w) + **pdu**(1w = max PDU
@@ -731,6 +737,454 @@ esistente sul modulo. **verificato** su `s7comm_reading_plc_status.pcap`
 Fonti: Siemens SSL manual cap. 34.5/34.8/34.9/34.10/34.13/34.14/34.18/34.29;
 `packet-s7comm_szl_ids.c`; snap7 `opReadSZL`/`opGetCpuInfo`/`opGetCpInfo`/
 `opGetPlcStatus`/`opGetProtection`.
+
+### 7.5 Liste SZL per la diagnostica online (tappa 3C)
+
+Catture usate qui (vedi §16): `tia_s300_goOnline.pcapng` (TIA V13 su CPU 315-2PN/DP
+`6ES7 315-2EH14`, firmware V3.2.x), `s7comm_reading_plc_status.pcap` (IM151-8 PN/DP CPU),
+`s7comm_downloading_block_db1.pcap` (STEP 7, S7-300 senza SZL 0x0011),
+`step7_s300_readDiagData.pcapng`, `3-S7comm-VAT_….pcap` (un'altra S7-300, 2010).
+
+#### 7.5.1 Da quali SZL legge TIA le pagine "Online e diagnostica"
+
+Nella cattura `tia_s300_goOnline.pcapng` TIA, dopo il go-online, interroga in ciclo
+(circa una volta al secondo) `0x0132/4`, `0x00A0`, `0x0222/1`, `0x0222/0x50`, `0x0222/0x5050`; una
+volta sola legge `0x0000`, `0x0011`, `0x001C`, `0x0015`, `0x0019`, `0x0074`, `0x0124`, `0x0131/2`,
+`0x0131/4`, `0x0132/2`, `0x0232/4`, `0x0424`, `0x0424/4`, `0x0591`, `0x0D91`.
+
+| pagina TIA (S7-300) | dato mostrato | SZL / indice | stato |
+|---------------------|---------------|--------------|-------|
+| Generale | numero d'ordine, versione HW e FW | `0x0011` idx 0 (§7.3) | **verificato** |
+| Generale | nome stazione/modulo, numero di serie, MMC | `0x001C` idx 0 (§7.3) | **verificato** |
+| Generale / barra di stato | modo attuale | `0x0424` idx 0 (§7.3) | **verificato** |
+| Generale | ultimo cambio di modo | `0x0124` idx 0 (§7.5.5) | **verificato** (1 cattura) |
+| Generale / stato | LED della CPU | `0x0019` o `0x0074` idx 0 (§7.5.4) | **verificato** |
+| Protezione | livello, selettore | `0x0232` idx 4 (§7.3) | **verificato** |
+| Buffer diagnostico | voci | `0x00A0` idx 0, oppure `0x01A0` idx N (§7.6) | **verificato** `0x00A0`; `0x01A0` da documentazione |
+| Tempo di ciclo | ultimo / minimo / massimo | `0x0222` idx `0x0001` (§7.5.2) | **verificato** |
+| Tempo di ciclo | tempo di sorveglianza configurato | `0x0222` idx `0x0050` (§7.5.2) | byte **verificati**; semantica da documentazione |
+| Memoria | memoria di caricamento / di lavoro / ritentiva | `0x0013` idx 0 (§7.5.3) | byte **verificati** (1 cattura); semantica da documentazione |
+| Stato dei moduli | stato del rack 0 e dei sottomoduli della CPU | `0x0D91` / `0x0591` (§7.5.6) | byte **verificati**; semantica una sola fonte |
+| Caratteristiche | tipi di blocco e limiti | `0x0015` idx 0 (§7.5.7) | byte **verificati** |
+| Ora / contaore | stato del sistema orario, contaore | `0x0132` idx 8 e idx `0x000B` (§7.5.8) | byte **verificati** |
+| (interno) | funzioni di test supportate | `0x0131` idx 2 (§7.5.9) | byte **verificati**; mappatura bit una sola fonte |
+
+⚠️ TIA chiede anche `0x0222` con indice `0x5050` e la CPU risponde con errore `0xD402`
+("funzione informativa non disponibile") nel campo error code del parametro userdata e parte dati
+`0a 00 00 00`. Il client deve trattare `0xD402` come "lista assente", non come guasto della
+connessione. **verificato** (24 volte nella cattura).
+
+#### 7.5.2 `0x0222` — dati dell'interrupt per OB (LENTHDR = 28) — tempo di ciclo
+
+Indice = numero dell'OB (`0x0001` = OB1, `0x0050` = OB80, `0x0064` = OB100…). Un record:
+
+| off | dim | campo | note |
+|-----|-----|-------|------|
+| 0 | 20 | info | informazioni di avvio dell'OB (le 20 byte di start info, vedi sotto) |
+| 20 | 2 | al1 | stato: bit 0 evento disabilitato da parametri, bit 1 bloccato con SFC 39, bit 2 sorgente attiva, bit 4 **OB caricato**, bit 5 bloccato da funzioni di test, bit 6 voce nel buffer diagnostico bloccata |
+| 22 | 2 | al2 | reazione se l'OB manca: bit 0 blocca la sorgente, bit 1 genera errore, bit 2 la CPU va in STOP, bit 3 l'interrupt viene solo scartato |
+| 24 | 4 | al3 | interrupt scartati dalle funzioni di test |
+
+Per **OB1** (indice `0x0001`) le 20 byte di info sono:
+
+| off | dim | campo | note |
+|-----|-----|-------|------|
+| 0 | 1 | classe evento | `0x11` |
+| 1 | 1 | tipo di ciclo | `0x01` primo ciclo dopo avviamento a caldo, `0x02` dopo riavvio, `0x03` ciclo normale, `0x04` dopo avviamento a freddo |
+| 2 | 1 | classe di priorità | `0x01` |
+| 3 | 1 | numero OB | `0x01` |
+| 4 | 2 | riservato | osservato `c8 58` |
+| 6 | 2 | **durata del ciclo precedente** | ms, intero senza segno |
+| 8 | 2 | **ciclo più breve** dall'ultimo avviamento | ms |
+| 10 | 2 | **ciclo più lungo** dall'ultimo avviamento | ms |
+| 12 | 8 | data/ora dell'ultimo avvio di OB1 | timestamp corto (§12.1) |
+
+Per **OB80** (indice `0x0050`) i byte 8–9 e 10–11 contengono il tempo di ciclo **minimo e massimo
+configurato** (il massimo è il tempo di sorveglianza del ciclo). Osservato `0` / `150` ms sulla
+315-2PN/DP (150 ms è il default di STEP 7) e `0` / `300` ms sulla IM151-8.
+
+Esempio [reale, `tia_s300_goOnline.pcapng`]:
+```
+REQ dati: ff 09 0004  0222 0001
+RES dati: ff 09 0024  0222 0001 001c 0001
+          11 03 01 01 c858 0000 0000 0003 1602082317582112   ; info OB1
+          0010 0008 00000000                                  ; al1 (OB caricato), al2, al3
+REQ dati: ff 09 0004  0222 0050
+RES dati: ff 09 0024  0222 0050 001c 0001
+          35 01 1a 50 c858 0000 0000 0096 0000000000000000    ; OB80: max configurato 0x96=150 ms
+          0000 0008 00000000                                  ; al1: OB80 non caricato
+```
+OB1: ciclo precedente 0 ms (sotto il millisecondo), minimo 0 ms, massimo 3 ms, ultimo avvio
+2016-02-08 23:17:58.211. Sulla IM151-8 (`s7comm_reading_plc_status.pcap`) il record è identico
+nella forma (`11 03 01 01 c858 0000 0000 0003 …`).
+
+Come si ottengono: la CPU aggiorna min/max a ogni ciclo e li azzera all'avviamento; il client
+li legge periodicamente (TIA lo fa circa ogni secondo). La risoluzione è il millisecondo.
+
+**verificato** (layout e valori su due CPU). Semantica di OB80 = valori configurati: **da
+documentazione** (manuale SSL, lista xy22), coerente con il default di 150 ms.
+
+#### 7.5.3 `0x0013` — aree di memoria utente (LENTHDR = 36)
+
+Un record per area. Indice del record:
+
+| index | area |
+|-------|------|
+| `0x0001` | memoria di lavoro |
+| `0x0002` | memoria di caricamento integrata |
+| `0x0003` | memoria di caricamento inserita (MMC) |
+| `0x0004` | massima memoria di caricamento inseribile |
+| `0x0005` | memoria di backup (ritentiva) |
+| `0x0006` | memoria riservata dal sistema per i CFB |
+
+| off | dim | campo | note |
+|-----|-----|-------|------|
+| 0 | 2 | index | vedi sopra |
+| 2 | 2 | code | tipo: `0x0001` volatile (RAM), `0x0002` non volatile (FEPROM), `0x0003` misto |
+| 4 | 4 | size | dimensione totale dell'area (area 1 + area 2), byte |
+| 8 | 2 | mode | bit 0 area volatile, bit 1 non volatile, bit 2 mista, bit 3 codice e dati separati, bit 4 codice e dati insieme |
+| 10 | 2 | granu | sempre 0 |
+| 12 | 4 | ber1 | dimensione della parte volatile, byte |
+| 16 | 4 | belegt1 | byte occupati nella parte volatile |
+| 20 | 4 | block1 | blocco libero più grande nella parte volatile |
+| 24 | 4 | ber2 | dimensione della parte non volatile |
+| 28 | 4 | belegt2 | byte occupati nella parte non volatile |
+| 32 | 4 | block2 | blocco libero più grande nella parte non volatile |
+
+Calcolo per la pagina "Memoria": **totale** = `size`; **occupato** = `belegt1 + belegt2`;
+**libero** = `size − occupato`. Non usare `block1`/`block2`: sulla CPU della cattura valgono 0.
+
+Esempio [reale, `s7comm_downloading_block_db1.pcap`, letto da STEP 7 prima del download]:
+
+| index | code | size | mode | ber1 / belegt1 | ber2 / belegt2 | lettura |
+|-------|------|------|------|----------------|----------------|---------|
+| 1 | 1 | 196608 | `0x0011` | 196608 / 352 | 0 / 0 | lavoro 192 KB, 352 byte usati |
+| 2 | 1 | 0 | `0x0001` | 0 / 0 | 0 / 0 | nessuna memoria di caricamento integrata |
+| 3 | 2 | 131072 | `0x0002` | 0 / 0 | 131072 / 4906 | MMC da 128 KB, 4906 byte usati |
+| 4 | 2 | 8388608 | `0x0002` | 0 / 0 | 8388608 / 0 | MMC massima 8 MB |
+| 5 | 2 | 1280 | `0x0002` | 0 / 0 | 1280 / 32 | ritentiva 1280 byte, 32 usati |
+
+Sulla S7-300 la memoria di lavoro è una sola per codice e dati (`mode` bit 4); TIA non mostra
+quindi la divisione codice/dati delle S7-400. **verificato** il layout su una cattura (5 record da
+36 byte); significato degli indici **da documentazione** (manuale SSL, `packet-s7comm_szl_ids.c`).
+⚠️ Che "ritentiva" in TIA corrisponda all'indice 5 è un'**ipotesi**.
+
+#### 7.5.4 `0x0019` / `0x0074` / `0x0174` — LED (LENTHDR = 4)
+
+`0x0019` e `0x0074` = tutti i LED; `0x0174` = un LED, scelto con l'indice (= id del LED). Record:
+
+| off | dim | campo | note |
+|-----|-----|-------|------|
+| 0 | 2 | id LED | byte basso = id; il byte alto serve solo alle CPU H (rack/tipo CPU) |
+| 2 | 1 | acceso | `0` spento, `1` acceso |
+| 3 | 1 | lampeggio | `0` fisso, `1` lampeggio normale (2 Hz), `2` lampeggio lento (0,5 Hz) |
+
+Id LED: `0x01` SF (errore cumulativo), `0x02` INTF, `0x03` EXTF, `0x04` RUN, `0x05` STOP,
+`0x06` FRCE (forzamento attivo), `0x07` CRST, `0x08` BAF (batteria), `0x09` USR, `0x0A` USR1,
+`0x0B` BUS1F, `0x0C` BUS2F, `0x0D` REDF, `0x0E` MSTR, `0x0F`–`0x11` RACK0–2, `0x12` IFM1F,
+`0x13` IFM2F, `0x14` BUS3F, `0x15` MAINT (richiesta di manutenzione), `0x16` DC24V.
+
+Esempio [reale, `tia_s300_goOnline.pcapng`, CPU in RUN]: `0019 0000 0004 0007` + `0001 0000`
+(SF spento) `0004 0100` (RUN acceso) `0005 0000` `0006 0000` `000b 0000` `000c 0000` `0015 0000`.
+`0x0074` dà gli stessi 7 record. Su IM151-8: `0174 0006 0004 0001` + `0006 0000` (FRCE spento).
+**verificato** il layout; codifica del lampeggio **da documentazione**.
+
+#### 7.5.5 `0x0124` — ultimo cambio di modo (LENTHDR = 20)
+
+Un record con lo **stesso formato di una voce del buffer diagnostico** (§7.6). Osservato
+[`tia_s300_goOnline.pcapng`]: `4302 ff 68 c7 00 0000 08147714 1602082308102642` = evento
+`0x4302` (avviamento→RUN), uguale alla voce più recente del buffer. **verificato** (1 cattura).
+
+#### 7.5.6 `0x0091` — stato dei moduli (LENTHDR = 16)
+
+`0x0D91` = moduli del rack/stazione indicato dall'indice (`0x0000` = rack centrale);
+`0x0591` = sottomoduli del modulo ospite (le interfacce della CPU).
+
+| off | dim | campo | note |
+|-----|-----|-------|------|
+| 0 | 2 | adr1 | numero di rack / sistema master |
+| 2 | 2 | adr2 | byte alto = posto connettore, byte basso = sottomodulo |
+| 4 | 2 | logadr | primo indirizzo logico (`0x7FFF` = nessuno) |
+| 6 | 2 | tipo atteso | |
+| 8 | 2 | tipo reale | |
+| 10 | 2 | riservato | |
+| 12 | 2 | stato I/O | bit 0 errore modulo, bit 1 modulo presente, bit 2 non disponibile, bit 3 disabilitato… |
+| 14 | 2 | area / larghezza | |
+
+Esempio [reale, CPU 315-2PN/DP]: `0d91 0000 0010 0001` + `0000 0200 7fff 00c0 00c0 0000 b402 0011`
+(CPU al posto 2); `0591` dà 4 record per i sottomoduli `0201`–`0204`. **verificato** il layout
+(stessi byte su due CPU); significato dei bit di stato **una sola fonte** (Wireshark).
+
+#### 7.5.7 `0x0015` — tipi di blocco (LENTHDR = 10)
+
+| off | dim | campo | note |
+|-----|-----|-------|------|
+| 0 | 2 | tipo blocco | `0x0800` OB, `0x0A00` DB, `0x0B00` SDB, `0x0C00` FC, `0x0E00` FB |
+| 2 | 2 | MaxAnz | vedi nota |
+| 4 | 2 | MaxLng | dimensione massima caricabile, KB |
+| 6 | 4 | MaxAbl | lunghezza massima della parte in memoria di lavoro di un blocco, byte |
+
+Osservato [CPU 315-2PN/DP]: OB `0x16`, DB `0x3E81`=16001, SDB `0x0422`, FC `0x1F40`=8000,
+FB 8000; MaxLng `0x03D1`, MaxAbl `0xFFFE` per tutti. ⚠️ MaxAnz coincide con il **limite
+dell'intervallo di numerazione** (FC/FB 0…7999, DB 1…16000), non col numero di blocchi caricabili
+(2048/1024 sul data sheet): **osservazione su una cattura**.
+
+#### 7.5.8 `0x0132` indice 8 (sistema orario) e indice `0x000B` (contaore)
+
+Indice 8 (40 byte): off 2 `zykl` (ciclo dei telegrammi di sincronizzazione), off 4 `korr` (fattore
+di correzione), off 6–21 otto contaore da 16 bit (ore), **off 22 data/ora attuale** (8 byte,
+formato corto §12.1), off 30 riservato. Indice `0x000B`: off 2 stato dei contaore (bit = attivo),
+off 3 riservato, off 4 overflow, off 5 riservato, off 6… contaore 0–7 da 32 bit (ore).
+Osservato su IM151-8: idx 8 con data `14 08 20 12 05 31 03 04` (2014-08-20 12:05:31.030), idx
+`0x000B` tutto a zero. **verificato** i byte; semantica **da documentazione**.
+
+#### 7.5.9 `0x0131` indice 2 — funzioni di test (TIS) supportate (LENTHDR = 40)
+
+| off | dim | campo | note |
+|-----|-----|-------|------|
+| 0 | 2 | index | `0x0002` |
+| 2 | 6 | funkt_0…funkt_5 | bitfield delle funzioni TIS; **bit n (contando da funkt_0 bit 0) = subfunction n del gruppo 1** (§6.4) |
+| 8 | 6 | aseg | dati di sistema senza rilevanza |
+| 14 | 6 | eseg | dati di sistema senza rilevanza |
+| 20 | 3 | trgereig_0…2 | eventi di trigger ammessi (vedi sotto) |
+| 23 | 5 | trgbed, pfad, tiefe, systrig, erg_par | dati di sistema senza rilevanza |
+| 28 | 4 | erg_pat_1, erg_pat_2 | dati di sistema senza rilevanza |
+| 32 | 2 | force | numero massimo di variabili modificabili/forzabili |
+| 34 | 2 | time | limite della misura del tempo (bit 0–11 valore, 12–15 base) |
+| 36 | 4 | riservato | |
+
+Mappatura funkt: funkt_0 bit 1 block status (`0x01`), bit 2 variable status (`0x02`), bit 3
+ISTACK, bit 4 BSTACK, bit 5 LSTACK, bit 6 misura tempo, bit 7 force selection (`0x07`); funkt_1 bit 0
+modify variable (`0x08`), bit 1 force (`0x09`), bit 2 breakpoint, bit 3 exit HOLD, bit 4 memory
+reset, bit 5 disable job, bit 6 enable job, bit 7 delete job (`0x0F`); funkt_2 bit 0 read job list
+(`0x10`), bit 1 read job, bit 2 replace job, bit 3 block status v2 (`0x13`), bit 6 flash LED (`0x16`).
+Eventi di trigger (trgereig_0): bit 0 subito, bit 1 trigger di sistema, bit 2 inizio ciclo, bit 3
+fine ciclo, bit 4 passaggio RUN→STOP, bit 5 dopo un indirizzo di codice, bit 6 area di indirizzi di
+codice, bit 7 indirizzo dati; trgereig_1: bit 0 area dati, bit 1 indirizzo dati locali, bit 2 area
+dati locali, bit 3 trigger di intervallo, bit 4 prima di un indirizzo di codice. Il **numero del
+bit, spostato di 8 a sinistra**, è il codice dell'evento trigger nel parametro TIS (§18.2):
+`0x0200` = inizio ciclo (bit 2), `0x0600` = area di codice (bit 6).
+
+Osservato:
+
+| CPU | funkt_0…2 | trgereig_0/1 | force | lettura |
+|-----|-----------|--------------|-------|---------|
+| 315-2PN/DP (`goOnline`, `readDiagData`) | `be fd 4f` | `7d 00` | 10 | tutto tranne misura tempo e **force `0x09`**; ha block status v2 e flash LED |
+| IM151-8 (`reading_plc_status`) | `be fd 4f` | `7d 00` | 10 | come sopra |
+| S7-300 del 2010 (`3-S7comm-VAT…`) | `be fd 03` | `7d 10` | 0 | niente block status v2 né flash LED |
+
+⚠️ Su tutte e tre il bit "force" è **0**, anche se le CPU hanno il LED FRCE. O la mappatura del
+bit è sbagliata, o la forzatura passa per un'altra via (force selection `0x07`?). **Da verificare
+con una cattura reale di forzamento.** Byte **verificati**; mappatura bit↔subfunction **una sola
+fonte** (Wireshark), coerente con le funzioni effettivamente usate nelle catture.
+
+### 7.6 Buffer diagnostico: decodifica delle voci
+
+#### 7.6.1 Record (20 byte), uguale per `0x00A0`, `0x01A0`, `0x0124` e per i messaggi push (§7.6.4)
+
+| off | dim | campo | note |
+|-----|-----|-------|------|
+| 0 | 2 | **event ID** | vedi §7.6.2 |
+| 2 | 1 | classe di priorità | dell'OB coinvolto; `0xFF` se non c'entra un OB |
+| 3 | 1 | numero OB | per i cambi di modo (`0x43xx`) è invece il byte di modo: nibble alto = modo precedente, basso = nuovo (codici come `0x0424`, §7.3) |
+| 4 | 2 | DatID | identificatore dei dati aggiuntivi (significato per evento) |
+| 6 | 2 | info 1 | informazione aggiuntiva 1 (es. per `0x1381` l'event ID dello STOP precedente) |
+| 8 | 4 | info 2 | informazione aggiuntiva 2 |
+| 12 | 8 | data/ora | timestamp corto, BCD (§12.1) |
+
+È la stessa struttura delle 20 byte di start info di un OB, con l'event ID al posto dei due byte
+"classe evento + codice". Indici: `0x00A0` = tutte le voci accessibili nel modo attuale (osservate
+10 su due S7-300), `0x01A0` = le N più recenti con N nell'indice, `0x0FA0` = solo intestazione.
+Ordine: la voce **più recente è la prima**.
+
+Esempio [reale, `tia_s300_goOnline.pcapng`, prime 4 voci]:
+```
+4302 ff 68 c7 00 0000 08147714 1602082308102642   ; 08/02/2016 23:08:10.264 avviamento→RUN (6→8)
+1381 1b 64 c7 72 4304 08147714 1602082308102632   ; richiesta di avviamento a caldo manuale (OB100, prio 27);
+                                                  ;   info1 = 0x4304, lo STOP che l'ha preceduta
+4301 ff 46 c7 72 4304 08147714 1602082308101662   ; STOP→avviamento (4→6)
+4304 ff 84 00 00 0000 00000000 1602082308100312   ; STOP da PG (8→4)
+```
+**verificato** (layout, ordine, timestamp, byte di modo).
+
+#### 7.6.2 Struttura dell'event ID (16 bit)
+
+| bit | significato |
+|-----|-------------|
+| 15–12 | **classe** dell'evento |
+| 11 | errore esterno |
+| 10 | errore interno |
+| 9 | voce nel buffer diagnostico |
+| 8 | `1` evento **entrante**, `0` evento **uscente** |
+| 7–0 | **numero** dell'evento |
+
+Classi: `1` eventi OB standard, `2` errori sincroni, `3` errori asincroni, `4` cambi di modo,
+`5` eventi di esecuzione, `6` eventi di comunicazione, `7` sistemi H e F, `8` diagnostica
+standard dei moduli, `9` eventi utente predefiniti, `A`/`B` eventi liberi dell'utente
+(WR_USMSG), `C`–`E` riservati, `F` eventi di moduli che non sono CPU (CP, FM).
+
+**Regola per un ID sconosciuto** (da implementare così):
+1. classi 1–7: cercare l'ID completo nella tabella; se manca, cercare l'ID con il bit 8
+   invertito (stesso evento, verso opposto: es. `0x3921`/`0x3821`) e aggiungere
+   "(entrante)"/"(uscente)";
+2. classi 8 e 9: cercare con la maschera `0xF0FF` (si ignorano i bit 8–11);
+3. classi A/B: "evento utente `0x….`";
+4. altrimenti: "‹nome della classe›, evento `0x‹nn›`, entrante/uscente", più "errore
+   interno/esterno" se i bit 10/11 sono a 1.
+
+Struttura e nomi delle classi **da documentazione** (manuale Siemens "System Software for
+S7-300/400 System and Standard Functions", appendice sugli event ID; `packet-s7comm.c`);
+coerente con tutte le voci catturate (`0x4302`, `0x1381`, `0x4301`, `0x4304`).
+
+#### 7.6.3 Eventi più comuni su S7-300 (testi nostri)
+
+Fonte: tabelle degli event ID del manuale Siemens citato e `cpu_diag_eventid_fix_names` in
+`packet-s7comm.c`; descrizioni **riscritte da noi**, **da documentazione**. Solo `0x1381`,
+`0x4301`, `0x4302`, `0x4304` sono stati visti in cattura (**verificati**).
+
+| ID | descrizione |
+|----|-------------|
+| `0x1381` | richiesta di avviamento a caldo manuale |
+| `0x1382` | richiesta di avviamento a caldo automatico (rete tornata) |
+| `0x1383` | richiesta di riavvio (ripresa) manuale |
+| `0x1384` | richiesta di riavvio (ripresa) automatico |
+| `0x1385` | richiesta di avviamento a freddo manuale |
+| `0x1386` | richiesta di avviamento a freddo automatico |
+| `0x2521` | errore di conversione BCD |
+| `0x2522` | lunghezza d'area errata in lettura |
+| `0x2523` | lunghezza d'area errata in scrittura |
+| `0x2524` | area errata in lettura |
+| `0x2525` | area errata in scrittura |
+| `0x2526` | numero di temporizzatore non valido |
+| `0x2527` | numero di contatore non valido |
+| `0x2528` | allineamento errato in lettura |
+| `0x2529` | allineamento errato in scrittura |
+| `0x2530` | scrittura su DB protetto in scrittura |
+| `0x2531` | scrittura su DB di istanza protetto in scrittura |
+| `0x2532` | numero di DB non valido all'apertura |
+| `0x2533` | numero di DB di istanza non valido all'apertura |
+| `0x2534` | numero di FC non valido nella chiamata |
+| `0x2535` | numero di FB non valido nella chiamata |
+| `0x253A` | DB non caricato |
+| `0x253C` | FC non caricata |
+| `0x253D` | SFC non presente |
+| `0x253E` | FB non caricato |
+| `0x253F` | SFB non presente |
+| `0x2942` | errore di accesso alla periferia in lettura |
+| `0x2943` | errore di accesso alla periferia in scrittura |
+| `0x3501` | tempo di ciclo superato |
+| `0x3502` | errore nella richiesta di un OB |
+| `0x3503` | ritardo eccessivo nell'elaborazione di una classe di priorità |
+| `0x3505` | interrupt orari saltati per il cambio dell'ora |
+| `0x3507` | troppe richieste di OB: buffer interno pieno |
+| `0x3571` | troppi livelli di parentesi annidate |
+| `0x3572` | troppi annidamenti di MCR |
+| `0x3573` | troppi annidamenti di errori sincroni |
+| `0x3574` | stack delle chiamate (U-stack) troppo profondo |
+| `0x3575` | stack dei blocchi (B-stack) troppo profondo |
+| `0x3576` | errore di allocazione dei dati locali |
+| `0x3578` | istruzione sconosciuta |
+| `0x357A` | salto fuori dal blocco |
+| `0x35A1` | OB richiesto non trovato |
+| `0x35A2` | OB non caricato (avviato da SFC o dal sistema operativo) |
+| `0x35A3` | errore del sistema operativo nell'accesso a un blocco |
+| `0x3821` / `0x3921` | batteria tampone guasta (BATTF): uscente / entrante |
+| `0x3822` / `0x3922` | tensione di backup assente (BAF): uscente / entrante |
+| `0x3823` / `0x3923` | alimentazione 24 V del rack centrale mancante: uscente / entrante |
+| `0x3842` / `0x3942` | modulo tornato a posto / modulo guasto (interrupt di diagnostica) |
+| `0x3861` | modulo inserito, tipo corretto |
+| `0x3863` | modulo inserito ma di tipo sbagliato |
+| `0x3961` | modulo tolto o non indirizzabile |
+| `0x3866` / `0x3966` | modulo di nuovo indirizzabile / non indirizzabile per mancanza di tensione di carico |
+| `0x38C1` / `0x39C1` | rack di ampliamento di nuovo funzionante / guasto |
+| `0x38C4` / `0x39C4` | periferia decentrata: stazione tornata / stazione guasta |
+| `0x39C3` | periferia decentrata: guasto del sistema master |
+| `0x39B1` | errore di periferia nell'aggiornamento dell'immagine degli ingressi |
+| `0x39B2` | errore di periferia nel trasferimento dell'immagine delle uscite |
+| `0x4300` | rete inserita con memoria tamponata |
+| `0x4301` | passaggio da STOP ad AVVIAMENTO |
+| `0x4302` | passaggio da AVVIAMENTO a RUN |
+| `0x4303` | STOP dal selettore dei modi |
+| `0x4304` | STOP dal PG o da SFB 20 |
+| `0x4305` | HOLD: raggiunto un breakpoint |
+| `0x4306` | HOLD: uscita dal breakpoint |
+| `0x4307` | cancellazione totale avviata dal PG |
+| `0x4308` | cancellazione totale avviata dal selettore |
+| `0x4309` | cancellazione totale automatica (rete inserita senza tampone) |
+| `0x430A` | uscita da HOLD con passaggio a STOP |
+| `0x430E` | cancellazione totale eseguita |
+| `0x43B0` | aggiornamento del firmware riuscito |
+| `0x4520` | DIFETTO: STOP impossibile |
+| `0x4530` | DIFETTO: errore nel test della memoria interna |
+| `0x4543` | STOP causato dalle funzioni di test |
+| `0x4545` | STOP causato dal sistema di comunicazione |
+| `0x4555` | riavvio impossibile: scaduto il tempo di sorveglianza |
+| `0x4556` | STOP: il sistema chiede la cancellazione totale (dati incoerenti) |
+| `0x4562` | STOP per errore di programmazione (OB121 assente) |
+| `0x4563` | STOP per errore di accesso alla periferia (OB122 assente) |
+| `0x4568` | STOP per errore di tempo (OB80 assente) |
+| `0x456A` | STOP per interrupt di diagnostica (OB82 assente) |
+| `0x456B` | STOP per estrazione/inserimento di un modulo (OB83 assente) |
+| `0x456C` | STOP per errore hardware della CPU (OB84 assente) |
+| `0x456D` | STOP per errore di esecuzione del programma (OB85 assente) |
+| `0x456E` | STOP per errore di comunicazione (OB87 assente) |
+| `0x456F` | STOP per guasto del rack (OB86 assente) |
+| `0x4571` | STOP per errore nello stack delle parentesi |
+| `0x4575` | STOP per stack dei blocchi troppo profondo |
+| `0x4576` | STOP per errore nell'allocazione dei dati locali |
+| `0x4578` | STOP per codice operativo sconosciuto |
+| `0x457A` | STOP per lunghezza del codice errata |
+| `0x457F` | STOP per comando di STOP (istruzione STP) |
+| `0x4580` | STOP: contenuto del buffer di backup incoerente |
+| `0x4926` | DIFETTO: guasto della sorveglianza degli accessi in periferia |
+| `0x4931` | STOP o DIFETTO: errore nel test della memoria del modulo di memoria |
+| `0x4933` | errore di checksum |
+| `0x4934` | DIFETTO: memoria non disponibile |
+| `0x494D` | STOP per errore di periferia |
+| `0x494E` | STOP per mancanza di rete |
+| `0x494F` | STOP per errore di configurazione |
+| `0x4959` | uno o più moduli non pronti |
+| `0x49A0` | STOP per errore di parametrizzazione o configurazione reale ≠ prevista: avviamento bloccato |
+| `0x49A4` | STOP: dati di configurazione incoerenti |
+| `0x530D` | nuove informazioni di avviamento in STOP |
+| `0x5311` | avviamento nonostante un modulo non pronto |
+| `0x5961` | errore di parametrizzazione |
+| `0x6390` | formattazione della Micro Memory Card completata |
+| `0x6500` | id di collegamento doppio sul modulo |
+| `0x6501` | risorse di collegamento insufficienti |
+| `0x6502` | errore nella descrizione del collegamento |
+| `0x6523` | richiesta di cancellazione totale: errore di accesso al modulo di memoria |
+| `0x6524` | richiesta di cancellazione totale: errore nell'intestazione di un blocco |
+| `0x6526` | richiesta di cancellazione totale: memoria sostituita |
+| `0x6528` | gestione oggetti in STOP/HOLD: riavvio impossibile |
+| `0x6529` | avviamento impossibile durante il caricamento del programma |
+| `0x6548` | errore di plausibilità nel controllo di un blocco |
+| `0x6549` | errore di struttura in un blocco |
+| `0x6981` / `0x6881` | errore di interfaccia: entrante / uscente |
+| `0x8000`… | classe 8, diagnostica moduli (maschera `0xF0FF`): `0x8000` guasto/ok modulo, `0x8001` errore interno, `0x8002` errore esterno, `0x8003` errore di canale, `0x8004` manca tensione ausiliaria, `0x8005` manca il connettore frontale, `0x8006` modulo non parametrizzato, `0x8007` parametri errati |
+
+#### 7.6.4 Voci in tempo reale (push) e cambi di modo
+
+Oltre a leggere `0x00A0`, il client può farsi mandare le nuove voci:
+
+- **Iscrizione**: userdata gruppo 4 subfunction `0x02` (message service). Dati della richiesta:
+  `ff 09 000a` + byte eventi + `00` + nome utente di 8 byte ASCII. Byte eventi: bit 0 `MODE`
+  (cambi di modo), bit 1 `SYS` (diagnostica di sistema), bit 2 `USR` (messaggi utente), bit 7
+  `ALM` (allarmi). `0x00` = disiscrizione. Risposta: `ff 09 0002 02 00`.
+  **verificato** su `tia_s300_goOnline.pcapng` (`01 00 "USER1\0\0\0"` poi `03 00 "USER1…"`) e
+  `s7comm_reading_plc_status.pcap` (`03 00 "asmess\0\0"`, poi `00 00 …` per disiscriversi).
+- **Voce di diagnostica (SYS)**: la CPU manda un PDU userdata **non sollecitato**, PDU ref 0,
+  param `00 01 12 04 11 04 03 00` (tipo indication, gruppo 4, subfunction `0x03`), dati
+  `ff 09 0014` + un record di 20 byte come §7.6.1. Esempio [reale, `step7_s300_stop.pcapng`]:
+  `ff 09 0014 4304 ff 84 00 0000 0000 00000000 9401092153421521` (STOP da PG, RUN→STOP).
+  **verificato**.
+- **Cambio di modo (MODE)**: PDU userdata non sollecitato, PDU ref 0, plen 8, dlen 0, parametro
+  `01 00 10 10 00 00 SS 00` con `SS` = nuovo stato: `0x00` STOP, `0x02` RUN (`0x01` avviamento a
+  caldo secondo Wireshark). Il parametro **non** ha la testata `00 01 12`: il parser deve
+  riconoscerlo a parte. **verificato** su `step7_s300_stop.pcapng` e
+  `tia_s300_downloadHwConfig.pcapng` (STOP e RUN); `0x01` **una sola fonte**.
+
+⚠️ L'iscrizione cambia lo stato della **sessione** sulla CPU (non quello del processo): vedi §15.
 
 ---
 
@@ -907,6 +1361,18 @@ del filesystem (§10.4): `_DELE` si implementa con **filesystem B**. Es. OB1:
 (non SDB, SFC, SFB). Stato: **verificato solo contro il server di prova**, non ancora su
 CPU reale.
 
+⚠️ **Errata da cattura reale (tappa 3C).** In `tia_s300_downloadHwConfig.pcapng` TIA cancella
+tre SDB su una 315-2PN/DP in STOP con:
+```
+28 00 00 00 00 00 00 fd 000a 01 00 30 42 "02000" 41 05 "_DELE"   ; SDB 2000, filesystem 'A'
+28 00 00 00 00 00 00 fd 000a 01 00 30 42 "01000" 41 05 "_DELE"   ; SDB 1000
+28 00 00 00 00 00 00 fd 000a 01 00 30 42 "00004" 41 05 "_DELE"   ; SDB 4
+```
+Risposta ack-data `28`, errore `0x0000`. La struttura coincide con quella sopra, ma la lettera
+del filesystem è **`'A'` (0x41)**, non `'B'`. Quindi: struttura di `_DELE` **verificata**; la
+scelta di `'B'` in `encodeDeleteBlock` **non** è confermata dalla CPU reale e va rivista (per gli
+SDB `'A'` è verificato; per OB/FC/FB/DB manca una cattura).
+
 Fonti: snap7 `opDownload`, `opDelete`, `TReqStartDownloadParams`,
 `TReqControlBlockParams`, `pi_service_names`; `packet-s7comm.c`
 (`s7comm_decode_pi_service`). **verificato** (download+INSE), `_DELE` **non verificato** (provato solo contro il server di prova).
@@ -972,6 +1438,24 @@ Fonti: snap7 `opPlcStop`/`opPlcHotStart`/`opPlcColdStart`/`opCopyRamToRom`/`opCo
 
 **verificato** su `s7comm_reading_setting_plc_time.pcap` (read: `…ff 09 00 0a
 00 19 14 08 20 11 59 43 91 24` ; set: subfunc 02 con timestamp).
+
+### 12.0 Set clock su S7-300: conferma (tappa 3C)
+
+- **Subfunction accettata: `0x02`.** Vista su due S7-300 reali: IM151-8
+  (`s7comm_reading_setting_plc_time.pcap`) e 315-2PN/DP (`snap7_s300_everything.pcapng`,
+  scritta da snap7 **con la CPU in RUN**, prima dello STOP). Richiesta: param
+  `00 01 12 04 11 47 02 00`, dati `ff 09 000a` + timestamp di 10 byte. Risposta: param
+  `00 01 12 08 12 87 02 SS 00 00 0000` (error code `0x0000`), dati `0a 00 00 00` (nessun dato).
+  **verificato**.
+- **Giorno della settimana**: la CPU lo ricalcola. Nella cattura IM151-8 il PG scrive
+  `… 59 33 04 00` (msec 040, giorno 0 = "indefinito") e la lettura successiva restituisce
+  `… 59 33 74 64` (giorno 4, mercoledì). Il client può mandare 0. **verificato**.
+- **Subfunction `0x04`** ("set clock" alternativo nel dissector): mai vista su S7-300; non usarla.
+  **non verificato**.
+- **Modo CPU**: la scrittura dell'ora funziona in RUN (vedi sopra). Con protezione livello 2/3 ci
+  si aspetta `0xD241`/`0xD0A1`: **non verificato**.
+- La scrittura dell'ora genera di solito la voce `0x3505` (interrupt orari saltati) solo se ci
+  sono OB10 attivi: **da documentazione**.
 
 ### 12.1 Layout timestamp BCD data/ora (DATE_AND_TIME, 10 byte)
 
@@ -1116,6 +1600,15 @@ Obiettivo: il kit di raccolta dell'amico e il client di default di BaaPortal 1D 
 | List blocks of type | UD grp3 sub `0x02` | solo elenco numeri |
 | Read clock | UD grp7 sub `0x01`/`0x03` | legge l'orologio |
 | Upload (`0x1D`/`0x1E`/`0x1F`) | — | ⚠️ vedi §15.3 |
+| SZL della diagnostica 3C (`0x0013`, `0x0015`, `0x0019`, `0x0074`, `0x0174`, `0x0091`, `0x00A0`, `0x01A0`, `0x0124`, `0x0131`, `0x0132`, `0x0222`) | UD grp4 sub `0x01` | sono SZL: solo lettura. Un indice non supportato dà `0xD402`, senza effetti |
+
+### 15.1bis Zona grigia: cambia lo stato della **sessione**, non del processo
+
+| funzione | codice | effetto | decisione 3C |
+|----------|--------|---------|--------------|
+| Iscrizione ai messaggi (MODE/SYS) | UD grp4 sub `0x02` | registra la connessione per ricevere push (§7.6.4); nessun effetto su programma o I/O; sparisce con la connessione | ammessa **solo** nel client online interattivo, non nel kit di raccolta; disiscriversi (`00`) alla chiusura |
+| Variable status / block status | UD grp1 sub `0x02` / `0x01` / `0x13` | crea un **job di test** sulla CPU, eseguito a ogni ciclo o al trigger: allunga il tempo di ciclo; non scrive dati | **non** in 3C; valutare in 3D con cancellazione garantita del job (`0x0F`) |
+| Read job list | UD grp1 sub `0x10` | legge l'elenco dei job di test; TIA e STEP 7 lo chiamano al go-online | innocua ma inutile in 3C |
 
 ### 15.2 Funzioni che **modificano lo stato** (vietate nel kit read-only)
 
@@ -1134,6 +1627,21 @@ Obiettivo: il kit di raccolta dell'amico e il client di default di BaaPortal 1D 
   di debug sulla CPU).
 - **Cyclic data** UD grp2 sub `0x01` subscribe, `0x04` unsubscribe, `0x05`/`0x07`
   change — ⚠️ creano/alterano job ciclici persistenti sulla CPU (stato). Vietati.
+
+Riepilogo per le funzioni nuove delle tappe 3C/3D (§7.5–§7.6, §12.0, §18, §19):
+
+| funzione | codice | classe | nota |
+|----------|--------|--------|------|
+| Set clock | UD grp7 sub `0x02` | **modifica** | cambia l'ora della CPU anche in RUN; può far saltare interrupt orari (`0x3505`). Sì in 3C, ma solo con conferma esplicita dell'utente |
+| Modify variable | UD grp1 sub `0x08` | **modifica** | scrive in M, I, Q, DB, anche nell'immagine degli ingressi |
+| Force / force selection | UD grp1 sub `0x09` / `0x07` | **modifica** | forzamento permanente, accende FRCE, resta attivo dopo la disconnessione (da documentazione) |
+| Breakpoint / exit HOLD | UD grp1 sub `0x0A` / `0x0B` | **modifica** | mette la CPU in HOLD: le uscite si fermano |
+| Memory reset | UD grp1 sub `0x0C` | **modifica** | cancellazione totale |
+| Disable/enable/delete/replace job | UD grp1 sub `0x0D`–`0x12` | modifica (solo job di test) | serve a chiudere i job aperti dal client stesso |
+| Flash LED | UD grp1 sub `0x16` | modifica (innocua) | fa lampeggiare i LED; nessun effetto sul processo |
+| Download di SDB | `0x1A`/`0x1B`/`0x1C` + `_INSE` | **modifica** | richiede STOP (§19.3); cambia la configurazione hardware |
+| `_DELE` di SDB | PI `0x28` | **modifica** | cancella la configurazione |
+| Warm restart dopo il download | PI `0x28` `P_PROGRAM` | **modifica** | rimette la CPU in RUN |
 
 ### 15.3 L'upload è davvero privo di effetti collaterali?
 
@@ -1190,12 +1698,27 @@ cattura S7-300 confermano il layout.
 | 7 | SZL 0x0011/0x001C/0x0424/0x00A0/0x0131/0x0132-4/0x0000 | **verificato** |
 | 8 | funzioni blocco (list/listtype/info) | **verificato** |
 | 9 | upload 0x1D/1E/1F | **verificato** (`cisa/snap7.pcap`) |
-| 10 | download 0x1A/1B/1C + _INSE | **verificato**; `_DELE` **non verificato** |
+| 10 | download 0x1A/1B/1C + _INSE | **verificato**; `_DELE` struttura **verificata** su SDB con filesystem `'A'` (§10.5 errata), non su blocchi utente |
 | 11 | stop/control/_MODU/_GARB/cold | **verificato**; hot/warm restart args parz. |
 | 12 | time read/set + BCD | **verificato** |
 | 13 | formato blocco (header pp, footer) | **verificato** byte-per-byte su 19 blocchi reali (header, rest SSB+ADD, footer di 36 byte, load length = lunghezza del file); la semantica MC7 non è coperta |
 | 14 | connessione, protezione, password | parz.: PDU/conn/protezione **verificato**; codifica XOR password **non verificata** |
 | 15 | allowlist read-only | analisi (non è un layout); upload side-effect **verificato** come PLC→PG |
+| 7.5.2 | SZL `0x0222` tempo di ciclo (OB1, OB80) | **verificato** su 2 CPU; OB80 = valori configurati da documentazione |
+| 7.5.3 | SZL `0x0013` memoria | layout **verificato** (1 cattura); indici da documentazione; "ritentiva = idx 5" ipotesi |
+| 7.5.4 | SZL `0x0019`/`0x0074`/`0x0174` LED | **verificato**; codici di lampeggio da documentazione |
+| 7.5.5 | SZL `0x0124` ultimo cambio di modo | **verificato** (1 cattura) |
+| 7.5.6 | SZL `0x0591`/`0x0D91` stato moduli | layout **verificato**; bit di stato una sola fonte |
+| 7.5.7 | SZL `0x0015` tipi di blocco | **verificato**; significato di MaxAnz osservazione |
+| 7.5.8 | SZL `0x0132` idx 8 / `0x000B` | byte **verificati**; semantica da documentazione |
+| 7.5.9 | SZL `0x0131` idx 2 (bit TIS) | byte **verificati** su 3 CPU; mappatura bit una sola fonte; bit force incoerente |
+| 7.6.1 | record del buffer diagnostico | **verificato** |
+| 7.6.2 | struttura event ID, regola generica | da documentazione, coerente con le catture |
+| 7.6.3 | testi degli eventi | da documentazione (4 ID visti in cattura) |
+| 7.6.4 | iscrizione MODE/SYS e push | **verificato** (push SYS, push MODE STOP/RUN) |
+| 12.0 | set clock S7-300 (sub `0x02`, in RUN) | **verificato** su 2 CPU |
+| 18 | TIS gruppo 1 (var status, block status v2, modify, job, flash LED) | **verificato** su catture STEP 7/TIA; force, stack, breakpoint **non verificati** |
+| 19 | SDB: elenco, upload, sequenza di download | **verificato** (1 cattura TIA per il download, 1 snap7 per l'upload di SDB0) |
 
 Conteggio: **12 sezioni principali pienamente verificate** su cattura
 (1,2.6,3-base,4,5,6,7,8,9,10-base,11-base,12), **6 parziali** (2.4, 3.3-tabella,
@@ -1225,6 +1748,12 @@ dell'amico** (`docs/kit-raccolta.md`), che registra tutto in `capture.jsonl`.
   prima volta. Da confermare con il kit dell'amico.
 - **CC con dimensione TPDU < 0x0A**: mai visto (le CPU rispondono 0x0A); il comportamento è
   ipotizzato. Da confermare con il kit dell'amico.
+- **`0x0013` memoria**: una sola cattura (STEP 7 prima di un download). Da confermare con il kit
+  dell'amico, che deve leggere `0x0013` idx 0.
+- **`0x01A0` (ultime N voci)**: mai vista; TIA legge sempre `0x00A0`. Da confermare con il kit.
+- **Mappatura bit di `0x0131` idx 2** e in particolare il bit "force": vedi §7.5.9.
+- **Push MODE con stato `0x01`** (avviamento): mai visto. Da confermare con il kit.
+- **Download di SDB e `_INSE` rifiutato con `0xD2A9`**: visto una volta, nella cattura TIA (§19.3).
 
 ---
 
@@ -1293,6 +1822,12 @@ TIA V13, snap7, WinCC. Sottoinsieme S7-300 rilevante:
 | `step7_s300_download.pcapng` | `b70e89869a6e5fa950c403415d5fabcc3860d36adc8670bed09398a2d6b6339c` | download con Step7 Manager (setup) |
 | `tia_s300_downloadOb1.pcapng` | `759440ab240a9b54824766ddd352fd09da50a897b08420e421fc9a4553450a74` | download OB1 da TIA (grp1 TIS) |
 | `step7_s300_readVarTab.pcapng` | `9cd63c73f2e5715585357f1f278cfb5baeeae9ecaa326bb5fcd4a038afa1ca85` | read variable table (grp1 var status, molti cicli) |
+| `tia_s300_goOnline.pcapng` | `e6d2359ffbbaf85efc56d85e060059c2cdb902bc19dfeb71f38298e4db8eb152` | TIA V13 go-online su 315-2PN/DP: tutte le SZL della diagnostica (§7.5), `0x0222` ogni secondo, message service, liste SDB |
+| `step7_s300_readDiagData.pcapng` | `6ba61ac1ec340e9129007a5a7aec16ae1009f9691eda31172c56b155022e702c` | STEP 7 stato del programma di OB1: **block status v2 (`0x13`)**, enable/delete job, read job list |
+| `step7_s300_rwVarTab.pcapng` | `aab8d49d09b57b60313905a4db2ac8b83e2034e36d56739cfdfa77efd1a25c20` | tabella variabili con **modify variable (`0x08`)** |
+| `tia_s300_flashLed.pcapng` | `7056ebe55946c155b50828ed64b7643e8abfff3e506ff2d2902b28a076cbe965` | flash LED (`0x16`) |
+| `tia_s300_downloadHwConfig.pcapng` | `5859f9b07503b1d287b43dc614577bb0bf8aa9b301b2079e42425fe21e3a0c64` | download configurazione HW: STOP, `_DELE`/download/`_INSE` di 7 SDB, riavvio (§19) |
+| `step7_s300_stop.pcapng` | `c761c5122be8de929e50e128f3c9d42576d3b88ac1ed2a63b4b6962990479487` | STOP da STEP 7 con push di diagnostica (`0x4304`) e push di modo (§7.6.4) |
 | `wincc_s400_production.pcapng` | `d0bae738862ee3157c73b2ca90230a3d0c8e21402923155296f9b86804a2f0ae` | ⚠️ **S7-400** WinCC produzione: cyclic data (grp2 sub4/5/7), read/write var, alarm — utile per cyclic e alarm |
 
 ---
@@ -1431,5 +1966,242 @@ Read RES : 32 07 0000 0700 000c 000e  00 01 12 08 12 87 01 01 0000 0000
 Set  REQ : 32 07 0000 0c00 0008 000e  00 01 12 04 11 47 02 00
            ff 09 000a  00 19 14 08 20 11 59 33 04 00     ; set clock
 ```
+
+---
+
+## 18. Funzioni di test (TIS, userdata gruppo 1) — ricerca per la tappa 3D
+
+Nulla di questa sezione serve alla 3C. Catture: `step7_s300_readVarTab.pcapng`,
+`step7_s300_rwVarTab.pcapng`, `step7_s300_readDiagData.pcapng`, `tia_s300_flashLed.pcapng`,
+`3-S7comm-VAT_….pcap`, più `read job list` in tutte le catture TIA/STEP 7 di download.
+Fonti: `packet-s7comm.c` (`s7comm_decode_ud_tis_*`, `userdata_tis_subfunc_names`,
+`userdata_varstat_trgevent_names`, `tis_param*_names`), manuale SSL (lista `0x0131` idx 2).
+
+### 18.1 Forma del messaggio
+
+- **Richiesta** (PG→CPU): param userdata sempre di **8 byte** anche alla prima richiesta (a
+  differenza delle SZL): `00 01 12 08 12 41 SS 00 00 00 0000` (method `0x12`, tg `0x41`,
+  SS = subfunction). **verificato** (tutte le catture STEP 7 e TIA).
+- **Ack** (CPU→PG): `00 01 12 08 12 81 SS NN 00 00 EEEE`, dove **NN = numero del job** assegnato
+  dalla CPU (seq), EEEE = errore; dati `0a 00 00 00`. **verificato**.
+- **Risultati** (CPU→PG, non sollecitati): `00 01 12 08 12 01 SS NN 00 00 0000` (type
+  indication), stesso SS e NN. **verificato**.
+- **Parte dati** di richiesta e risultati: `ff 09 LLLL` + **dimensione parametro TIS** (2) +
+  **dimensione dati TIS** (2) + parametro TIS + dati TIS. **verificato**.
+
+### 18.2 Parametro TIS della richiesta
+
+| off | dim | campo | valori |
+|-----|-----|-------|--------|
+| 0 | 2 | p1 | osservato sempre 0 |
+| 2 | 2 | p2 azione | `0` aggiorna / attiva una modifica, `1` osserva / modifica, `2` modifica permanente, `256` forza subito |
+| 4 | 2 | p3 frequenza | `0` a ogni trigger (permanente), `1` una volta, `2` sempre (force) |
+| 6 | 2 | p4 dimensione della risposta | byte attesi nei dati TIS dei risultati (verificato: 18, 46, 6, 28) |
+| 8 | 10 | p5…p9 | osservati quasi sempre `0001` |
+| 18 | 2 | evento trigger | `0x0000` subito, `0x0100` trigger di sistema, `0x0200` **inizio ciclo**, `0x0300` **fine ciclo**, `0x0400` passaggio RUN→STOP, `0x0500` dopo un indirizzo di codice, `0x0600` area di codice, `0x0601` area di codice con ambiente di chiamata, `0x0700` indirizzo dati, `0x0800` area dati, `0x0900`/`0x0A00` dati locali, `0x0B00` intervallo, `0x0C00` prima di un indirizzo di codice |
+| 20 | 2 | tipo blocco | (param ≥ 26 byte) `0x08` OB, `0x0A` DB, `0x0B` SDB, `0x0C` FC, `0x0D` SFC, `0x0E` FB, `0x0F` SFB |
+| 22 | 2 | numero blocco | |
+| 24 | 2 | indirizzo iniziale | offset in byte nel codice MC7 |
+| 26 | 2 | SAZ | (param ≥ 28) contatore di indirizzo di passo; osservato `0x0010` |
+| 28 | 2 | ambiente di chiamata | (param ≥ 36) `0` blocco chiamante indicato, `2` DB globale e/o di istanza indicati |
+| 30 | 2 | condizione | `0x0000` nessuna, `0x0001` numero di blocco, `0x0101` blocco + indirizzo, `0x0A00` contenuto DB1, `0x000A` DB2, `0x0A0A` entrambi |
+| 32 | 4–6 | blocco chiamante + indirizzo, oppure numeri DB1/DB2 | |
+
+Il codice del trigger è il numero di bit in `0x0131` idx 2 spostato di 8 (§7.5.9). Il parametro
+dei **risultati** è di 4 byte: osservati `0x0100` + `0x0001`/`0x0002`.
+**verificato** offset 0–27 e trigger `0x0000`/`0x0200`/`0x0600`; nomi dei campi e altri valori
+**una sola fonte** (Wireshark); ambiente di chiamata **non verificato**.
+
+### 18.3 Variable status (`0x02`) — tabella variabili in osservazione
+
+Dati della richiesta: numero di item (2) + per item un **indirizzo di 6 byte**:
+
+| off | dim | campo | note |
+|-----|-----|-------|------|
+| 0 | 1 | area | `0x00` MX, `0x01` MB, `0x02` MW, `0x03` MD; `0x10`–`0x13` I (X/B/W/D); `0x20`–`0x23` Q; `0x31`–`0x33` periferia ingressi B/W/D; `0x70`–`0x73` DBX/DBB/DBW/DBD; `0x54` T; `0x64` Z |
+| 1 | 1 | ripetizioni o bit | se il nibble basso dell'area è 0 (accesso a bit) è il **numero di bit**, altrimenti il numero di elementi |
+| 2 | 2 | numero DB | 0 fuori dai DB |
+| 4 | 2 | byte iniziale | per T/Z il numero del temporizzatore/contatore |
+
+Dati dei risultati: numero di item (2) + per item: return code (1, `0xFF` ok) + transport size
+(1, osservato `0x09` = lunghezza in byte) + lunghezza (2) + dati + 1 byte di riempimento se la
+lunghezza è dispari.
+
+Sequenza [reale, `step7_s300_readVarTab.pcapng`, tabella MB0…MB5 e I8]:
+```
+job    PG→CPU: ff09 0026 0014 000e | 0000 0001 0000 0012 0001 0001 0001 0001 0001 0200
+                                   | 0002  01 06 0000 0000  11 01 0000 0008     ; MB0×6, IB8
+ack    CPU→PG: seq 02, dati 0a000000                                            ; job n. 2
+enable PG→CPU: sub 0x0E, ff09 001a 0014 0002 | 0000 0000 0001 0000 0000 0001 0001 0001 0001 0000 | 02 02
+ack    CPU→PG: sub 0x0E, dati 0a000000
+push   CPU→PG: tg 01 sub 02 seq 02, ff09 001a 0004 0012 | 0100 0002
+               | 0002  ff 09 0006 4133851fdead  ff 09 0001 02 00
+… (enable + push ripetuti 105 volte)
+disable PG→CPU: sub 0x0D, dati 02 02 → risposta con errore 0xD0A5 ("job non trovato")
+delete  PG→CPU: sub 0x0F, dati 0000 02 02 → ok
+```
+STEP 7 crea il job con trigger "inizio ciclo" e poi chiede **un valore alla volta** con
+"enable job" (p3 = 1, una volta). Nella cattura `3-S7comm-VAT_…` (trigger `0x0000`, subito) la CPU
+manda un solo push senza "enable". **verificato**.
+
+### 18.4 Block status (`0x13` v2, `0x01` v1) — stato del programma
+
+Richiesta v2 [reale, `step7_s300_readDiagData.pcapng`, OB1 in AWL, CPU in RUN]:
+```
+param TIS (28): 0000 0001 0000 002e 0001 0001 0001 0001 0001 0600 | 0008 0001 0000 | 0010
+               ; osserva, ogni ciclo, risposta 46 byte, trigger "area di codice", OB1 da 0, SAZ 16
+dati TIS (28): 00 06 00 03 | 0000 00 01 | 0002 00 01 | 0006 00 03 | 0008 00 02 | 000a 00 03 | 000e 00 03
+```
+Dati v2: flag (1, osservato 0) + **numero di righe** (1) + riservato (1) + registri iniziali (1),
+poi per ogni riga: **indirizzo** (2, offset in byte nel codice MC7: qui 0, 2, 6, 8, 10, 14, cioè
+istruzioni da 2 o 4 byte) + riservato (1) + **registri** (1). Bit dei registri: `0x01` **STW**
+(parola di stato), `0x02` ACCU1, `0x04` ACCU2, `0x08` AR1, `0x10` AR2, `0x20` DB1 (registro DB
+globale), `0x40` DB2 (registro DB di istanza), `0x80` sconosciuto. **STA e RLO non hanno un bit
+proprio**: sono bit della STW (bit 0 /ER, 1 **RLO**, 2 **STA**, 3 OR, 4 OS, 5 OV, 6 CC0, 7 CC1,
+8 BR).
+
+Risultati: indirizzo iniziale (2) + registri iniziali, poi per ogni riga indirizzo (2) + valori
+dei registri richiesti in ordine di bit (STW 2 byte, ACCU/AR 4 byte; DB1/DB2 mai visti, ipotesi
+2 byte). Esempio reale (46 byte):
+```
+0000 | 0007 00000000 | 0000 0007 | 0002 0106 | 0006 0106 00000002 | 0008 00001111
+     | 000a 0106 00004444 | 000e 0106 00004444
+```
+STW `0x0106` = BR + STA + RLO. Flusso: job → ack (job n. 3) → "enable job" (`13 03`) per ogni
+aggiornamento → push `tg 01 sub 13` → alla fine "delete job" (`0000 13 03`). Prima del job STEP 7
+legge get-block-info di OB1 (per confrontare la versione del blocco, **ipotesi**).
+**verificato** v2 (layout e somma = 46 byte); v1 (`0x01`: riservato + registri, poi 2 byte per
+riga senza indirizzo) **una sola fonte**, mai visto.
+
+### 18.5 Modify variable (`0x08`), force (`0x09`), force selection (`0x07`)
+
+Modify, richiesta [reale, `step7_s300_rwVarTab.pcapng`]: numero item + indirizzi (§18.3) +
+valori (return code `0x00`, transport size `0x09`, lunghezza in byte, dati, riempimento):
+```
+param: 0000 0000 0001 0006 0001 0001 0001 0001 0001 0000   ; attiva, una volta, subito
+dati : 0003  03 01 0000 0000  02 01 0000 0004  10 01 0000 0008
+             00 09 0004 4133851f  00 09 0002 dead  00 09 0001 01 00
+       ; MD0 := 0x4133851F, MW4 := 0xDEAD, I8.1 := 1
+push : tg 01 sub 08: 0004 0006 | 0100 0001 | 0003 ff ff ff 00   ; un return code per item
+```
+Una seconda richiesta usa p2 = 1 e trigger `0x0200` (modifica a inizio ciclo). **verificato**.
+
+Force (`0x09`): stessa forma di modify secondo Wireshark (indirizzi + valori; risultati =
+return code per item). **Non verificato**: nessuna cattura, e il bit "force" di `0x0131` idx 2 è 0
+su tutte le S7-300 viste (§7.5.9). Force selection (`0x07`): nessuna descrizione nelle fonti
+pubbliche. **Sconosciuto.** Serve una cattura di STEP 7/TIA "Forza valori" su una S7-300 vera.
+
+### 18.6 Stack (ISTACK `0x03`, BSTACK `0x04`, LSTACK `0x05`)
+
+Solo dal dissector, **mai visti in cattura**:
+- ISTACK richiesta: 2 byte riservati. Risposta: blocco in cui si continua (tipo, numero,
+  indirizzo) + tipi e numeri dei registri DB + altri dati non decodificati.
+- BSTACK richiesta: 2 byte riservati. Risposta: voci da 16 byte (tipo blocco, numero, indirizzo
+  di ritorno, tipi DB1/DB2, numeri DB1/DB2, 4 riservati); se il blocco è un OB seguono classe di
+  priorità (1) + 3 riservati + timestamp di 8 byte. Il dissector segnala un bug di firmware
+  dell'IM151-8: la lunghezza dati nell'intestazione è 4 byte più corta del vero.
+- LSTACK richiesta: classe di priorità (1) + profondità di annidamento (1). Risposta: blocco
+  interrotto (tipo, numero, indirizzo) + lunghezza (2) + dati locali + priorità + timestamp.
+
+Disponibilità: STEP 7 mostra gli stack (scheda "Stack" delle informazioni sul modulo) **solo
+con la CPU in STOP o in HOLD**; in STOP il contenuto è quello del momento dell'arresto. **Da
+documentazione** (help STEP 7), non verificato.
+
+### 18.7 Gestione dei job
+
+| subfunc | dati richiesta | risposta | stato |
+|---------|----------------|----------|-------|
+| `0x0D` disable | funzione (1) + n. job (1) | ack; `0xD0A5` se il job non esiste | **verificato** |
+| `0x0E` enable | funzione (1) + n. job (1) | ack + un push di risultati | **verificato** |
+| `0x0F` delete | riservato (2) + funzione (1) + n. job (1) | ack | **verificato** |
+| `0x10` read job list | 4 byte a zero | lista di voci da 4 byte: funzione (1) + n. job (1) + riservato (2) | **verificato** |
+| `0x11` read job | funzione + n. job | dimensione param + dimensione dati + param + dati del job | una sola fonte |
+| `0x12` replace job | riservato (2) + funzione + n. job + nuovo param e dati | ack | una sola fonte |
+
+TIA e STEP 7 chiamano "read job list" al go-online e prima dei download. Nelle catture la lista
+contiene una sola voce, `10 NN`, cioè la chiamata stessa (**ipotesi**): nessun job di test
+rimasto attivo.
+
+### 18.8 Flash LED (`0x16`)
+
+[reale, `tia_s300_flashLed.pcapng`, 315-2PN/DP] parametro TIS di 20 byte
+`0000 0000 0001 0000 0000 0001 0001 0001 0001 0000`, nessun dato; ack `0a 00 00 00`. TIA ne manda
+due identiche a 10 ms di distanza: come si spegne il lampeggio è **sconosciuto**.
+
+### 18.9 Cosa resta sconosciuto (serve una CPU vera)
+
+- force `0x09` e force selection `0x07` su S7-300 (formato e se la CPU li accetta);
+- block status v1 `0x01`, ambiente di chiamata (param ≥ 36 byte), dimensione dei registri DB nei
+  risultati;
+- ISTACK/BSTACK/LSTACK, breakpoint/HOLD: mai catturati;
+- che cosa fa la CPU se il client cade senza "delete job" (il job resta? per quanto?);
+- carico sul ciclo di un block status permanente (STEP 7 avverte che allunga il ciclo).
+
+---
+
+## 19. SDB: elenco, backup e ripristino
+
+### 19.1 Quali SDB ha una S7-300
+
+List blocks of type `"0B"` [reale, `tia_s300_goOnline.pcapng`, 315-2PN/DP]:
+```
+0000 2207  0001 2207  0002 2211  0003 2207  0004 2207  0007 2207  07d0 2207  03e8 2207
+```
+→ SDB **0, 1, 2, 3, 4, 7, 2000, 1000**, flag `0x22`, linguaggio `0x07` (SDB) tranne SDB 2 con
+`0x11` (SDB creato dalla CPU dopo la cancellazione totale, §8.5). **verificato** (1 CPU).
+
+Significato dei numeri, **da documentazione non ufficiale** (Siemens non pubblica il contenuto
+degli SDB): SDB 0 parametri della CPU, SDB 1–7 configurazione del rack centrale e parametri dei
+moduli, SDB 1000+ sistema master DP, SDB 2000+ PROFINET IO. Il client deve trattarli come **blob
+opachi**.
+
+### 19.2 Upload degli SDB
+
+Sì, con la sequenza normale di §9 e filesystem `'A'`: SDB 0 (216 byte) caricato da snap7 su una
+315-2PN/DP **in RUN** (`snap7_s300_everything.pcapng`, la CPU va in STOP solo dopo).
+**verificato** per SDB 0; gli altri numeri **non verificati**, ma lo stesso servizio vale per
+tutti i tipi di blocco.
+
+### 19.3 Download degli SDB: ordine e modo della CPU
+
+Sequenza reale TIA V13 "carica configurazione hardware" (`tia_s300_downloadHwConfig.pcapng`):
+
+1. **PLC stop** (`0x29 P_PROGRAM`); la CPU manda il push MODE "STOP".
+2. `_DELE` (filesystem `'A'`) di SDB 2000, 1000, 4, che poi vengono scaricati di nuovo.
+3. Per ogni SDB, nell'ordine **7, 4, 2000, 1000, 1, 3, 0**: request download `0x1A` (filesystem
+   `'P'`, lunghezze ASCII), pezzi `0x1B` richiesti dalla CPU, `0x1C`, poi `_INSE` (filesystem
+   `'P'`). **SDB 0 per ultimo.**
+4. Il primo `_INSE` di SDB 4 riceve **`0xD2A9`** ("la CPU sta assegnando nuovi parametri"); TIA
+   ripete dopo ~190 ms e passa. Il client deve **ritentare** su `0xD2A9`.
+5. **Avviamento a caldo** (`0x28` senza argomenti + `P_PROGRAM`); push MODE "RUN".
+
+SDB 2 non viene né cancellato né scaricato (è creato dalla CPU). Download di OB1 e DB1 nelle altre
+catture avvengono **in RUN** senza STOP (`tia_s300_downloadOb1.pcapng`,
+`s7comm_downloading_block_db1.pcap`).
+
+Regole:
+- **Ordine**: SDB 0 per ultimo (**verificato** su una cattura). Il resto dell'ordine è quello di
+  TIA; non sappiamo se è vincolante.
+- **Modo STOP**: TIA mette la CPU in STOP prima di toccare gli SDB (**verificato**); la
+  documentazione Siemens dice che la configurazione hardware di una S7-300 si carica solo in STOP
+  (**da documentazione**). Che cosa risponde la CPU a un download di SDB in RUN è **sconosciuto**:
+  il client deve imporre STOP da sé, non fidarsi del rifiuto.
+- Dopo l'ultimo `_INSE` serve un riavvio esplicito per tornare in RUN.
+
+### 19.4 Backup online di una S7-300 negli strumenti Siemens
+
+- STEP 7 V5 ("Carica nel PG" della stazione) e TIA ("Carica backup dal dispositivo online")
+  copiano **tutti i blocchi della memoria di caricamento, SDB compresi**: OB, FC, FB, DB e
+  "dati di sistema". Il backup si ripristina solo su una CPU dello stesso tipo. **Da
+  documentazione** (help STEP 7 / TIA), non verificato.
+- Probabilmente restano fuori merker, temporizzatori e contatori ritentivi, il buffer diagnostico
+  e l'ora (**ipotesi**). Se i **DB caricati da una CPU vera contengono i valori attuali o quelli
+  iniziali** non lo sappiamo: **da verificare con il kit**.
+- Ripristino = download di tutti i blocchi con la procedura di §19.3 (STOP, SDB con 0 per
+  ultimo, blocchi utente, riavvio).
+
+Per BaaPortal: un "backup online" = list blocks (§8.1) + upload (§9) di ogni blocco di ogni tipo,
+SDB inclusi, salvati come file grezzi (§13). È solo lettura e si può fare in RUN, con i limiti di
+§15.3. Il ripristino è una modifica completa e va trattato come un download con STOP.
 
 Fine documento.
