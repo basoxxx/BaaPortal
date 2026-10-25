@@ -857,7 +857,8 @@ export class PlcWriteService {
         }
       }
       const result: PlcRestoreResult = {
-        ok,
+        // blocchi caricati, ma con lo stato della CPU ignoto il ripristino non si dice riuscito
+        ok: ok && !startUnknown,
         ...(failedAt !== undefined
           ? { error: failedAt }
           : startUnknown

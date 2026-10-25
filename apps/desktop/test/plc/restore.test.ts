@@ -495,6 +495,7 @@ describe('ripristino contro il finto PLC', () => {
     };
     const p = await plan();
     const r = await writes.restore(owner, { token: p.token, restart: true });
+    expect(r.ok).toBe(false);
     expect(r.cpuStopped).toBe(false);
     expect(r.restarted).toBe(false);
     expect(r.error).toContain('sconosciuto');
