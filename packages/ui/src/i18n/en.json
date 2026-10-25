@@ -358,7 +358,8 @@
     "editSource": "Edit source",
     "importBlocks": "Import blocks",
     "importTags": "Import tags",
-    "addWatchTable": "Add watch table"
+    "addWatchTable": "Add watch table",
+    "setAccess": "Set CPU access"
   },
   "inspector": {
     "tab": {
@@ -1082,5 +1083,45 @@
       "S5_RESOLUTION": "Time not representable: minimum resolution 10 ms (100 ms above 9.99 s, 1 s above 99.9 s, 10 s above 999 s).",
       "TOO_MANY": "Too many rows to monitor: the simulator accepts at most 1000."
     }
+  },
+  "accessDevices": {
+    "title": "Accessible devices",
+    "interface": "PG/PC interface",
+    "noInterfaces": "No network interface available.",
+    "type": "Connection type",
+    "direct": "Direct (PN CPU or CP 343-1)",
+    "gateway": "RFC 1006 gateway",
+    "tsap": "Remote TSAP (hexadecimal)",
+    "tsapInvalid": "Invalid TSAP: use two hexadecimal bytes, for example 03.02.",
+    "rack": "Rack",
+    "slot": "Slot",
+    "cpu": "Project CPU",
+    "start": "Start search",
+    "stop": "Stop",
+    "connect": "Connect",
+    "close": "Close",
+    "progress": "Searching: {{done}} of {{total}}",
+    "finished": "Search finished: {{found}} devices found.",
+    "cancelled": "Search stopped.",
+    "colAddress": "Address",
+    "colType": "Type",
+    "colModule": "Module",
+    "colOrder": "Order number",
+    "colStatus": "Status",
+    "typeCpu": "CPU",
+    "typeUnknown": "Unrecognized device",
+    "typeManual": "Manual address",
+    "statusManual": "Not verified",
+    "empty": "No devices. Start the search or add an address.",
+    "manual": "Manual address",
+    "manualHint": "192.0.2.10 or 192.0.2.10:102",
+    "add": "Add address",
+    "errEmpty": "Enter an IPv4 address.",
+    "errSpaces": "The address cannot contain spaces.",
+    "errFormat": "Invalid format: use address or address:port.",
+    "errNotIpv4": "An IPv4 address is required (for example 192.0.2.10): host names are not allowed.",
+    "errOctet": "Each number of the address must be between 0 and 255.",
+    "errPort": "The port must be a number between 1 and 65535.",
+    "rowSelect": "Select {{host}}"
   }
 }

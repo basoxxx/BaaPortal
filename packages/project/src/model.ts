@@ -1,4 +1,5 @@
 import type { BlockMeta } from '@baaportal/mc7';
+import type { PlcAccess } from './plcAccess';
 
 export const FORMAT_VERSION = 4;
 
@@ -23,6 +24,8 @@ export interface CpuProperties {
   clockMemory: { enabled: boolean; byte: number };
   retentivity: { mBytes: number; timers: number; counters: number };
   cyclicInterrupts: { ob35Ms: number };
+  /** Come raggiungere la CPU reale (facoltativo: assente finché non si sceglie un dispositivo). */
+  access?: PlcAccess;
 }
 
 export interface Tag {

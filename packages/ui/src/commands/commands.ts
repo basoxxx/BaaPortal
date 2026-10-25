@@ -263,7 +263,11 @@ const list: Command[] = [
     run: ({ store }) => simControllerFor(store).toggleMonitor(),
   }),
   def('online.upload', { icon: 'upload' }),
-  def('online.accessibleDevices', { icon: 'accessibleDevices' }),
+  def('online.accessibleDevices', {
+    icon: 'accessibleDevices',
+    isEnabled: hasDoc,
+    run: ({ store }) => store.getState().openDialog({ kind: 'accessibleDevices' }),
+  }),
   def('online.startCpu', {
     icon: 'startCpu',
     isEnabled: (s) => s.sim.phase === 'on' && s.sim.mode === 'STOP',

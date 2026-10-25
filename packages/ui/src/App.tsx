@@ -9,6 +9,7 @@ import { i18next, initI18n, t } from './i18n';
 import { flushPendingEdits } from './flushPendingEdits';
 import { createProjectService } from './services/projectService';
 import { createRecoveryService, type RecoveryService } from './services/recoveryService';
+import { AccessibleDevicesDialog } from './dialogs/AccessibleDevicesDialog';
 import { SettingsDialog } from './dialogs/SettingsDialog';
 import { applyDisplaySettings, useSettings } from './settings/settings';
 import { AddBlockDialog } from './project/dialogs/AddBlockDialog';
@@ -55,6 +56,7 @@ function Shell() {
       {view === 'portal' ? <PortalView /> : <ProjectView />}
       {dialog?.kind === 'addDevice' ? <AddDeviceDialog onClose={close} /> : null}
       {dialog?.kind === 'settings' ? <SettingsDialog onClose={close} /> : null}
+      {dialog?.kind === 'accessibleDevices' ? <AccessibleDevicesDialog onClose={close} /> : null}
       {dialog?.kind === 'collectKit' ? <KitDialog onClose={close} /> : null}
       {dialog?.kind === 'addBlock' ? (
         <AddBlockDialog

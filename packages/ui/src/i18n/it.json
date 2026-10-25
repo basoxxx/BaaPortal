@@ -358,7 +358,8 @@
     "editSource": "Modifica sorgente",
     "importBlocks": "Importa blocchi",
     "importTags": "Importa variabili",
-    "addWatchTable": "Aggiungi tabella di controllo"
+    "addWatchTable": "Aggiungi tabella di controllo",
+    "setAccess": "Imposta accesso CPU"
   },
   "inspector": {
     "tab": {
@@ -1082,5 +1083,45 @@
       "S5_RESOLUTION": "Tempo non rappresentabile: risoluzione minima 10 ms (100 ms oltre 9,99 s, 1 s oltre 99,9 s, 10 s oltre 999 s).",
       "TOO_MANY": "Troppe righe da osservare: il simulatore ne accetta al più 1000."
     }
+  },
+  "accessDevices": {
+    "title": "Dispositivi accessibili",
+    "interface": "Interfaccia PG/PC",
+    "noInterfaces": "Nessuna interfaccia di rete disponibile.",
+    "type": "Tipo di collegamento",
+    "direct": "Diretto (CPU PN o CP 343-1)",
+    "gateway": "Gateway RFC 1006",
+    "tsap": "TSAP remoto (esadecimale)",
+    "tsapInvalid": "TSAP non valido: usa due byte in esadecimale, per esempio 03.02.",
+    "rack": "Rack",
+    "slot": "Slot",
+    "cpu": "CPU del progetto",
+    "start": "Avvia ricerca",
+    "stop": "Interrompi",
+    "connect": "Collega",
+    "close": "Chiudi",
+    "progress": "Ricerca in corso: {{done}} di {{total}}",
+    "finished": "Ricerca terminata: {{found}} dispositivi trovati.",
+    "cancelled": "Ricerca interrotta.",
+    "colAddress": "Indirizzo",
+    "colType": "Tipo",
+    "colModule": "Modulo",
+    "colOrder": "Numero di ordinazione",
+    "colStatus": "Stato",
+    "typeCpu": "CPU",
+    "typeUnknown": "Dispositivo non riconosciuto",
+    "typeManual": "Indirizzo manuale",
+    "statusManual": "Non verificato",
+    "empty": "Nessun dispositivo. Avvia la ricerca o aggiungi un indirizzo.",
+    "manual": "Indirizzo manuale",
+    "manualHint": "192.0.2.10 oppure 192.0.2.10:102",
+    "add": "Aggiungi indirizzo",
+    "errEmpty": "Scrivi un indirizzo IPv4.",
+    "errSpaces": "L'indirizzo non può contenere spazi.",
+    "errFormat": "Formato non valido: usa indirizzo o indirizzo:porta.",
+    "errNotIpv4": "Serve un indirizzo IPv4 (per esempio 192.0.2.10): i nomi host non sono ammessi.",
+    "errOctet": "Ogni numero dell'indirizzo deve essere tra 0 e 255.",
+    "errPort": "La porta deve essere un numero tra 1 e 65535.",
+    "rowSelect": "Seleziona {{host}}"
   }
 }

@@ -22,6 +22,7 @@ export type DialogState =
   | { kind: 'addBlock'; deviceId: string }
   | { kind: 'collectKit' }
   | { kind: 'settings' }
+  | { kind: 'accessibleDevices' }
   | { kind: 'importTagsReport'; fileName: string; tableName: string; summary: ImportSummary }
   | null;
 
