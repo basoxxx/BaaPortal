@@ -11,6 +11,17 @@ Per ogni voce si indica che cosa succede oggi. "Errore chiaro" vuol dire che Baa
 - **Provenienza 1D-bis.** Scrittura di variabili, carica nel dispositivo e STOP/avvio esistono e sono verificati contro il finto PLC e contro i byte delle catture pubbliche (`cisa/snap7.pcap` per scrittura, stop e avvio a freddo; la cattura del download di un blocco). Il giro completo «la CPU accetta ed esegue un blocco compilato da BaaPortal» non è mai stato provato su una CPU reale (spec §10). Il riavvio a caldo è verificato solo in parte. Restano per la tappa 3 (R1, R3): `_DELE`, `_GARB`, `_MODU` (copia RAM→ROM), MRES, forzatura, impostazione dell'orologio, riavvio a freddo e a caldo, e l'interfaccia online dell'app.
 - **Scorciatoie della tappa 3 non collegate.** Ctrl+L (carica nel dispositivo), Ctrl+K (collegamento online) e Ctrl+M (interrompi collegamento online) non fanno ancora nulla: le funzioni online dell'interfaccia sono della tappa 3.
 
+## Online (piano 3A)
+
+- **Sola lettura.** Il collegamento online non carica, non avvia e non arresta la CPU e non dà MRES: i pulsanti sono disabilitati. Queste funzioni arrivano con il piano 3B.
+- **Mai provato su una CPU reale.** Il collegamento è provato solo contro il PLC di prova (server S7 locale con CPU simulata). Non è stato provato né su una CPU reale, né su un CP 343-1, né su un gateway RFC 1006.
+- **Ricerca limitata.** La ricerca trova solo dispositivi con un indirizzo IPv4 nella stessa sottorete dell'interfaccia scelta. Non c'è DCP, quindi una CPU senza indirizzo IP non compare; il DCP arriva nella tappa 6.
+- **MPI/DP.** Solo attraverso un gateway RFC 1006.
+- **Sonda provata solo in locale.** La sonda di rete è stata provata solo su loopback (127.0.0.1), mai su una rete vera.
+- **Eventi di ricerca.** Gli eventi della ricerca non hanno una protezione contro un renderer sostituito: se la pagina viene ricaricata durante una ricerca, gli eventi restano indirizzati alla finestra.
+- **Campi di rack e slot.** Rack da 0 a 7 e slot da 0 a 31.
+- **Impostazioni di accesso salvate nel progetto.** Indirizzo, porta, rack e slot restano nel file del progetto, nelle proprietà della CPU; non sono impostazioni dell'utente.
+
 ## Simulatore (piano 2A)
 
 Le scelte sono descritte in `docs/protocollo/sim.md` (§4.1 per la semantica). Tutte restano **non confermate** da una CPU reale.
