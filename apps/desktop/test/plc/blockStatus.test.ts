@@ -387,6 +387,23 @@ describe('BlockStatusService', () => {
     await svc.stopAll();
   });
 
+  it('un ripristino che parte durante start: nessun job creato; né ricreazione con blocked', async () => {
+    let calls = 0;
+    const svc = newService({ blocked: () => ++calls > 1 }); // la prima verifica passa, la seconda no
+    const r = await svc.start(owners[0]!, req());
+    expect(r).toMatchObject({ ok: false, reason: 'busy' });
+    expect(await liveJobs()).toEqual([]);
+
+    let restoring = false;
+    const svc2 = newService({ blocked: () => restoring });
+    await svc2.start(owners[0]!, req({ offsets: evens(0, 10), saz: 12 }));
+    restoring = true;
+    svc2.window(owners[0]!, req({ offsets: evens(20, 30), saz: 32 })); // vuole ricreare il job
+    expect(await svc2.read(owners[0]!)).toMatchObject({ ok: false, ended: true });
+    expect(await liveJobs()).toEqual([]);
+    await svc2.stopAll();
+  });
+
   it('stopAll con una create in volo (ricreazione dopo una nuova finestra) → job comunque cancellato', async () => {
     let creates = 0;
     const svc = newService({

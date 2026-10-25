@@ -69,7 +69,8 @@ export function outcomeText(r: RestoreOutcomeRow): string {
     case 'kept':
       return t('restore.outcome.kept');
     case 'unknown':
-      return t('restore.outcome.unknown');
+      // il motivo specifico (per esempio «il blocco non risulta nella CPU») vale più del testo generico
+      return r.error && r.error !== 'Esito sconosciuto' ? r.error : t('restore.outcome.unknown');
     case 'notDone':
       return t('restore.outcome.notDone');
     case 'rejected': {

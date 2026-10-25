@@ -102,9 +102,9 @@ Nella scheda _Online e diagnostica_, la pagina _Stack di chiamata_ legge BSTACK,
 Con l'impostazione attiva e il collegamento online, _Online_ > _Ripristina backup nel dispositivo… (sperimentale)_ (o il menu della cartella _Backup online_) apre la finestra di ripristino.
 
 1. _Scegli file…_ apre un `.baapbak`. La tabella mostra, per ogni blocco, l'azione: _Carica_, _Cancella_ (SDB assenti nel backup), _Saltato_ (per esempio SDB 2, creato dalla CPU) o _Resta nella CPU_ (blocchi presenti solo nella CPU).
-2. In testa gli avvisi: funzione sperimentale mai provata su una CPU reale, la CPU andrà in STOP, «Il backup è di una CPU diversa» se serve, e i DB tornano ai valori salvati nel backup mentre merker, temporizzatori e contatori no.
+2. In testa gli avvisi: funzione sperimentale mai provata su una CPU reale, la CPU andrà in STOP, e i DB tornano ai valori salvati nel backup mentre merker, temporizzatori e contatori no.
 3. La casella _Avvia la CPU al termine (avviamento a caldo)_ è spenta per default.
-4. _Ripristina_ chiede le conferme del sistema (sovrascrittura, con l'elenco dei blocchi non toccati, STOP, avvio). Annullarne una non cambia nulla.
+4. _Ripristina_ chiede le conferme del sistema (sovrascrittura, con l'elenco dei blocchi non toccati, STOP, avvio). Annullare la conferma di sovrascrittura o quella di STOP non cambia nulla; annullare «Avviare la CPU?» lascia il backup caricato e la CPU in STOP.
 
 Prima di toccare la CPU il ripristino si rifiuta se c'è un forzamento attivo, se ci sono job di test sulla CPU, se la CPU è di un tipo diverso da quello del backup, se la protezione della CPU non permette la scrittura, se il backup è incompleto (blocchi non letti) o se contiene SDB fuori dagli intervalli documentati. L'avanzamento sta nella barra di stato con _Interrompi_, che ferma prima del passo successivo. L'esito mostra, per ogni blocco, _Caricato_, _Cancellato_, _Saltato_, _Resta nella CPU_, _Rifiutato dalla CPU_, _Esito sconosciuto_ o _Non caricato_; se la CPU è rimasta in STOP c'è il pulsante _Avvia CPU_. Alla fine il confronto online riparte.
 

@@ -181,7 +181,8 @@ export function registerPlc(
       ]);
     },
     writing: () => writes.writing(),
-    // Operazioni che un aggiornamento non deve interrompere: scrittura, caricamento dalla CPU, backup.
+    // Operazioni che un aggiornamento non deve interrompere: scrittura, ripristino, caricamento dalla CPU, backup.
+    // Le osservazioni invece si fermano in modo pulito (`closeAll`).
     resume: () => {
       writes.resume();
       uploads.resume();

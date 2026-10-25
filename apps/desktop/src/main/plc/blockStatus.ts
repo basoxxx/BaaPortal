@@ -353,6 +353,10 @@ export class BlockStatusService {
         onDestroyed: () => void this.close(s),
       };
       if (this.o.service.modeOf(owner) === 'RUN') {
+        // un ripristino può essere partito mentre ci si collegava: niente job nuovi durante il ripristino
+        if (this.o.blocked?.(target.access)) {
+          return fail('busy', 'Ripristino in corso su questa CPU');
+        }
         try {
           await this.createJob(s);
         } catch (err) {
@@ -441,6 +445,9 @@ export class BlockStatusService {
     if (s.closed) return this.endedResult(s.owner);
     if (s.job === undefined) {
       if (mode !== 'RUN') return { ok: true, state: 'waiting' };
+      const t = this.o.service.target(s.owner);
+      if (t && this.o.blocked?.(t.access))
+        return this.endWith(s, 'Ripristino in corso su questa CPU');
       try {
         await this.createJob(s);
       } catch (err) {

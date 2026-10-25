@@ -37,10 +37,10 @@ export function RestoreDialog({ onClose }: { onClose(): void }) {
       alive.current = false;
     };
   }, []);
-  // Il collegamento è caduto: la finestra non serve più (non durante il ripristino).
+  // Il collegamento è caduto prima del ripristino: la finestra non serve più. Dopo, l'esito resta visibile.
   useEffect(() => {
-    if (!online && !busy) onClose();
-  }, [online, busy]);
+    if (!online && !busy && !result) onClose();
+  }, [online, busy, result]);
 
   const choose = async (): Promise<void> => {
     if (busyRef.current) return;
@@ -209,13 +209,15 @@ export function RestoreDialog({ onClose }: { onClose(): void }) {
             {result.cpuStopped ? (
               <p>
                 {t('restore.cpuStopped')}{' '}
-                <button
-                  type="button"
-                  data-testid="restore-start-cpu"
-                  onClick={() => void commands['online.startCpu'].run({ store, service, bridge })}
-                >
-                  {t('restore.startCpu')}
-                </button>
+                {online ? (
+                  <button
+                    type="button"
+                    data-testid="restore-start-cpu"
+                    onClick={() => void commands['online.startCpu'].run({ store, service, bridge })}
+                  >
+                    {t('restore.startCpu')}
+                  </button>
+                ) : null}
               </p>
             ) : null}
             {result.diag?.length ? (

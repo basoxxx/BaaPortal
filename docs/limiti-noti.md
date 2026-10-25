@@ -94,6 +94,7 @@ Per ogni voce si indica che cosa succede oggi. "Errore chiaro" vuol dire che Baa
 - **Ritmo:** un risultato ogni 250 ms al massimo, non a ogni ciclo come STEP 7: i valori sono quelli di un ciclo ogni tanto.
 - **Un'osservazione per CPU,** su un collegamento PG in più. Durante un ripristino sulla stessa CPU l'osservazione si rifiuta.
 - **Il blocco deve essere uguale a quello del progetto** (checksum e lunghezza MC7, con la stessa ipotesi del confronto del 3B).
+- **Installazione o uscita durante un'osservazione:** l'osservazione si ferma in modo pulito. Se la cancellazione del job è lenta (limite di 1 s alla chiusura) il job può restare sulla CPU; si cancella alla connessione successiva.
 - **Il tempo di ciclo aumenta** mentre si osserva (da documentazione). Una CPU in modo processo può limitare lo stato (`0xD0AB`/`0xD0AC`/`0xD0CC`, una sola fonte).
 - **In STOP nessun valore.** Cosa risponde la CPU a un block status in STOP è sconosciuto, e il client non lo chiede.
 - **Job orfani:** si suppone che la CPU cancelli i job quando il collegamento cade (ipotesi). BaaPortal cancella alla connessione solo quelli che ha registrato in `tis-jobs.json`; un job di un'altra connessione (`0xD0AE`) resta. Il registro scrive subito alla creazione; le cancellazioni si raggruppano e si scrivono dopo 500 ms o all'uscita.

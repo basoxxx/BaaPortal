@@ -276,7 +276,14 @@ export class PlcWriteService {
   /** Piani di ripristino preparati: restano qui, legati alla finestra e al collegamento. */
   private readonly plans = new Map<
     string,
-    { owner: PlcOwner; linkId: number; plan: RestorePlan; dispose: () => void }
+    {
+      owner: PlcOwner;
+      linkId: number;
+      plan: RestorePlan;
+      /** Gli SDB che la CPU aveva alla preparazione. */
+      sdbs: number[];
+      dispose: () => void;
+    }
   >();
   /** Prima di un ripristino ferma l'osservazione del blocco sulla stessa CPU (la imposta `plcIpc`). */
   beforeRestore?: (owner: PlcOwner) => Promise<void>;
@@ -644,7 +651,8 @@ export class PlcWriteService {
         offLink?.();
         owner.removeListener('destroyed', drop);
       };
-      this.plans.set(token, { owner, linkId: target.linkId, plan, dispose });
+      const sdbs = online.value.blocks.filter((b) => b.type === 'SDB').map((b) => b.number);
+      this.plans.set(token, { owner, linkId: target.linkId, plan, sdbs, dispose });
       return { ok: true, token, rows: restoreRows(plan), warnings };
     } catch (e) {
       return { ok: false, error: errText(e) }; // mai un'eccezione verso il renderer
@@ -670,7 +678,9 @@ export class PlcWriteService {
         const cpu = t && cpuKey(t.access);
         if (cpu !== undefined) this.restoringCpus.add(cpu);
         try {
-          return await this.runRestore(owner, op, req);
+          const res = await this.runRestore(owner, op, req);
+          await this.settleOutcome(owner, res);
+          return res;
         } finally {
           if (cpu !== undefined) this.restoringCpus.delete(cpu);
         }
@@ -790,10 +800,29 @@ export class PlcWriteService {
           stopConfirmed,
         );
       }
+      // la lista degli SDB può essere cambiata (altro PG) dopo la preparazione: si rilegge prima di scrivere
+      const live = await this.o.service.read?.(owner, async (run) =>
+        (await run((x) => x.listBlocks('SDB'))).map((e) => e.number),
+      );
+      if (!live || !live.ok) {
+        return fin(
+          'Elenco degli SDB della CPU non rileggibile. La CPU è rimasta in STOP, nulla è stato scritto',
+          stopConfirmed,
+        );
+      }
+      const expected = [...saved.sdbs].sort((a, b) => a - b);
+      const now = [...live.value].sort((a, b) => a - b);
+      if (now.length !== expected.length || now.some((n, i) => n !== expected[i])) {
+        return fin(
+          'Gli SDB della CPU sono cambiati dopo la preparazione del ripristino: prepararlo di nuovo. La CPU è rimasta in STOP, nulla è stato scritto',
+          stopConfirmed,
+        );
+      }
       // 3. i passi
       const failedAt = await this.runRestoreSteps(owner, op, c, plan.steps, rows);
       const ok = failedAt === undefined;
       let diag: PlcRestoreResult['diag'];
+      let startUnknown: string | undefined;
       // 4. riavvio, solo con tutti i passi riusciti, richiesto e confermato
       if (ok && req.restart) {
         const run = await this.o.confirm(owner, {
@@ -803,15 +832,20 @@ export class PlcWriteService {
           confirmLabel: 'Avvia',
         });
         if (run && !op.aborted) {
-          await c.start();
-          for (let waited = 0; waited <= RUN_WAIT_MS; waited += POLL_MS) {
+          try {
+            await c.start();
+          } catch (err) {
+            // il comando può essere arrivato: lo stato della CPU non è noto
+            startUnknown = `Avviamento inviato ma esito sconosciuto, lo stato della CPU non è noto (${errText(err)})`;
+          }
+          for (let waited = 0; !startUnknown && waited <= RUN_WAIT_MS; waited += POLL_MS) {
             if ((await mode()) === 'RUN') {
               restarted = true;
               break;
             }
             await this.sleep(POLL_MS);
           }
-          if (!restarted) {
+          if (!restarted && !startUnknown) {
             try {
               diag = diagRecordsFrom(await c.readSzl(0x00a0, 0))
                 .slice(0, 5)
@@ -824,9 +858,13 @@ export class PlcWriteService {
       }
       const result: PlcRestoreResult = {
         ok,
-        ...(failedAt !== undefined ? { error: failedAt } : {}),
+        ...(failedAt !== undefined
+          ? { error: failedAt }
+          : startUnknown
+            ? { error: startUnknown }
+            : {}),
         rows,
-        cpuStopped: stopConfirmed && !restarted,
+        cpuStopped: stopConfirmed && !restarted && !startUnknown,
         ...(req.restart && ok ? { restarted } : {}),
         ...(diag ? { diag } : {}),
       };
@@ -836,7 +874,24 @@ export class PlcWriteService {
       return fin(errText(err), stopConfirmed && !restarted, stopSent && !stopConfirmed);
     } finally {
       await c.close().catch(() => undefined);
-      await this.verifyLoaded(owner, rows);
+    }
+  }
+
+  /**
+   * Riletto l'elenco dei blocchi, l'esito si ricalcola: una riga declassata a `unknown` non può stare
+   * sotto «Ripristino completato.».
+   */
+  private async settleOutcome(owner: PlcOwner, res: PlcRestoreResult): Promise<void> {
+    try {
+      await this.verifyLoaded(owner, res.rows);
+    } catch {
+      // l'elenco è un di più: le righe restano come sono
+    }
+    if (!res.ok) return;
+    const bad = res.rows.find((r) => r.outcome === 'unknown' || r.outcome === 'rejected');
+    if (bad) {
+      res.ok = false;
+      res.error = `${bad.name}: ${bad.error ?? 'Esito sconosciuto'}`;
     }
   }
 

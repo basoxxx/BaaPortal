@@ -455,6 +455,52 @@ describe('ripristino contro il finto PLC', () => {
     expect(cpu.mode).toBe('STOP');
   });
 
+  it('restore: blocco caricato che poi non risulta nella CPU → ok false, motivo specifico, niente «completato»', async () => {
+    wrap = (c) => {
+      const close = c.close.bind(c);
+      c.close = async () => {
+        cpu.deleteBlock('OB', 1); // sparisce prima della rilettura dell'elenco
+        return close();
+      };
+      return c;
+    };
+    const p = await plan();
+    const r = await writes.restore(owner, { token: p.token, restart: false });
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('OB1');
+    expect(r.error).toContain('non risulta nella CPU');
+    const row = r.rows.find((x) => x.name === 'OB1')!;
+    expect(row.outcome).toBe('unknown');
+    expect(row.error).toContain('non risulta nella CPU');
+  });
+
+  it('restore: SDB cambiati dopo la preparazione → rifiuto dopo lo STOP, niente scritto', async () => {
+    const p = await plan();
+    cpu.addBlock(sdb(5, 32)); // un altro PG aggiunge un SDB
+    const r = await writes.restore(owner, { token: p.token, restart: false });
+    expect(r).toMatchObject({ ok: false, cpuStopped: true });
+    expect(r.error).toContain('SDB della CPU sono cambiati');
+    expect(r.error).toContain('nulla è stato scritto');
+    expect(cpu.mode).toBe('STOP');
+    expect(r.rows.filter((x) => x.outcome === 'loaded' || x.outcome === 'deleted')).toEqual([]);
+    expect(cpu.block('SDB', 0)!.file).not.toEqual(SDB0_NEW);
+  });
+
+  it('restore: errore di trasporto nel comando di avvio → stato della CPU sconosciuto, non «in STOP»', async () => {
+    wrap = (c) => {
+      c.start = async () => {
+        throw new S7Error('CLOSED', 'collegamento chiuso');
+      };
+      return c;
+    };
+    const p = await plan();
+    const r = await writes.restore(owner, { token: p.token, restart: true });
+    expect(r.cpuStopped).toBe(false);
+    expect(r.restarted).toBe(false);
+    expect(r.error).toContain('sconosciuto');
+    expect(r.error).toContain('non è noto');
+  });
+
   it('restore: errore del filtro → «Rifiutato da BaaPortal (frame non ammesso)»; errore della CPU → «dalla CPU»', async () => {
     for (const [code, want] of [
       ['FORBIDDEN', 'Rifiutato da BaaPortal (frame non ammesso)'],

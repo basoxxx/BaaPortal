@@ -1,6 +1,7 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { commands } from '../../src/commands/commands';
+import { ONLINE_OFF } from '../../src/state/store';
 import { initI18n } from '../../src/i18n';
 import type { PlcRestorePlanResult, PlcRestoreResult } from '../../src/online/plcTypes';
 import { DEFAULT_SETTINGS, saveSettings, updateSettings } from '../../src/settings/settings';
@@ -121,6 +122,25 @@ describe('finestra di ripristino', () => {
     // «Avvia CPU» usa il comando del 3B (con la sua conferma nativa)
     fireEvent.click(screen.getByTestId('restore-start-cpu'));
     await waitFor(() => expect(app.bridge.plcControlCalls).toContain('RUN'));
+  });
+
+  it('collegamento perso durante il ripristino: l’esito resta visibile, senza «Avvia CPU»', async () => {
+    const app = await open();
+    await choose();
+    app.bridge.plcRestoreImpl = () => {
+      app.store.getState().setOnline(ONLINE_OFF);
+      return {
+        ok: false,
+        error: 'SDB 1: Esito sconosciuto',
+        cpuStopped: true,
+        rows: [{ name: 'SDB 1', outcome: 'unknown', error: 'Esito sconosciuto' }],
+      };
+    };
+    await run();
+    expect(await screen.findByTestId('restore-result')).toBeTruthy();
+    expect(screen.getByTestId('restore-result').textContent).toContain('CPU lasciata in STOP');
+    expect(screen.queryByTestId('restore-start-cpu')).toBeNull();
+    expect(screen.getByTestId('restore-dialog')).toBeTruthy();
   });
 
   it('esiti: Caricato per tutti, rifiuto con il motivo', async () => {
