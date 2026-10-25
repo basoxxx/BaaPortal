@@ -899,9 +899,16 @@ Stessa struttura PI-service `0x28` ma servizio `"_DELE"` e subfun `0x42`. Cancel
 blocco indicato dal filesystem passivo. (Non in cattura S7-300 locale; struttura da
 snap7 `opDelete` e dissector.)
 
+Codifica implementata (`encodeDeleteBlock`): identica a `_INSE` (§10.4) con servizio
+`"_DELE"`, cioè len1 `0x000A`, conteggio `01`, `00`, nome a 8 caratteri (tipo ASCII a 2
+caratteri, numero a 5 cifre, filesystem `P`), len2 `0x05`, `"_DELE"`. Es. OB1:
+`28 00000000 0000 fd 000a 01 00 "08" "00001" "P" 05 "_DELE"`. Stato: **non verificato** su CPU
+reale; **provato contro il server di prova** (`deleteBlock` toglie il blocco dalla lista), non
+su CPU reale.
+
 Fonti: snap7 `opDownload`, `opDelete`, `TReqStartDownloadParams`,
 `TReqControlBlockParams`, `pi_service_names`; `packet-s7comm.c`
-(`s7comm_decode_pi_service`). **verificato** (download+INSE), `_DELE` **non verificato**.
+(`s7comm_decode_pi_service`). **verificato** (download+INSE), `_DELE` **non verificato** (provato solo contro il server di prova).
 
 ---
 

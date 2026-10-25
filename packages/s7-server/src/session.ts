@@ -454,11 +454,36 @@ class Session {
     // _INSE attiva il blocco solo a trasferimento finito (proto §10.4); altrove non è ammesso
     if (req.service === '_INSE' && this.dl?.phase === 'insert')
       return this.insertBlock(p, req.block);
-    // fuori allowlist (cold restart, _MODU, _GARB, _DELE, _INSE fuori download)
+    if (req.service === '_DELE' || req.service === '_MODU' || req.service === '_GARB') {
+      return this.piService(p, req.service, req.block);
+    }
+    // fuori allowlist (cold restart, _INSE fuori download)
     if (req.service !== 'P_PROGRAM') return headerError(p, ERR.PROTECTED);
     if (this.writeProtected()) return headerError(p, ERR.PROTECTED);
     const code = req.function === 0x29 ? this.cpu.applyStop() : this.cpu.applyWarmRestart();
     return ack(p, encodeControlResponse(req.function, code));
+  }
+
+  /** `_DELE`, `_MODU` e `_GARB`: se il backend non li ha, "servizio non implementato" (proto §3.3). */
+  private piService(
+    p: S7Pdu,
+    service: '_DELE' | '_MODU' | '_GARB',
+    block: { type: BlockType; number: number } | undefined,
+  ): S7Pdu {
+    if (this.writeProtected()) return headerError(p, ERR.PROTECTED);
+    if (service === '_DELE') {
+      if (!this.cpu.deleteBlock || !block) return headerError(p, ERR.NOT_IMPLEMENTED);
+      if (!this.cpu.deleteBlock(block.type, block.number)) {
+        return headerError(p, ERR.UPLOAD_MISSING); // blocco assente: stesso d20c di snap7.pcap
+      }
+    } else if (service === '_MODU') {
+      if (!this.cpu.copyRamToRom) return headerError(p, ERR.NOT_IMPLEMENTED);
+      this.cpu.copyRamToRom();
+    } else {
+      if (!this.cpu.compressMemory) return headerError(p, ERR.NOT_IMPLEMENTED);
+      this.cpu.compressMemory();
+    }
+    return ack(p, encodeControlResponse(0x28, 0));
   }
 
   // ---- download (ruoli invertiti, proto §10.2) ------------------------------------------------

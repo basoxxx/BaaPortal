@@ -252,6 +252,15 @@ export function simBackend(cpu: SimCpu, o: { orderNumber?: string } = {}): CpuBa
       cpu.loadBlock(copy); // un blocco non caricabile lancia: la sessione risponde con un errore
       files.set(keyOf(type, number), { type, number, file: copy, parsed });
     },
+    deleteBlock(type, number) {
+      if (!present(type, number)) return false;
+      cpu.deleteBlock(type, number);
+      files.delete(keyOf(type, number));
+      return true;
+    },
+    // la CPU simulata non ha ROM né memoria da compattare: restano senza effetto
+    copyRamToRom() {},
+    compressMemory() {},
     block(type, number) {
       return present(type, number) ? files.get(keyOf(type, number)) : undefined;
     },

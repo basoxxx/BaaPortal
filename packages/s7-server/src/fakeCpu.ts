@@ -270,6 +270,17 @@ export class FakeCpu implements CpuBackend {
     return this.diag;
   }
 
+  /** @internal Cancella il blocco; `false` se non c'era. Solo dalla sessione (`_DELE`). */
+  deleteBlock(type: BlockType, number: number): boolean {
+    return this.blockMap.delete(`${type}:${number}`);
+  }
+
+  /** @internal `_MODU`: nel finto PLC non c'è una ROM separata, quindi non cambia nulla. */
+  copyRamToRom(): void {}
+
+  /** @internal `_GARB`: nel finto PLC la memoria non si frammenta, quindi non cambia nulla. */
+  compressMemory(): void {}
+
   /** @internal */
   block(type: BlockType, number: number): StoredBlock | undefined {
     return this.blockMap.get(`${type}:${number}`);

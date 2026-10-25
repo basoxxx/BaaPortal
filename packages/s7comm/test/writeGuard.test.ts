@@ -9,6 +9,9 @@ import {
   encodeDownloadBlockAck,
   encodeDownloadBlockJob,
   encodeDownloadEnded,
+  encodeCompressMemory,
+  encodeCopyRamToRom,
+  encodeDeleteBlock,
   encodeInsertBlock,
   encodePlcStop,
   encodeRequestDownload,
@@ -53,7 +56,7 @@ const writeReq = encodeWriteRequest([
 const writePdu = job(writeReq.param, writeReq.data);
 
 describe('assertOnlineWrite', () => {
-  it('assertOnlineWrite: 0x05, 0x1A, 0x1C, 0x29, warm restart e _INSE passano; _DELE/_MODU/cold/MRES/force → FORBIDDEN', () => {
+  it('assertOnlineWrite: 0x05, 0x1A, 0x1C, 0x29, warm restart, _INSE, _DELE, _MODU e _GARB passano (solo canonici); cold/MRES/force → FORBIDDEN', () => {
     const ok: S7Pdu[] = [
       writePdu,
       job(encodeRequestDownload('DB', 1, 'P', 100086, 2)),
@@ -61,6 +64,9 @@ describe('assertOnlineWrite', () => {
       job(encodePlcStop()),
       job(encodeWarmRestart()),
       job(encodeInsertBlock('DB', 1, 'P')),
+      job(encodeDeleteBlock('OB', 1, 'P')),
+      job(encodeCopyRamToRom()),
+      job(encodeCompressMemory()),
       // ack-data 0x1B e 0x1C
       job(
         encodeDownloadBlockAck(true, Uint8Array.of(1, 2, 3)).param,
@@ -89,9 +95,15 @@ describe('assertOnlineWrite', () => {
         ...ascii(svc),
       ]);
     const bad: S7Pdu[] = [
-      job(ctl([1, 0, ...ascii('0A00001P')], '_DELE')),
-      job(ctl([1, 0, ...ascii('0A00001P')], '_GARB')),
-      job(ctl([1, 0, ...ascii('0A00001P')], '_MODU')),
+      job(ctl([1, 0, ...ascii('0A00001P')], '_GARB')), // _GARB con argomenti
+      job(ctl([1, 0, ...ascii('0A00001P')], '_MODU')), // _MODU con argomenti
+      job(ctl(ascii('EQ'), '_MODU')),
+      job(ctl([1, 0, ...ascii('0800001B')], '_DELE')), // _DELE su filesystem B
+      job(ctl([1, 0, ...ascii('0800001A')], '_DELE')),
+      job(ctl([2, 0, ...ascii('0800001P')], '_DELE')), // conteggio diverso da 1
+      job(Uint8Array.from([...encodeCompressMemory(), 0])),
+      job(Uint8Array.from([...encodeCopyRamToRom(), 0])),
+      job(encodeDeleteBlock('OB', 1, 'P'), Uint8Array.of(1)), // dati in più
       job(ctl(ascii('C '), 'P_PROGRAM')), // cold restart
       job(ctl(ascii('H '), 'P_PROGRAM')), // hot restart
       job(ctl([], '_MRES')),
@@ -180,7 +192,7 @@ describe('modo della connessione', () => {
     }
   });
 
-  it('online-write: una write var arriva al trasporto; un _DELE resta vietato', async () => {
+  it('online-write: una write var arriva al trasporto; un _DELE non canonico resta vietato', async () => {
     const { conn, sends } = await open('online-write', (p, cpu) => {
       cpu.ack(p.pduRef, Uint8Array.of(0x05, 1), Uint8Array.of(0xff));
     });
@@ -201,7 +213,7 @@ describe('modo della connessione', () => {
       10,
       1,
       0,
-      ...[...'0A00001P'].map((c) => c.charCodeAt(0)),
+      ...[...'0A00001B'].map((c) => c.charCodeAt(0)),
       5,
       ...[...'_DELE'].map((c) => c.charCodeAt(0)),
     ]);

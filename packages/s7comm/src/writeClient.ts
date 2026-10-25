@@ -3,8 +3,12 @@ import { S7Connection, type ConnectOptions } from './connection';
 import { S7Error } from './errors';
 import { itemReturnName } from './s7/errorCodes';
 import { parseBlockFile } from './s7/blockFile';
+import type { BlockType } from './s7/blocks';
 import {
   decodeControlResponse,
+  encodeCompressMemory,
+  encodeCopyRamToRom,
+  encodeDeleteBlock,
   encodeInsertBlock,
   encodePlcStop,
   encodeWarmRestart,
@@ -139,6 +143,30 @@ export class S7WriteClient extends S7Client {
   /** Riavvio a caldo. "Già RUN" è un risultato; un errore nell'header lancia CPU_ERROR. */
   start(): Promise<ControlResult> {
     return this.#control(encodeWarmRestart(), 'avvio');
+  }
+
+  /** Cancella un blocco dal filesystem passivo (proto §10.5). Un esito diverso da 0 lancia CPU_ERROR. */
+  deleteBlock(type: BlockType, number: number): Promise<void> {
+    return this.#controlOk(encodeDeleteBlock(type, number, DOWNLOAD_FS), `_DELE ${type}${number}`);
+  }
+
+  /** Copia la RAM in ROM (`_MODU`, proto §11.3). Un esito diverso da 0 lancia CPU_ERROR. */
+  copyRamToRom(): Promise<void> {
+    return this.#controlOk(encodeCopyRamToRom(), '_MODU');
+  }
+
+  /** Comprime la memoria (`_GARB`, proto §11.3). Un esito diverso da 0 lancia CPU_ERROR. */
+  compressMemory(): Promise<void> {
+    return this.#controlOk(encodeCompressMemory(), '_GARB');
+  }
+
+  async #controlOk(param: Uint8Array, what: string): Promise<void> {
+    const r = await this.#control(param, what);
+    if (r.code !== 0) {
+      throw new S7Error('CPU_ERROR', `${what} non eseguito dalla CPU: ${r.name} (${h2(r.code)})`, {
+        returnCode: r.code,
+      });
+    }
   }
 
   async #control(param: Uint8Array, what: string): Promise<ControlResult> {
