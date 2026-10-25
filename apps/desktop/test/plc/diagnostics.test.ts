@@ -236,13 +236,15 @@ describe('readDiagnostics con collegamento finto', () => {
   });
 
   it('oltre la scadenza: parti già lette restano, le altre «Lettura troppo lunga», collegamento vivo', async () => {
+    // Solo i LED (0x0019) sono lenti e superano la scadenza: il buffer non parte più. Margini ampi,
+    // così il test non dipende dalla velocità della macchina.
     const service = fakeService(async (id) => {
-      await new Promise((r) => setTimeout(r, 40));
+      if (id === 0x0019) await new Promise((r) => setTimeout(r, 700));
       return SZL(id);
     });
     const owner = new FakeOwner();
     await service.connect(owner, access);
-    const r = await readDiagnostics(service, owner, ['mode', 'leds', 'buffer', 'memory'], 50);
+    const r = await readDiagnostics(service, owner, ['mode', 'leds', 'buffer', 'memory'], 300);
     if (!r.ok) throw new Error(r.error);
     expect(r.data.mode).toMatchObject({ ok: true });
     expect(r.data.leds).toMatchObject({ ok: true });
