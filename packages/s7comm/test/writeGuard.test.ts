@@ -164,10 +164,36 @@ describe('assertOnlineWrite', () => {
     forbidden(
       job(
         f.param,
-        f.data.map((b, i) => (i === 7 ? 0x9a : b)),
+        f.data.map((b, i) => (i === 6 ? 0x9a : b)),
         7,
       ),
     ); // anno non BCD
+    forbidden(
+      job(
+        f.param,
+        f.data.map((b, i) => (i === 5 ? 0x20 : b)),
+        7,
+      ),
+    ); // byte alto dell'anno (0x19) alterato
+    forbidden(
+      job(
+        f.param,
+        f.data.map((b, i) => (i === 7 ? 0x9a : b)),
+        7,
+      ),
+    ); // mese non BCD
+    for (const [mo, d] of [
+      [0x02, 0x30],
+      [0x04, 0x31],
+    ] as const) {
+      forbidden(
+        job(
+          f.param,
+          f.data.map((b, i) => (i === 7 ? mo : i === 8 ? d : b)),
+          7,
+        ),
+      ); // data impossibile
+    }
     forbidden(job(f.param, f.data.slice(0, 4), 7)); // dati corti
     forbidden(job(fromHex('0001120811470200000000 00'.replace(/ /g, '')), f.data, 7)); // forma risposta
     // read-only

@@ -72,6 +72,18 @@ describe('event ID (proto §7.6.2)', () => {
     expect(describeEvent(0x9001, 'it').source).toBe('generic');
   });
 
+  it('ogni classe 0-15, in entrambe le lingue, dà un testo generico senza lanciare', () => {
+    for (let c = 0; c <= 15; c++) {
+      for (const lang of ['it', 'en'] as const) {
+        const id = (c << 12) | 0x0f77; // nessun ID in tabella
+        let d: { text: string; source: string } | undefined;
+        expect(() => (d = describeEvent(id, lang))).not.toThrow();
+        if (c !== 0xa && c !== 0xb && c !== 8 && c !== 9) expect(d!.source).toBe('generic');
+        expect(d!.text.length).toBeGreaterThan(0);
+      }
+    }
+  });
+
   it('la tabella ha gli stessi ID di §7.6.3', () => {
     const docIds = new Set<number>();
     for (const row of docRows()) {
@@ -111,7 +123,7 @@ describe('event ID (proto §7.6.2)', () => {
       expect(t.en.trim(), `0x${id.toString(16)}`).not.toBe('');
       expect(t.it.trim()).not.toBe('');
     }
-    for (let c = 1; c <= 15; c++) {
+    for (let c = 0; c <= 15; c++) {
       expect(EVENT_CLASSES[c]?.it).toBeTruthy();
       expect(EVENT_CLASSES[c]?.en).toBeTruthy();
     }

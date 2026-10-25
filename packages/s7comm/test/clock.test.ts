@@ -141,6 +141,11 @@ describe('set clock (proto §12.0, §17.12)', () => {
     expect(() => reqSetClock({ ...T, year: 2090 })).toThrow(RangeError);
     expect(() => reqSetClock({ ...T, year: 1989 })).toThrow(RangeError);
     expect(() => reqSetClock({ ...T, month: 13 })).toThrow(RangeError);
+    expect(() => reqSetClock({ ...T, month: 2, day: 30 })).toThrow(RangeError);
+    expect(() => reqSetClock({ ...T, month: 4, day: 31 })).toThrow(RangeError);
+    expect(() => reqSetClock({ ...T, year: 2015, month: 2, day: 29 })).toThrow(RangeError);
+    expect(() => reqSetClock({ ...T, year: 2016, month: 2, day: 29 })).not.toThrow();
+    expect(() => reqSetClock({ ...T, year: 2000, month: 2, day: 29 })).not.toThrow();
     expect(reqSetClock({ ...T, year: 2089 }).data.length).toBe(14);
     expect(reqSetClock({ ...T, year: 1990 }).data.length).toBe(14);
   });

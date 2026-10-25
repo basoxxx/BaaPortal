@@ -179,7 +179,11 @@ describe('S7WriteClient contro il finto PLC', () => {
 });
 
 /** Risponde al set clock con i byte di una CPU reale (proto §12.0), con `code` nel parametro. */
-function setClockRig(code: number, seen: string[]): Promise<S7WriteClient> {
+function setClockRig(
+  code: number,
+  seen: string[],
+  tweak?: (param: Uint8Array) => void,
+): Promise<S7WriteClient> {
   const transport: TransportFactory = async () => {
     const [a, b] = memoryTransportPair();
     serve(new FakeCpu(), b);
@@ -191,6 +195,7 @@ function setClockRig(code: number, seen: string[]): Promise<S7WriteClient> {
         if (pdu?.rosctr === 7 && pdu.param[5] === 0x47 && pdu.param[6] === 0x02) {
           seen.push(hex(pdu.param) + ' ' + hex(pdu.data));
           const param = fromHex('000112081287020000000000');
+          tweak?.(param);
           param[10] = code >> 8;
           param[11] = code & 0xff;
           const res = encodeS7({
@@ -225,6 +230,15 @@ describe('S7WriteClient.setClock', () => {
     const c = await setClockRig(0, seen);
     await expect(c.setClock({ ...T, year: 2090 })).rejects.toBeInstanceOf(RangeError);
     expect(seen).toEqual([]);
+  });
+
+  it('una risposta che non è 7/2 di risposta è PROTOCOL', async () => {
+    const wrongGroup = await setClockRig(0, [], (p) => (p[5] = 0x84));
+    await expect(wrongGroup.setClock(T)).rejects.toMatchObject({ code: 'PROTOCOL' });
+    const wrongSub = await setClockRig(0, [], (p) => (p[6] = 0x01));
+    await expect(wrongSub.setClock(T)).rejects.toMatchObject({ code: 'PROTOCOL' });
+    const asRequest = await setClockRig(0, [], (p) => (p[5] = 0x47));
+    await expect(asRequest.setClock(T)).rejects.toMatchObject({ code: 'PROTOCOL' });
   });
 
   it('manda 7/2 canonico e accetta la risposta senza dati utili; un error code diverso da 0 è CPU_ERROR', async () => {

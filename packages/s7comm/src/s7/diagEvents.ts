@@ -48,11 +48,14 @@ export const EVENT_CLASSES: Record<number, Text> = {
   9: { it: 'eventi utente predefiniti', en: 'predefined user events' },
   10: { it: "eventi liberi dell'utente", en: 'free user events' },
   11: { it: "eventi liberi dell'utente", en: 'free user events' },
+  0: { it: 'classe 0 (non definita)', en: 'class 0 (undefined)' },
   12: { it: 'classe riservata', en: 'reserved class' },
   13: { it: 'classe riservata', en: 'reserved class' },
   14: { it: 'classe riservata', en: 'reserved class' },
   15: { it: 'eventi di moduli che non sono CPU', en: 'events of non-CPU modules' },
 };
+
+const UNKNOWN_CLASS: Text = { it: 'classe sconosciuta', en: 'unknown class' };
 
 const TABLE: readonly (readonly [number, string, string])[] = [
   [0x1381, 'richiesta di avviamento a caldo manuale', 'manual warm restart requested'],
@@ -396,7 +399,7 @@ export function describeEvent(
       source: 'user',
     };
   }
-  const cls = EVENT_CLASSES[e.cls]![lang];
+  const cls = (EVENT_CLASSES[e.cls] ?? UNKNOWN_CLASS)[lang];
   const num = `0x${e.number.toString(16).toUpperCase().padStart(2, '0')}`;
   let text: string;
   if (lang === 'it') {

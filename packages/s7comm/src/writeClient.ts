@@ -184,6 +184,12 @@ export class S7WriteClient extends S7Client {
     if (pdu.rosctr !== 7)
       throw new S7Error('PROTOCOL', `risposta a set clock con ROSCTR ${pdu.rosctr}`);
     const u = decodeUserdata(pdu.param, pdu.data);
+    if (u.param.method !== 'response' || u.param.group !== 7 || u.param.subfunction !== 2) {
+      throw new S7Error(
+        'PROTOCOL',
+        `set clock: risposta ${u.param.method} gruppo ${u.param.group} sottofunzione ${u.param.subfunction} invece di 7/2`,
+      );
+    }
     const code = u.param.errorCode ?? 0;
     if (code !== 0) {
       const cls = code >> 8;

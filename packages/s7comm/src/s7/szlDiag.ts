@@ -140,7 +140,7 @@ function obRecord(l: SzlList, index: number, what: string): Uint8Array {
 export function cycleTimeFrom(s0222_1: SzlList): CycleTime {
   const r = obRecord(s0222_1, 1, 'tempo di ciclo');
   const out: CycleTime = { lastMs: readU16(r, 6), minMs: readU16(r, 8), maxMs: readU16(r, 10) };
-  const t = r.length >= 20 ? tryTime(r.slice(12, 20)) : undefined;
+  const t = tryTime(r.slice(12, 20));
   if (t) out.lastStart = t;
   return out;
 }

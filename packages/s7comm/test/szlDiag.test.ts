@@ -221,6 +221,8 @@ describe('SZL di diagnostica (proto §7.5, §7.6)', () => {
       new S7Error('CPU_ERROR', 'x', { errorClass: c, errorCode: n });
     expect(isUnavailable(cpu(0xd4, 0x02))).toBe(true);
     expect(isUnavailable(cpu(0xd4, 0x09))).toBe(true);
+    expect(isUnavailable(cpu(0xd4, 0x01))).toBe(true);
+    expect(isUnavailable(cpu(0xd4, 0x00))).toBe(false);
     expect(isUnavailable(cpu(0xd4, 0x0a))).toBe(false);
     expect(isUnavailable(cpu(0xd2, 0x41))).toBe(false);
     expect(isUnavailable(new S7Error('TIMEOUT', 'x'))).toBe(false);

@@ -33,6 +33,9 @@ function check(t: S7DateTime): void {
   if (!ok(t.year, 1990, 2089)) throw bad(`anno ${t.year} fuori 1990-2089`);
   if (!ok(t.month, 1, 12)) throw bad(`mese ${t.month} fuori 1-12`);
   if (!ok(t.day, 1, 31)) throw bad(`giorno ${t.day} fuori 1-31`);
+  const leap = t.year % 4 === 0; // 1990-2089: nessun anno secolare eccezionale tranne 2000 (bisestile)
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][t.month - 1]!;
+  if (t.day > days) throw bad(`giorno ${t.day} inesistente nel mese ${t.month} del ${t.year}`);
   if (!ok(t.hour, 0, 23)) throw bad(`ora ${t.hour} fuori 0-23`);
   if (!ok(t.minute, 0, 59)) throw bad(`minuto ${t.minute} fuori 0-59`);
   if (!ok(t.second, 0, 59)) throw bad(`secondo ${t.second} fuori 0-59`);
