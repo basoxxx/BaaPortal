@@ -11,6 +11,7 @@ import { activeCodeBlock } from '../sim/monitorStatus';
 import { plcControllerFor } from '../online/plcController';
 import { plcMonitorFor } from '../online/plcMonitor';
 import { preparePlcDownload } from '../online/plcDownload';
+import { getSettings } from '../settings/settings';
 import { simControllerFor } from '../sim/simController';
 import { targetPlcId } from '../project/navigation/treeIds';
 
@@ -59,6 +60,7 @@ export type CommandId =
   | 'online.compress'
   | 'online.diagnostics'
   | 'online.backup'
+  | 'online.restore'
   | 'options.settings'
   | 'tools.crossReferences'
   | 'tools.callStructure'
@@ -90,7 +92,7 @@ const hasDoc = (s: AppState) => s.doc !== null;
 const hasPlc = (s: AppState) => (s.doc?.project.devices.length ?? 0) > 0;
 /** PLC online e libero: nessun caricamento né altro comando della CPU in corso. */
 const plcFree = (s: AppState) =>
-  s.online.status === 'on' && !s.online.downloading && !s.online.commanding;
+  s.online.status === 'on' && !s.online.downloading && !s.online.commanding && !s.online.restoring;
 const always = () => true;
 const never = () => false;
 const noop = () => {};
@@ -356,8 +358,21 @@ const list: Command[] = [
       !s.online.comparing &&
       !s.online.downloading &&
       !s.online.commanding &&
+      !s.online.restoring &&
       !getProgress(),
     run: ({ store, bridge }) => plcControllerFor(store, bridge).backup(),
+  }),
+  // Sperimentale: solo con l'impostazione attiva e nessuna operazione in corso.
+  def('online.restore', {
+    isEnabled: (s) =>
+      getSettings().online.experimental &&
+      s.online.status === 'on' &&
+      !s.online.comparing &&
+      !s.online.downloading &&
+      !s.online.commanding &&
+      !s.online.restoring &&
+      !getProgress(),
+    run: ({ store }) => store.getState().openDialog({ kind: 'restore' }),
   }),
   def('options.settings', {
     isEnabled: always,

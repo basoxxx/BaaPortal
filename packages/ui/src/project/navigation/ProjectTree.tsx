@@ -17,6 +17,7 @@ import { peekClipboardPayload } from '../../services/clipboard';
 import { useAppStore, useServices } from '../../state/AppContext';
 import type { EditAction } from '../../state/store';
 import { useEditTarget } from '../../state/useEditTarget';
+import { commands } from '../../commands/commands';
 import { areaOfItem, isStandardTable } from '../objectActions';
 import { useMnemonic } from '../../editors/awl/mnemonicPreference';
 import { editorOfNode } from '../../state/workArea';
@@ -410,8 +411,17 @@ export function ProjectTree() {
           !!o.comparing ||
           !!o.downloading ||
           !!o.commanding ||
+          !!o.restoring ||
           !!getProgress(),
         run: () => void plcControllerFor(store, bridge).backup(),
+      });
+      // Sperimentale: la stessa condizione del comando del menu Online.
+      compileItems.push({
+        id: 'restoreOnline',
+        label: t('commands.online.restore'),
+        disabled:
+          o.deviceId !== parsed.dev || !commands['online.restore'].isEnabled(store.getState()),
+        run: () => store.getState().openDialog({ kind: 'restore' }),
       });
     }
     if (parsed.kind === 'folder' && parsed.folder === 'blocks') {

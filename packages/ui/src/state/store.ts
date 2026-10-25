@@ -27,6 +27,7 @@ export type DialogState =
   | { kind: 'settings' }
   | { kind: 'accessibleDevices' }
   | { kind: 'download'; plan: DownloadPlan }
+  | { kind: 'restore' }
   | { kind: 'importTagsReport'; fileName: string; tableName: string; summary: ImportSummary }
   | null;
 
@@ -199,6 +200,8 @@ export interface OnlineUiState {
   downloading?: boolean;
   /** Un comando della CPU (RUN, STOP, copia RAM in ROM, comprimi) è in corso. */
   commanding?: boolean;
+  /** Un ripristino di backup (sperimentale) è in corso. */
+  restoring?: boolean;
   /** Osservazione del blocco aperto sulla CPU (una sola alla volta). */
   monitor?: PlcMonitorUiState | null;
   /** Ultime righe osservate (offset e registri); `null` finché non arrivano e se non ci sono valori. */

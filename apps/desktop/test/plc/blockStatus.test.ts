@@ -361,6 +361,46 @@ describe('BlockStatusService', () => {
     });
   });
 
+  it('CPU in ripristino (blocked) → start rifiutata come busy, nessun job né collegamento', async () => {
+    let restoring = true;
+    const svc = newService({ blocked: () => restoring });
+    const r = await svc.start(owners[0]!, req());
+    expect(r).toMatchObject({ ok: false, reason: 'busy' });
+    expect((r as { error: string }).error).toContain('Ripristino in corso');
+    expect(connections).toHaveLength(0);
+    expect(await liveJobs()).toEqual([]);
+    restoring = false;
+    expect(await svc.start(owners[0]!, req())).toMatchObject({ ok: true });
+    await svc.stopAll();
+  });
+
+  it('stopAll con una create in volo (ricreazione dopo una nuova finestra) → job comunque cancellato', async () => {
+    let creates = 0;
+    const svc = newService({
+      connect: async () => {
+        const c = spy(await connectRaw());
+        const create = c.createBlockStatus.bind(c);
+        c.createBlockStatus = async (r, s) => {
+          if (++creates === 2) await new Promise((res) => setTimeout(res, 300));
+          return create(r, s);
+        };
+        connections.push(c);
+        return c;
+      },
+    });
+    await svc.start(owners[0]!, req({ offsets: evens(0, 10), saz: 12 }));
+    svc.window(owners[0]!, req({ offsets: evens(20, 30), saz: 32 }));
+    const reading = svc.read(owners[0]!);
+    await new Promise((r) => setTimeout(r, 50)); // la seconda create è in volo
+    expect(creates).toBe(2);
+    const t = Date.now();
+    await svc.stopAll();
+    expect(Date.now() - t).toBeLessThan(2500);
+    await reading;
+    expect(await liveJobs()).toEqual([]);
+    expect(svc.active(owners[0]!)).toBe(false);
+  });
+
   it('0xD0CC con i valori (tisPartial) → values veri con partial true', async () => {
     backend = world({ faults: { tisPartial: true } });
     const svc = newService();

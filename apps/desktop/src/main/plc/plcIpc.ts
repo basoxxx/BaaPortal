@@ -83,7 +83,7 @@ export function registerPlc(
   jobs: TisJobStore = memoryJobStore(),
   restoreFile?: RestoreFileIo,
 ): { closeAll(): Promise<void>; writing(): boolean; interruptWrites(): void } {
-  const status = new BlockStatusService({ service, jobs });
+  const status = new BlockStatusService({ service, jobs, blocked: (a) => writes.restoringOn(a) });
   if (restoreFile) writes.setRestoreFile(restoreFile);
   writes.beforeRestore = (owner) => status.stopForCpu(owner);
   handle('plc:connect', async (e, raw): Promise<PlcConnectResult> => {

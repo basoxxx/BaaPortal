@@ -429,6 +429,21 @@ describe('ripristino contro il finto PLC', () => {
     expect(order[0]).toBe('stop');
   });
 
+  it('durante il ripristino la CPU è «in ripristino» (le osservazioni si rifiutano), poi si libera', async () => {
+    const p = await plan();
+    expect(writes.restoringOn(access())).toBe(false);
+    const seen: boolean[] = [];
+    const orig = confirm.getMockImplementation()!;
+    confirm.mockImplementation(async (o, t) => {
+      seen.push(writes.restoringOn(access()));
+      return orig(o, t);
+    });
+    await writes.restore(owner, { token: p.token, restart: false });
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every(Boolean)).toBe(true);
+    expect(writes.restoringOn(access())).toBe(false);
+  });
+
   it('un riavvio con 0xD2A9 sul primo _INSE ritenta (busyRetry) e il ripristino riesce', async () => {
     await plc.close();
     cpu = new FakeCpu({ mode: 'RUN', faults: { insertBusy: 2 } });

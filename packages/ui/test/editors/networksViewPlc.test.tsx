@@ -164,4 +164,21 @@ describe("osservazione sulla CPU nell'editor del blocco", () => {
     },
     T,
   );
+
+  it(
+    'comando dopo «terminata»: riparte dal blocco attivo, non da quello finito',
+    async () => {
+      const { app, f } = await setup({ reason: 'ended', blockId: 'blocco-vecchio' });
+      act(
+        () =>
+          void commands['online.monitor'].run({
+            store: app.store,
+            service: app.service,
+            bridge: app.bridge,
+          }),
+      );
+      expect(app.store.getState().online.monitor?.blockId).toBe(f.id);
+    },
+    T,
+  );
 });

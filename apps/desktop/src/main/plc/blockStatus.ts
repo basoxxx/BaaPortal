@@ -55,6 +55,8 @@ export interface BlockStatusOptions {
   connectTimeoutMs?: number;
   /** Attesa massima di un enable (poi il job si cancella e si ricrea). */
   enableLongMs?: number;
+  /** La CPU è in ripristino: l'osservazione si rifiuta (la imposta `plcIpc`). */
+  blocked?: (access: PlcAccess) => boolean;
 }
 
 const isInt = (v: unknown, min: number, max: number): v is number =>
@@ -266,6 +268,9 @@ export class BlockStatusService {
     const target = this.o.service.target(owner);
     if (!target) {
       return { ok: false, reason: 'offline', error: 'Nessun collegamento online' };
+    }
+    if (this.o.blocked?.(target.access)) {
+      return { ok: false, reason: 'busy', error: 'Ripristino in corso su questa CPU' };
     }
     const cpu = cpuKey(target.access, target.identity.serial);
     const holder = this.cpuOwner.get(cpu);

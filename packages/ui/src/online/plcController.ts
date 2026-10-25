@@ -221,7 +221,13 @@ export class PlcController {
    */
   async backup(): Promise<void> {
     const { online } = this.store.getState();
-    if (online.status !== 'on' || online.comparing || online.downloading || online.commanding) {
+    if (
+      online.status !== 'on' ||
+      online.comparing ||
+      online.downloading ||
+      online.commanding ||
+      online.restoring
+    ) {
       return;
     }
     if (getProgress()) return;

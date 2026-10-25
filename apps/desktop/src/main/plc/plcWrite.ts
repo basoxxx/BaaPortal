@@ -257,6 +257,8 @@ export class PlcWriteService {
   private readonly ops = new Map<PlcOwner, Op>();
   /** Le CPU (host:porta/rack/slot) con una scrittura in corso, da qualunque finestra. */
   private readonly busyCpus = new Set<string>();
+  /** Le CPU con un ripristino in corso: l'osservazione del blocco non parte (vedi `restoringOn`). */
+  private readonly restoringCpus = new Set<string>();
   /** Dopo `abortAll` (uscita dall'app) non parte più nessuna scrittura. */
   private closing = false;
   private readonly connectFn: PlcWriteConnectFn;
@@ -281,6 +283,11 @@ export class PlcWriteService {
     this.sleep = o.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
     this.connectTimeoutMs = o.connectTimeoutMs ?? 3000;
     this.now = o.now ?? Date.now;
+  }
+
+  /** Un ripristino è in corso su questa CPU. */
+  restoringOn(access: PlcAccess): boolean {
+    return this.restoringCpus.has(cpuKey(access));
   }
 
   /** C'è una scrittura con il collegamento aperto (serve all'uscita dall'app). */
@@ -613,7 +620,16 @@ export class PlcWriteService {
       owner,
       (m) => restoreFail(m),
       (err) => restoreFail(errText(err)),
-      (op) => this.runRestore(owner, op, req),
+      async (op) => {
+        const t = this.o.service.target(owner);
+        const cpu = t && cpuKey(t.access);
+        if (cpu !== undefined) this.restoringCpus.add(cpu);
+        try {
+          return await this.runRestore(owner, op, req);
+        } finally {
+          if (cpu !== undefined) this.restoringCpus.delete(cpu);
+        }
+      },
     );
   }
 

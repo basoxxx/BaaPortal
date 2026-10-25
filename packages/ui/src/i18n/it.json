@@ -50,7 +50,8 @@
     "simulationFailed": "Simulazione non disponibile",
     "online": "Online: {{module}} {{host}} - {{mode}}",
     "onlineConnecting": "Collegamento online in corso…",
-    "onlineTitleSuffix": " — Online"
+    "onlineTitleSuffix": " — Online",
+    "restore": "Ripristino in corso…"
   },
   "messages": {
     "replaced": "Sostituiti {{replaced}} testi, saltati {{skipped}}.",
@@ -193,7 +194,8 @@
     "help.show": "Visualizza la guida",
     "help.about": "Informazioni su BaaPortal",
     "tools.collectCpuData": "Raccolta dati CPU (sola lettura)…",
-    "edit.compileFull": "Compila → Software (compilazione completa)"
+    "edit.compileFull": "Compila → Software (compilazione completa)",
+    "online.restore": "Ripristina backup nel dispositivo… (sperimentale)"
   },
   "menu": {
     "project": "Progetto",
@@ -1414,5 +1416,51 @@
       "waiting": "Nessun risultato: il blocco non è elaborato o la finestra non è raggiunta.",
       "ended": "Osservazione terminata."
     }
+  },
+  "restore": {
+    "title": "Ripristina backup nel dispositivo (sperimentale)",
+    "chooseFile": "Scegli file…",
+    "noFile": "Scegliere un file di backup (.baapbak).",
+    "run": "Ripristina",
+    "close": "Chiudi",
+    "cancel": "Annulla",
+    "warnExperimental": "Funzione sperimentale, mai provata su una CPU reale.",
+    "warnStop": "La CPU andrà in STOP.",
+    "warnMismatch": "Il backup è di una CPU diversa ({{backup}}); la CPU collegata è {{online}}.",
+    "warnData": "I DB tornano ai valori salvati nel backup; merker, temporizzatori e contatori no.",
+    "restart": "Avvia la CPU al termine (avviamento a caldo)",
+    "colBlock": "Blocco",
+    "colAction": "Azione",
+    "colOutcome": "Esito",
+    "empty": "Nessun blocco da ripristinare.",
+    "action": {
+      "load": "Carica",
+      "delete": "Cancella",
+      "skip": "Saltato",
+      "skipWhy": "Saltato: {{why}}",
+      "keep": "Resta nella CPU"
+    },
+    "why": {
+      "cpuCreated": "creato dalla CPU",
+      "outOfRange": "fuori dagli intervalli documentati: lasciato sulla CPU"
+    },
+    "outcome": {
+      "loaded": "Caricato",
+      "deleted": "Cancellato",
+      "skipped": "Saltato",
+      "kept": "Resta nella CPU",
+      "rejected": "Rifiutato dalla CPU: {{detail}}",
+      "unknown": "Esito sconosciuto",
+      "notDone": "Non caricato"
+    },
+    "waiting": "In attesa di conferma...",
+    "progress": "{{done}} di {{total}} ({{current}})",
+    "done": "Ripristino completato.",
+    "failed": "Ripristino non riuscito.",
+    "noChange": "Nessuna modifica alla CPU.",
+    "cpuStopped": "CPU lasciata in STOP.",
+    "startCpu": "Avvia CPU",
+    "restarted": "CPU avviata.",
+    "diagTitle": "Ultime voci del buffer di diagnostica:"
   }
 }
