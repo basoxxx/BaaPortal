@@ -1,4 +1,4 @@
-import type { BrowserWindow, MessageBoxOptions } from 'electron';
+import { app, type BrowserWindow, type MessageBoxOptions } from 'electron';
 
 /** Testi della finestra di conferma di una scrittura nella CPU. */
 export interface WriteConfirmTexts {
@@ -24,6 +24,9 @@ export function createConfirm(
   windowOf: (owner: unknown) => BrowserWindow | null,
 ): ConfirmFn {
   return async (owner, t) => {
+    // Aggancio solo per i test e2e: mai nell'app impacchettata, e solo con 'yes' o 'no'.
+    const hook = process.env['BAAPORTAL_E2E_CONFIRM'];
+    if (!app.isPackaged && (hook === 'yes' || hook === 'no')) return hook === 'yes';
     const opts: MessageBoxOptions = {
       type: 'warning',
       buttons: [t.confirmLabel, 'Annulla'],

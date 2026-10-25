@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+const electronApp = vi.hoisted(() => ({ isPackaged: false }));
+vi.mock('electron', () => ({ app: electronApp }));
 import { connectTcp } from '@baaportal/s7comm/node';
 import { compileBlock, type CompileInput } from '@baaportal/mc7';
 import { listen, type ListeningCpu } from '@baaportal/s7-server/node';
@@ -442,6 +444,41 @@ describe('createConfirm', () => {
     expect(await c(null, { title: 't', message: 'm', detail: 'd', confirmLabel: 'Carica' })).toBe(
       false,
     );
+  });
+});
+
+describe('createConfirm: aggancio e2e', () => {
+  const t = { title: 't', message: 'm', detail: 'd', confirmLabel: 'Carica' };
+  afterEach(() => {
+    delete process.env['BAAPORTAL_E2E_CONFIRM'];
+    electronApp.isPackaged = false;
+  });
+
+  it('non impacchettata: yes e no rispondono senza mostrare la finestra', async () => {
+    const show = vi.fn(async () => ({ response: 0 }));
+    const c = createConfirm({ showMessageBox: show } as never, () => WIN);
+    process.env['BAAPORTAL_E2E_CONFIRM'] = 'yes';
+    expect(await c(null, t)).toBe(true);
+    process.env['BAAPORTAL_E2E_CONFIRM'] = 'no';
+    expect(await c(null, t)).toBe(false);
+    expect(show).not.toHaveBeenCalled();
+  });
+
+  it('un altro valore non è un aggancio: la finestra si mostra', async () => {
+    const show = vi.fn(async () => ({ response: 1 }));
+    const c = createConfirm({ showMessageBox: show } as never, () => WIN);
+    process.env['BAAPORTAL_E2E_CONFIRM'] = 'si';
+    expect(await c(null, t)).toBe(false);
+    expect(show).toHaveBeenCalledTimes(1);
+  });
+
+  it('impacchettata: la variabile è ignorata e la finestra si mostra', async () => {
+    electronApp.isPackaged = true;
+    const show = vi.fn(async () => ({ response: 1 }));
+    const c = createConfirm({ showMessageBox: show } as never, () => WIN);
+    process.env['BAAPORTAL_E2E_CONFIRM'] = 'yes';
+    expect(await c(null, t)).toBe(false);
+    expect(show).toHaveBeenCalledTimes(1);
   });
 });
 

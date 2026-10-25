@@ -59,7 +59,7 @@ test('Piano 3A: collegamento al PLC di prova, LED RUN/STOP, collegamento interro
     await expect(indicator).toContainText('127.0.0.1');
     await expect(page.locator('.baa-app.online')).toHaveCount(1);
     await page.getByTestId('taskcard-tab-test').click();
-    await expect(page.getByTestId('cpu-readonly')).toBeVisible();
+    await expect(page.getByTestId('cpu-panel-online')).toBeVisible();
     await expect(page.getByTestId('led-run')).toHaveAttribute('data-on', 'true');
     await expect(page.getByTestId('led-stop')).toHaveAttribute('data-on', 'false');
 
