@@ -1349,5 +1349,26 @@
     "stop": "Stop",
     "busy": "Upload from the device in progress.",
     "missingComment": "Blocks not uploaded from the CPU"
+  },
+  "plcMonitor": {
+    "title": "Program status on the CPU",
+    "on": "Monitoring active on the CPU.",
+    "firstN": "Showing the first {{n}} visible lines.",
+    "cycleWarning": "Monitoring active — CPU cycle time increases",
+    "compare": "Compare with CPU",
+    "accu2": "ACCU2",
+    "ar1": "AR1",
+    "reason": {
+      "stale": "Monitoring unavailable: compile the block.",
+      "noLines": "Monitoring unavailable: the block is imported and has no mapping to the text lines.",
+      "edited": "Monitoring paused: the text is being edited.",
+      "different": "The block in the CPU differs from the project: download or compare it before monitoring.",
+      "missing": "The block is not in the CPU.",
+      "unsupported": "This CPU does not support block status v2.",
+      "busy": "Monitoring is already active on this CPU in another window.",
+      "stop": "CPU in STOP: no values.",
+      "waiting": "No result: the block is not processed or the window is not reached.",
+      "ended": "Monitoring ended."
+    }
   }
 }

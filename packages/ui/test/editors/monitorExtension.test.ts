@@ -7,6 +7,7 @@ import {
   formatStw,
   monitorExtension,
   monitorLinesByNetwork,
+  monitorLinesFromPlc,
   setMonitorLines,
   type LineMapRow,
 } from '../../src/editors/awl/monitorExtension';
@@ -156,6 +157,85 @@ describe('estensione CodeMirror', () => {
       ),
     });
     expect(v.dom.querySelectorAll('.baa-mon-cell')).toHaveLength(1);
+    v.destroy();
+  });
+});
+
+describe('monitorLinesFromPlc', () => {
+  const map: LineMapRow[] = [
+    { offset: 0, length: 2, network: 0, line: 0 },
+    { offset: 2, length: 2, network: 0, line: 1 },
+    // CALL espansa su 3 offset
+    { offset: 4, length: 2, network: 0, line: 3 },
+    { offset: 6, length: 2, network: 0, line: 3 },
+    { offset: 8, length: 2, network: 0, line: 3 },
+    { offset: 10, length: 2, network: 1, line: 0 },
+  ];
+  const regs = (accu1: number) => ({ stw: 0x0106, accu1 });
+
+  it('CALL espansa su 3 offset → valori dell ultimo eseguito', () => {
+    const r = monitorLinesFromPlc(
+      map,
+      [
+        { offset: 4, regs: regs(4) },
+        { offset: 6, regs: regs(6) },
+        { offset: 8, regs: null },
+      ],
+      true,
+    );
+    expect(r.get(0)!.cells.get(3)!.accu1).toBe(6);
+  });
+
+  it('riga chiesta e non elaborata → null; riga non chiesta → assente', () => {
+    const r = monitorLinesFromPlc(
+      map,
+      [
+        { offset: 0, regs: null },
+        { offset: 2, regs: regs(2) },
+      ],
+      false,
+    );
+    expect(r.get(0)!.cells.get(0)).toBeNull();
+    expect(r.get(0)!.cells.get(1)!.accu1).toBe(2);
+    expect(r.get(0)!.cells.has(3)).toBe(false);
+    expect(r.has(1)).toBe(false);
+    expect(r.get(0)!.hex).toBe(false);
+  });
+
+  it('accu2 e ar1 compaiono solo se chiesti', () => {
+    const r = monitorLinesFromPlc(
+      map,
+      [
+        { offset: 0, regs: { stw: 0, accu1: 1, accu2: 2, ar1: 3 } },
+        { offset: 2, regs: regs(1) },
+      ],
+      true,
+    );
+    expect(r.get(0)!.cells.get(0)).toMatchObject({ accu2: 2, ar1: 3 });
+    expect(r.get(0)!.cells.get(1)!.accu2).toBeUndefined();
+  });
+});
+
+describe('cella della CPU', () => {
+  it('STW 0x0106 → RLC 1, STA 1, suggerimento con OR 0 OS 0 OV 0 A0 0 A1 0; senza ACCU2 e AR1', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const v = new EditorView({
+      parent,
+      state: EditorState.create({ doc: 'L 5', extensions: [monitorExtension()] }),
+    });
+    const m = monitorLinesFromPlc(
+      [{ offset: 0, length: 2, network: 0, line: 0 }],
+      [{ offset: 0, regs: { stw: 0x0106, accu1: 5 } }],
+      true,
+    );
+    v.dispatch({ effects: setMonitorLines.of(m.get(0)!) });
+    const cell = v.dom.querySelector('.baa-mon-cell') as HTMLElement;
+    expect(cell.textContent).toContain('RLC 1');
+    expect(cell.textContent).toContain('STA 1');
+    expect(cell.textContent).toContain('STW 100000110');
+    expect(cell.textContent).not.toContain('ACCU2');
+    expect(cell.title).toBe('OR 0 OS 0 OV 0 A0 0 A1 0');
     v.destroy();
   });
 });

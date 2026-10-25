@@ -34,7 +34,7 @@ const SYSTEM: ReadonlySet<string> = new Set(['SFC', 'SFB', 'SDB']);
 const key = (type: string, number: number) => `${type}${number}`;
 
 /** Checksum e lunghezza MC7 dall'intestazione del compilato; `undefined` se il file non si legge. */
-function signatureOf(file: Uint8Array): { checksum: number; mc7Length: number } | undefined {
+export function signatureOf(file: Uint8Array): { checksum: number; mc7Length: number } | undefined {
   try {
     const p = parseBlockFile(file);
     return p.footer ? { checksum: p.footer.checksum, mc7Length: p.header.mc7Length } : undefined;

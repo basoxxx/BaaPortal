@@ -29,6 +29,11 @@ export function StatusBar() {
               })}
         </span>
       ) : null}
+      {online.monitor && online.monitor.reason !== 'ended' ? (
+        <span data-testid="plc-monitor-warning" className="baa-status-warn">
+          {t('plcMonitor.cycleWarning')}
+        </span>
+      ) : null}
       {progress ? (
         <span className="baa-status-progress">
           <span>{t(progress.labelKey)}</span>

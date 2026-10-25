@@ -4,7 +4,7 @@ import type { DiagEntry, MonitorStep, SimMode } from '@baaportal/sim';
 import type { LineMapRow } from '../editors/awl/monitorExtension';
 import type { OnlineCompare } from '../online/compare';
 import type { DownloadPlan } from '../online/plcDownload';
-import type { PlcAccess, PlcIdentity, PlcMode } from '../online/plcTypes';
+import type { PlcAccess, PlcIdentity, PlcMode, PlcRegs } from '../online/plcTypes';
 import type { SimStats, SimWarning, WatchValue } from '../sim/protocol';
 import type { ImportSummary } from '../project/navigation/tagTableIo';
 import * as wa from './workArea';
@@ -197,6 +197,36 @@ export interface OnlineUiState {
   downloading?: boolean;
   /** Un comando della CPU (RUN, STOP, copia RAM in ROM, comprimi) è in corso. */
   commanding?: boolean;
+  /** Osservazione del blocco aperto sulla CPU (una sola alla volta). */
+  monitor?: PlcMonitorUiState | null;
+  /** Ultime righe osservate (offset e registri); `null` finché non arrivano e se non ci sono valori. */
+  monitorLines?: { offset: number; regs: PlcRegs | null }[] | null;
+  /** Registri facoltativi chiesti oltre a STW e ACCU1. */
+  monitorRegs?: { accu2: boolean; ar1: boolean };
+}
+
+/** Perché l'osservazione sulla CPU non mostra (ancora) valori; `ok` = valori in arrivo. */
+export type PlcMonitorReason =
+  | 'ok'
+  | 'stale'
+  | 'noLines'
+  | 'edited'
+  | 'different'
+  | 'missing'
+  | 'unsupported'
+  | 'busy'
+  | 'stop'
+  | 'waiting'
+  | 'ended';
+
+export interface PlcMonitorUiState {
+  deviceId: string;
+  blockId: string;
+  reason: PlcMonitorReason;
+  message?: string;
+  partial?: boolean;
+  /** Righe osservate, se le righe visibili sono di più di quelle che la CPU concede. */
+  limit?: number;
 }
 
 export const ONLINE_OFF: OnlineUiState = { status: 'off' };

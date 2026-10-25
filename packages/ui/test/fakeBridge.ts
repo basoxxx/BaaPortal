@@ -35,6 +35,10 @@ import type {
   PlcWatchTarget,
   PlcWriteVarItem,
   PlcWriteVarsResult,
+  PlcStatusRequest,
+  PlcStatusStartResult,
+  PlcStatusWindowResult,
+  PlcStatusReadResult,
 } from '../src/online/plcTypes';
 
 type Answer = 'save' | 'discard' | 'cancel';
@@ -289,6 +293,37 @@ export class FakeBridge implements BaaBridge {
   async plcReadWatch(items: PlcWatchTarget[]): Promise<PlcReadWatchResult> {
     this.plcReadWatchCalls.push(items);
     return this.plcReadWatchImpl(items);
+  }
+  /** Osservazione del blocco: le risposte si programmano, le chiamate si registrano. */
+  plcStatusStartCalls: PlcStatusRequest[] = [];
+  plcStatusStartImpl: (
+    r: PlcStatusRequest,
+  ) => Promise<PlcStatusStartResult> | PlcStatusStartResult = () => ({
+    ok: true,
+    maxLines: 24,
+    pduLength: 240,
+  });
+  async plcStatusStart(r: PlcStatusRequest): Promise<PlcStatusStartResult> {
+    this.plcStatusStartCalls.push(r);
+    return this.plcStatusStartImpl(r);
+  }
+  plcStatusWindowCalls: PlcStatusRequest[] = [];
+  async plcStatusWindow(r: PlcStatusRequest): Promise<PlcStatusWindowResult> {
+    this.plcStatusWindowCalls.push(r);
+    return { ok: true };
+  }
+  plcStatusReadCalls = 0;
+  plcStatusReadImpl: () => Promise<PlcStatusReadResult> | PlcStatusReadResult = () => ({
+    ok: true,
+    state: 'waiting',
+  });
+  async plcStatusRead(): Promise<PlcStatusReadResult> {
+    this.plcStatusReadCalls++;
+    return this.plcStatusReadImpl();
+  }
+  plcStatusStopCalls = 0;
+  async plcStatusStop(): Promise<void> {
+    this.plcStatusStopCalls++;
   }
   plcWriteVarsCalls: PlcWriteVarItem[][] = [];
   plcWriteVarsResults: PlcWriteVarsResult[] = [];

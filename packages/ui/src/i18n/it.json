@@ -1349,5 +1349,26 @@
     "stop": "Interrompi",
     "busy": "Caricamento dal dispositivo in corso.",
     "missingComment": "Blocchi non caricati dalla CPU"
+  },
+  "plcMonitor": {
+    "title": "Osservazione del programma sulla CPU",
+    "on": "Osservazione attiva sulla CPU.",
+    "firstN": "Osservate le prime {{n}} righe visibili.",
+    "cycleWarning": "Osservazione attiva — il tempo di ciclo della CPU aumenta",
+    "compare": "Confronta con la CPU",
+    "accu2": "ACCU2",
+    "ar1": "AR1",
+    "reason": {
+      "stale": "Osservazione non disponibile: compilare il blocco.",
+      "noLines": "Osservazione non disponibile: il blocco è importato e non ha la corrispondenza con le righe del testo.",
+      "edited": "Osservazione sospesa: il testo è in modifica.",
+      "different": "Il blocco nella CPU è diverso da quello del progetto: caricarlo o confrontarlo prima di osservarlo.",
+      "missing": "Il blocco non è nella CPU.",
+      "unsupported": "Questa CPU non supporta lo stato del blocco v2.",
+      "busy": "Osservazione già attiva su questa CPU in un'altra finestra.",
+      "stop": "CPU in STOP: nessun valore.",
+      "waiting": "Nessun risultato: il blocco non è elaborato o la finestra non è raggiunta.",
+      "ended": "Osservazione terminata."
+    }
   }
 }

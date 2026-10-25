@@ -7,7 +7,7 @@ import {
   type TransportFactory,
 } from '@baaportal/s7comm';
 import { FakeCpu, serve, type CpuBackend, type FakeCpuOptions } from '@baaportal/s7-server';
-import { SimCpu, connectToSim, simBackend } from '@baaportal/sim';
+import { SimCpu, simBackend } from '@baaportal/sim';
 import type { PlcAccess, PlcMode, PlcStatusRequest } from '@baaportal/ui';
 import {
   BlockStatusService,
@@ -243,17 +243,6 @@ describe('BlockStatusService', () => {
     if (!r.file) throw new Error('compilazione fallita');
     cpu.run();
     const simB = simBackend(cpu);
-    const w = await connectToSim(cpu);
-    await w.close();
-    const tmp = await (async () => {
-      const transport: TransportFactory = async () => {
-        const [a, z] = memoryTransportPair();
-        serve(simB, z);
-        return a;
-      };
-      return S7TestClient.connect({ host: 'sim', transport, timeoutMs: 2000 });
-    })();
-    void tmp;
     // il programma si scarica con un client di scrittura sullo stesso backend
     const { S7WriteClient } = await import('@baaportal/s7comm');
     const wc = await S7WriteClient.connect({
