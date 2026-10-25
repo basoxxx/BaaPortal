@@ -205,7 +205,8 @@ export const BOX_CATALOG: Record<BoxKind, BoxDef> = Object.fromEntries(
 
 // ---- palette degli altri elementi ----
 
-export type PaletteGroup = 'bits' | 'compare' | 'edge' | 'outputs' | 'timers' | 'flow' | 'call';
+export type PaletteGroup =
+  'bits' | 'compare' | 'edge' | 'outputs' | 'timers' | 'counters' | 'flow' | 'call';
 
 export type PaletteEntry = {
   id: string;
@@ -222,14 +223,14 @@ const e = (id: string, group: PaletteGroup, preset: PaletteEntry['preset']): Pal
   id,
   where: 'elem',
   group,
-  label: `ladder.palette.${id}`,
+  label: `lad.palette.${id}`,
   preset,
 });
 const o = (id: string, group: PaletteGroup, preset: PaletteEntry['preset']): PaletteEntry => ({
   id,
   where: 'out',
   group,
-  label: `ladder.palette.${id}`,
+  label: `lad.palette.${id}`,
   preset,
 });
 
@@ -251,9 +252,9 @@ export const PALETTE: PaletteEntry[] = [
   o('timerSD', 'timers', { k: 'tcoil', fn: 'SD', timer: '', value: '' }),
   o('timerSS', 'timers', { k: 'tcoil', fn: 'SS', timer: '', value: '' }),
   o('timerSF', 'timers', { k: 'tcoil', fn: 'SF', timer: '', value: '' }),
-  o('counterSC', 'timers', { k: 'ccoil', fn: 'SC', counter: '', value: '' }),
-  o('counterCU', 'timers', { k: 'ccoil', fn: 'CU', counter: '', value: '' }),
-  o('counterCD', 'timers', { k: 'ccoil', fn: 'CD', counter: '', value: '' }),
+  o('counterSC', 'counters', { k: 'ccoil', fn: 'SC', counter: '', value: '' }),
+  o('counterCU', 'counters', { k: 'ccoil', fn: 'CU', counter: '', value: '' }),
+  o('counterCD', 'counters', { k: 'ccoil', fn: 'CD', counter: '', value: '' }),
   o('jmp', 'flow', { k: 'jmp', label: '' }),
   o('jmpn', 'flow', { k: 'jmpn', label: '' }),
   o('ret', 'flow', { k: 'ret' }),

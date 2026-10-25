@@ -54,7 +54,7 @@ describe('openBranch / removeElem', () => {
     expect(nuovo).toMatchObject({ k: 'contact', neg: false, op: '' });
     expect(open.root.series[1]!.id).toBe('c2');
 
-    const back = removeElem(open, nuovo.id);
+    const back = removeElem(open, nuovo.id, counter());
     expect(back.root.series.map((e) => e.id)).toEqual(['c1', 'c2']);
   });
 
@@ -73,16 +73,16 @@ describe('openBranch / removeElem', () => {
     const par = open.root.series[0]!;
     if (par.k !== 'parallel') throw new Error('atteso parallelo');
     const added = insertElem(open, { branchOf: par.id, branch: 1, index: 1 }, contact('c9'));
-    const removed = removeElem(added, par.branches[1]![0]!.id);
+    const removed = removeElem(added, par.branches[1]![0]!.id, counter());
     const p2 = removed.root.series[0]!;
     expect(p2.k === 'parallel' && p2.branches).toHaveLength(2);
   });
 
   it('rimuovere un elemento semplice e rifiutare la radice o un id ignoto', () => {
     const net = twoContacts();
-    expect(removeElem(net, 'c1').root.series.map((e) => e.id)).toEqual(['c2']);
-    expect(() => removeElem(net, net.root.id)).toThrow();
-    expect(() => removeElem(net, 'nope')).toThrow();
+    expect(removeElem(net, 'c1', counter()).root.series.map((e) => e.id)).toEqual(['c2']);
+    expect(() => removeElem(net, net.root.id, counter())).toThrow();
+    expect(() => removeElem(net, 'nope', counter())).toThrow();
   });
 });
 
@@ -139,14 +139,14 @@ describe('addOutput', () => {
     const withT = addOutput(net, net.root.id, t);
     expect(withT.root.outs).toHaveLength(2);
     expect(withT.root.outs[1]).toEqual(t);
-    const none = removeElem(withT, 'o5');
+    const none = removeElem(withT, 'o5', counter());
     expect(none.root.outs).toHaveLength(1);
   });
 
   it('l’ultima uscita della radice diventa una bobina vuota', () => {
     const net = twoContacts();
     const coilId = net.root.outs[0]!.id;
-    const r = removeElem(net, coilId);
+    const r = removeElem(net, coilId, counter());
     expect(r.root.outs).toHaveLength(1);
     expect(r.root.outs[0]).toMatchObject({ k: 'coil', op: '' });
   });
@@ -192,7 +192,7 @@ describe('purezza', () => {
     expect(() => insertElem(net, { node: net.root.id, index: 0 }, contact('z'))).not.toThrow();
     expect(() => closeBranchAfter(op, nid, 'c2', newId)).not.toThrow();
     expect(() => addOutput(net, net.root.id, { id: 'o9', k: 'coil', op: '' })).not.toThrow();
-    expect(() => removeElem(op, nid)).not.toThrow();
+    expect(() => removeElem(op, nid, counter())).not.toThrow();
     expect(() => updateElem(net, 'c1', { neg: true })).not.toThrow();
     expect(net.root.series).toHaveLength(2);
   });

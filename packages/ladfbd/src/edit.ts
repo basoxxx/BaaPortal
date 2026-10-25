@@ -2,8 +2,11 @@
 import { isNode } from './model.js';
 import type { LadElem, LadNetwork, LadNode, LadOut } from './model.js';
 
+/** Posizione d'inserimento: serie di un nodo, ramo di un parallelo o lista di un pin BOOL di un box. */
 export type InsertPoint =
-  { node: string; index: number } | { branchOf: string; branch: number; index: number };
+  | { node: string; index: number }
+  | { branchOf: string; branch: number; index: number }
+  | { box: string; pin: string; index: number };
 
 export type LadItem = LadElem | LadOut | LadNode;
 
@@ -112,6 +115,11 @@ function findParallel(node: LadNode, id: string): Extract<LadElem, { k: 'paralle
   return it && 'k' in it && it.k === 'parallel' ? it : undefined;
 }
 
+function findBox(node: LadNode, id: string): Extract<LadElem, { k: 'box' }> | undefined {
+  const it = findElem({ root: node }, id);
+  return it && 'k' in it && it.k === 'box' ? it : undefined;
+}
+
 function must<T>(v: T | undefined, what: string): T {
   if (v === undefined) throw new Error(`Rete KOP: ${what} non trovato`);
   return v;
@@ -127,11 +135,17 @@ export function insertElem(net: LadNetwork, at: InsertPoint, elem: LadElem): Lad
   const n = clone(net);
   let list: LadElem[];
   if ('node' in at) list = must(findNode(n.root, at.node), `nodo ${at.node}`).series;
-  else {
+  else if ('box' in at) {
+    const box = must(findBox(n.root, at.box), `box ${at.box}`);
+    list = box.boolPins[at.pin] ??= [];
+  } else {
     const par = must(findParallel(n.root, at.branchOf), `parallelo ${at.branchOf}`);
     list = must(par.branches[at.branch], `ramo ${at.branch} di ${at.branchOf}`);
   }
-  list.splice(Math.max(0, Math.min(at.index, list.length)), 0, structuredClone(elem));
+  if (!Number.isInteger(at.index) || at.index < 0 || at.index > list.length) {
+    throw new Error(`Rete KOP: indice ${at.index} fuori intervallo (0..${list.length})`);
+  }
+  list.splice(at.index, 0, structuredClone(elem));
   return n;
 }
 
@@ -157,7 +171,9 @@ export function openBranch(net: LadNetwork, elemId: string, newId: () => string)
  * Chiude il ramo (F9) più avanti: gli elementi della serie che seguono il parallelo, fino a
  * `targetElemId` compreso, passano nel percorso principale, cioè nei rami diversi da quello che
  * contiene `branchElemId`, che li scavalca. Con più di due rami gli altri rami si raggruppano
- * prima in un parallelo annidato (serve `newId`).
+ * prima in un parallelo annidato (serve `newId`, usato solo in quel caso). Esempio:
+ * `P([c1],[nuovo]) c2 c3` chiuso su `c3` diventa `P([c1,c2,c3],[nuovo])`. Il parallelo può stare
+ * in una serie, in un ramo o in un pin di un box; il bersaglio dev'essere nella stessa lista.
  */
 export function closeBranchAfter(
   net: LadNetwork,
@@ -192,18 +208,18 @@ export function addOutput(net: LadNetwork, nodeId: string, out: LadOut | LadNode
 }
 
 /** Toglie un nodo a T rimasto senza uscite, risalendo finché serve; la radice resta. */
-function pruneEmpty(root: LadNode, node: LadNode): void {
+function pruneEmpty(root: LadNode, node: LadNode, newId: () => string): void {
   if (node.outs.length > 0) return;
   if (node === root) {
-    node.outs.push({ id: `${node.id}_out`, k: 'coil', op: '' });
+    node.outs.push({ id: newId(), k: 'coil', op: '' });
     return;
   }
   const loc = must(locateOut(root, node.id), `nodo ${node.id}`);
   loc.parent.outs.splice(loc.index, 1);
-  pruneEmpty(root, loc.parent);
+  pruneEmpty(root, loc.parent, newId);
 }
 
-export function removeElem(net: LadNetwork, id: string): LadNetwork {
+export function removeElem(net: LadNetwork, id: string, newId: () => string): LadNetwork {
   const n = clone(net);
   if (n.root.id === id) throw new Error('Rete KOP: il nodo radice non si elimina');
   const loc = locateElem(n.root, id);
@@ -223,15 +239,17 @@ export function removeElem(net: LadNetwork, id: string): LadNetwork {
   const out = locateOut(n.root, id);
   if (out) {
     out.parent.outs.splice(out.index, 1);
-    pruneEmpty(n.root, out.parent);
+    pruneEmpty(n.root, out.parent, newId);
     return n;
   }
-  const node = findNode(n.root, id);
-  if (node) throw new Error(`Rete KOP: ${id} non eliminabile`);
   throw new Error(`Rete KOP: elemento ${id} non trovato`);
 }
 
-/** Aggiorna campi di un elemento, uscita o nodo (operandi, pin, `neg` per NA ↔ NC…). */
+/**
+ * Patch superficiale dei campi di un elemento o di un'uscita: operandi, `pins`, `boolPins`,
+ * `neg` (NA ↔ NC)… Non cambia `id` e non serve a ristrutturare la rete (rami, serie, uscite):
+ * per quello ci sono le altre operazioni.
+ */
 export function updateElem(
   net: LadNetwork,
   id: string,
