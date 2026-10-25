@@ -622,6 +622,20 @@ export class BlockStatusService {
     if (s) await this.close(s);
   }
 
+  /**
+   * Ferma ogni osservazione sulla CPU del collegamento della finestra (di qualunque finestra): il
+   * ripristino non deve trovare job di test. Aspetta che i job siano cancellati.
+   */
+  async stopForCpu(owner: PlcOwner): Promise<void> {
+    const target = this.o.service.target(owner);
+    if (!target) return;
+    const cpu = cpuKey(target.access, target.identity.serial);
+    const mine = [...this.sessions.values()].filter((s) => s.cpu === cpu);
+    for (const s of mine)
+      this.lastEnd.set(s.owner, 'Osservazione fermata dal ripristino del backup');
+    await Promise.all(mine.map((s) => this.close(s)));
+  }
+
   async stopAll(): Promise<void> {
     const all = Promise.all([...this.sessions.values()].map((s) => this.close(s)));
     try {

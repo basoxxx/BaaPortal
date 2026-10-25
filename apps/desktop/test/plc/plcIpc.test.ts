@@ -36,6 +36,18 @@ describe("registerPlc: canali dell'osservazione", () => {
     });
   });
 
+  it('registra i canali del ripristino; senza collegamento o con dati non validi → errore', async () => {
+    for (const c of ['plc:restorePlan', 'plc:restore', 'plc:restoreInterrupt']) {
+      expect(channels.has(c), c).toBe(true);
+    }
+    expect(await channels.get('plc:restorePlan')!(e)).toMatchObject({ ok: false });
+    expect(await channels.get('plc:restore')!(e, 42)).toMatchObject({ ok: false, rows: [] });
+    expect(await channels.get('plc:restore')!(e, { token: 'x', restart: false })).toMatchObject({
+      ok: false,
+    });
+    expect(channels.get('plc:restoreInterrupt')!(e)).toBeUndefined();
+  });
+
   it('closeAll senza collegamenti non fallisce', async () => {
     await expect(reg.closeAll()).resolves.toBeUndefined();
   });

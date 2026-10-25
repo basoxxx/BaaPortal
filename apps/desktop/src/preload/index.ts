@@ -85,6 +85,9 @@ const bridge: RawBridge = {
   onPlcUploadProgress: (cb) => subscribe<[PlcUploadProgress]>('plc:uploadProgress', cb),
   plcBackup: () => ipcRenderer.invoke('plc:backup'),
   plcBackupCancel: () => ipcRenderer.invoke('plc:backupCancel'),
+  plcRestorePlan: () => ipcRenderer.invoke('plc:restorePlan'),
+  plcRestore: (req) => ipcRenderer.invoke('plc:restore', req),
+  plcRestoreInterrupt: () => ipcRenderer.invoke('plc:restoreInterrupt'),
   testOverrides: () => ipcRenderer.invoke('app:test-overrides'),
 };
 

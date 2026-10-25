@@ -26,6 +26,8 @@ import type {
   PlcWriteProgress,
   PlcUploadAllResult,
   PlcBackupResult,
+  PlcRestorePlanResult,
+  PlcRestoreResult,
   PlcUploadProgress,
   DiagPart,
   PlcClockRequest,
@@ -404,6 +406,22 @@ export class FakeBridge implements BaaBridge {
   }
   async plcBackupCancel() {
     this.plcBackupCancelCalls++;
+  }
+  plcRestorePlanCalls = 0;
+  plcRestorePlanImpl: () => PlcRestorePlanResult = () => ({ ok: false, error: 'non previsto' });
+  async plcRestorePlan(): Promise<PlcRestorePlanResult> {
+    this.plcRestorePlanCalls++;
+    return this.plcRestorePlanImpl();
+  }
+  plcRestoreCalls: { token: string; restart: boolean }[] = [];
+  plcRestoreImpl: () => PlcRestoreResult = () => ({ ok: false, rows: [], cpuStopped: false });
+  async plcRestore(req: { token: string; restart: boolean }): Promise<PlcRestoreResult> {
+    this.plcRestoreCalls.push(req);
+    return this.plcRestoreImpl();
+  }
+  plcRestoreInterruptCalls = 0;
+  async plcRestoreInterrupt() {
+    this.plcRestoreInterruptCalls++;
   }
   plcUploadResults: PlcUploadAllResult[] = [];
   plcUploadCalls: PlcAccess[] = [];

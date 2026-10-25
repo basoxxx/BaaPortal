@@ -3,12 +3,8 @@ import {
   MGMT_PARAM,
   assertOnlineTest,
   assertOnlineWrite,
-  assertOutgoingFrame,
   assertReadOnly,
   blockStatusProblem,
-  encodeCotp,
-  encodeS7,
-  encodeTpkt,
   encodeInsertBlock,
   encodePlcStop,
   encodeRequestDownload,
@@ -169,25 +165,6 @@ describe('assertOnlineTest', () => {
       job(encodeInsertBlock('DB', 1, 'P')),
     ];
     for (const p of bad) expect(() => assertOnlineTest(p, 240)).toThrowError(forbidden);
-  });
-
-  it('online-restore (provvisorio) ammette solo la lettura: rifiuta write var, download e PI', () => {
-    const dt = (p: S7Pdu): Uint8Array =>
-      encodeTpkt(encodeCotp({ type: 'DT', eot: true, data: encodeS7(p) }));
-    const w = encodeWriteRequest([
-      { area: 'M', db: 0, start: 0, size: 'BYTE', count: 1, data: Uint8Array.of(1) },
-    ]);
-    for (const p of [
-      job(w.param, w.data),
-      job(encodeRequestDownload('DB', 1, 'P', 100, 2)),
-      job(encodePlcStop()),
-      job(encodeInsertBlock('DB', 1, 'P')),
-    ]) {
-      expect(() => assertOutgoingFrame(dt(p), 'online-restore', 240)).toThrowError(forbidden);
-    }
-    expect(() =>
-      assertOutgoingFrame(dt(ud(reqReadSzl(0x0131, 2))), 'online-restore', 240),
-    ).not.toThrow();
   });
 
   it('read-only e online-write rifiutano lista dei job e block status', () => {

@@ -61,7 +61,7 @@ import {
 /**
  * Modo della connessione, fissato all'apertura (mai modificabile su una connessione viva).
  * `online-test` ammette in più le funzioni di test TIS (proto §18); `online-restore` è il modo
- * del ripristino (il suo filtro è del Task 6: per ora coincide con la sola lettura).
+ * del ripristino (`assertOnlineRestore`: solo i frame canonici del ripristino di un backup).
  */
 export type ConnectionMode = 'read-only' | 'online-write' | 'online-test' | 'online-restore';
 
@@ -225,6 +225,7 @@ export function assertOnlineWrite(pdu: S7Pdu): void {
       }
       case 0x1a: {
         const r = decodeRequestDownload(p);
+        must(r.type !== 'SDB', 'gli SDB si scrivono solo nel ripristino');
         must(
           sameBytes(p, encodeRequestDownload(r.type, r.number, r.fs, r.loadLength, r.mc7Length)),
           'request download non canonico',
@@ -233,6 +234,7 @@ export function assertOnlineWrite(pdu: S7Pdu): void {
       }
       case 0x1c: {
         const r = decodeDownloadEnded(p);
+        must(r.type !== 'SDB', 'gli SDB si scrivono solo nel ripristino');
         must(
           sameBytes(p, encodeDownloadEnded(r.type, r.number, r.fs)),
           'download ended non canonico',
@@ -250,6 +252,7 @@ export function assertOnlineWrite(pdu: S7Pdu): void {
         if (r.service === 'P_PROGRAM') {
           must(sameBytes(p, encodeWarmRestart()), 'warm restart non canonico');
         } else if (r.service === '_INSE' && r.block) {
+          must(r.block.type !== 'SDB', 'gli SDB si scrivono solo nel ripristino');
           // il filesystem e' la lettera finale del nome (ultimo byte del nome, prima di len2 + "_INSE")
           const fs = String.fromCharCode(p[19]!);
           must(fs === 'A' || fs === 'P' || fs === 'B', 'filesystem diverso da A, P, B');
@@ -322,6 +325,126 @@ function assertDownloadAck(pdu: S7Pdu): void {
     must(sameBytes(pdu.param, want.param) && sameBytes(pdu.data, want.data), 'ack non canonica');
   } catch (e) {
     refuseWrite(`ack-data non ammessa (${e instanceof Error ? e.message : String(e)})`);
+  }
+}
+
+/**
+ * SDB che un ripristino può scrivere o cancellare (proto §19.1, §19.5): 0, 1, 3, 4, 5, 6, 7 e gli
+ * intervalli 1000-1999 (sistema master DP) e 2000-2999 (PROFINET IO). SDB 2 non è mai ripristinabile
+ * (lo crea la CPU).
+ */
+export const RESTORE_SDB = {
+  single: [0, 1, 3, 4, 5, 6, 7],
+  ranges: [
+    [1000, 1999],
+    [2000, 2999],
+  ],
+} as const;
+
+export function isRestorableSdb(n: number): boolean {
+  if (!Number.isInteger(n)) return false;
+  return (
+    (RESTORE_SDB.single as readonly number[]).includes(n) ||
+    RESTORE_SDB.ranges.some(([lo, hi]) => n >= lo && n <= hi)
+  );
+}
+
+function refuseRestore(msg: string): never {
+  throw new S7Error('FORBIDDEN', `${msg}: non ammesso nemmeno in modo online-restore`);
+}
+
+/** Tipi che il ripristino scarica: blocchi utente e SDB (mai SFC/SFB, che stanno nel firmware). */
+const RESTORE_TYPES = ['OB', 'FB', 'FC', 'DB', 'SDB'];
+
+function restoreBlockOk(type: string, number: number): void {
+  must(RESTORE_TYPES.includes(type), `tipo ${type} non ripristinabile`);
+  if (type === 'SDB') must(isRestorableSdb(number), `SDB ${number} fuori dagli intervalli`);
+}
+
+/**
+ * Filtro del modo `online-restore` (proto §19.3, §19.5): la lettura (`assertReadOnly`), la lista
+ * dei job (`0x10`) e SOLO i frame canonici del ripristino:
+ * - request download `0x1A` e download ended `0x1C` con filesystem `P`, per OB, FB, FC, DB e per
+ *   gli SDB ripristinabili; ack-data del download (ROSCTR 3);
+ * - `_INSE` con filesystem `P` degli stessi blocchi;
+ * - `_DELE` con filesystem `A` dei soli SDB ripristinabili;
+ * - STOP e avviamento a caldo (`P_PROGRAM`).
+ * Non ammessi: write var, orologio, `_MODU`, `_GARB`, `_DELE` di blocchi utente, TIS salvo la lista.
+ */
+export function assertOnlineRestore(pdu: S7Pdu): void {
+  if (pdu.rosctr === 3) return assertDownloadAck(pdu);
+  if (pdu.rosctr === 7 && isTisShape(pdu)) return assertJobList(pdu);
+  if (pdu.rosctr !== 1 || pdu.param.length === 0) return assertReadOnly(pdu);
+  const fn = pdu.param[0]!;
+  if (fn !== 0x1a && fn !== 0x1c && fn !== 0x28 && fn !== 0x29) return assertReadOnly(pdu);
+  const p = pdu.param;
+  const label = `funzione ${h2(fn)}`;
+  try {
+    switch (fn) {
+      case 0x1a: {
+        const r = decodeRequestDownload(p);
+        restoreBlockOk(r.type, r.number);
+        must(r.fs === 'P', 'request download con filesystem diverso da P');
+        must(
+          sameBytes(p, encodeRequestDownload(r.type, r.number, 'P', r.loadLength, r.mc7Length)),
+          'request download non canonico',
+        );
+        break;
+      }
+      case 0x1c: {
+        const r = decodeDownloadEnded(p);
+        restoreBlockOk(r.type, r.number);
+        must(r.fs === 'P', 'download ended con filesystem diverso da P');
+        must(
+          sameBytes(p, encodeDownloadEnded(r.type, r.number, 'P')),
+          'download ended non canonico',
+        );
+        break;
+      }
+      case 0x29: {
+        const r = decodePlcControlRequest(p);
+        must(r.service === 'P_PROGRAM', 'stop con servizio diverso da P_PROGRAM');
+        must(sameBytes(p, encodePlcStop()), 'stop non canonico');
+        break;
+      }
+      case 0x28: {
+        const r = decodePlcControlRequest(p);
+        if (r.service === 'P_PROGRAM') {
+          must(sameBytes(p, encodeWarmRestart()), 'warm restart non canonico');
+        } else if (r.service === '_INSE' && r.block) {
+          restoreBlockOk(r.block.type, r.block.number);
+          must(
+            sameBytes(p, encodeInsertBlock(r.block.type, r.block.number, 'P')),
+            '_INSE non canonico (filesystem P)',
+          );
+        } else if (r.service === '_DELE' && r.block) {
+          must(r.block.type === 'SDB', '_DELE: solo gli SDB si cancellano nel ripristino');
+          restoreBlockOk(r.block.type, r.block.number);
+          must(
+            sameBytes(p, encodeDeleteBlock('SDB', r.block.number, 'A')),
+            '_DELE non canonico (filesystem A)',
+          );
+        } else {
+          refuseRestore(`${label} (servizio fuori allowlist)`);
+        }
+        break;
+      }
+    }
+    must(pdu.data.length === 0, 'parte dati presente');
+  } catch (e) {
+    if (e instanceof S7Error && e.code === 'FORBIDDEN') throw e;
+    refuseRestore(`${label} non canonica (${e instanceof Error ? e.message : String(e)})`);
+  }
+}
+
+/** La sola richiesta TIS ammessa nel ripristino: la lista dei job, in forma canonica. */
+function assertJobList(pdu: S7Pdu): void {
+  try {
+    const want = reqReadJobList();
+    must(pdu.param[6] === TIS_SUB.JOB_LIST, `TIS sottofunzione ${h2(pdu.param[6]!)} non ammessa`);
+    must(sameBytes(pdu.param, want.param) && sameBytes(pdu.data, want.data), 'forma non canonica');
+  } catch (e) {
+    refuseRestore(`lista dei job non canonica (${e instanceof Error ? e.message : String(e)})`);
   }
 }
 
@@ -427,10 +550,10 @@ export function assertOutgoingFrame(
         const raw = payload.subarray(3);
         const pdu = decodeS7(raw);
         if (!sameBytes(raw, encodeS7(pdu))) refuse('intestazione S7 non canonica');
-        // provvisorio: finché non arriva il filtro del Task 6, `online-restore` ammette solo la lettura
         if (mode === 'online-write') assertOnlineWrite(pdu);
         else if (mode === 'online-test') assertOnlineTest(pdu, pduLength);
-        else if (mode === 'read-only' || mode === 'online-restore') assertReadOnly(pdu);
+        else if (mode === 'online-restore') assertOnlineRestore(pdu);
+        else if (mode === 'read-only') assertReadOnly(pdu);
         else refuse(`modo "${String(mode)}" sconosciuto`);
         return;
       }

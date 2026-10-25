@@ -46,6 +46,15 @@ export function createConfirm(
 }
 
 /**
+ * Aggancio solo per i test e2e: se BAAPORTAL_E2E_OPEN_PATH è impostata e l'app non è impacchettata,
+ * la finestra di apertura del backup da ripristinare non si mostra e si usa quel percorso.
+ */
+export function e2eOpenPath(): string | null {
+  const hook = process.env['BAAPORTAL_E2E_OPEN_PATH'];
+  return !app.isPackaged && hook ? hook : null;
+}
+
+/**
  * Aggancio solo per i test e2e: se BAAPORTAL_E2E_SAVE_PATH è impostata e l'app non è impacchettata,
  * la finestra di salvataggio del backup non si mostra e si usa quel percorso. Altrimenti `null`.
  */

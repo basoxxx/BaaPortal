@@ -75,6 +75,16 @@ Per ogni voce si indica che cosa succede oggi. "Errore chiaro" vuol dire che Baa
 - **I record di diagnostica più corti di 20 byte si scartano.**
 - **Il pulsante si chiama «Osserva tutto»,** il nome del 2C, e non «Controlla tutto» come in TIA.
 
+## Osservazione e ripristino online (piano 3D)
+
+- **Ripristino di un backup: sperimentale, mai provato su una CPU reale.** Solo contro il PLC di prova (in STOP, SDB come blob opachi). Il comportamento reale di una CPU a un download di SDB in RUN, l'ordine degli SDB diversi da 0 e il risultato su moduli e DP/PN sono sconosciuti (proto §19.3).
+- **Il ripristino non cancella i blocchi utente presenti solo sulla CPU:** restano e sono elencati («Restano nella CPU»). Si cancellano solo gli SDB assenti nel backup e ripristinabili (0, 1, 3-7, 1000-1999, 2000-2999); SDB 2 non si tocca mai.
+- **Nessuna ripetizione né annullamento.** Dopo un errore i passi seguenti sono «Non caricato» e la CPU resta in STOP; il passo in corso quando cade il collegamento è «Esito sconosciuto».
+- **Il filtro `online-restore` ammette** solo i frame canonici del ripristino (lettura, lista dei job, download e `_INSE` con `P`, `_DELE` degli SDB con `A`, STOP e avviamento a caldo). `online-write` rifiuta ora anche download e `_INSE` di SDB.
+- **Lettura del `.baapbak`:** i byte si contano mentre si decomprimono (manifest 64 KB, blocchi la `length` del manifest, al massimo 1 MB ciascuno); la dimensione dichiarata nell'archivio non conta più.
+- **Osservazione del blocco:** nel pannello, la prima finestra si taglia per una PDU di 240 byte; con una PDU più grande la CPU concede più righe, e il renderer ne chiede di più con una seconda finestra (un delete e un create in più). `SAZ` di una finestra tagliata dal main è l'inizio della prima riga scartata, non quello dell'istruzione successiva del testo (ipotesi di §18).
+- **Il registro dei job** (`tis-jobs.json`) scrive subito alla creazione di un job; le cancellazioni si raggruppano e si scrivono dopo 500 ms o all'uscita.
+
 ## Simulatore (piano 2A)
 
 Le scelte sono descritte in `docs/protocollo/sim.md` (§4.1 per la semantica). Tutte restano **non confermate** da una CPU reale.

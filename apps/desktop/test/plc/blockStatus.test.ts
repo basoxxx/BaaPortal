@@ -347,6 +347,20 @@ describe('BlockStatusService', () => {
     await svc.stopAll();
   });
 
+  it("stopForCpu: ferma l'osservazione di qualunque finestra sulla stessa CPU e cancella il job", async () => {
+    const svc = newService();
+    await svc.start(owners[0]!, req());
+    expect(await liveJobs()).toHaveLength(1);
+    await svc.stopForCpu(owners[0]!);
+    expect(svc.active(owners[0]!)).toBe(false);
+    expect(await liveJobs()).toEqual([]);
+    expect(await svc.read(owners[0]!)).toMatchObject({
+      ok: false,
+      ended: true,
+      error: expect.stringContaining('ripristino'),
+    });
+  });
+
   it('0xD0CC con i valori (tisPartial) → values veri con partial true', async () => {
     backend = world({ faults: { tisPartial: true } });
     const svc = newService();

@@ -35,13 +35,16 @@ const newCpu = (o: Partial<SimCpuOptions> = {}): SimCpu =>
   new SimCpu({ cpuTypeId: 'cpu-315-2-pn-dp', props: PROPS, ...o });
 
 /** Un client collegato a un backend preparato dal test (per le opzioni che `connectToSim` non ha). */
-async function connectTo(backend: CpuBackend): Promise<S7WriteClient> {
+async function connectTo(
+  backend: CpuBackend,
+  mode: 'online-write' | 'online-restore' = 'online-write',
+): Promise<S7WriteClient> {
   const transport: TransportFactory = async () => {
     const [a, b] = memoryTransportPair();
     serve(backend, b);
     return a;
   };
-  return S7WriteClient.connect({ host: 'sim', transport, timeoutMs: 3000 });
+  return S7WriteClient.connect({ host: 'sim', transport, timeoutMs: 3000 }, mode);
 }
 
 const OB1 = { kind: 'OB' as const, number: 1, networks: ['\tL 7;\n\tT MW 10;'] };
@@ -242,8 +245,29 @@ describe('CPU simulata: SDB sintetici', () => {
 
   it('download di un SDB → rifiutato; il programma della CPU non lo vede', async () => {
     const cpu = newCpu();
-    const c = await connectTo(simBackend(cpu, { systemBlocks: [sdb0] }));
+    cpu.run(); // in RUN gli SDB non si scrivono
+    const c = await connectTo(simBackend(cpu, { systemBlocks: [sdb0] }), 'online-restore');
     await expect(c.downloadBlock(syntheticSdb(5, 16))).rejects.toMatchObject({ code: 'CPU_ERROR' });
+    expect((await c.blockCounts()).SDB).toBe(1);
+    expect(cpu.program.list().some((b) => (b.kind as string) === 'SDB')).toBe(false);
+    await c.close();
+  });
+
+  it('in STOP, con il modo del ripristino: SDB scaricato e cancellato come blob opaco', async () => {
+    const cpu = newCpu();
+    const backend = simBackend(cpu, { systemBlocks: [sdb0] });
+    const transport: TransportFactory = async () => {
+      const [a, b] = memoryTransportPair();
+      serve(backend, b);
+      return a;
+    };
+    const c = await S7WriteClient.connect(
+      { host: 'sim', transport, timeoutMs: 3000 },
+      'online-restore',
+    );
+    await c.downloadBlock(syntheticSdb(5, 16));
+    expect((await c.blockCounts()).SDB).toBe(2);
+    await c.deleteSystemBlock(5);
     expect((await c.blockCounts()).SDB).toBe(1);
     expect(cpu.program.list().some((b) => (b.kind as string) === 'SDB')).toBe(false);
     await c.close();

@@ -50,7 +50,7 @@ export function parseDiagParts(raw: unknown): DiagPart[] | string {
 const hex = (b: Uint8Array): string =>
   Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
 
-function view(r: DiagRecord): DiagEventView {
+export function view(r: DiagRecord): DiagEventView {
   const out: DiagEventView = {
     eventId: r.eventId,
     priority: r.priority,

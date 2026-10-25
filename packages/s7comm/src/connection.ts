@@ -273,8 +273,10 @@ export class S7Connection {
     rosctr: 1 | 3 | 7,
     timeoutMs?: number,
   ): Promise<S7Pdu> {
-    if (rosctr === 3 && this.#mode !== 'online-write') {
-      return Promise.reject(new RangeError('ROSCTR 3 ammesso solo in modo online-write'));
+    if (rosctr === 3 && this.#mode !== 'online-write' && this.#mode !== 'online-restore') {
+      return Promise.reject(
+        new RangeError('ROSCTR 3 ammesso solo in modo online-write e online-restore'),
+      );
     }
     if (this.#closed) return Promise.reject(new S7Error('CLOSED', 'connessione chiusa'));
     const t = timeoutMs ?? this.#defaultTimeoutMs;
@@ -394,7 +396,7 @@ export class S7Connection {
     onEnded: DownloadState['onEnded'],
     timeoutMs?: number,
   ): Promise<void> {
-    if (this.#mode !== 'online-write') {
+    if (this.#mode !== 'online-write' && this.#mode !== 'online-restore') {
       throw new S7Error('FORBIDDEN', 'download non ammesso in modo read-only');
     }
     if (this.#closed) throw new S7Error('CLOSED', 'connessione chiusa');

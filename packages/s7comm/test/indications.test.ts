@@ -174,7 +174,7 @@ describe('indication negli altri modi', () => {
     });
   }
 
-  it('online-restore si apre (filtro provvisorio)', async () => {
+  it('online-restore si apre', async () => {
     const { client } = rig();
     const conn = await open(client, 'online-restore');
     expect(conn.closed).toBe(false);

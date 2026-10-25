@@ -1,9 +1,12 @@
-import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
+import { Unzip, UnzipInflate, UnzipPassThrough, strFromU8, strToU8, zipSync } from 'fflate';
 
 export const BACKUP_FORMAT = 'baaportal-backup';
 export const BACKUP_VERSION = 1;
 /** Oltre questa dimensione l'archivio non si legge (difesa da archivi gonfiati). */
 export const BACKUP_MAX_BYTES = 256 * 1024 * 1024;
+/** Tetti sui byte veri decompressi: il manifest, e ogni blocco (la `length` del manifest, al più). */
+const MANIFEST_MAX_BYTES = 64 * 1024;
+const BLOCK_MAX_BYTES = 1024 * 1024;
 const MANIFEST_FILE = 'manifest.json';
 const BACKUP_TYPES = ['OB', 'FB', 'FC', 'DB', 'SDB'] as const;
 export type BackupBlockType = (typeof BACKUP_TYPES)[number];
@@ -89,6 +92,61 @@ export function encodeBackup(
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
 
+/**
+ * Decomprime a flusso solo le voci richieste (`cap` dà il tetto in byte di ciascuna, `undefined`
+ * la salta). I byte si contano mentre escono: appena un tetto è superato la voce si ferma, senza
+ * fidarsi della dimensione dichiarata nell'archivio.
+ */
+function inflateCapped(
+  bytes: Uint8Array,
+  cap: (name: string) => number | undefined,
+): Record<string, Uint8Array> {
+  const out: Record<string, Uint8Array> = {};
+  let total = 0;
+  let failure: BackupFormatError | undefined;
+  const tooBig = (): BackupFormatError => new BackupFormatError('contenuto troppo grande');
+  const unzip = new Unzip((file) => {
+    const limit = cap(file.name);
+    if (limit === undefined || failure) return;
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    file.ondata = (err, chunk, final) => {
+      if (failure) return;
+      if (err) {
+        failure = new BackupFormatError('non è un archivio zip');
+        return;
+      }
+      size += chunk.length;
+      total += chunk.length;
+      if (size > limit || total > BACKUP_MAX_BYTES) {
+        failure = tooBig();
+        file.terminate();
+        return;
+      }
+      chunks.push(chunk);
+      if (final) {
+        const data = new Uint8Array(size);
+        let at = 0;
+        for (const c of chunks) {
+          data.set(c, at);
+          at += c.length;
+        }
+        out[file.name] = data;
+      }
+    };
+    file.start();
+  });
+  unzip.register(UnzipInflate);
+  unzip.register(UnzipPassThrough);
+  try {
+    unzip.push(bytes, true);
+  } catch {
+    throw failure ?? new BackupFormatError('non è un archivio zip');
+  }
+  if (failure) throw failure;
+  return out;
+}
+
 /** Legge e controlla un `.baapbak`: formato, versione, file presenti, `sha256` e percorsi. */
 export function decodeBackup(
   bytes: Uint8Array,
@@ -98,26 +156,12 @@ export function decodeBackup(
   files: Record<string, Uint8Array>;
 } {
   if (bytes.length > BACKUP_MAX_BYTES) throw new BackupFormatError('file troppo grande');
-  // Prima si legge solo il manifest, con il tetto sulla dimensione dichiarata di ogni voce.
-  const unzip = (want: (name: string) => boolean): Record<string, Uint8Array> => {
-    let total = 0;
-    try {
-      return unzipSync(bytes, {
-        filter: (f) => {
-          if (!want(f.name)) return false;
-          total += f.originalSize;
-          if (f.originalSize > BACKUP_MAX_BYTES || total > BACKUP_MAX_BYTES) {
-            throw new BackupFormatError('contenuto troppo grande');
-          }
-          return true;
-        },
-      });
-    } catch (e) {
-      if (e instanceof BackupFormatError) throw e;
-      throw new BackupFormatError('non è un archivio zip');
-    }
-  };
-  const raw = unzip((n) => n === MANIFEST_FILE)[MANIFEST_FILE];
+  if (bytes.length < 4 || bytes[0] !== 0x50 || bytes[1] !== 0x4b) {
+    throw new BackupFormatError('non è un archivio zip');
+  }
+  const raw = inflateCapped(bytes, (n) => (n === MANIFEST_FILE ? MANIFEST_MAX_BYTES : undefined))[
+    MANIFEST_FILE
+  ];
   if (!raw) throw new BackupFormatError('manifest.json mancante');
   let m: unknown;
   try {
@@ -142,7 +186,7 @@ export function decodeBackup(
   }
   const seenBlocks = new Set<string>();
   const seenFiles = new Set<string>();
-  const wanted = new Set<string>();
+  const wanted = new Map<string, number>();
   for (const b of m['blocks'] as unknown[]) {
     if (
       !isObj(b) ||
@@ -167,9 +211,11 @@ export function decodeBackup(
     }
     seenBlocks.add(key);
     seenFiles.add(b['file']);
-    wanted.add(b['file']);
+    if ((b['length'] as number) > BLOCK_MAX_BYTES)
+      throw new BackupFormatError('contenuto troppo grande');
+    wanted.set(b['file'], b['length'] as number);
   }
-  const zip = unzip((n) => wanted.has(n));
+  const zip = inflateCapped(bytes, (n) => wanted.get(n));
   const files: Record<string, Uint8Array> = {};
   for (const b of m['blocks'] as { file: string; length: number; sha256: string }[]) {
     const data = zip[b.file];

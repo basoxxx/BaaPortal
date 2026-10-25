@@ -148,6 +148,48 @@ export type PlcBackupResult =
   | { ok: false; error: string }
   | { ok: false; cancelled: true };
 
+/** Una riga del piano di ripristino che l'utente conferma (costruita dal processo principale). */
+export interface RestoreRow {
+  /** `SDB 7`, `OB1`: come nelle righe della conferma. */
+  name: string;
+  action: 'load' | 'delete' | 'skip' | 'keep';
+  why?: string;
+}
+
+/**
+ * Esito di `plcRestorePlan` (sperimentale): il piano resta nel processo principale, legato al
+ * collegamento; il renderer riceve le righe e un `token` monouso per `plcRestore`.
+ */
+export type PlcRestorePlanResult =
+  | {
+      ok: true;
+      token: string;
+      rows: RestoreRow[];
+      cpuMismatch?: { backup: string; online: string };
+      warnings: string[];
+    }
+  | { ok: false; error: string }
+  | { ok: false; cancelled: true };
+
+export interface RestoreOutcomeRow {
+  name: string;
+  outcome: 'loaded' | 'deleted' | 'skipped' | 'kept' | 'rejected' | 'unknown' | 'notDone';
+  error?: string;
+}
+
+/** Esito di `plcRestore` (sperimentale): una riga per blocco; nessuna ripetizione automatica. */
+export interface PlcRestoreResult {
+  ok: boolean;
+  cancelled?: true;
+  error?: string;
+  rows: RestoreOutcomeRow[];
+  /** La CPU è stata arrestata da noi e non è ripartita. */
+  cpuStopped: boolean;
+  restarted?: boolean;
+  /** Prime voci del buffer di diagnostica, se la CPU è rimasta in STOP dopo l'avvio. */
+  diag?: DiagEventView[];
+}
+
 /** Le parti della diagnostica online che si possono chiedere (ognuna una o due SZL, proto §7.5.1). */
 export type DiagPart =
   | 'identity'

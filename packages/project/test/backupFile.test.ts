@@ -95,4 +95,56 @@ describe('backupFile', () => {
     });
     expect(() => decode(bomb)).toThrow(/troppo grande/);
   });
+
+  /** Falsifica la dimensione dichiarata di ogni voce (locale e centrale), lasciando i dati. */
+  function lie(zip: Uint8Array, size: number): Uint8Array {
+    const out = zip.slice();
+    const dv = new DataView(out.buffer);
+    for (let i = 0; i + 30 < out.length; i++) {
+      if (dv.getUint32(i, true) === 0x04034b50) dv.setUint32(i + 22, size, true);
+      if (dv.getUint32(i, true) === 0x02014b50) dv.setUint32(i + 24, size, true);
+    }
+    return out;
+  }
+
+  it('voce con originalSize 10 che si gonfia a 2 MB → «contenuto troppo grande»', () => {
+    const zip = zipSync(
+      {
+        'manifest.json': strToU8(JSON.stringify(manifest())),
+        'blocks/OB1.blk': new Uint8Array(2 * 1024 * 1024),
+        'blocks/SDB0.blk': B,
+      },
+      { level: 9 },
+    );
+    expect(() => decode(lie(zip, 10))).toThrow(/troppo grande/);
+  });
+
+  it('manifest dichiarato di 100 byte che diventa 100 KB → errore', () => {
+    const m = { ...manifest(), app: 'x'.repeat(100 * 1024) };
+    const zip = zipSync(
+      { 'manifest.json': strToU8(JSON.stringify(m)), 'blocks/OB1.blk': A, 'blocks/SDB0.blk': B },
+      { level: 9 },
+    );
+    expect(() => decode(lie(zip, 100))).toThrow(/troppo grande/);
+  });
+
+  it('blocco più lungo della length del manifest → errore', () => {
+    const zip = zipSync({
+      'manifest.json': strToU8(JSON.stringify(manifest())),
+      'blocks/OB1.blk': new Uint8Array(A.length + 1),
+      'blocks/SDB0.blk': B,
+    });
+    expect(() => decode(zip)).toThrow(/troppo grande/);
+  });
+
+  it('length del manifest oltre 1 MB → errore', () => {
+    const m = manifest();
+    m.blocks[0]!.length = 2 * 1024 * 1024;
+    const zip = zipSync({
+      'manifest.json': strToU8(JSON.stringify(m)),
+      'blocks/OB1.blk': A,
+      'blocks/SDB0.blk': B,
+    });
+    expect(() => decode(zip)).toThrow(/troppo grande/);
+  });
 });

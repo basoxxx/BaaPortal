@@ -373,8 +373,9 @@ describe('SDB come blob opachi', () => {
     const cpu = new FakeCpu({ mode: 'RUN', systemBlocks: [sdb0] });
     const c = await connect(cpu);
     const other = syntheticSdb(0, 10);
-    await expect(c.downloadBlock(other)).rejects.toMatchObject({ code: 'CPU_ERROR' });
-    await expect(c.downloadBlock(syntheticSdb(7, 10))).rejects.toMatchObject({ code: 'CPU_ERROR' });
+    // il filtro di online-write non manda gli SDB; il rifiuto della CPU in RUN è in sdbWrite.test.ts
+    await expect(c.downloadBlock(other)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await expect(c.downloadBlock(syntheticSdb(7, 10))).rejects.toMatchObject({ code: 'FORBIDDEN' });
     expect(Array.from(await c.upload('SDB', 0))).toEqual(Array.from(sdb0));
     expect((await c.blockCounts()).SDB).toBe(1);
     await c.close();

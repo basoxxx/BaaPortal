@@ -17,11 +17,14 @@ import type {
   PlcStatusWindowResult,
   PlcStatusReadResult,
   PlcStacksResult,
+  PlcRestorePlanResult,
+  PlcRestoreResult,
 } from '@baaportal/ui';
 import { BlockStatusService } from './blockStatus';
 import { memoryJobStore, type TisJobStore } from './tisJobs';
 import { BackupService, type PickBackupPath } from './backup';
 import type { ConfirmFn } from './confirm';
+import type { RestoreFileIo } from './plcWrite';
 import { readStacks } from './stacks';
 import { readDiagnostics } from './diagnostics';
 import { PlcWriteService, isControlOp } from './plcWrite';
@@ -78,8 +81,11 @@ export function registerPlc(
   pickBackupPath: PickBackupPath = async () => null,
   appVersion: () => string = () => '',
   jobs: TisJobStore = memoryJobStore(),
+  restoreFile?: RestoreFileIo,
 ): { closeAll(): Promise<void>; writing(): boolean; interruptWrites(): void } {
   const status = new BlockStatusService({ service, jobs });
+  if (restoreFile) writes.setRestoreFile(restoreFile);
+  writes.beforeRestore = (owner) => status.stopForCpu(owner);
   handle('plc:connect', async (e, raw): Promise<PlcConnectResult> => {
     const access = parsePlcAccess(raw);
     if (typeof access === 'string') return { ok: false, error: access };
@@ -153,6 +159,10 @@ export function registerPlc(
   });
   handle('plc:backup', (e): Promise<PlcBackupResult> => backups.backup(e.sender));
   handle('plc:backupCancel', (e) => backups.cancel(e.sender));
+  // Ripristino di un backup (sperimentale): il piano resta nel main, il renderer riceve righe e token.
+  handle('plc:restorePlan', (e): Promise<PlcRestorePlanResult> => writes.restorePlan(e.sender));
+  handle('plc:restore', (e, raw): Promise<PlcRestoreResult> => writes.restore(e.sender, raw));
+  handle('plc:restoreInterrupt', (e) => writes.interrupt(e.sender));
   return {
     closeAll: async () => {
       await Promise.all([

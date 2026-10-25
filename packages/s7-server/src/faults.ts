@@ -28,6 +28,8 @@ export interface FaultPlan {
   tisError?: { sub: number; code: number };
   /** I job di test prendono sempre il numero libero più basso (un numero cancellato si riusa subito). */
   reuseJobId?: boolean;
+  /** I primi N `_INSE` rispondono 0xD2A9 («la CPU sta assegnando nuovi parametri»), per sessione. */
+  insertBusy?: number;
   /** Le indication del block status portano `0xD0CC` (dati limitati dal tempo) insieme ai valori. */
   tisPartial?: boolean;
   /** Sottofunzioni TIS che rispondono con dati troncati a 7 byte. */
@@ -62,6 +64,7 @@ export function checkFaults(f: FaultPlan): void {
   int('delayMs', f.delayMs, 0, 60_000);
   int('dropAfterResponses', f.dropAfterResponses, 0);
   int('chunkSize', f.chunkSize, 1);
+  int('insertBusy', f.insertBusy, 0, 1000);
   int('ignoreFunction', f.ignoreFunction, 0, 0xffff);
   for (const id of f.szlUnavailable ?? []) int('szlUnavailable', id, 0, 0xffff);
   if (f.tisError) {

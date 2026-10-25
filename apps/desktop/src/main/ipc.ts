@@ -9,7 +9,7 @@ import {
   type WebContents,
 } from 'electron';
 import { existsSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ConfirmTexts, QuestionTexts, RecentEntry, RecoveryInfo } from '@baaportal/ui';
 import { writeFileAtomic } from './fsAtomic';
@@ -18,7 +18,7 @@ import { isTrustedFrame, type FrameLike, type TrustOptions } from './trust';
 import { deleteRecovery, listRecovery, readRecovery, writeRecovery } from './recoveryStore';
 import { parseOpenOptions, parseSaveOptions } from './fileDialogOptions';
 import { registerKit } from './kit';
-import { createConfirm, e2eSavePath } from './plc/confirm';
+import { createConfirm, e2eOpenPath, e2eSavePath } from './plc/confirm';
 import { registerPlc } from './plc/plcIpc';
 import { fileJobStore } from './plc/tisJobs';
 import { addRecent, removeRecent, type Platform, type StoredRecent } from './recentProjects';
@@ -207,6 +207,21 @@ export function registerIpc(
     },
     () => app.getVersion(),
     fileJobStore(join(app.getPath('userData'), 'tis-jobs.json')),
+    {
+      pick: async (owner) => {
+        const hooked = e2eOpenPath();
+        if (hooked) return hooked;
+        const win = BrowserWindow.fromWebContents(owner as WebContents);
+        const opts = {
+          properties: ['openFile' as const],
+          filters: [{ name: 'Backup BaaPortal', extensions: ['baapbak'] }],
+        };
+        const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
+        return r.canceled || !r.filePaths[0] ? null : r.filePaths[0];
+      },
+      size: async (path) => (await stat(path)).size,
+      read: (path) => readFile(path),
+    },
   );
 
   // Valori solo per i test e2e: come BAA_USER_DATA, mai onorati nelle build pacchettizzate.

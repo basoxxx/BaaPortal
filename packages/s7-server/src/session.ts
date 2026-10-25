@@ -1,5 +1,6 @@
 import {
   FrameReader,
+  isRestorableSdb,
   decodeBcdDateTime,
   decodeBlockInfoRequest,
   decodeBlockListOfTypeRequest,
@@ -76,6 +77,8 @@ const ERR = {
   NOT_IMPLEMENTED: [0x81, 0x04],
   /** Nessun ulteriore upload parallelo possibile. */
   NO_PARALLEL_UPLOAD: [0x83, 0x04],
+  /** La CPU sta assegnando nuovi parametri: la stessa richiesta si ripete dopo un attimo (proto §19.3.1). */
+  PARAMS_BUSY: [0xd2, 0xa9],
   /** Sequenza di servizio non valida: upload id sconosciuto, continuazione fuori sequenza. */
   BAD_SEQUENCE: [0x84, 0x01],
 } as const;
@@ -164,6 +167,7 @@ class Session implements TisSession {
     private readonly t: Transport,
   ) {
     this.pdu = cpu.config.pduLength;
+    this.insertBusyLeft = cpu.config.faults.insertBusy ?? 0;
     this.ourRef = cpu.nextRef();
     t.onData((chunk) => this.onData(chunk));
     t.onClose(() => this.shutdown());
@@ -473,6 +477,9 @@ class Session implements TisSession {
   // ---- scrittura e controllo (allowlist) -----------------------------------------------------
 
   /** Con protezione 2 o 3 le funzioni che cambiano stato sono rifiutate (proto §14); la lettura no. */
+  /** `_INSE` ancora da rifiutare con 0xD2A9 (guasto `insertBusy`). */
+  private insertBusyLeft: number;
+
   private writeProtected(): boolean {
     return this.cpu.config.protectionLevel >= 2;
   }
@@ -519,7 +526,10 @@ class Session implements TisSession {
     if (this.writeProtected()) return headerError(p, ERR.PROTECTED);
     if (service === '_DELE') {
       if (!this.cpu.deleteBlock || !block) return headerError(p, ERR.NOT_IMPLEMENTED);
-      if (block.type === 'SDB') return headerError(p, ERR.PROTECTED); // gli SDB non si cancellano
+      // gli SDB si cancellano solo in STOP e solo quelli ripristinabili (scelta del server di prova)
+      if (block.type === 'SDB' && (this.cpu.mode !== 'STOP' || !isRestorableSdb(block.number))) {
+        return headerError(p, ERR.PROTECTED);
+      }
       // il nome e' lungo 8 caratteri e finisce a p[19]: come TIA (proto §10.5), solo il filesystem 'A'
       if (p.param[19] !== 0x41) return headerError(p, ERR.WRONG_FRAMES);
       if (!this.cpu.deleteBlock(block.type, block.number)) {
@@ -545,8 +555,11 @@ class Session implements TisSession {
     } catch {
       return headerError(p, ERR.WRONG_FRAMES);
     }
-    // gli SDB non si scrivono in 3C: la CPU li espone solo in lettura
-    if (req.type === 'SDB') return headerError(p, ERR.PROTECTED);
+    // gli SDB si scrivono solo in STOP e solo se ripristinabili: in RUN il rifiuto è quello dei
+    // download rifiutati (scelta del server di prova, proto §19.3: la risposta reale è sconosciuta)
+    if (req.type === 'SDB' && (this.cpu.mode !== 'STOP' || !isRestorableSdb(req.number))) {
+      return headerError(p, ERR.PROTECTED);
+    }
     // un download già in trasferimento blocca il secondo; uno finito che aspetta solo l'_INSE si sostituisce
     if (this.dl && this.dl.phase !== 'insert') return headerError(p, ERR.NO_PARALLEL_UPLOAD);
     this.dl = { ...req, phase: 'start', ref: 0, pieces: [], received: 0, bad: false };
@@ -608,6 +621,11 @@ class Session implements TisSession {
   /** `_INSE` a trasferimento finito: solo qui il blocco entra nel blockMap. */
   private insertBlock(p: S7Pdu, block: { type: BlockType; number: number } | undefined): S7Pdu {
     const d = this.dl!;
+    // `insertBusy`: i primi n _INSE ricevono 0xD2A9 e il download resta in attesa della ripetizione
+    if (this.insertBusyLeft > 0) {
+      this.insertBusyLeft--;
+      return headerError(p, ERR.PARAMS_BUSY);
+    }
     this.dl = undefined; // riuscito o no, questo download è chiuso
     if (!block || block.type !== d.type || block.number !== d.number) {
       return headerError(p, ERR.BLOCK_NAME);

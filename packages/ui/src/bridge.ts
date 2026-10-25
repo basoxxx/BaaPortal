@@ -27,6 +27,8 @@ import type {
   PlcStatus,
   PlcUploadAllResult,
   PlcBackupResult,
+  PlcRestorePlanResult,
+  PlcRestoreResult,
   PlcUploadProgress,
   PlcWriteProgress,
 } from './online/plcTypes';
@@ -196,5 +198,13 @@ export interface BaaBridge {
    */
   plcBackup(): Promise<PlcBackupResult>;
   plcBackupCancel(): Promise<void>;
+  /**
+   * Ripristino di un `.baapbak` (SPERIMENTALE, mai provato su una CPU reale): `plcRestorePlan`
+   * apre la finestra di scelta del file e prepara il piano nel processo principale; `plcRestore`
+   * lo esegue con il `token`, dopo le conferme native. Mai eccezioni.
+   */
+  plcRestorePlan(): Promise<PlcRestorePlanResult>;
+  plcRestore(req: { token: string; restart: boolean }): Promise<PlcRestoreResult>;
+  plcRestoreInterrupt(): Promise<void>;
   testOverrides(): Promise<{ recoveryIntervalMs?: number }>; // sempre {} nelle build pacchettizzate
 }

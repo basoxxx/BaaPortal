@@ -124,7 +124,7 @@ export function simBackend(
   const sessions = new Set<object>();
   let refCounter = 0;
   let modeSince = clock();
-  /** SDB sintetici: blob opachi in sola lettura (nessun download né cancellazione). */
+  /** SDB: blob opachi (sintetici all'avvio, scrivibili e cancellabili dal ripristino in STOP). */
   const sdbs = new Map<number, StoredBlock>();
   for (const file of o.systemBlocks ?? []) {
     const parsed = parseBlockFile(file.slice());
@@ -386,18 +386,28 @@ export function simBackend(
       return 0x00;
     },
     applyDownloadedBlock(type, number, file) {
-      if (type === 'SDB') throw new RangeError('gli SDB non si scrivono');
       const copy = file.slice();
       const parsed = parseBlockFile(copy);
       if (parsed.header.type !== type || parsed.header.number !== number) {
         throw new RangeError(`il file non è ${type}${number}`);
+      }
+      if (type === 'SDB') {
+        // blob opaco: la CPU simulata non ne interpreta il contenuto
+        sdbs.set(number, { type, number, file: copy, parsed });
+        emit({ kind: 'block', type, number });
+        return;
       }
       cpu.loadBlock(copy); // un blocco non caricabile lancia: la sessione risponde con un errore
       files.set(keyOf(type, number), { type, number, file: copy, parsed });
       emit({ kind: 'block', type, number });
     },
     deleteBlock(type, number) {
-      if (type === 'SDB' || !present(type, number)) return false;
+      if (type === 'SDB') {
+        if (!sdbs.delete(number)) return false;
+        emit({ kind: 'block', type, number });
+        return true;
+      }
+      if (!present(type, number)) return false;
       cpu.deleteBlock(type, number);
       files.delete(keyOf(type, number));
       emit({ kind: 'block', type, number });
