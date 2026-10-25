@@ -1,5 +1,6 @@
 import { formatType, incrementName, parseType, sameName } from '@baaportal/s7-types';
 import { findOb, type CpuType } from '@baaportal/catalog';
+import { emptyNetwork } from '@baaportal/ladfbd';
 import { renameSymbolInCode, renameSymbolInWatchRows } from './codeRename';
 import { renameMemberWithOverrides } from './memberRename';
 import type {
@@ -116,7 +117,15 @@ export function createCodeBlock(a: {
       temp,
       returnType: a.kind === 'FC' ? 'Void' : '',
     },
-    networks: [{ id: newId(), title: '', comment: '', source: '' }],
+    networks: [
+      {
+        id: newId(),
+        title: '',
+        comment: '',
+        source: '',
+        ...(a.language === 'KOP' ? { lad: emptyNetwork(newId) } : {}),
+      },
+    ],
   };
 }
 

@@ -1,6 +1,7 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
-import { createProject, readBaap, writeBaap } from '../src/index';
+import { createCodeBlock, createProject, readBaap, writeBaap } from '../src/index';
+import { makeDevice, seq } from './fixtures';
 
 const now = new Date('2026-10-18T10:00:00.000Z');
 
@@ -33,6 +34,33 @@ describe('file .baap', () => {
       now,
     );
     expect(readBaap(writeBaap(p, { appVersion: '0.1.0' }))).toEqual(p);
+  });
+
+  it('andata e ritorno conserva il segmento KOP (lad) di un blocco', () => {
+    const p = createProject({ name: 'K', author: '', comment: '' }, now);
+    const dev = makeDevice(seq('k'));
+    const b = createCodeBlock({
+      kind: 'FC',
+      number: 9,
+      name: 'Ko',
+      language: 'KOP',
+      newId: seq('b'),
+    });
+    b.networks[0]!.lad = {
+      root: {
+        id: 'r',
+        series: [{ id: 'c1', k: 'contact', neg: true, op: 'I 0.0' }],
+        outs: [{ id: 'o1', k: 'coil', op: 'Q 4.0' }],
+      },
+    };
+    dev.blocks.push(b);
+    p.devices.push(dev);
+    const back = readBaap(writeBaap(p, { appVersion: '0.1.0' }));
+    expect(back).toEqual(p);
+    const kb = back.devices[0]!.blocks.find((x) => x.id === b.id);
+    expect(kb && kb.kind !== 'DB' && kb.kind !== 'IDB' && kb.networks[0]!.lad).toEqual(
+      b.networks[0]!.lad,
+    );
   });
 
   it('lo zip contiene manifest e progetto leggibili', () => {

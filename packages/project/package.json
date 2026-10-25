@@ -12,6 +12,7 @@
   "dependencies": {
     "@baaportal/awl": "*",
     "@baaportal/catalog": "*",
+    "@baaportal/ladfbd": "*",
     "@baaportal/mc7": "*",
     "@baaportal/s7-types": "*",
     "fflate": "^0.8.3",
@@ -19,6 +20,7 @@
   },
   "devDependencies": {
     "@baaportal/s7-server": "*",
+    "@baaportal/sim": "*",
     "@baaportal/s7comm": "*"
   }
 }

@@ -1,4 +1,5 @@
 import type { AwlContext, Operand, Statement } from '@baaportal/awl';
+import type { TypedMember } from '@baaportal/s7-types';
 import type { CallEnv } from './callExpand';
 import type { Mc7Diagnostic } from './encode';
 import { callBase } from './localData';
@@ -28,6 +29,14 @@ export function toolsOf(ctx: AwlContext): LayoutTools {
       return m ? { block: m[1]!.toUpperCase() as 'FB' | 'SFB', number: Number(m[2]) } : undefined;
     },
   };
+}
+
+/**
+ * Primo byte libero dopo i TEMP dichiarati (senza i temporanei delle CALL): la stessa misura da cui
+ * `codeEnvironment` ricava `base`. Serve a chi genera codice AWL che usa dati locali (KOP).
+ */
+export function tempEndByte(temp: TypedMember[], ctx: AwlContext): number {
+  return Math.ceil(structLayout(temp, toolsOf(ctx)).endBits / 8);
 }
 
 export interface CodeEnvironment {

@@ -73,6 +73,8 @@ export interface CompileInput {
   /** Valori iniziali per percorso (`a.b`); in un IDB i valori del DB, sopra quelli dell'FB. */
   initials: Record<string, string>;
   networks: string[];
+  /** Linguaggio scritto nell'intestazione del file (default AWL): un blocco KOP si compila dall'AWL generato. */
+  language?: 'AWL' | 'KOP';
   /** Contesto AWL: `owner.iface` deve corrispondere a `sections`; i tag portano `address`. */
   ctx: AwlContext;
   /** DB di istanza: l'FB o SFB, le sue sezioni e i suoi valori iniziali (nell'SSB del DB). */
@@ -254,6 +256,7 @@ function checkUcTarget(st: Statement, env: SymbolEnv): void {
 
 const KIND_CODE = { OB: 0x08, FC: 0x0c, FB: 0x0e, DB: 0x0a, IDB: 0x0a } as const;
 const LANGUAGE_AWL = 0x01;
+const LANGUAGE_KOP = 0x02;
 const LANGUAGE_DB = 0x05;
 const ATTR_LINKED = 0x01;
 const ATTR_MULTI = 0x04;
@@ -611,7 +614,7 @@ function compileCode(
   const result = file({
     kindCode: KIND_CODE[kind],
     attr: ATTR_LINKED | (kind === 'FB' && multi.length > 0 ? ATTR_MULTI : 0),
-    language: LANGUAGE_AWL,
+    language: i.language === 'KOP' ? LANGUAGE_KOP : LANGUAGE_AWL,
     number: i.number,
     knowHow: i.knowHowProtected,
     localData,

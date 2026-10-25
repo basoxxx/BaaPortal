@@ -41,6 +41,7 @@ import {
 } from '@baaportal/s7-types';
 import { createAwlContext } from './awlContext';
 import { findSystemFb, toTypedMembers } from './members';
+import { blockSources, kopSources, type KopNetworkResult } from './kopSources';
 import type {
   Block,
   BlockHeader,
@@ -71,10 +72,35 @@ export const MC7_BRIDGE_DIAG_CODES = [
   'IDB_INCOERENTE',
   'IMPORT_CONTESTO_INCOERENTE',
   'INTERNAL',
+  'KOP_BAD_INSTANCE',
+  'KOP_BAD_LABEL',
+  'KOP_BOX_IN_PARALLEL',
+  'KOP_BOX_IN_TBRANCH',
+  'KOP_EDGE_ON_RAIL',
+  'KOP_EMPTY_BRANCH',
+  'KOP_EMPTY_OPERAND',
+  'KOP_FLOW_IN_BRANCH',
+  'KOP_MIDLINE_ON_RAIL',
+  'KOP_MUST_BE_ALONE',
+  'KOP_NO_OUTPUT',
+  'KOP_NOT_ON_RAIL',
+  'KOP_RET_ON_RAIL',
+  'KOP_TOO_MANY_LABELS',
   'LINGUAGGIO_NON_COMPILABILE',
   'VALORI_ATTUALI_PERSI',
   'VALORI_INIZIALI_DA_CAMPIONE',
 ] as const;
+
+/** Le diagnostiche KOP come errori del ponte: `KOP_<CODICE>`, rete da 1; bloccano la compilazione. */
+function kopDiagnostics(nets: KopNetworkResult[]): Mc7Diagnostic[] {
+  return nets.flatMap((r, k) =>
+    r.diagnostics.map((d) => ({
+      ...err(`KOP_${d.code}`, `Rete ${k + 1}: ${d.code}`),
+      network: k + 1,
+      params: { network: String(k + 1), elemId: d.elemId, ...d.params },
+    })),
+  );
+}
 
 const defaultNewId: NewId = () => globalThis.crypto.randomUUID();
 
@@ -134,7 +160,9 @@ export function interfaceHashOf(b: Block): string {
 }
 
 export function sourceHashOf(b: Block): string {
-  const nets = b.kind === 'DB' || b.kind === 'IDB' ? [] : b.networks.map((n) => n.source);
+  // Un segmento KOP conta per il suo grafico (la sorgente generata ne deriva); gli altri come prima.
+  const nets =
+    b.kind === 'DB' || b.kind === 'IDB' ? [] : b.networks.map((n) => (n.lad ? [n.lad] : n.source));
   return fnv(JSON.stringify([interfaceKey(b), nets]));
 }
 
@@ -779,7 +807,16 @@ function compileModel(
         collectInitials(device, block.interface[k], '', initials, 0, sfb);
       }
       samples = sfb.used;
-      input = codeInput(block, base, initials, state);
+      const kop = kopSources(block, device);
+      const kopErrors = kopDiagnostics(kop);
+      if (kopErrors.length > 0) return { diagnostics: kopErrors };
+      input = codeInput(
+        block,
+        base,
+        initials,
+        state,
+        kop.map((r) => r.source),
+      );
     }
   } catch (e) {
     if (!(e instanceof SymbolError)) throw e;
@@ -811,6 +848,7 @@ function codeInput(
   base: Pick<CompileInput, 'number' | 'knowHowProtected' | 'header' | 'ctx' | 'now'>,
   initials: Record<string, string>,
   state: FidelityState | undefined,
+  sources: string[],
 ): CompileInput {
   let keep: Partial<CompileInput> = {};
   const code = block.mc7?.code;
@@ -828,7 +866,8 @@ function codeInput(
     kind: block.kind,
     sections: sectionsOf(block),
     initials,
-    networks: block.networks.map((n) => n.source),
+    networks: sources,
+    ...(block.language === 'KOP' ? { language: 'KOP' as const } : {}),
     ...keep,
   };
 }
@@ -1288,7 +1327,7 @@ function viewOf(b: Block, device: PlcDevice): BlockView {
     language = b.language;
     const ctx = codeContext(b, device, undefined);
     const p = projectorOf(b, ctx);
-    networks = b.networks.map((n) => analyzeNetwork(n.source, p));
+    networks = blockSources(b, device).map((text) => analyzeNetwork(text, p));
     for (const n of networks) for (const r of n.refs) deps.add(r);
     const tools = toolsOf(ctx);
     for (const m of b.interface.static) {
@@ -1733,7 +1772,12 @@ export function blockToMc7File(
         ],
       };
     }
-    if (block.kind !== 'DB' && block.kind !== 'IDB' && block.language !== 'AWL') {
+    if (
+      block.kind !== 'DB' &&
+      block.kind !== 'IDB' &&
+      block.language !== 'AWL' &&
+      block.language !== 'KOP'
+    ) {
       return {
         diagnostics: [
           err(
