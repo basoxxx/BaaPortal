@@ -1,3 +1,4 @@
+import { readBaap, writeBaap } from '@baaportal/project';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { findCpu } from '@baaportal/catalog';
 import {
@@ -22,7 +23,12 @@ import {
 import { FakeBridge } from '../fakeBridge';
 
 const ACCESS: PlcAccess = { host: '192.168.0.10', rack: 0, slot: 2, connectionType: 'PG' };
-const TEXTS = { defaultTagTable: 'Tabella', plc: 'PLC_1', namePrefix: 'Caricato da' };
+const TEXTS = {
+  defaultTagTable: 'Tabella',
+  plc: 'PLC_1',
+  namePrefix: 'Caricato da',
+  missing: 'Blocchi non caricati dalla CPU',
+};
 const ORDER = '6ES7 315-2EH14-0AB0';
 
 /** Un dispositivo con OB1, FC1 e DB1 e i file compilati, come li darebbe la CPU. */
@@ -227,5 +233,114 @@ describe('uploadFromDevice', () => {
     s.bridge.files.set(`${first}/${name}.baap`, new Uint8Array());
     await uploadFromDevice(s, ACCESS);
     expect(s.store.getState().doc?.filePath).toBe(`${first}/${name} (2).baap`);
+  });
+});
+
+describe('blocchi non caricati', () => {
+  function setup() {
+    const store = createAppStore();
+    const bridge = new FakeBridge();
+    const service = {
+      close: async () => {
+        store.getState().setDoc(null);
+        return true;
+      },
+    } as never;
+    return { store, bridge, service };
+  }
+  const keys = (s: ReturnType<typeof setup>) =>
+    s.store.getState().messages.map((m) => [m.severity, m.textKey]);
+
+  it('un blocco rifiutato o non decodificabile resta scritto nel commento, anche dopo salva e riapri', () => {
+    const { files } = sample();
+    const bad: PlcUploadedFile = { type: 'FC', number: 9, bytes: new Uint8Array([1, 2, 3]) };
+    const r = buildUploadedProject({
+      files: [...files, bad],
+      identity,
+      access: ACCESS,
+      now: new Date(),
+      failed: [{ type: 'DB', number: 20, error: 'accesso negato' }],
+      texts: TEXTS,
+    });
+    expect(r.missing).toBe(2);
+    const c = r.project.meta.comment;
+    expect(c).toMatch(/^Blocchi non caricati dalla CPU: DB20 \(accesso negato\), FC9 \(/);
+    const back = readBaap(writeBaap(r.project, { appVersion: '0.1.0' }));
+    expect(back.meta.comment).toBe(c);
+  });
+
+  it('senza mancanti il commento è vuoto', () => {
+    expect(build(sample().files).project.meta.comment).toBe('');
+  });
+
+  it('failed non vuoto: avviso (non info) con i conteggi e riga nel commento', async () => {
+    const s = setup();
+    s.bridge.plcUploadResults.push({
+      ok: true,
+      files: sample().files,
+      identity,
+      failed: [{ type: 'DB', number: 20, error: 'protetto' }],
+    });
+    expect(await uploadFromDevice(s, ACCESS)).toBe('done');
+    expect(keys(s)).toContainEqual(['warning', 'messages.uploadDonePartial']);
+    expect(keys(s)).not.toContainEqual(['info', 'messages.uploadDone']);
+    expect(s.store.getState().doc?.project.meta.comment).toContain('DB20 (protetto)');
+  });
+
+  it('tutti i blocchi rifiutati: errore, il progetto aperto resta e nessun progetto vuoto', async () => {
+    const s = setup();
+    s.store.getState().setDoc({
+      project: createProject({ name: 'Vecchio', author: '', comment: '' }, new Date()),
+      filePath: '/v.baap',
+      dirty: true,
+      revision: 1,
+      savedRevision: 0,
+    });
+    s.bridge.plcUploadResults.push({
+      ok: true,
+      files: [],
+      identity,
+      failed: [
+        { type: 'OB', number: 1, error: 'livello di protezione 3' },
+        { type: 'FC', number: 1, error: 'livello di protezione 3' },
+      ],
+    });
+    expect(await uploadFromDevice(s, ACCESS)).toBe('failed');
+    expect(s.store.getState().doc?.project.meta.name).toBe('Vecchio');
+    expect(s.store.getState().doc?.dirty).toBe(true);
+    expect(keys(s)).toContainEqual(['error', 'messages.uploadNothing']);
+  });
+
+  it('firmware della CPU nel catalogo: lo usa; sconosciuto: il più recente e un avviso', async () => {
+    const { files } = sample();
+    const versions = findCpu('cpu-315-2-pn-dp')!.versions.find((v) => v.orderNumber === ORDER)!;
+    const old = versions.firmware.at(-1)!;
+    const ok = build(files, { ...identity, firmware: old } as never);
+    expect(ok.device.cpu.firmware).toBe(old);
+    expect(ok.firmwareUnknown).toBe(false);
+    const bad = build(files, { ...identity, firmware: 'V9.9' } as never);
+    expect(bad.device.cpu.firmware).toBe(versions.firmware[0]);
+    expect(bad.firmwareUnknown).toBe(true);
+    // senza firmware letto (CPU che non lo dà) resta il più recente, senza avviso
+    expect(build(files).firmwareUnknown).toBe(false);
+  });
+
+  it('blocco importato in sola lettura: torna con i byte originali e confronta uguale', () => {
+    const { dev } = sample();
+    const dbBlock = dev.blocks.find((b) => b.kind === 'DB')!;
+    const file = compileDevice(dev, findCpu(dev.cpu.typeId), [dbBlock.id]).results[0]!.file!;
+    const bytes = file.slice();
+    // genere 0x10 dell'SSB: il DB non si ricodifica e resta coi byte originali
+    bytes[36 + parseBlockFile(file).header.mc7Length] = 0x10;
+    const up: PlcUploadedFile = { type: 'DB', number: dbBlock.number, bytes };
+    const r = build([up]);
+    expect(r.device.blocks[0]!.mc7?.exact).toBe(false);
+    const again = compileDevice(r.device, findCpu(r.device.cpu.typeId)).results[0]!;
+    expect(Array.from(again.file!)).toEqual(Array.from(bytes));
+    const rows = compareBlocks(
+      [{ id: r.device.blocks[0]!.id, type: 'DB', number: dbBlock.number, file: again.file! }],
+      onlineOf([up]),
+    );
+    expect(rows[0]!.state).toBe('same');
   });
 });

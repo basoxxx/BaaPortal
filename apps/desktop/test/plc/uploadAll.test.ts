@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { buildBlockFile, parseBlockFile } from '@baaportal/s7comm';
+import { S7Error, buildBlockFile, parseBlockFile } from '@baaportal/s7comm';
 import { connectWriteTcp } from '@baaportal/s7comm/node';
 import { listen, type ListeningCpu } from '@baaportal/s7-server/node';
 import { SimCpu, simBackend } from '@baaportal/sim';
@@ -252,7 +252,12 @@ describe('andata e ritorno contro il PLC di prova', () => {
         identity: up.identity,
         access,
         now: new Date(),
-        texts: { defaultTagTable: 'T', plc: 'PLC_1', namePrefix: 'Caricato da' },
+        texts: {
+          defaultTagTable: 'T',
+          plc: 'PLC_1',
+          namePrefix: 'Caricato da',
+          missing: 'Blocchi non caricati',
+        },
       });
       expect(built.skipped).toEqual([]);
       const again = compileDevice(built.device, findCpu(built.device.cpu.typeId)).results;
@@ -286,5 +291,43 @@ describe('andata e ritorno contro il PLC di prova', () => {
     } finally {
       await plc.close();
     }
+  });
+});
+
+describe('un blocco rifiutato dalla CPU', () => {
+  const fakeConnect = (refuse: (type: string, n: number) => boolean) =>
+    (async () => ({
+      identity: async () => ({ orderNumber: '6ES7 315-2EH14-0AB0' }),
+      close: async () => undefined,
+      listBlocks: async (t: string) =>
+        t === 'OB' ? [{ number: 1 }] : t === 'FC' ? [{ number: 1 }, { number: 2 }] : [],
+      uploadWithInfo: async (t: string, n: number) => {
+        if (refuse(t, n)) throw new S7Error('CPU_ERROR', 'accesso negato');
+        return { bytes: rawBlock(t as 'OB' | 'FC', n, 8), declaredLength: null, warnings: [] };
+      },
+    })) as never;
+  const access: PlcAccess = { host: '10.0.0.1', rack: 0, slot: 2, connectionType: 'PG' };
+
+  it('gli altri si caricano e il blocco finisce in failed', async () => {
+    const owner = new FakeOwner();
+    const r = await new UploadService({
+      connect: fakeConnect((t, n) => t === 'FC' && n === 1),
+    }).start(owner, access);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.files.map((f) => `${f.type}${f.number}`)).toEqual(['OB1', 'FC2']);
+    expect(r.failed).toEqual([
+      { type: 'FC', number: 1, error: expect.stringContaining('accesso negato') },
+    ]);
+    expect(owner.events.at(-1)).toMatchObject({ done: 3, total: 3 });
+  });
+
+  it('tutti rifiutati: nessun file e tutti in failed (decide il renderer)', async () => {
+    const r = await new UploadService({ connect: fakeConnect(() => true) }).start(
+      new FakeOwner(),
+      access,
+    );
+    expect(r.ok && r.files.length).toBe(0);
+    expect(r.ok && r.failed.length).toBe(3);
   });
 });

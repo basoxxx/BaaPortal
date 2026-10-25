@@ -20,6 +20,12 @@ import type { PlcAccess, PlcIdentity, PlcUploadedFile } from './plcTypes';
 /** CPU usata quando il numero di ordinazione non è nel catalogo e la famiglia non è nota. */
 const FALLBACK_CPU = 'cpu-315-2-pn-dp';
 const TYPE_ORDER = { OB: 0, FB: 1, FC: 2, DB: 3 } as const;
+const normFw = (s: string) => s.trim().replace(/^v/i, '').toUpperCase();
+/** Motivo breve per il commento del progetto: una riga, al più 80 caratteri. */
+const shortReason = (s: string) => {
+  const one = s.replace(/\s+/g, ' ').trim();
+  return one.length > 80 ? `${one.slice(0, 77)}...` : one;
+};
 const norm = (s: string) => s.replace(/\s+/g, '').toUpperCase();
 
 /** Un blocco che il progetto non ha preso (illeggibile): `label` è `OB1`, `DB10`… */
@@ -29,11 +35,15 @@ export interface UploadSkipped {
 }
 
 export interface UploadedProject {
+  /** La CPU ha dato una versione di firmware non presente nel catalogo (si usa la più recente). */
+  firmwareUnknown: boolean;
   project: Project;
   device: PlcDevice;
   /** false: il numero di ordinazione non è nel catalogo, la CPU è generica della stessa famiglia. */
   cpuFound: boolean;
   created: number;
+  /** Quanti blocchi mancano (rifiutati dalla CPU o non decodificabili). */
+  missing: number;
   skipped: UploadSkipped[];
   notes: ImportNote[];
   warnings: string[];
@@ -76,11 +86,18 @@ export function buildUploadedProject(input: {
   identity: PlcIdentity;
   access: PlcAccess;
   now: Date;
-  texts: { defaultTagTable: string; plc: string; namePrefix: string };
+  /** Blocchi che la CPU non ha dato (errore della CPU), da segnare nel commento del progetto. */
+  failed?: { type: string; number: number; error: string }[];
+  texts: { defaultTagTable: string; plc: string; namePrefix: string; missing: string };
 }): UploadedProject {
   const { files, identity, access } = input;
   const { cpu, orderNumber, found } = cpuFor(identity.orderNumber);
-  const firmware = cpu.versions.find((v) => v.orderNumber === orderNumber)?.firmware[0] ?? '';
+  const known = cpu.versions.find((v) => v.orderNumber === orderNumber)?.firmware ?? [];
+  // Il firmware letto dalla CPU, se è nel catalogo (con o senza «V»); altrimenti il più recente.
+  const wanted = identity.firmware ? normFw(identity.firmware) : undefined;
+  const match = wanted ? known.find((f) => normFw(f) === wanted) : undefined;
+  const firmware = match ?? known[0] ?? '';
+  const firmwareUnknown = wanted !== undefined && match === undefined;
   const device = createPlcDevice({
     cpu,
     orderNumber,
@@ -98,24 +115,32 @@ export function buildUploadedProject(input: {
     sorted.map((f) => f.bytes),
   );
   applyImport(device, plan);
+  const skipped = plan.skipped.map((s) => ({
+    label: `${sorted[s.index]!.type}${sorted[s.index]!.number}`,
+    reason: s.reason,
+  }));
+  // Un blocco mancante deve restare scritto nel progetto, anche dopo salvataggio e riapertura.
+  const missing = [
+    ...(input.failed ?? []).map((f) => `${f.type}${f.number} (${shortReason(f.error)})`),
+    ...skipped.map((k) => `${k.label} (${shortReason(k.reason)})`),
+  ];
   const project = createProject(
     {
       name: uploadedProjectName(identity, access, input.texts.namePrefix),
       author: '',
-      comment: '',
+      comment: missing.length > 0 ? `${input.texts.missing}: ${missing.join(', ')}` : '',
     },
     input.now,
   );
   project.devices.push(device);
   return {
+    firmwareUnknown,
+    missing: missing.length,
     project,
     device,
     cpuFound: found,
     created: plan.create.length,
-    skipped: plan.skipped.map((s) => ({
-      label: `${sorted[s.index]!.type}${sorted[s.index]!.number}`,
-      reason: s.reason,
-    })),
+    skipped,
     notes: plan.notes,
     warnings: plan.warnings,
     readOnly: plan.create.filter((b) => b.mc7 && !b.mc7.exact).map((b) => b.name),
@@ -161,10 +186,12 @@ export async function uploadFromDevice(ctx: UploadCtx, access: PlcAccess): Promi
       identity: res.identity,
       access,
       now: new Date(),
+      failed: res.failed,
       texts: {
         defaultTagTable: t('defaults.defaultTagTable'),
         plc: t('defaults.plc'),
         namePrefix: t('upload.namePrefix'),
+        missing: t('upload.missingComment'),
       },
     });
   } catch (e) {
@@ -173,6 +200,14 @@ export async function uploadFromDevice(ctx: UploadCtx, access: PlcAccess): Promi
       textKey: 'messages.uploadFailed',
       params: { message: errorText(e) },
     });
+    return 'failed';
+  }
+  // Niente è arrivato dalla CPU: non si chiude il progetto aperto né se ne crea uno vuoto.
+  if (built.created === 0 && built.missing > 0) {
+    const first = res.failed[0]
+      ? `${res.failed[0].type}${res.failed[0].number}: ${res.failed[0].error}`
+      : `${built.skipped[0]!.label}: ${built.skipped[0]!.reason}`;
+    push({ severity: 'error', textKey: 'messages.uploadNothing', params: { reason: first } });
     return 'failed';
   }
   // Sostituire il progetto aperto: la domanda di salvataggio è quella esistente.
@@ -195,14 +230,26 @@ export async function uploadFromDevice(ctx: UploadCtx, access: PlcAccess): Promi
   const s = store.getState();
   s.setView('project');
   s.select(ids.plc(built.device.id));
-  push({
-    severity: 'info',
-    textKey: 'messages.uploadDone',
-    params: {
-      count: String(built.created),
-      name: built.project.meta.name,
-    },
-  });
+  if (built.missing > 0) {
+    push({
+      severity: 'warning',
+      textKey: 'messages.uploadDonePartial',
+      params: { count: String(built.created), missing: String(built.missing) },
+    });
+  } else {
+    push({
+      severity: 'info',
+      textKey: 'messages.uploadDone',
+      params: { count: String(built.created), name: built.project.meta.name },
+    });
+  }
+  if (built.firmwareUnknown) {
+    push({
+      severity: 'warning',
+      textKey: 'messages.uploadFirmwareUnknown',
+      params: { firmware: res.identity.firmware ?? '', used: built.device.cpu.firmware },
+    });
+  }
   if (!built.cpuFound) {
     push({
       severity: 'warning',

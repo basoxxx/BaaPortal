@@ -131,7 +131,10 @@
     "uploadFailed": "Upload from the device failed: {{message}}",
     "uploadCpuUnknown": "CPU {{order}} is not in the catalog: the project uses a generic CPU of the same family ({{cpu}}).",
     "uploadBlockFailed": "{{block}}: the CPU did not provide it ({{message}})",
-    "uploadBlockSkipped": "{{block}}: not imported ({{reason}})"
+    "uploadBlockSkipped": "{{block}}: not imported ({{reason}})",
+    "uploadDonePartial": "Uploaded {{count}} blocks, {{missing}} not uploaded (see the project comment).",
+    "uploadNothing": "No block uploaded from the CPU: {{reason}}",
+    "uploadFirmwareUnknown": "Firmware {{firmware}} is not in the catalog: the project uses {{used}}."
   },
   "commands": {
     "project.new": "New…",
@@ -276,7 +279,8 @@
       "addDevice": "Add new device",
       "addBlock": "Add new block",
       "accessibleDevices": "Accessible devices",
-      "collectCpu": "Collect CPU data (read-only)"
+      "collectCpu": "Collect CPU data (read-only)",
+      "uploadDevice": "Upload from device"
     },
     "projectView": "Project view",
     "openProjectInfo": "Open project: {{path}}",
@@ -1214,6 +1218,7 @@
     "progress": "Uploading: {{done}} of {{total}} ({{current}})",
     "starting": "Connecting to the CPU…",
     "stop": "Stop",
-    "busy": "Upload from the device in progress."
+    "busy": "Upload from the device in progress.",
+    "missingComment": "Blocks not uploaded from the CPU"
   }
 }

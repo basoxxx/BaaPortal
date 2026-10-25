@@ -131,7 +131,10 @@
     "uploadFailed": "Caricamento dal dispositivo non riuscito: {{message}}",
     "uploadCpuUnknown": "La CPU {{order}} non è nel catalogo: il progetto usa una CPU generica della stessa famiglia ({{cpu}}).",
     "uploadBlockFailed": "{{block}}: la CPU non l'ha dato ({{message}})",
-    "uploadBlockSkipped": "{{block}}: non importato ({{reason}})"
+    "uploadBlockSkipped": "{{block}}: non importato ({{reason}})",
+    "uploadDonePartial": "Caricati {{count}} blocchi, {{missing}} non caricati (vedi commento del progetto).",
+    "uploadNothing": "Nessun blocco caricato dalla CPU: {{reason}}",
+    "uploadFirmwareUnknown": "Firmware {{firmware}} non presente nel catalogo: il progetto usa {{used}}."
   },
   "commands": {
     "project.new": "Nuovo…",
@@ -276,7 +279,8 @@
       "addDevice": "Aggiungi nuovo dispositivo",
       "addBlock": "Aggiungi nuovo blocco",
       "accessibleDevices": "Dispositivi accessibili",
-      "collectCpu": "Raccolta dati CPU (sola lettura)"
+      "collectCpu": "Raccolta dati CPU (sola lettura)",
+      "uploadDevice": "Carica dal dispositivo"
     },
     "projectView": "Vista progetto",
     "openProjectInfo": "Progetto aperto: {{path}}",
@@ -1214,6 +1218,7 @@
     "progress": "Caricamento in corso: {{done}} di {{total}} ({{current}})",
     "starting": "Collegamento alla CPU…",
     "stop": "Interrompi",
-    "busy": "Caricamento dal dispositivo in corso."
+    "busy": "Caricamento dal dispositivo in corso.",
+    "missingComment": "Blocchi non caricati dalla CPU"
   }
 }
