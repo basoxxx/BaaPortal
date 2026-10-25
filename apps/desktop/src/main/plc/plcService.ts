@@ -1,7 +1,8 @@
-import { S7Error, type S7Client } from '@baaportal/s7comm';
+import { S7Error, isUnavailable, type S7Client } from '@baaportal/s7comm';
 import { connectTcp } from '@baaportal/s7comm/node';
 import type { ConnectOptions } from '@baaportal/s7comm';
 import { toPlcIdentity, toPlcMode } from './plcMap';
+import { FRCE_LED, forceFrom } from './diagnostics';
 import type {
   PlcAccess,
   PlcConnectResult,
@@ -53,6 +54,8 @@ export interface PlcServiceOptions {
 }
 
 const DEFAULT_PORT = 102;
+/** Il LED FRCE si legge una volta ogni tanti giri di sorveglianza (circa 5 s). */
+const FORCE_EVERY = 5;
 const CONNECTION_TYPES = { PG: 'pg', OP: 'op', S7_BASIC: 'basic' } as const;
 
 interface Link {
@@ -70,6 +73,12 @@ interface Link {
   chain: Promise<unknown>;
   failures: number;
   done: boolean;
+  /** Ultimo stato noto del LED FRCE; `undefined` se mai letto. */
+  force: boolean | undefined;
+  /** La CPU non ha la 0x0174 (D401-D409): non si rilegge più su questo collegamento. */
+  forceGone: boolean;
+  /** Giri di sorveglianza fatti: il LED si legge uno ogni `FORCE_EVERY`. */
+  polls: number;
 }
 
 export function connectMessage(err: unknown, access: PlcAccess): string {
@@ -168,6 +177,18 @@ export class PlcService {
       await client.close().catch(() => undefined);
       return { ok: false, error: 'Collegamento annullato' };
     }
+    // LED FRCE: un di più, come la protezione; senza la lista non si chiede più
+    let force: boolean | undefined;
+    let forceGone = false;
+    try {
+      force = forceFrom(await client.readSzl(0x0174, FRCE_LED));
+    } catch (err) {
+      forceGone = isUnavailable(err);
+    }
+    if (this.epochs.get(owner) !== epoch || owner.isDestroyed()) {
+      await client.close().catch(() => undefined);
+      return { ok: false, error: 'Collegamento annullato' };
+    }
     const link: Link = {
       id: ++this.linkSeq,
       access,
@@ -180,6 +201,9 @@ export class PlcService {
       chain: Promise.resolve(),
       failures: 0,
       done: false,
+      force,
+      forceGone,
+      polls: 0,
     };
     owner.once('destroyed', link.onGone);
     this.links.set(owner, link);
@@ -190,9 +214,13 @@ export class PlcService {
         // un ascoltatore che sbaglia non deve far fallire il collegamento
       }
     }
-    return protection === undefined
-      ? { ok: true, identity, mode }
-      : { ok: true, identity, mode, protection };
+    return {
+      ok: true,
+      identity,
+      mode,
+      ...(protection !== undefined ? { protection } : {}),
+      ...(force !== undefined ? { force } : {}),
+    };
   }
 
   private bump(owner: PlcOwner): number {
@@ -340,6 +368,18 @@ export class PlcService {
     this.emit(owner, { kind: 'lost', reason });
   }
 
+  /** Lettura del LED FRCE nello stesso posto in coda; un suo errore non conta nei `failures`. */
+  private async pollForce(owner: PlcOwner, link: Link, timeout: Promise<never>): Promise<void> {
+    try {
+      const on = forceFrom(await Promise.race([link.client.readSzl(0x0174, FRCE_LED), timeout]));
+      if (link.done || on === link.force) return;
+      link.force = on;
+      this.emit(owner, { kind: 'force', active: on });
+    } catch (err) {
+      if (isUnavailable(err)) link.forceGone = true;
+    }
+  }
+
   /** Un giro di sorveglianza; se la lettura precedente non è finita, salta. */
   private async tick(owner: PlcOwner, link: Link): Promise<void> {
     if (link.done || link.polling) return;
@@ -372,6 +412,9 @@ export class PlcService {
       if (m !== link.mode) {
         link.mode = m;
         this.emit(owner, { kind: 'mode', mode: m });
+      }
+      if (++link.polls % FORCE_EVERY === 0 && !link.forceGone) {
+        await this.pollForce(owner, link, timeout);
       }
     } catch (err) {
       if (link.done) return;

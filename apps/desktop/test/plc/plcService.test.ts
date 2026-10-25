@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { encodeWriteRequest, S7Error } from '@baaportal/s7comm';
 import { connectTcp, openTcp } from '@baaportal/s7comm/node';
+import { FakeCpu, type FakeCpuOptions } from '@baaportal/s7-server';
 import { listen, type ListeningCpu } from '@baaportal/s7-server/node';
 import { SimCpu, simBackend } from '@baaportal/sim';
 import type { PlcAccess, PlcEvent } from '@baaportal/ui';
 import { PlcService, type PlcConnectFn, type PlcOwner } from '../../src/main/plc/plcService';
 import { startTestPlc } from '../../src/main/plc/testPlc';
 import { parsePlcAccess } from '../../src/main/plc/plcIpc';
+import { readDiagnostics } from '../../src/main/plc/diagnostics';
 
 class FakeOwner implements PlcOwner {
   events: PlcEvent[] = [];
@@ -346,5 +348,102 @@ describe('startTestPlc e parsePlcAccess', () => {
     expect(parsePlcAccess({ ...ok, rack: 9 })).toBe('Rack non valido');
     expect(parsePlcAccess({ ...ok, connectionType: 'X' })).toBe('Tipo di collegamento non valido');
     expect(parsePlcAccess(null)).toBe('Dati di accesso non validi');
+  });
+});
+
+describe('PlcService, LED FRCE (forzamento attivo)', () => {
+  let cpu: FakeCpu;
+  let plc: ListeningCpu;
+  let service: PlcService;
+  /** Letture SZL per id e indice, contate sul client. */
+  let reads: string[];
+  let failForce = false;
+
+  async function start(o: FakeCpuOptions = {}): Promise<FakeOwner> {
+    cpu = new FakeCpu(o);
+    plc = await listen(cpu, { port: 0 });
+    reads = [];
+    service = new PlcService({
+      intervalMs: 10,
+      readTimeoutMs: 500,
+      connect: (async (opts) => {
+        const c = await connectTcp(opts);
+        const orig = c.readSzl.bind(c);
+        c.readSzl = async (id, index) => {
+          reads.push(`${id.toString(16)}/${index}`);
+          if (failForce && id === 0x0174) throw new S7Error('PROTOCOL', 'prova');
+          return orig(id, index);
+        };
+        return c;
+      }) as PlcConnectFn,
+    });
+    return new FakeOwner();
+  }
+  const access = (): PlcAccess => ({
+    host: '127.0.0.1',
+    port: plc.port,
+    rack: 0,
+    slot: 2,
+    connectionType: 'PG',
+  });
+  const forceReads = (): number => reads.filter((r) => r === '174/6').length;
+  const modeReads = (): number => reads.filter((r) => r === '424/0').length;
+  afterEach(async () => {
+    failForce = false;
+    await service.closeAll();
+    await plc.close();
+  });
+
+  it('forceActive → evento force true entro 5 giri, poi false; una lettura ogni 5 giri', async () => {
+    const owner = await start();
+    const r = await service.connect(owner, access());
+    expect(r.ok && r.force).toBe(false);
+    cpu.forceActive = true;
+    await waitFor(() => owner.events.some((e) => e.kind === 'force'));
+    expect(owner.events).toEqual([{ kind: 'force', active: true }]);
+    cpu.forceActive = false;
+    await waitFor(() => owner.events.length === 2);
+    expect(owner.events[1]).toEqual({ kind: 'force', active: false });
+    await service.disconnect(owner);
+    const polls = modeReads() - 1; // una lettura del modo è del collegamento
+    const polled = forceReads() - 1; // una lettura del LED è del collegamento
+    expect(polled).toBeGreaterThanOrEqual(Math.floor(polls / 5) - 1);
+    expect(polled).toBeLessThanOrEqual(Math.floor(polls / 5));
+  });
+
+  it('collegamento con FRCE acceso → force true nel risultato, nessun evento', async () => {
+    const owner = await start({ forceActive: true });
+    const r = await service.connect(owner, access());
+    expect(r.ok && r.force).toBe(true);
+    await new Promise((res) => setTimeout(res, 150));
+    expect(owner.events).toEqual([]);
+  });
+
+  it('0x0174 non disponibile → nessun evento e nessuna nuova lettura', async () => {
+    const owner = await start({ faults: { szlUnavailable: [0x0174] } });
+    const r = await service.connect(owner, access());
+    expect(r.ok && r.force).toBeUndefined();
+    await waitFor(() => modeReads() > 20);
+    expect(forceReads()).toBe(1);
+    expect(owner.events).toEqual([]);
+  });
+
+  it('errore della lettura FRCE → la sorveglianza non perde il collegamento', async () => {
+    const owner = await start();
+    await service.connect(owner, access());
+    failForce = true;
+    await waitFor(() => forceReads() >= 4);
+    expect(owner.events.filter((e) => e.kind === 'lost')).toEqual([]);
+    expect(service.status(owner).connected).toBe(true);
+  });
+
+  it('readDiagnostics([force]) → value true con forceActive', async () => {
+    const owner = await start({ forceActive: true });
+    await service.connect(owner, access());
+    const r = await readDiagnostics(service, owner, ['force']);
+    expect(r).toEqual({ ok: true, data: { force: { ok: true, value: true } } });
+    cpu.forceActive = false;
+    const r2 = await readDiagnostics(service, owner, ['force']);
+    expect(r2).toEqual({ ok: true, data: { force: { ok: true, value: false } } });
   });
 });

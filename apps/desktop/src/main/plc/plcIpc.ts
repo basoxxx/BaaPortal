@@ -16,11 +16,13 @@ import type {
   PlcStatusStartResult,
   PlcStatusWindowResult,
   PlcStatusReadResult,
+  PlcStacksResult,
 } from '@baaportal/ui';
 import { BlockStatusService } from './blockStatus';
 import { memoryJobStore, type TisJobStore } from './tisJobs';
 import { BackupService, type PickBackupPath } from './backup';
 import type { ConfirmFn } from './confirm';
+import { readStacks } from './stacks';
 import { readDiagnostics } from './diagnostics';
 import { PlcWriteService, isControlOp } from './plcWrite';
 import { isUploadableType, listOnlineBlocks, uploadOneBlock } from './onlineBlocks';
@@ -121,6 +123,10 @@ export function registerPlc(
   handle('plc:statusWindow', (e, raw): PlcStatusWindowResult => status.window(e.sender, raw));
   handle('plc:statusRead', (e): Promise<PlcStatusReadResult> => status.read(e.sender));
   handle('plc:statusStop', (e) => status.stop(e.sender));
+  // Stack di chiamata (sperimentale): il servizio rifiuta se l'impostazione non è proprio `true`.
+  handle('plc:readStacks', (e, experimental): Promise<PlcStacksResult> =>
+    readStacks(service, e.sender, { experimental: experimental === true }),
+  );
   // Elenco dei blocchi della CPU: sola lettura, sul collegamento della finestra.
   handle('plc:blocks', (e): Promise<PlcBlocksResult> => listOnlineBlocks(service, e.sender));
   // Un solo blocco della CPU collegata: sola lettura, solo OB, FB, FC e DB.

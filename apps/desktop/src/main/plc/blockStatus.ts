@@ -102,7 +102,7 @@ export const cpuKey = (a: PlcAccess): string =>
   `${a.host.toLowerCase()}:${a.port ?? DEFAULT_PORT}/${a.rack}/${a.slot}`;
 
 /** Codice d'errore della CPU di una S7Error (`classe << 8 | codice`). */
-function cpuCode(err: unknown): number | undefined {
+export function cpuCode(err: unknown): number | undefined {
   if (!(err instanceof S7Error) || err.code !== 'CPU_ERROR') return undefined;
   const d = err.detail;
   if (!d || d.errorClass === undefined || d.errorCode === undefined) return undefined;

@@ -39,6 +39,7 @@ import type {
   PlcStatusStartResult,
   PlcStatusWindowResult,
   PlcStatusReadResult,
+  PlcStacksResult,
 } from '../src/online/plcTypes';
 
 type Answer = 'save' | 'discard' | 'cancel';
@@ -324,6 +325,17 @@ export class FakeBridge implements BaaBridge {
   plcStatusStopCalls = 0;
   async plcStatusStop(): Promise<void> {
     this.plcStatusStopCalls++;
+  }
+  plcReadStacksCalls: boolean[] = [];
+  plcReadStacksImpl: (experimental: boolean) => Promise<PlcStacksResult> | PlcStacksResult =
+    () => ({
+      ok: false,
+      reason: 'error',
+      error: 'nessun risultato previsto',
+    });
+  async plcReadStacks(experimental: boolean): Promise<PlcStacksResult> {
+    this.plcReadStacksCalls.push(experimental);
+    return this.plcReadStacksImpl(experimental);
   }
   plcWriteVarsCalls: PlcWriteVarItem[][] = [];
   plcWriteVarsResults: PlcWriteVarsResult[] = [];

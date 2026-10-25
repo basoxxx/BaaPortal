@@ -9,6 +9,7 @@ import type {
   PlcStatusStartResult,
   PlcStatusWindowResult,
   PlcStatusReadResult,
+  PlcStacksResult,
   PlcWatchTarget,
   PlcWriteVarItem,
   PlcWriteVarsResult,
@@ -178,6 +179,8 @@ export interface BaaBridge {
   plcStatusWindow(req: PlcStatusRequest): Promise<PlcStatusWindowResult>;
   plcStatusRead(): Promise<PlcStatusReadResult>;
   plcStatusStop(): Promise<void>;
+  /** Stack di chiamata (sperimentale, solo in STOP/HOLD); `experimental` è l'impostazione, ricontrollata nel main. */
+  plcReadStacks(experimental: boolean): Promise<PlcStacksResult>;
   onPlcWriteProgress(cb: (p: PlcWriteProgress) => void): () => void;
   /**
    * Carica OB, FB, FC e DB da una CPU in sola lettura, su un collegamento proprio (non serve essere

@@ -94,3 +94,8 @@
   align-items: center;
   margin: 8px 0;
 }
+.baa-diag-hex {
+  font-family: var(--baa-mono, monospace);
+  white-space: pre;
+  margin: 4px 0;
+}

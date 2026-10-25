@@ -632,7 +632,12 @@
     "tabSize": "Larghezza tabulazione",
     "autocomplete": "Completamento automatico",
     "lineNumbers": "Numeri di riga",
-    "reset": "Ripristina predefiniti"
+    "reset": "Ripristina predefiniti",
+    "online": {
+      "title": "Online",
+      "experimental": "Funzioni sperimentali (non provate su una CPU reale)",
+      "note": "Attiva funzioni basate su documentazione e non verificate: per ora gli stack di chiamata. Si usano solo con la CPU in STOP."
+    }
   },
   "dialog": {
     "ok": "OK",
@@ -790,7 +795,45 @@
     "PROPERTY_INVALID": "Il valore della proprietà non è valido.",
     "CPU_UNKNOWN": "La CPU non è nel catalogo.",
     "WATCH_NAME_DUPLICATE": "Esiste già una tabella di controllo con questo nome.",
-    "WATCH_OPERAND_INVALID": "L'operando «{{operand}}» di una riga non si risolve."
+    "WATCH_OPERAND_INVALID": "L'operando «{{operand}}» di una riga non si risolve.",
+    "force": {
+      "active": "Forzamento attivo sulla CPU",
+      "note": "Per forzare o terminare il forzamento usare TIA Portal o STEP 7",
+      "label": "Forzamento"
+    },
+    "stacks": {
+      "page": "Stack di chiamata (sperimentale)",
+      "off": "Attivare le funzioni sperimentali in Opzioni → Impostazioni",
+      "runOnly": "disponibile solo in STOP",
+      "read": "Leggi stack",
+      "reading": "Lettura in corso...",
+      "note": "Formato degli stack da una sola fonte, mai visto su una CPU reale",
+      "unrecognized": "risposta non riconosciuta",
+      "bstack": "Stack dei blocchi (BSTACK)",
+      "ustack": "Stack delle interruzioni (USTACK)",
+      "lstack": "Dati locali (LSTACK)",
+      "block": "Blocco",
+      "returnAddress": "Indirizzo di ritorno",
+      "db1": "DB1",
+      "db2": "DB2",
+      "priority": "Priorità",
+      "time": "Ora",
+      "interrupted": "Blocco interrotto",
+      "resume": "Blocco di ripresa",
+      "accu1": "ACCU1",
+      "accu2": "ACCU2",
+      "ar1": "AR1",
+      "ar2": "AR2",
+      "stw": "STW",
+      "obStart": "Dati di avvio dell'OB",
+      "entry": "Voce",
+      "reason": {
+        "run": "disponibile solo in STOP",
+        "unsupported": "Questa CPU non supporta la lettura degli stack",
+        "offline": "Nessun collegamento online",
+        "error": "Lettura non riuscita: {{message}}"
+      }
+    }
   },
   "block": {
     "interface": "Interfaccia del blocco",

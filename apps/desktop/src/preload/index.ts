@@ -76,6 +76,7 @@ const bridge: RawBridge = {
   plcStatusWindow: (req) => ipcRenderer.invoke('plc:statusWindow', req),
   plcStatusRead: () => ipcRenderer.invoke('plc:statusRead'),
   plcStatusStop: () => ipcRenderer.invoke('plc:statusStop'),
+  plcReadStacks: (experimental) => ipcRenderer.invoke('plc:readStacks', experimental),
   plcBlocks: () => ipcRenderer.invoke('plc:blocks'),
   plcUploadBlock: (type, number) => ipcRenderer.invoke('plc:uploadBlock', type, number),
   onPlcWriteProgress: (cb) => subscribe<[PlcWriteProgress]>('plc:writeProgress', cb),

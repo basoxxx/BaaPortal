@@ -26,12 +26,13 @@ const PARTS: readonly DiagPart[] = [
   'memory',
   'buffer',
   'clock',
+  'force',
 ];
 /** Tempo massimo di tutta la lettura (ms). */
 const DEADLINE_MS = 5000;
 const TOO_LONG = 'Lettura troppo lunga';
 
-/** Controlla ciò che arriva dal renderer: parti note, distinte, al massimo nove. */
+/** Controlla ciò che arriva dal renderer: parti note, distinte, . */
 export function parseDiagParts(raw: unknown): DiagPart[] | string {
   if (!Array.isArray(raw)) return 'Elenco di parti non valido';
   if (raw.length > PARTS.length) return `Troppe parti (massimo ${PARTS.length})`;
@@ -73,6 +74,12 @@ function isDeadline(err: unknown): boolean {
   return err instanceof S7Error && err.code === 'ABORTED';
 }
 
+/** Il LED FRCE (0x0174, indice 6): acceso = forzamento attivo sulla CPU. */
+export const FRCE_LED = 0x0006;
+export function forceFrom(list: Parameters<typeof ledsFrom>[0]): boolean {
+  return ledsFrom(list).some((l) => l.id === FRCE_LED && l.on);
+}
+
 type Run = <R>(fn: (c: ReadClient) => Promise<R>) => Promise<R>;
 
 const READERS: {
@@ -105,6 +112,7 @@ const READERS: {
   memory: async (run) => memoryFrom(await run((c) => c.readSzl(0x0013, 0))),
   buffer: async (run) => diagRecordsFrom(await run((c) => c.readSzl(0x00a0, 0))).map(view),
   clock: (run) => run((c) => c.readClock()),
+  force: async (run) => forceFrom(await run((c) => c.readSzl(0x0174, FRCE_LED))),
 };
 
 /**

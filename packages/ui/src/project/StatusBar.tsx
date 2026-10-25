@@ -29,6 +29,11 @@ export function StatusBar() {
               })}
         </span>
       ) : null}
+      {online.status === 'on' && online.force ? (
+        <span data-testid="plc-force-warning" className="baa-status-warn">
+          {t('diag.force.active')}
+        </span>
+      ) : null}
       {online.monitor && online.monitor.reason !== 'ended' ? (
         <span data-testid="plc-monitor-warning" className="baa-status-warn">
           {t('plcMonitor.cycleWarning')}

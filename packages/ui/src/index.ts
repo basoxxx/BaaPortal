@@ -53,6 +53,12 @@ export type {
   PlcStatusStartResult,
   PlcStatusWindowResult,
   PlcStatusReadResult,
+  PlcStacksResult,
+  Decoded,
+  Wire,
+  BStackView,
+  IStackView,
+  LStackView,
   PlcWriteVarItem,
   PlcWriteVarsResult,
 } from './online/plcTypes';

@@ -632,7 +632,12 @@
     "tabSize": "Tab width",
     "autocomplete": "Autocomplete",
     "lineNumbers": "Line numbers",
-    "reset": "Restore defaults"
+    "reset": "Restore defaults",
+    "online": {
+      "title": "Online",
+      "experimental": "Experimental features (not tried on a real CPU)",
+      "note": "Enables features based on documentation and not verified: for now the call stacks. They are only used with the CPU in STOP."
+    }
   },
   "dialog": {
     "ok": "OK",
@@ -790,7 +795,45 @@
     "PROPERTY_INVALID": "The property value is not valid.",
     "CPU_UNKNOWN": "The CPU is not in the catalog.",
     "WATCH_NAME_DUPLICATE": "A watch table with this name already exists.",
-    "WATCH_OPERAND_INVALID": "The operand \"{{operand}}\" of a row does not resolve."
+    "WATCH_OPERAND_INVALID": "The operand \"{{operand}}\" of a row does not resolve.",
+    "force": {
+      "active": "Force active on the CPU",
+      "note": "To force or end forcing use TIA Portal or STEP 7",
+      "label": "Forcing"
+    },
+    "stacks": {
+      "page": "Call stacks (experimental)",
+      "off": "Enable the experimental features in Options → Settings",
+      "runOnly": "only available in STOP",
+      "read": "Read stacks",
+      "reading": "Reading...",
+      "note": "Stack format from a single source, never seen on a real CPU",
+      "unrecognized": "response not recognised",
+      "bstack": "Block stack (BSTACK)",
+      "ustack": "Interrupt stack (USTACK)",
+      "lstack": "Local data (LSTACK)",
+      "block": "Block",
+      "returnAddress": "Return address",
+      "db1": "DB1",
+      "db2": "DB2",
+      "priority": "Priority",
+      "time": "Time",
+      "interrupted": "Interrupted block",
+      "resume": "Resume block",
+      "accu1": "ACCU1",
+      "accu2": "ACCU2",
+      "ar1": "AR1",
+      "ar2": "AR2",
+      "stw": "STW",
+      "obStart": "OB start data",
+      "entry": "Entry",
+      "reason": {
+        "run": "only available in STOP",
+        "unsupported": "This CPU does not support reading the stacks",
+        "offline": "No online connection",
+        "error": "Read failed: {{message}}"
+      }
+    }
   },
   "block": {
     "interface": "Block interface",

@@ -188,6 +188,8 @@ export interface OnlineUiState {
   access?: PlcAccess;
   identity?: PlcIdentity;
   mode?: PlcMode;
+  /** LED FRCE acceso: forzamento attivo sulla CPU (assente se la CPU non lo dice). */
+  force?: boolean;
   deviceId?: string;
   /** Confronto con la CPU: assente finché non è fatto; sparisce andando offline. */
   compare?: OnlineCompare;

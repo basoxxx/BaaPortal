@@ -10,6 +10,7 @@ describe('settings', () => {
       general: { language: 'it', author: '', recoveryMinutes: 1 },
       appearance: { uiScale: 100 },
       editor: { mnemonic: 'int', fontSize: 13, tabSize: 4, autocomplete: true, lineNumbers: true },
+      online: { experimental: false },
     });
   });
 

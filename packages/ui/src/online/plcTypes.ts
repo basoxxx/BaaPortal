@@ -1,16 +1,29 @@
 import type { PlcAccess, PlcIdentity, PlcMode, WatchTarget } from '@baaportal/project';
-import type { CycleTime, Led, MemoryArea, ProtectionInfo, S7DateTime } from '@baaportal/s7comm';
+import type {
+  BStackEntry,
+  CycleTime,
+  IStack,
+  LStack,
+  Led,
+  MemoryArea,
+  ProtectionInfo,
+  S7DateTime,
+} from '@baaportal/s7comm';
 
 export type { PlcAccess, PlcIdentity, PlcMode };
 
 /** Eventi dal processo principale sul collegamento online della finestra. */
 /** Perché il collegamento è andato perso: la finestra lo traduce nel messaggio. */
 export type PlcLostReason = 'timeout' | 'closed' | 'errors';
-export type PlcEvent = { kind: 'mode'; mode: PlcMode } | { kind: 'lost'; reason: PlcLostReason };
+export type PlcEvent =
+  | { kind: 'mode'; mode: PlcMode }
+  | { kind: 'lost'; reason: PlcLostReason }
+  /** LED FRCE (forzamento attivo sulla CPU) cambiato; arriva solo a un cambio. */
+  | { kind: 'force'; active: boolean };
 
 /** Esito di `plcConnect`: l'errore è già un testo leggibile, mai un'eccezione grezza. */
 export type PlcConnectResult =
-  | { ok: true; identity: PlcIdentity; mode: PlcMode; protection?: string }
+  | { ok: true; identity: PlcIdentity; mode: PlcMode; protection?: string; force?: boolean }
   | { ok: false; error: string };
 
 export interface PlcStatus {
@@ -145,7 +158,8 @@ export type DiagPart =
   | 'cycle'
   | 'memory'
   | 'buffer'
-  | 'clock';
+  | 'clock'
+  | 'force';
 
 /** Il valore di una parte: letto, non disponibile nella CPU, o fallito per un errore della CPU. */
 export type DiagValue<T> =
@@ -175,6 +189,8 @@ export interface PlcDiagData {
   /** Dalla voce più recente. */
   buffer: DiagValue<DiagEventView[]>;
   clock: DiagValue<S7DateTime>;
+  /** LED FRCE acceso: c'è un forzamento attivo sulla CPU (proto §7.5.4). */
+  force: DiagValue<boolean>;
 }
 
 /** Esito di `plcDiagnostics`: errore solo se manca il collegamento o si perde durante la lettura. */
@@ -262,3 +278,30 @@ export type PlcStatusReadResult =
   | { ok: true; state: 'stop' }
   | { ok: true; state: 'waiting' }
   | { ok: false; ended: true; error: string };
+
+// ---- stack di chiamata (sperimentale, proto §18.6) ---------------------------------------------
+
+/** Un valore com'è sul canale: i `Uint8Array` viaggiano come esadecimale. */
+export type Wire<T> = T extends Uint8Array
+  ? string
+  : T extends object
+    ? { [K in keyof T]: Wire<T[K]> }
+    : T;
+
+/** Una risposta decodificata, o i byte grezzi in esadecimale se il formato non torna. */
+export type Decoded<T> = { ok: true; value: T } | { ok: false; why: string; hex: string };
+
+export type BStackView = Wire<{ entries: BStackEntry[]; rest?: string }>;
+export type IStackView = Wire<IStack>;
+export type LStackView = Wire<LStack>;
+
+export type PlcStacksResult =
+  | {
+      ok: true;
+      mode: PlcMode;
+      bstack: Decoded<BStackView>;
+      ustack: Decoded<IStackView>;
+      /** Un LSTACK per ogni voce del BSTACK (al massimo 16); `depth` è l'indice della voce. */
+      lstack: { depth: number; value: Decoded<LStackView> }[];
+    }
+  | { ok: false; reason: 'run' | 'unsupported' | 'offline' | 'error'; error: string };
