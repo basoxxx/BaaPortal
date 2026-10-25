@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const electronApp = vi.hoisted(() => ({ isPackaged: false }));
 vi.mock('electron', () => ({ app: electronApp }));
-import { planReads, type S7Client } from '@baaportal/s7comm';
+import { planReads, S7Error, type S7Client } from '@baaportal/s7comm';
 import { connectTcp } from '@baaportal/s7comm/node';
 import { listen, type ListeningCpu } from '@baaportal/s7-server/node';
 import { SimCpu, simBackend } from '@baaportal/sim';
@@ -353,7 +353,7 @@ describe('watch online contro il PLC di prova', () => {
   describe('writeVars: gruppi per richiesta', () => {
     const many = (n: number) =>
       Array.from({ length: n }, (_, i) => ({ target: M('B', i), data: Uint8Array.of(i) }));
-    const fake = (failGroup?: number) => {
+    const fake = (failGroup?: number, failWith: Error = new Error('connessione caduta')) => {
       const log: string[] = [];
       let n = 0;
       const client = {
@@ -366,7 +366,7 @@ describe('watch online contro il PLC di prova', () => {
         writeItems: vi.fn(async (g: unknown[]) => {
           n++;
           log.push(`w${g.length}`);
-          if (n === failGroup) throw new Error('connessione caduta');
+          if (n === failGroup) throw failWith;
           return g.map(() => ({ returnCode: 0xff, name: 'ok' }));
         }),
       };
@@ -404,6 +404,29 @@ describe('watch online contro il PLC di prova', () => {
         });
       }
       expect(r.results).toHaveLength(45);
+      expect(log).toEqual(['w20', 'w20', 'close']);
+    });
+
+    it('la CPU rifiuta la richiesta (CPU_ERROR): «Rifiutato dalla CPU», gruppi dopo non scritti, nessuna ripetizione', async () => {
+      const { client, log } = fake(2, new S7Error('CPU_ERROR', 'protezione 0xD241'));
+      const w = new PlcWriteService({
+        service: svc(),
+        confirm,
+        connect: async () => client as never,
+      });
+      const r = await w.writeVars(owner, many(45));
+      expect(r.ok).toBe(true);
+      if (!r.ok || !('results' in r)) return;
+      expect(r.results.slice(0, 20).every((x) => x.ok)).toBe(true);
+      for (const x of r.results.slice(20, 40)) {
+        expect(x).toEqual({ ok: false, error: 'Rifiutato dalla CPU: protezione 0xD241' });
+      }
+      for (const x of r.results.slice(40)) {
+        expect(x).toEqual({
+          ok: false,
+          error: 'Non scritto: scrittura interrotta dopo un errore',
+        });
+      }
       expect(log).toEqual(['w20', 'w20', 'close']);
     });
 

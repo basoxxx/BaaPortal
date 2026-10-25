@@ -161,17 +161,17 @@ describe('download nella CPU simulata attraverso il server S7', () => {
     await c.close();
   });
 
-  it('T e C: zero in lettura, rifiuto in scrittura', async () => {
+  it('T e C: zero in lettura, scrittura vietata dal filtro del client', async () => {
     const { c } = await loaded();
     for (const area of ['T', 'C'] as const) {
       const size = area === 'T' ? 'TIMER' : 'COUNTER';
       const [r] = await c.readItems([{ area, db: 0, start: 0, size, count: 1 }]);
       expect(r).toMatchObject({ ok: true });
       expect(Array.from(r?.ok ? r.data : [1])).toEqual([0, 0]);
-      const [w] = await c.writeItems([
-        { area, db: 0, start: 0, size, count: 1, data: Uint8Array.of(1, 2) },
-      ]);
-      expect(w!.returnCode).toBe(0x05);
+      // La scrittura non parte nemmeno: il filtro del client ammette solo I, Q, M e DB.
+      await expect(
+        c.writeItems([{ area, db: 0, start: 0, size, count: 1, data: Uint8Array.of(1, 2) }]),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     }
     await c.close();
   });

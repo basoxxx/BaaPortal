@@ -37,9 +37,7 @@ export function suggestedBackupName(identity: PlcIdentity, at: Date): string {
 
 const sameCpu = (a: PlcIdentity, b: PlcIdentity): boolean =>
   a.orderNumber === b.orderNumber &&
-  a.serial === b.serial &&
-  a.moduleName === b.moduleName &&
-  a.firmware === b.firmware;
+  (a.serial === undefined || b.serial === undefined || a.serial === b.serial);
 
 /**
  * Backup online (solo esportazione): OB, FB, FC, DB e SDB della CPU collegata alla finestra in un
@@ -55,7 +53,7 @@ export class BackupService {
   cancel(owner: BackupOwner): void {
     const st = this.running.get(owner);
     if (st) st.cancelled = true;
-    this.o.uploads.cancel(owner);
+    this.o.uploads.cancel(owner, 'backup');
   }
 
   /** Uscita dall'app: nessun backup prosegue dopo la finestra di salvataggio. */
@@ -87,6 +85,7 @@ export class BackupService {
       return { ok: false, error: 'Nessun collegamento online' };
 
     const r = await this.o.uploads.collect(owner, target.access, {
+      kind: 'backup',
       types: BACKUP_TYPES,
       verifyIdentity: (id) =>
         sameCpu(id, target.identity)
@@ -104,6 +103,9 @@ export class BackupService {
         error: `Nessun blocco copiato${first ? `: ${first}` : ': la CPU non ne ha elencati'}`,
       };
     }
+
+    // Interrompi durante la raccolta o subito dopo: il file non si scrive.
+    if (state.cancelled || owner.isDestroyed()) return { ok: false, cancelled: true };
 
     const entries: BackupBlockEntry[] = [];
     const files: Record<string, Uint8Array> = {};

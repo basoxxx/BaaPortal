@@ -44,3 +44,12 @@ export function createConfirm(
     return r.response === 0;
   };
 }
+
+/**
+ * Aggancio solo per i test e2e: se BAAPORTAL_E2E_SAVE_PATH è impostata e l'app non è impacchettata,
+ * la finestra di salvataggio del backup non si mostra e si usa quel percorso. Altrimenti `null`.
+ */
+export function e2eSavePath(): string | null {
+  const hook = process.env['BAAPORTAL_E2E_SAVE_PATH'];
+  return !app.isPackaged && hook ? hook : null;
+}

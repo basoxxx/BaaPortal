@@ -1,8 +1,9 @@
-import { act } from '@testing-library/react';
+import { act, fireEvent, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { commands } from '../../src/commands/commands';
+import { ids } from '../../src/project/navigation/treeIds';
 import { getProgress } from '../../src/project/progress';
-import { ctx, setupOnline } from './downloadHelpers';
+import { ctx, PLC, setupOnline } from './downloadHelpers';
 
 const keys = (app: Awaited<ReturnType<typeof setupOnline>>['app']) =>
   app.store.getState().messages.map((m) => m.textKey);
@@ -83,5 +84,28 @@ describe('online.backup', () => {
     });
     expect(getProgress()).toBeNull();
     expect(app.bridge.plcBackupCalls).toBe(1);
+  });
+
+  it('menu della cartella «Backup online»: la voce parte con la CPU online, offline è disabilitata', async () => {
+    const { app } = await setupOnline([]);
+    app.store.getState().setInfoSubTab('general');
+    app.bridge.plcBackupResults.push({ ok: true, path: '/tmp/a.baapbak', count: 1, failed: [] });
+    const folder = await screen.findByTestId(`tree-node-${ids.folder(PLC, 'backup')}`);
+    fireEvent.contextMenu(folder);
+    await act(async () => {
+      fireEvent.click(
+        await screen.findByRole('menuitem', { name: 'Carica backup dal dispositivo online…' }),
+      );
+    });
+    expect(app.bridge.plcBackupCalls).toBe(1);
+    expect(keys(app)).toContain('messages.backupDone');
+
+    await act(async () => {
+      await commands['online.goOffline'].run(ctx(app));
+    });
+    fireEvent.contextMenu(folder);
+    expect(
+      await screen.findByRole('menuitem', { name: 'Carica backup dal dispositivo online…' }),
+    ).toHaveAttribute('aria-disabled', 'true');
   });
 });

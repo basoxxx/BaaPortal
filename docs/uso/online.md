@@ -53,4 +53,27 @@ Ogni comando chiede una conferma. **MRES (cancellazione totale) non è disponibi
 
 Dal portale (_Carica dal dispositivo_) o dal menu _Online_ si apre la finestra _Dispositivi accessibili_: si sceglie la CPU e si preme _Carica dal dispositivo_. BaaPortal legge dalla CPU i blocchi di programma e crea un **progetto nuovo**, non salvato, con i blocchi in AWL. Non porta simboli né commenti. I blocchi che la CPU rifiuta o che non si decodificano non vengono caricati: sono elencati nel commento del progetto nuovo. Se c'è un progetto con modifiche non salvate, compare prima la solita domanda di salvataggio.
 
-I limiti noti sono in `docs/limiti-noti.md`, sezioni «Online (piano 3A)» e «Caricamento e confronto (piano 3B)».
+## Online e diagnostica
+
+Con il collegamento attivo, nell'albero del progetto (o con _Apri Online e diagnostica_ nella task card _Test_) si apre la scheda _Online e diagnostica_. A sinistra ci sono le pagine, a destra quella scelta. In alto si vedono sempre il modo della CPU e i suoi LED.
+
+- **Generale**: modulo, numero d'ordine, versione, MMC, ultimo cambio di modo e livello di protezione.
+- **Buffer di diagnostica**: gli eventi della CPU, il più recente in cima. Un clic su una riga mostra i dettagli. _Blocca visualizzazione_ ferma l'aggiornamento per leggere con calma. Il buffer si aggiorna circa ogni secondo, solo finché la scheda è aperta.
+- **Tempo di ciclo**: ultimo, minimo e massimo, con il tempo di sorveglianza.
+- **Memoria**: totale, occupato e libero per ogni area.
+
+Se la CPU non fornisce un'informazione, la pagina dice «non disponibile su questa CPU». Con la simulazione attiva la scheda rimanda al Pannello di comando CPU.
+
+## Imposta ora
+
+La pagina _Imposta ora_ mostra l'ora della CPU, quella del PC e la differenza. Si può impostare l'ora del PC con un solo pulsante, oppure scrivere a mano data (AAAA-MM-GG) e ora (hh:mm:ss) e premere _Applica_. È una scrittura nella CPU: chiede conferma. L'ora è quella locale del PC, senza fuso né ora legale.
+
+## Tabelle di controllo online
+
+Una tabella di controllo funziona anche con la CPU vera. Con il collegamento attivo, _Osserva tutto_ legge i valori di stato ogni mezzo secondo circa. _Comanda_ scrive i valori di comando: prima compare la conferma, con l'elenco degli indirizzi e dei valori. Le righe che online non si possono usare (per esempio le uscite di periferia PQ) dicono «non disponibile online». PI, temporizzatori e contatori si osservano ma non si comandano. Al massimo 200 righe osservate. Se una scrittura si interrompe a metà, le righe già scritte restano scritte. L'«esito sconosciuto» riguarda tutta la richiesta in corso (fino a 20 righe): le righe successive dicono «Non scritto», e se la CPU rifiuta la richiesta le righe dicono «Rifiutato dalla CPU».
+
+## Backup online
+
+_Online_ > _Carica backup dal dispositivo online…_ (o il menu della cartella _Backup online_) chiede dove salvare e copia nel file `.baapbak` i blocchi OB, FB, FC e DB e i blocchi di sistema (SDB) della CPU. Si può fare anche in RUN, e con _Interrompi_ si ferma. Il backup non cambia né la CPU né il progetto. Per ora è solo un'esportazione: il ripristino arriva con il piano 3D.
+
+I limiti noti sono in `docs/limiti-noti.md`, sezioni «Online (piano 3A)», «Caricamento e confronto (piano 3B)» e «Diagnostica online (piano 3C)».

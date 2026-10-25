@@ -170,6 +170,9 @@ function assertUserdata(pdu: S7Pdu): void {
   }
 }
 
+/** Aree in cui una write var è ammessa: ingressi, uscite, merker e blocchi dati. */
+const WRITABLE_AREAS = new Set<string>(['I', 'Q', 'M', 'DB']);
+
 function refuseWrite(msg: string): never {
   throw new S7Error('FORBIDDEN', `${msg}: non ammesso nemmeno in modo online-write`);
 }
@@ -197,6 +200,10 @@ export function assertOnlineWrite(pdu: S7Pdu): void {
         const items = decodeWriteRequest(p, pdu.data);
         must(items.length >= 1, 'write var senza item');
         must(items.length <= MAX_ITEMS_PER_REQUEST, `write var con ${items.length} item`);
+        // Difesa in profondità: si scrive solo in I, Q, M e DB (mai periferia, temporizzatori, contatori...).
+        for (const it of items) {
+          must(WRITABLE_AREAS.has(it.area), `write var in area ${it.area} non ammessa`);
+        }
         const want = encodeWriteRequest(items);
         must(sameBytes(p, want.param) && sameBytes(pdu.data, want.data), 'write var non canonico');
         return;

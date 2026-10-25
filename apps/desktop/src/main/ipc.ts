@@ -18,7 +18,7 @@ import { isTrustedFrame, type FrameLike, type TrustOptions } from './trust';
 import { deleteRecovery, listRecovery, readRecovery, writeRecovery } from './recoveryStore';
 import { parseOpenOptions, parseSaveOptions } from './fileDialogOptions';
 import { registerKit } from './kit';
-import { createConfirm } from './plc/confirm';
+import { createConfirm, e2eSavePath } from './plc/confirm';
 import { registerPlc } from './plc/plcIpc';
 import { addRecent, removeRecent, type Platform, type StoredRecent } from './recentProjects';
 
@@ -194,6 +194,8 @@ export function registerIpc(
     undefined,
     undefined,
     async (owner, defaultName) => {
+      const hooked = e2eSavePath();
+      if (hooked) return hooked;
       const win = BrowserWindow.fromWebContents(owner as WebContents);
       const opts = {
         defaultPath: defaultName,

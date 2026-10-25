@@ -27,7 +27,7 @@ Per ogni voce si indica che cosa succede oggi. "Errore chiaro" vuol dire che Baa
 - **Mai provato su una CPU reale.** Ogni scrittura (carica nel dispositivo, cancellazione, RUN/STOP, copia RAM in ROM, comprimi) è provata solo contro il PLC di prova e il simulatore. Prima di usarla su una macchina, provarla su una CPU che non è in produzione.
 - **MRES non disponibile da remoto.** Non c'è un servizio documentato nelle fonti pubbliche per una S7-300: si usa il selettore di modo della CPU. Il pulsante è disabilitato.
 - **Il confronto usa checksum e lunghezze (lunghezza MC7), non il contenuto byte per byte.** Che il checksum letto dalla CPU coincida con quello del file compilato è un'ipotesi non verificata su una CPU reale.
-- **Blocchi di sistema (SDB).** Non si caricano né si confrontano. Il backup arriva nel 3C.
+- **Blocchi di sistema (SDB).** Il backup online li copia (3C, solo esportazione); non si caricano né si confrontano.
 - **Carica dal dispositivo senza simboli né commenti.** Il progetto nuovo ha solo i blocchi in AWL.
 - **Blocchi non caricati.** I blocchi che la CPU rifiuta o che non si decodificano non vengono caricati: sono elencati nel commento del progetto nuovo. I loro byte originali non si conservano.
 - **Cancellazione dei blocchi.** `_DELE` usa il filesystem 'A', come TIA nella cattura reale (§10.5). È verificato per gli SDB; per OB, FB, FC e DB è un'ipotesi.
@@ -48,6 +48,32 @@ Per ogni voce si indica che cosa succede oggi. "Errore chiaro" vuol dire che Baa
 - **Cerca/Sostituisci nella scheda di confronto.** Agisce sul blocco sorgente del progetto, non sul testo mostrato (il compilato decodificato).
 - **Firmware del progetto nuovo.** Un progetto creato dalla CPU usa il firmware letto dalla CPU solo se è nel catalogo; altrimenti usa il più recente e mostra un avviso.
 - **DB creati con SFC 22 (CREAT_DB).** Vengono cancellati da un nuovo caricamento (vedi «Simulatore (piano 2A)», «Blocchi cancellati»). Su una CPU reale non è provato.
+
+## Diagnostica online (piano 3C)
+
+- **Mai provato su una CPU reale.** La diagnostica, l'impostazione dell'ora, il comando delle variabili e il backup sono provati solo contro il PLC di prova. Impostare l'ora e comandare le variabili non sono mai stati provati su una CPU reale.
+- **Testi degli eventi da documentazione.** Solo 4 ID evento sono stati visti in una cattura; gli altri hanno il testo preso dalla documentazione, oppure quello generico.
+- **«Ritentiva = indice 5» di `0x0013` è un'ipotesi.** La memoria è verificata su una sola cattura.
+- **Il tempo di sorveglianza (OB80) viene dalla documentazione.**
+- **Ora locale del PC.** L'ora si imposta in ora locale del PC, senza fuso né ora legale.
+- **Impostazione dell'ora con protezione di livello 2.** Il PLC di prova risponde `0xD241`, ma è un'ipotesi (§12.0).
+- **Il PLC di prova registra ogni STOP come `0x4304` «STOP da PG».** Una CPU reale distingue altre cause.
+- **L'osservazione usa read var, non lo stato delle variabili TIS.** I valori non sono presi a un punto preciso del ciclo.
+- **Niente PQ online, niente comando di PI, T, C, niente forzamento.** Al massimo 200 righe osservate online.
+- **Scritture da tabella in più richieste.** Se una fallisce, le precedenti restano scritte. L'«esito sconosciuto» riguarda tutta la richiesta in corso (fino a 20 righe); le righe successive dicono «Non scritto», e un rifiuto della CPU dice «Rifiutato dalla CPU».
+- **Numero di richieste nella conferma.** È un massimo calcolato per PDU 240, non il numero esatto.
+- **Backup in sola esportazione.** Il ripristino arriva nel 3D. Non si sa se i DB caricati hanno i valori attuali o quelli iniziali (§19.4).
+- **Il backup registra il modo visto per ultimo dalla sorveglianza,** non quello riletto all'inizio.
+- **Lettura di un `.baapbak`.** Per il ripristino del 3D, la lettura si fida delle dimensioni dichiarate nello zip.
+- **Niente messaggi push.** Il buffer si aggiorna ogni secondo, solo con l'editor aperto.
+- **`_DELE` usa 'A'.** Vedi «Caricamento e confronto (piano 3B)».
+- **Impostazione dell'ora con protezione di livello 3.** Anche la risposta `0xD0A1` è un'ipotesi (§12.0).
+- **Il numero di richieste nella conferma è un massimo solo se la CPU concorda una PDU di almeno 240 byte.** Con una PDU più piccola le richieste possono essere di più.
+- **Più tabelle con «Osserva tutto» interrogano ognuna per conto suo.** Il limite di 200 righe vale per tabella, e le tabelle aperte ma non in primo piano continuano a interrogare.
+- **Il backup continua sul suo collegamento** anche se il collegamento online cade o si va offline: lo ferma solo _Interrompi_.
+- **I file `.baapbak` non compaiono nell'albero** fino al 3D.
+- **I record di diagnostica più corti di 20 byte si scartano.**
+- **Il pulsante si chiama «Osserva tutto»,** il nome del 2C, e non «Controlla tutto» come in TIA.
 
 ## Simulatore (piano 2A)
 
@@ -73,7 +99,7 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§4.1 per la semantica). T
 - **Tempo:** orologio iniettato; controllo del tempo di ciclo ogni 1024 istruzioni e a fine ciclo (più il limite fisso di istruzioni); byte del merker di clock aggiornato all'inizio del ciclo e ogni 1024 istruzioni, non a ogni lettura. Dal piano 2B il superamento del tempo di ciclo richiama OB80 (un solo superamento per ciclo), prima di arrivare in STOP.
 - **Chiamate:** lo stack MCR del chiamato parte vuoto; i puntatori `0x84`/`0x85` legano DB/DI al momento della chiamata; `0x86` è trattato come V; DB = DB di istanza dopo `CALL FB`.
 - **Salto alla fine esatta del codice** rifiutato (`MC7_NON_ESEGUIBILE`).
-- **Buffer di diagnostica** limitato a 100 voci; gli id degli eventi nelle SZL sono sintetici (da 0x9000) salvo quelli che il manuale dà (piano 2B).
+- **Buffer di diagnostica** limitato a 100 voci; gli id degli eventi nelle SZL sono sintetici (da 0x9000) salvo quelli che il manuale dà (piano 2B). I cambi di modo del simulatore usano ora gli ID 0x43xx reali (piano 3C).
 - **Errore non previsto del simulatore** (non `SimError`): voce `MC7_NON_ESEGUIBILE` con dettaglio «errore interno», STOP e l'eccezione viene rilanciata.
 - **Cancellazione totale** azzera anche le statistiche del ciclo e `physOut`; i DB tornano ai valori della sezione MC7 del file caricato (i valori iniziali separati non sono letti); i blocchi restano.
 - **Blocchi non caricati dal backend** (messi direttamente nel programma) non hanno upload né informazioni di blocco.
@@ -124,7 +150,7 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§10–§13). Come per il 
 
 Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simulatore.md`. Come per i piani 2A e 2B, nessuna è confermata da una CPU reale.
 
-- **Nessun PLC vero fino alla tappa 3.** Pannello CPU, pannello I/O, osservazione e tabelle di controllo funzionano solo sul simulatore; il collegamento a un PLC reale usa lo stesso `watch`/`write` nella tappa 3.
+- **Nessun PLC vero fino alla tappa 3.** Pannello CPU, pannello I/O, osservazione e tabelle di controllo funzionano solo sul simulatore; il collegamento a un PLC reale usa lo stesso `watch`/`write` nella tappa 3 (le tabelle online arrivano con il 3C).
 - **Il tempo di ciclo del Worker non è quello di una CPU vera.** Dipende dal computer.
 - **Osservazione del programma.**
   - Rileva solo la prima esecuzione di ogni riga nel ciclo; non c'è l'opzione «ultima esecuzione».
