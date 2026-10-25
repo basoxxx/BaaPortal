@@ -40,8 +40,9 @@ export async function prepareCompiledBlocks(
   const before = stateNow();
   const wanted = (dev: PlcDevice) =>
     only ? dev.blocks.filter((b) => only.includes(b.id)) : dev.blocks;
+  if (!before.dev) return { status: 'aborted' };
   let needCompile = true;
-  if (only && before.dev) {
+  if (only) {
     const ctx0 = contextHashOf(before.dev);
     needCompile = wanted(before.dev).some((b) => before.compile.hashes[b.id] !== hashOf(b, ctx0));
   }
@@ -50,7 +51,7 @@ export async function prepareCompiledBlocks(
       ctx,
       deviceId,
       'changes',
-      only ? wanted(before.dev!).map((b) => b.id) : undefined,
+      only ? wanted(before.dev).map((b) => b.id) : undefined,
     );
   }
   if (!isCurrent()) return { status: 'aborted' };

@@ -50,7 +50,7 @@ export function DownloadPreviewDialog({ plan, onClose }: { plan: DownloadPlan; o
     plan.rows.filter((r) => !isCpuOnly(r) && active.has(r.key)).map((r) => r.key),
   );
   const nothing = active.size === 0;
-  const warn = runWarning(plan.rows, loads, mode);
+  const warn = runWarning(plan.rows, active, mode);
   const toggle = (key: string) =>
     setActive((a) => {
       const next = new Set(a);
@@ -59,7 +59,8 @@ export function DownloadPreviewDialog({ plan, onClose }: { plan: DownloadPlan; o
     });
 
   const start = async (): Promise<void> => {
-    if (running || outcome || nothing) return;
+    if (runningRef.current || outcome || nothing) return;
+    runningRef.current = true;
     setRunning(true);
     setProgress(null);
     const off = bridge.onPlcWriteProgress((p) => setProgress(p));
@@ -75,6 +76,7 @@ export function DownloadPreviewDialog({ plan, onClose }: { plan: DownloadPlan; o
     } finally {
       off();
     }
+    runningRef.current = false;
     setRunning(false);
     setOutcome(result);
   };
@@ -188,6 +190,7 @@ export function DownloadPreviewDialog({ plan, onClose }: { plan: DownloadPlan; o
             {outcome.deleted.length > 0 ? (
               <p>{t('download.deleted', { list: outcome.deleted.join(', ') })}</p>
             ) : null}
+            {outcome.cpuStopped ? <p>{t('download.cpuStopped')}</p> : null}
             {outcome.failedAt ? <p>{t('download.failedAt', { block: outcome.failedAt })}</p> : null}
           </div>
         ) : null}

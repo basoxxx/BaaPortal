@@ -56,6 +56,8 @@ export interface DownloadOutcome {
   deleted: string[];
   failedAt?: string;
   error?: string;
+  /** Abbiamo arrestato la CPU e non è ripartita. */
+  cpuStopped?: boolean;
 }
 
 const keyOf = (type: string, number: number) => `${type}${number}`;
@@ -70,20 +72,23 @@ export function defaultLoad(r: DownloadRow): boolean {
 export const isCpuOnly = (r: DownloadRow) => r.blockId === undefined;
 
 /**
- * L'avviso «CPU in RUN»: il caricamento contiene un OB, o un FB/DB diverso da quello della CPU.
+ * L'avviso «CPU in RUN»: il caricamento (o la cancellazione) tocca un OB, o un FB/DB diverso da
+ * quello della CPU o solo della CPU.
  * L'impronta d'interfaccia della CPU non è nota: «diverso» è un'approssimazione per eccesso del
  * «cambia l'interfaccia».
  */
 export function runWarning(
   rows: readonly DownloadRow[],
-  load: ReadonlySet<string>,
+  active: ReadonlySet<string>,
   mode: string | undefined,
 ): boolean {
-  if (mode !== 'RUN') return false;
+  // Modo ignoto: per prudenza si avvisa; solo in STOP certo non serve.
+  if (mode === 'STOP') return false;
   return rows.some(
     (r) =>
-      load.has(r.key) &&
-      (r.type === 'OB' || ((r.type === 'FB' || r.type === 'DB') && r.state === 'different')),
+      active.has(r.key) &&
+      (r.type === 'OB' ||
+        ((r.type === 'FB' || r.type === 'DB') && (isCpuOnly(r) || r.state === 'different'))),
   );
 }
 
@@ -253,6 +258,7 @@ export async function executePlcDownload(
       return { status: 'stopFailed', ...none, error: stop.error };
     }
     stopped = true;
+    if (!sameSession(store, plan)) return { status: 'ended', ...none, cpuStopped: true };
   }
   let res: Awaited<ReturnType<BaaBridge['plcDownload']>>;
   try {
@@ -263,7 +269,7 @@ export async function executePlcDownload(
   const live = sameSession(store, plan);
   if (!res.ok && 'cancelled' in res) {
     if (live) push(store, 'warning', 'plcDownloadCancelled');
-    return { status: 'cancelled', ...none };
+    return { status: 'cancelled', ...none, ...(stopped ? { cpuStopped: true } : {}) };
   }
   const outcome: DownloadOutcome = res.ok
     ? { status: 'done', loaded: res.loaded, deleted: res.deleted }
@@ -273,8 +279,10 @@ export async function executePlcDownload(
         deleted: res.deleted,
         error: res.error,
         ...(res.failedAt ? { failedAt: res.failedAt } : {}),
+        ...(stopped ? { cpuStopped: true } : {}),
       };
   if (!live) return { ...outcome, status: outcome.status === 'done' ? 'ended' : outcome.status };
+  const something = res.loaded.length > 0 || res.deleted.length > 0;
   if (res.ok) {
     push(store, 'info', 'plcDownloaded', {
       loaded: String(res.loaded.length),
@@ -287,9 +295,8 @@ export async function executePlcDownload(
       failedAt: res.failedAt ?? '-',
     });
   }
-  const something = res.loaded.length > 0 || res.deleted.length > 0;
   // Se la CPU gira ancora (nessun arresto), non c'è nulla da avviare.
-  if (res.ok && res.loaded.length > 0 && (stopped || wasMode !== 'RUN')) {
+  if (res.ok && something && (stopped || wasMode !== 'RUN')) {
     let yes = false;
     try {
       yes = await bridge.askQuestion({
@@ -314,7 +321,7 @@ export async function executePlcDownload(
     }
   }
   if (something && sameSession(store, plan)) {
-    await plcControllerFor(store, bridge).compare(true);
+    await plcControllerFor(store, bridge).compare(false);
   }
   return outcome;
 }

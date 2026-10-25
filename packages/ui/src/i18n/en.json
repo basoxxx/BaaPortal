@@ -1192,6 +1192,7 @@
       "stopFailed": "Stopping the CPU failed: nothing downloaded.",
       "stale": "The project changed after the preview: nothing downloaded.",
       "ended": "Download done, but the connection or project changed."
-    }
+    },
+    "cpuStopped": "CPU left in STOP."
   }
 }

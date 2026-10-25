@@ -1192,6 +1192,7 @@
       "stopFailed": "Arresto della CPU non riuscito: nessun caricamento.",
       "stale": "Il progetto è cambiato dopo l'anteprima: nessun caricamento.",
       "ended": "Caricamento eseguito, ma il collegamento o il progetto sono cambiati."
-    }
+    },
+    "cpuStopped": "CPU lasciata in STOP."
   }
 }

@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { parseBlockFile } from '@baaportal/s7comm';
 import { commands } from '../../src/commands/commands';
 import type { PlcDownloadResult } from '../../src/online/plcTypes';
-import { cpuBlock, runDownload, setupOnline } from './downloadHelpers';
+import { createInstanceDb, findDevice, type CodeBlock } from '@baaportal/project';
+import { PLC, cpuBlock, runDownload, setupOnline } from './downloadHelpers';
 
 const st = (app: Awaited<ReturnType<typeof setupOnline>>['app']) => app.store.getState();
 const messages = (app: Awaited<ReturnType<typeof setupOnline>>['app']) =>
@@ -219,5 +220,150 @@ describe('Carica nel dispositivo (PLC vero)', () => {
     });
     expect(commands['online.download'].isEnabled(st(app))).toBe(false);
     expect(app.bridge.plcDownloadCalls).toHaveLength(0);
+  }, 30_000);
+
+  // Toglie le azioni di tutti gli OB (il progetto ha già un OB1 che si caricherebbe).
+  const noObs = () => {
+    for (const ob of screen.getAllByRole('checkbox', { name: /^OB/ }))
+      if ((ob as HTMLInputElement).checked) fireEvent.click(ob);
+  };
+  const cpuOnlyOb = {
+    type: 'OB' as const,
+    number: 40,
+    loadLength: 80,
+    mc7Length: 8,
+    checksum: 5,
+  };
+
+  it('cancellare un OB solo della CPU in RUN: avviso; con solo cancellazioni e STOP si chiede e si avvia', async () => {
+    const { app } = await setupOnline([['FC', 1]]);
+    app.bridge.plcBlocksResults = [{ ok: true, blocks: [cpuOnlyOb] }];
+    app.bridge.plcDownloadResults.push({ ok: true, loaded: [], deleted: ['OB40'] });
+    await runDownload(app);
+    await ok();
+    noObs();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'FC1' })); // niente caricamenti
+    expect(screen.queryByTestId('download-run-warning')).toBeNull();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'OB40' }));
+    expect(screen.getByTestId('download-run-warning')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Arresta la CPU' }));
+    await press();
+    await waitFor(() => expect(app.bridge.plcWriteLog).toEqual(['STOP', 'download', 'RUN']));
+    expect(app.bridge.plcDownloadCalls[0]!.deleteBlocks).toEqual([{ type: 'OB', number: 40 }]);
+  }, 30_000);
+
+  it('avviso RUN: FB diverso sì, FB nuovo no', async () => {
+    const { app, blocks } = await setupOnline([
+      ['FB', 1],
+      ['FB', 2],
+    ]);
+    app.bridge.plcBlocksResults = [{ ok: true, blocks: [cpuBlock(app, blocks[0]!, 'FB', 1)] }];
+    await runDownload(app);
+    await ok();
+    noObs();
+    // FB1 diverso → avviso; FB2 nuovo non basta
+    expect(screen.getByTestId('download-run-warning')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'FB1' }));
+    expect(screen.queryByTestId('download-run-warning')).toBeNull();
+  }, 30_000);
+
+  it('senza avviso non c è modo di arrestare la CPU: nessun STOP', async () => {
+    const { app } = await setupOnline([['FC', 1]]);
+    await runDownload(app);
+    await ok();
+    noObs();
+    expect(screen.queryByRole('checkbox', { name: 'Arresta la CPU' })).toBeNull();
+    await press();
+    await screen.findByTestId('download-result');
+    expect(app.bridge.plcControlCalls).toEqual([]);
+  }, 30_000);
+
+  it('STOP riuscito ma collegamento perso: non si carica', async () => {
+    const { app } = await setupOnline([['OB', 35]]);
+    let release!: (r: { ok: true; result: string }) => void;
+    app.bridge.plcControl = () => new Promise((r) => (release = r));
+    await runDownload(app);
+    await ok();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Arresta la CPU' }));
+    await press();
+    await act(async () => {
+      await commands['online.goOffline'].run({
+        store: app.store,
+        service: app.service,
+        bridge: app.bridge,
+      });
+    });
+    await act(async () => release({ ok: true, result: 'ok' }));
+    await screen.findByTestId('download-result');
+    expect(app.bridge.plcDownloadCalls).toHaveLength(0);
+  }, 30_000);
+
+  it('errore a metà dopo STOP: «CPU lasciata in STOP»', async () => {
+    const { app } = await setupOnline([['OB', 35]]);
+    app.bridge.plcDownloadResults.push({
+      ok: false,
+      loaded: [],
+      deleted: [],
+      failedAt: 'OB35',
+      error: 'x',
+    });
+    await runDownload(app);
+    await ok();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Arresta la CPU' }));
+    await press();
+    expect(await screen.findByTestId('download-result')).toHaveTextContent('CPU lasciata in STOP');
+    expect(app.bridge.questions).toHaveLength(0);
+  }, 30_000);
+
+  it('doppio avvio: una sola scrittura', async () => {
+    const { app } = await setupOnline([['FC', 1]]);
+    let calls = 0;
+    app.bridge.plcDownload = () => {
+      calls++;
+      return new Promise(() => undefined);
+    };
+    await runDownload(app);
+    await ok();
+    const btn = screen.getByTestId('download-ok');
+    await act(async () => {
+      fireEvent.click(btn);
+      fireEvent.click(btn);
+    });
+    expect(calls).toBe(1);
+  }, 30_000);
+
+  it('progetto cambiato dopo l anteprima: nessuna scrittura e messaggio', async () => {
+    const { app, blocks } = await setupOnline([['FC', 1]]);
+    await runDownload(app);
+    await ok();
+    act(() => {
+      app.store.getState().edit('history.editBlock', (p) => {
+        const b = findDevice(p, PLC)!.blocks.find((x) => x.id === blocks[0]!.id) as CodeBlock;
+        b.networks[0]!.source = 'A %I0.5\n= %Q0.5';
+      });
+    });
+    await press();
+    expect(await screen.findByTestId('download-result')).toHaveTextContent('è cambiato');
+    expect(app.bridge.plcDownloadCalls).toHaveLength(0);
+    expect(messages(app)).toContain('messages.plcDownloadChanged');
+  }, 30_000);
+
+  it('un DB di istanza va prima del suo FB', async () => {
+    const { app, blocks } = await setupOnline([['FB', 7]]);
+    act(() => {
+      app.store.getState().edit('history.addBlock', (p) => {
+        findDevice(p, PLC)!.blocks.push(
+          createInstanceDb({ number: 8, name: 'DB8', instanceOf: blocks[0]!.name }),
+        );
+      });
+    });
+    await runDownload(app);
+    await ok();
+    await press();
+    await waitFor(() => expect(app.bridge.plcDownloadCalls).toHaveLength(1));
+    const order = names(app.bridge.plcDownloadCalls[0]!.files).filter((n) =>
+      ['DB8', 'FB7'].includes(n),
+    );
+    expect(order).toEqual(['DB8', 'FB7']);
   }, 30_000);
 });
