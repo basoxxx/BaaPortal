@@ -39,6 +39,7 @@ function setup(opts: { pick?: () => Promise<string | null> } = {}) {
   const service = {
     target: () => target,
     closeAll: async () => undefined,
+    onConnect: () => undefined,
   } as unknown as PlcService;
   const writes = new PlcWriteService({
     service,

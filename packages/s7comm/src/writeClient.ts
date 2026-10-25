@@ -1,4 +1,5 @@
 import { S7Client, checkHeader } from './client';
+import { isRestorableSdb } from './readOnlyGuard';
 import { S7Connection, type ConnectOptions } from './connection';
 import { S7Error } from './errors';
 import { itemReturnName } from './s7/errorCodes';
@@ -17,6 +18,7 @@ import {
 import { encodeRequestDownload, sliceBlockForDownload } from './s7/download';
 import type { Area } from './s7/readVar';
 import { decodeUserdata } from './s7/userdata';
+import { decodeJobList, decodeTisReply, reqReadJobList, tisErrorText } from './s7/tis';
 import { reqSetClock } from './s7/userdataRequests';
 import type { S7DateTime } from './s7/clock';
 import { errorName } from './s7/errorCodes';
@@ -36,6 +38,22 @@ const DELETE_FS = 'A';
 /** Tipi cancellabili con `_DELE`: SDB, SFC e SFB non si cancellano. */
 const DELETABLE: readonly BlockType[] = ['OB', 'FB', 'FC', 'DB'];
 
+/** Ritentativi su «la CPU sta assegnando nuovi parametri» (0xD2A9/0xD2AA, proto §19.5). */
+const BUSY_RETRY_MS = 200;
+const BUSY_RETRIES = 10;
+
+export interface DownloadOptions {
+  /** Su 0xD2A9/0xD2AA ripete la stessa richiesta dopo 200 ms, fino a 10 volte; `sleep` è iniettabile. */
+  busyRetry?: boolean | { sleep(ms: number): Promise<void> };
+}
+
+/** La CPU sta assegnando parametri (a sé o ai moduli): la stessa richiesta si può ripetere. */
+export function isParamBusy(err: unknown): boolean {
+  if (!(err instanceof S7Error) || err.code !== 'CPU_ERROR') return false;
+  const d = err.detail;
+  return d?.errorClass === 0xd2 && (d.errorCode === 0xa9 || d.errorCode === 0xaa);
+}
+
 const h2 = (n: number): string => `0x${n.toString(16).padStart(2, '0')}`;
 
 /**
@@ -51,8 +69,12 @@ export class S7WriteClient extends S7Client {
     this.#wconn = conn;
   }
 
-  static override async connect(o: ConnectOptions): Promise<S7WriteClient> {
-    return new S7WriteClient(await S7Connection.open({ ...o, mode: 'online-write' }));
+  /** `online-restore` è il modo del ripristino di un backup (SDB compresi); il resto è `online-write`. */
+  static override async connect(
+    o: ConnectOptions,
+    mode: 'online-write' | 'online-restore' = 'online-write',
+  ): Promise<S7WriteClient> {
+    return new S7WriteClient(await S7Connection.open({ ...o, mode }));
   }
 
   // ---- variabili ---------------------------------------------------------------------------
@@ -103,42 +125,101 @@ export class S7WriteClient extends S7Client {
    * Scrive un file di blocco nella CPU (proto §10): request download, fette su richiesta della
    * CPU, poi `_INSE` per attivarlo. Se la connessione cade a metà l'errore sale così com'è.
    */
-  async downloadBlock(file: Uint8Array): Promise<void> {
+  async downloadBlock(file: Uint8Array, opts: DownloadOptions = {}): Promise<void> {
     const { header } = parseBlockFile(file);
     const type = header.type;
     if (type === undefined) {
       throw new S7Error('PROTOCOL', `tipo di blocco 0x${header.typeCode.toString(16)} sconosciuto`);
     }
     const slices = sliceBlockForDownload(file, this.pduLength);
-    let next = 0;
-    await this.#wconn.runDownload(
-      encodeRequestDownload(type, header.number, DOWNLOAD_FS, header.loadLength, header.mc7Length),
-      () => {
-        const chunk = slices[next++];
-        if (chunk === undefined) {
-          throw new S7Error('PROTOCOL', 'la CPU chiede più fette di quelle del blocco');
+    const retry = opts.busyRetry;
+    const sleep =
+      typeof retry === 'object'
+        ? (ms: number) => retry.sleep(ms)
+        : (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+    const attempt = async <T>(f: () => Promise<T>): Promise<T> => {
+      for (let n = 0; ; n++) {
+        try {
+          return await f();
+        } catch (e) {
+          if (!retry || !isParamBusy(e)) throw e;
+          if (n >= BUSY_RETRIES) {
+            throw new S7Error(
+              'CPU_ERROR',
+              `${(e as Error).message}: la CPU sta assegnando nuovi parametri (${BUSY_RETRIES} ritentativi esauriti)`,
+              (e as S7Error).detail,
+            );
+          }
+          await sleep(BUSY_RETRY_MS);
         }
-        return { eos: next < slices.length, chunk };
-      },
-      () => undefined,
-    );
-    const pdu = await this.#wconn.request(
-      encodeInsertBlock(type, header.number, DOWNLOAD_FS),
-      NOTHING,
-      1,
-    );
-    checkHeader(pdu, `_INSE ${type}${header.number} rifiutato dalla CPU`);
-    if (pdu.rosctr !== 3) {
-      throw new S7Error('PROTOCOL', `risposta a _INSE con ROSCTR ${pdu.rosctr}`);
-    }
-    const r = decodeControlResponse(pdu.param);
-    if (r.code !== 0) {
-      throw new S7Error(
-        'CPU_ERROR',
-        `_INSE ${type}${header.number} non eseguito dalla CPU: ${r.name} (0x${r.code.toString(16).padStart(2, '0')})`,
-        { returnCode: r.code },
+      }
+    };
+    await attempt(async () => {
+      let next = 0;
+      await this.#wconn.runDownload(
+        encodeRequestDownload(
+          type,
+          header.number,
+          DOWNLOAD_FS,
+          header.loadLength,
+          header.mc7Length,
+        ),
+        () => {
+          const chunk = slices[next++];
+          if (chunk === undefined) {
+            throw new S7Error('PROTOCOL', 'la CPU chiede più fette di quelle del blocco');
+          }
+          return { eos: next < slices.length, chunk };
+        },
+        () => undefined,
       );
+    });
+    await attempt(async () => {
+      const pdu = await this.#wconn.request(
+        encodeInsertBlock(type, header.number, DOWNLOAD_FS),
+        NOTHING,
+        1,
+      );
+      checkHeader(pdu, `_INSE ${type}${header.number} rifiutato dalla CPU`);
+      if (pdu.rosctr !== 3) {
+        throw new S7Error('PROTOCOL', `risposta a _INSE con ROSCTR ${pdu.rosctr}`);
+      }
+      const r = decodeControlResponse(pdu.param);
+      if (r.code !== 0) {
+        throw new S7Error(
+          'CPU_ERROR',
+          `_INSE ${type}${header.number} non eseguito dalla CPU: ${r.name} (0x${r.code.toString(16).padStart(2, '0')})`,
+          { returnCode: r.code },
+        );
+      }
+    });
+  }
+
+  /** I job di test vivi, compresa la chiamata stessa (`10 nn`); sola lettura (proto §18.1). */
+  async readJobList(): Promise<{ fn: number; job: number }[]> {
+    const f = reqReadJobList();
+    const pdu = await this.#wconn.request(f.param, f.data, 7);
+    if (pdu.rosctr !== 7) throw new S7Error('PROTOCOL', `lista dei job: ROSCTR ${pdu.rosctr}`);
+    const r = decodeTisReply(pdu.param, pdu.data);
+    if (r.kind === 'indication' || r.sub !== f.param[6]) {
+      throw new S7Error('PROTOCOL', 'lista dei job: risposta TIS inattesa');
     }
+    if (r.errorCode !== 0) {
+      throw new S7Error('CPU_ERROR', `lista dei job: ${tisErrorText(r.errorCode)}`, {
+        errorClass: r.errorCode >> 8,
+        errorCode: r.errorCode & 0xff,
+      });
+    }
+    if (!r.tisData) throw new S7Error('PROTOCOL', 'lista dei job: risposta senza dati');
+    return decodeJobList(r.tisData);
+  }
+
+  /** Cancella un SDB ripristinabile (`_DELE`, filesystem A, proto §19.3.1); SDB 2 e fuori intervallo no. */
+  deleteSystemBlock(number: number): Promise<void> {
+    if (!isRestorableSdb(number)) {
+      return Promise.reject(new S7Error('PROTOCOL', `_DELE: SDB ${number} non ripristinabile`));
+    }
+    return this.#controlOk(encodeDeleteBlock('SDB', number, DELETE_FS), `_DELE SDB${number}`);
   }
 
   // ---- controllo ---------------------------------------------------------------------------

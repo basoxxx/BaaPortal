@@ -1,5 +1,6 @@
 import { StateEffect, StateField, type Extension } from '@codemirror/state';
 import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemirror/view';
+import { stwBits, type Regs } from '@baaportal/s7comm';
 
 /** Riga della mappa di compilazione: istruzione MC7 → riga del testo della rete (da 0). */
 export interface LineMapRow {
@@ -24,7 +25,9 @@ export interface MonitorCell {
   sta: boolean;
   stw: number;
   accu1: number;
-  accu2: number;
+  /** Facoltativi: sulla CPU compaiono solo se chiesti con le caselle della barra. */
+  accu2?: number;
+  ar1?: number;
 }
 
 /**
@@ -44,6 +47,54 @@ export function formatAccu(v: number, hex: boolean): string {
 
 /** Parola di stato in 9 bit (BR … /FC, da sinistra a destra). */
 export const formatStw = (w: number): string => (w & 0x1ff).toString(2).padStart(9, '0');
+
+/**
+ * Dalle righe osservate sulla CPU ai valori per riga di ogni rete, con le stesse regole del
+ * simulatore: una riga con più voci (una `CALL` espansa) mostra l'ultima voce eseguita; una riga
+ * le cui voci non sono state chieste (fuori finestra) non compare, una chiesta e non elaborata è `null`.
+ */
+export function monitorLinesFromPlc(
+  map: readonly LineMapRow[],
+  lines: readonly { offset: number; regs: Regs | null }[],
+  hex: boolean,
+): Map<number, MonitorLines> {
+  const byOffset = new Map<number, Regs | null>();
+  for (const l of lines) byOffset.set(l.offset, l.regs);
+  const best = new Map<number, Map<number, { offset: number; regs: Regs } | null>>();
+  for (const e of map) {
+    if (!byOffset.has(e.offset)) continue;
+    let rows = best.get(e.network);
+    if (!rows) best.set(e.network, (rows = new Map()));
+    const regs = byOffset.get(e.offset) ?? null;
+    const prev = rows.get(e.line);
+    if (regs) {
+      if (!prev || e.offset > prev.offset) rows.set(e.line, { offset: e.offset, regs });
+    } else if (prev === undefined) rows.set(e.line, null);
+  }
+  const out = new Map<number, MonitorLines>();
+  for (const [network, rows] of best) {
+    const cells = new Map<number, MonitorCell | null>();
+    for (const [line, hit] of rows) {
+      if (!hit) {
+        cells.set(line, null);
+        continue;
+      }
+      const r = hit.regs;
+      const stw = r.stw ?? 0;
+      const cell: MonitorCell = {
+        rlo: stwBits(stw).rlo === 1,
+        sta: stwBits(stw).sta === 1,
+        stw,
+        accu1: r.accu1 ?? 0,
+      };
+      if (r.accu2 !== undefined) cell.accu2 = r.accu2;
+      if (r.ar1 !== undefined) cell.ar1 = r.ar1;
+      cells.set(line, cell);
+    }
+    out.set(network, { hex, cells });
+  }
+  return out;
+}
 
 /**
  * Dai passi del simulatore ai valori per riga di ogni rete. Una riga con più voci (una `CALL`
@@ -108,11 +159,15 @@ class CellWidget extends WidgetType {
       s.textContent = `${label} ${value}`;
       el.append(s);
     };
-    part('RLO', this.c.rlo ? '1' : '0');
+    // Colonne come in TIA: RLC, STA, ACCU1, STW; poi, a richiesta, ACCU2 e AR1.
+    part('RLC', this.c.rlo ? '1' : '0');
     part('STA', this.c.sta ? '1' : '0');
     part('ACCU1', formatAccu(this.c.accu1, this.hex));
-    part('ACCU2', formatAccu(this.c.accu2, this.hex));
     part('STW', formatStw(this.c.stw));
+    if (this.c.accu2 !== undefined) part('ACCU2', formatAccu(this.c.accu2, this.hex));
+    if (this.c.ar1 !== undefined) part('AR1', formatAccu(this.c.ar1, this.hex));
+    const b = stwBits(this.c.stw);
+    el.title = `OR ${b.or} OS ${b.os} OV ${b.ov} A0 ${b.cc0} A1 ${b.cc1}`;
     return el;
   }
   override ignoreEvent(): boolean {

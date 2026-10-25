@@ -11,6 +11,11 @@ import type {
   PlcClockResult,
   PlcDiagResult,
   PlcReadWatchResult,
+  PlcStatusRequest,
+  PlcStatusStartResult,
+  PlcStatusWindowResult,
+  PlcStatusReadResult,
+  PlcStacksResult,
   PlcWatchTarget,
   PlcWriteVarItem,
   PlcWriteVarsResult,
@@ -28,6 +33,8 @@ import type {
   PlcStatus,
   PlcUploadAllResult,
   PlcBackupResult,
+  PlcRestorePlanResult,
+  PlcRestoreResult,
   PlcUploadProgress,
   PlcWriteProgress,
 } from './online/plcTypes';
@@ -177,6 +184,13 @@ export interface BaaBridge {
   plcBlocks(): Promise<PlcBlocksResult>;
   /** Carica un solo blocco OB, FB, FC o DB dalla CPU collegata (sola lettura); mai eccezioni. */
   plcUploadBlock(type: PlcBlockRef['type'], number: number): Promise<PlcUploadBlockResult>;
+  /** Osservazione di un blocco (stato del blocco v2): una sola per CPU; mai eccezioni. */
+  plcStatusStart(req: PlcStatusRequest): Promise<PlcStatusStartResult>;
+  plcStatusWindow(req: PlcStatusRequest): Promise<PlcStatusWindowResult>;
+  plcStatusRead(): Promise<PlcStatusReadResult>;
+  plcStatusStop(): Promise<void>;
+  /** Stack di chiamata (sperimentale, solo in STOP/HOLD); `experimental` è l'impostazione, ricontrollata nel main. */
+  plcReadStacks(experimental: boolean): Promise<PlcStacksResult>;
   onPlcWriteProgress(cb: (p: PlcWriteProgress) => void): () => void;
   /**
    * Carica OB, FB, FC e DB da una CPU in sola lettura, su un collegamento proprio (non serve essere
@@ -192,6 +206,14 @@ export interface BaaBridge {
    */
   plcBackup(): Promise<PlcBackupResult>;
   plcBackupCancel(): Promise<void>;
+  /**
+   * Ripristino di un `.baapbak` (SPERIMENTALE, mai provato su una CPU reale): `plcRestorePlan`
+   * apre la finestra di scelta del file e prepara il piano nel processo principale; `plcRestore`
+   * lo esegue con il `token`, dopo le conferme native. Mai eccezioni.
+   */
+  plcRestorePlan(): Promise<PlcRestorePlanResult>;
+  plcRestore(req: { token: string; restart: boolean }): Promise<PlcRestoreResult>;
+  plcRestoreInterrupt(): Promise<void>;
   /** Aggiornamenti dell'app (solo build pacchettizzate; altrove `enabled` è falso). */
   updateInfo(): Promise<UpdateInfoView>;
   /** L'ultimo evento significativo, per ricostruire l'avviso dopo una ricarica. */

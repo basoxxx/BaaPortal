@@ -99,9 +99,10 @@ describe('DiagController', () => {
       'protection',
       'lastModeChange',
       'memory',
+      'force',
     ]);
     expect(calls[1]).toEqual(['mode', 'leds', 'buffer']);
-    expect(calls[2]).toEqual(['mode', 'leds', 'protection', 'lastModeChange', 'memory']);
+    expect(calls[2]).toEqual(['mode', 'leds', 'protection', 'lastModeChange', 'memory', 'force']);
     expect(timers.pending).toHaveLength(1);
   });
 

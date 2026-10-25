@@ -74,6 +74,40 @@ Una tabella di controllo funziona anche con la CPU vera. Con il collegamento att
 
 ## Backup online
 
-_Online_ > _Carica backup dal dispositivo online…_ (o il menu della cartella _Backup online_) chiede dove salvare e copia nel file `.baapbak` i blocchi OB, FB, FC e DB e i blocchi di sistema (SDB) della CPU. Si può fare anche in RUN, e con _Interrompi_ si ferma. Il backup non cambia né la CPU né il progetto. Per ora è solo un'esportazione: il ripristino arriva con il piano 3D.
+_Online_ > _Carica backup dal dispositivo online…_ (o il menu della cartella _Backup online_) chiede dove salvare e copia nel file `.baapbak` i blocchi OB, FB, FC e DB e i blocchi di sistema (SDB) della CPU. Si può fare anche in RUN, e con _Interrompi_ si ferma. Il backup non cambia né la CPU né il progetto. Per rimetterlo nella CPU c'è il ripristino sperimentale (sotto).
 
-I limiti noti sono in `docs/limiti-noti.md`, sezioni «Online (piano 3A)», «Caricamento e confronto (piano 3B)» e «Diagnostica online (piano 3C)».
+## Osservazione del programma online
+
+Con il collegamento attivo e un blocco AWL aperto, _Osserva programma_ (barra degli strumenti o menu _Online_) mostra a destra di ogni riga RLC, STA, ACCU1 e STW; le caselle _ACCU2_ e _AR1_ ne aggiungono altri due e riducono le righe osservate. Le righe che la CPU non elabora sono in grigio. Il blocco della CPU deve essere uguale a quello compilato del progetto: se è diverso, la barra lo dice e propone _Confronta con la CPU_.
+
+- Si osservano solo le righe visibili, entro i limiti di una PDU (24 righe con STW e ACCU1, meno con più registri); se sono di più la barra dice «Osservate le prime N righe».
+- I valori arrivano al massimo ogni 250 ms: sono quelli di un ciclo ogni tanto. Mentre si osserva il tempo di ciclo della CPU aumenta, e la barra di stato lo ricorda («Osservazione attiva»).
+- In STOP non ci sono valori. Spegnendo l'osservazione, interrompendo il collegamento o chiudendo la finestra, il job di test sulla CPU si cancella.
+- Una sola osservazione per CPU.
+
+## Forzamento
+
+BaaPortal non forza valori e non ha tabelle di forzamento: il protocollo di forzamento non è stabilito. Se sulla CPU c'è un forzamento attivo (LED FRCE), la diagnostica e la barra di stato dicono «Forzamento attivo sulla CPU». Per forzare o terminare un forzamento si usa TIA Portal o STEP 7. Con un forzamento attivo il ripristino di un backup si rifiuta.
+
+## Funzioni sperimentali
+
+_Opzioni_ > _Impostazioni_ > _Online_ > «Funzioni sperimentali (non provate su una CPU reale)», spenta per default, abilita gli stack di chiamata e il ripristino di un backup. Non sono mai state provate su una CPU reale. L'impostazione vale per l'interfaccia di questo computer; le conferme del ripristino chiedono comunque il consenso e dicono «sperimentale».
+
+## Stack di chiamata (sperimentale)
+
+Nella scheda _Online e diagnostica_, la pagina _Stack di chiamata_ legge BSTACK, USTACK (stack delle interruzioni) e LSTACK solo col pulsante, e solo con la CPU in STOP o HOLD: in RUN non parte nessuna richiesta. Con l'impostazione spenta la pagina rimanda alle impostazioni. Se la CPU risponde in un formato non riconosciuto si vede l'esadecimale.
+
+## Ripristino di un backup (sperimentale)
+
+Con l'impostazione attiva e il collegamento online, _Online_ > _Ripristina backup nel dispositivo… (sperimentale)_ (o il menu della cartella _Backup online_) apre la finestra di ripristino.
+
+1. _Scegli file…_ apre un `.baapbak`. La tabella mostra, per ogni blocco, l'azione: _Carica_, _Cancella_ (SDB assenti nel backup), _Saltato_ (per esempio SDB 2, creato dalla CPU) o _Resta nella CPU_ (blocchi presenti solo nella CPU).
+2. In testa gli avvisi: funzione sperimentale mai provata su una CPU reale, la CPU andrà in STOP, e i DB tornano ai valori salvati nel backup mentre merker, temporizzatori e contatori no.
+3. La casella _Avvia la CPU al termine (avviamento a caldo)_ è spenta per default.
+4. _Ripristina_ chiede le conferme del sistema (sovrascrittura, con l'elenco dei blocchi non toccati, STOP, avvio). Annullare la conferma di sovrascrittura o quella di STOP non cambia nulla; annullare «Avviare la CPU?» lascia il backup caricato e la CPU in STOP.
+
+Prima di toccare la CPU il ripristino si rifiuta se c'è un forzamento attivo, se ci sono job di test sulla CPU, se la CPU è di un tipo diverso da quello del backup, se la protezione della CPU non permette la scrittura, se il backup è incompleto (blocchi non letti) o se contiene SDB fuori dagli intervalli documentati. L'avanzamento sta nella barra di stato con _Interrompi_, che ferma prima del passo successivo. L'esito mostra, per ogni blocco, _Caricato_, _Cancellato_, _Saltato_, _Resta nella CPU_, _Rifiutato dalla CPU_, _Esito sconosciuto_ o _Non caricato_; se la CPU è rimasta in STOP c'è il pulsante _Avvia CPU_. Alla fine il confronto online riparte.
+
+Un ripristino interrotto lascia la CPU in STOP con una configurazione parziale.
+
+I limiti noti sono in `docs/limiti-noti.md`, sezioni «Online (piano 3A)», «Caricamento e confronto (piano 3B)», «Diagnostica online (piano 3C)» e «Osservazione online, stack e ripristino (piano 3D)».

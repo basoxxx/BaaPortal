@@ -114,11 +114,14 @@ function comm(cpu: CpuBackend, index: number): Uint8Array {
     );
   }
   // indice 2: costanti delle funzioni di test e messa in servizio (TIS), come una 315 vera
-  return Uint8Array.from(
+  const bytes = Uint8Array.from(
     '0002befd4f0000000000080000003c01080000007d000005030f00000800000c000a000000010000'
       .match(/../g)!
       .map((h) => parseInt(h, 16)),
   );
+  // senza TIS v2 (CPU del 2010, proto §7.5.9) manca il block status `0x13`: funkt_2 = 0x03
+  if (cpu.tisV2 === false) bytes[4] = 0x03;
+  return bytes;
 }
 
 // ---- 0x0132 / 0x0232 indice 4: protezione (record da 40 byte) ----------------------------------
@@ -217,7 +220,8 @@ function memoryRecords(cpu: CpuBackend): { index: number; bytes: Uint8Array }[] 
 const LED_SF = 0x01;
 const LED_RUN = 0x04;
 const LED_STOP = 0x05;
-const LED_IDS = [LED_SF, LED_RUN, LED_STOP, 0x06, 0x0b, 0x0c, 0x15]; // SF RUN STOP FRCE BUS1F BUS2F MAINT
+const LED_FRCE = 0x06;
+const LED_IDS = [LED_SF, LED_RUN, LED_STOP, LED_FRCE, 0x0b, 0x0c, 0x15]; // SF RUN STOP FRCE BUS1F BUS2F MAINT
 
 function ledRecords(cpu: CpuBackend): { index: number; bytes: Uint8Array }[] {
   const startup = cpu.mode === 'STARTUP';
@@ -230,6 +234,8 @@ function ledRecords(cpu: CpuBackend): { index: number; bytes: Uint8Array }[] {
         return cpu.mode === 'RUN' ? [1, 0] : startup ? [1, 1] : [0, 0];
       case LED_STOP:
         return cpu.mode === 'STOP' || startup ? [1, 0] : [0, 0];
+      case LED_FRCE:
+        return [cpu.forceActive ? 1 : 0, 0];
       default:
         return [0, 0];
     }

@@ -107,11 +107,13 @@
   color: var(--baa-disabled);
 }
 
-/* Osservazione del programma (simulatore) */
+/* Osservazione del programma (simulatore e CPU): i valori sono una colonna a destra */
 .baa-mon-off {
   opacity: 0.45;
 }
 .baa-mon-cell {
+  float: right;
+  text-align: right;
   margin-left: 2em;
   padding: 0 0.5em;
   color: var(--baa-text-muted);
@@ -137,4 +139,10 @@
 }
 .baa-monitor-msg {
   flex: 1;
+}
+
+.baa-monitor-bar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }

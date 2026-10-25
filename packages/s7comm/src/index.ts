@@ -21,6 +21,8 @@ export * from './s7/upload';
 export * from './s7/blockFile';
 export * from './s7/control';
 export * from './s7/download';
+export * from './s7/tis';
+export * from './s7/tisStacks';
 export * from './capture/captureLog';
 export * from './capture/dissect';
 export * from './capture/pcap';
@@ -31,6 +33,7 @@ export * from './connection';
 
 export * from './client';
 export * from './writeClient';
+export * from './testClient';
 
 export * from './kit/collect';
 export * from './kit/kitZip';

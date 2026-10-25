@@ -22,6 +22,20 @@ export interface FaultPlan {
   szlUnavailable?: number[];
   /** La funzione indicata riceve sempre questo errore (classe e codice dell'header, come 0x85 0x00). */
   errorFor?: { function: number; errorClass: number; errorCode: number };
+  /** I job di test sopravvivono alla chiusura della sessione e si gestiscono da un'altra (proto §18.4.1). */
+  orphanJobs?: boolean;
+  /** La sottofunzione TIS indicata riceve sempre questo codice d'errore (p.es. `0xD0A1`). */
+  tisError?: { sub: number; code: number };
+  /** I job di test prendono sempre il numero libero più basso (un numero cancellato si riusa subito). */
+  reuseJobId?: boolean;
+  /** I primi N `_INSE` rispondono 0xD2A9 («la CPU sta assegnando nuovi parametri»), per sessione. */
+  insertBusy?: number;
+  /** Le prime N richieste di download (0x1A) rispondono 0xD2A9, per sessione. */
+  requestBusy?: number;
+  /** Le indication del block status portano `0xD0CC` (dati limitati dal tempo) insieme ai valori. */
+  tisPartial?: boolean;
+  /** Sottofunzioni TIS che rispondono con dati troncati a 7 byte. */
+  tisMalformed?: number[];
 }
 
 /** Numero di funzione di un userdata per `FaultPlan`: 0x1000 + gruppo * 0x100 + sottofunzione. */
@@ -52,8 +66,15 @@ export function checkFaults(f: FaultPlan): void {
   int('delayMs', f.delayMs, 0, 60_000);
   int('dropAfterResponses', f.dropAfterResponses, 0);
   int('chunkSize', f.chunkSize, 1);
+  int('insertBusy', f.insertBusy, 0, 1000);
+  int('requestBusy', f.requestBusy, 0, 1000);
   int('ignoreFunction', f.ignoreFunction, 0, 0xffff);
   for (const id of f.szlUnavailable ?? []) int('szlUnavailable', id, 0, 0xffff);
+  if (f.tisError) {
+    int('tisError.sub', f.tisError.sub, 0, 0xff);
+    int('tisError.code', f.tisError.code, 0, 0xffff);
+  }
+  for (const sub of f.tisMalformed ?? []) int('tisMalformed', sub, 0, 0xff);
   if (f.errorFor) {
     int('errorFor.function', f.errorFor.function, 0, 0xffff);
     int('errorFor.errorClass', f.errorFor.errorClass, 0, 0xff);

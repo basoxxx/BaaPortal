@@ -62,18 +62,68 @@ Per ogni voce si indica che cosa succede oggi. "Errore chiaro" vuol dire che Baa
 - **Niente PQ online, niente comando di PI, T, C, niente forzamento.** Al massimo 200 righe osservate online.
 - **Scritture da tabella in più richieste.** Se una fallisce, le precedenti restano scritte. L'«esito sconosciuto» riguarda tutta la richiesta in corso (fino a 20 righe); le righe successive dicono «Non scritto», e un rifiuto della CPU dice «Rifiutato dalla CPU».
 - **Numero di richieste nella conferma.** È un massimo calcolato per PDU 240, non il numero esatto.
-- **Backup in sola esportazione.** Il ripristino arriva nel 3D. Non si sa se i DB caricati hanno i valori attuali o quelli iniziali (§19.4).
+- **Backup: il ripristino è del 3D (sperimentale).** Non si sa se i DB caricati hanno i valori attuali o quelli iniziali (§19.4).
 - **Il backup registra il modo visto per ultimo dalla sorveglianza,** non quello riletto all'inizio.
-- **Lettura di un `.baapbak`.** Per il ripristino del 3D, la lettura si fida delle dimensioni dichiarate nello zip.
+- **Lettura di un `.baapbak`: risolto nel 3D.** La lettura non si fida più delle dimensioni dichiarate nello zip (vedi «Osservazione online, stack e ripristino (piano 3D)»).
 - **Niente messaggi push.** Il buffer si aggiorna ogni secondo, solo con l'editor aperto.
 - **`_DELE` usa 'A'.** Vedi «Caricamento e confronto (piano 3B)».
 - **Impostazione dell'ora con protezione di livello 3.** Anche la risposta `0xD0A1` è un'ipotesi (§12.0).
 - **Il numero di richieste nella conferma è un massimo solo se la CPU concorda una PDU di almeno 240 byte.** Con una PDU più piccola le richieste possono essere di più.
 - **Più tabelle con «Osserva tutto» interrogano ognuna per conto suo.** Il limite di 200 righe vale per tabella, e le tabelle aperte ma non in primo piano continuano a interrogare.
 - **Il backup continua sul suo collegamento** anche se il collegamento online cade o si va offline: lo ferma solo _Interrompi_.
-- **I file `.baapbak` non compaiono nell'albero** fino al 3D.
+- **I file `.baapbak` non compaiono nell'albero.** Restano così anche dopo il 3D: si aprono con la finestra dei file (vedi 3D).
 - **I record di diagnostica più corti di 20 byte si scartano.**
 - **Il pulsante si chiama «Osserva tutto»,** il nome del 2C, e non «Controlla tutto» come in TIA.
+
+## Osservazione online, stack e ripristino (piano 3D)
+
+### Prove
+
+- **Mai provato su una CPU reale.** Lo stato del blocco, gli stack, la lettura di FRCE e il ripristino sono provati solo contro il PLC di prova e contro i byte di una cattura. Stack e ripristino sono **sperimentali**: spenti per default, dietro «Funzioni sperimentali (non provate su una CPU reale)» nelle impostazioni.
+- **Funzioni sperimentali solo dall'interfaccia.** L'impostazione sta nel renderer, con le altre impostazioni; il processo principale non la ricontrolla. La difesa nel main sono le conferme native, che dicono «sperimentale». Gli stack sono in sola lettura e solo con la CPU in STOP o HOLD, verificato dal main.
+
+### Osservazione del blocco
+
+- **Lo stato del blocco è verificato su una sola cattura** (OB1, 6 righe, §18.4.1). Sono ipotesi:
+  - la SAZ come fine esclusiva della finestra;
+  - una riga mancante dal risultato vuol dire «non elaborata» (riga grigia);
+  - nessun risultato in 2 s vuol dire «blocco non elaborato» (un FC non chiamato è un caso normale).
+    Se fossero sbagliate, una cattura su una CPU vera corregge solo `decodeBlockStatusResult`.
+- **DB1 e DB2 non si osservano:** la loro dimensione nel risultato è sconosciuta. Nemmeno AR2.
+- **Finestra limitata dalla PDU:** con PDU 240, 24 righe con STW e ACCU1, 16 con ACCU2, 11 con ACCU2 e AR1. Le altre righe visibili restano senza valori. Con una PDU più grande la prima finestra si taglia comunque a 24 righe e poi si allarga (un delete e un create in più). `SAZ` di una finestra tagliata dal main è l'inizio della prima riga scartata, non quello dell'istruzione successiva del testo.
+- **Ritmo:** un risultato ogni 250 ms al massimo, non a ogni ciclo come STEP 7: i valori sono quelli di un ciclo ogni tanto.
+- **Un'osservazione per CPU,** su un collegamento PG in più. Durante un ripristino sulla stessa CPU l'osservazione si rifiuta.
+- **Il blocco deve essere uguale a quello del progetto** (checksum e lunghezza MC7, con la stessa ipotesi del confronto del 3B).
+- **Installazione o uscita durante un'osservazione:** l'osservazione si ferma in modo pulito. Se la cancellazione del job è lenta (limite di 1 s alla chiusura) il job può restare sulla CPU; si cancella alla connessione successiva.
+- **Il tempo di ciclo aumenta** mentre si osserva (da documentazione). Una CPU in modo processo può limitare lo stato (`0xD0AB`/`0xD0AC`/`0xD0CC`, una sola fonte).
+- **In STOP nessun valore.** Cosa risponde la CPU a un block status in STOP è sconosciuto, e il client non lo chiede.
+- **Job orfani:** si suppone che la CPU cancelli i job quando il collegamento cade (ipotesi). BaaPortal cancella alla connessione solo quelli che ha registrato in `tis-jobs.json`; un job di un'altra connessione (`0xD0AE`) resta. Il registro scrive subito alla creazione; le cancellazioni si raggruppano e si scrivono dopo 500 ms o all'uscita.
+
+### Forzamento
+
+- **Forzamento non implementato.** Il protocollo di forzamento della S7-300 non è stabilito (§18.5.1: nessuna cattura; la CPU dichiara force selection `0x07` e non force `0x09`), e un forzamento resta attivo anche dopo la disconnessione. BaaPortal mostra solo «Forzamento attivo sulla CPU» dal LED FRCE (SZL `0x0174`/`0x0006`, riletta ogni 5 giri della sorveglianza). Per forzare o terminare un forzamento si usa TIA Portal o STEP 7. Mancano le tabelle di forzamento e la colonna «Forza»: restano nelle mancanze aperte.
+
+### Stack di chiamata (sperimentali)
+
+- Layout da una sola fonte, mai visti in cattura.
+- La forma della richiesta è ipotizzata come la lista dei job.
+- La risposta in RUN non si conosce, e BaaPortal non chiede.
+- Il tipo del registro DB è sconosciuto.
+- USTACK è lo stack delle interruzioni (ISTACK `0x03` del documento).
+
+### Ripristino di un backup (sperimentale)
+
+- **Mai provato su una CPU reale.** Solo contro il PLC di prova (in STOP, SDB come blob opachi). Il comportamento reale di una CPU a un download di SDB in RUN, l'ordine degli SDB diversi da 0 e il risultato su moduli e DP/PN sono sconosciuti (proto §19.3).
+- **Verificato sul formato solo per gli SDB** (una cattura TIA). L'ordine dei blocchi utente dopo gli SDB è una scelta, come i ritentativi (200 ms × 10 su `0xD2A9`/`0xD2AA`).
+- **Non cancella i blocchi utente presenti solo sulla CPU** (`_DELE` dei blocchi utente è un'ipotesi, §10.5): restano e sono elencati («Resta nella CPU»). Si cancellano solo gli SDB assenti nel backup, negli intervalli 0, 1, 3–7, 1000–2999; SDB 2 non si tocca mai. Un SDB del backup fuori dagli intervalli fa rifiutare tutto.
+- **Non si sa se i DB del backup hanno i valori attuali** o quelli iniziali (§19.4). Merker, temporizzatori e contatori non tornano.
+- **Un ripristino interrotto lascia la CPU in STOP** con una configurazione parziale. Nessuna ripetizione né annullamento: dopo un errore i passi seguenti sono «Non caricato», e il passo in corso quando cade il collegamento è «Esito sconosciuto».
+- **Il ripristino si rifiuta per intero** (nessuna conferma di forzatura) se: il backup ha blocchi non letti (`failed`, SDB o no); la CPU ha SDB 0 e il backup no; il numero d'ordine della CPU è diverso; la protezione della CPU è di livello 2 o 3 (BaaPortal non gestisce le password) o illeggibile; il forzamento è attivo o illeggibile (riletto anche sul collegamento del ripristino); la CPU è in HOLD; c'è un job di test (riletto anche subito dopo lo STOP: in quel caso la CPU resta in STOP e nulla è scritto).
+- **STOP non confermato in 5 s:** l'esito dice «STOP inviato ma non confermato»: `cpuStopped` è falso ma la CPU potrebbe fermarsi più tardi.
+- **`cpuStopped` è falso se la CPU era già in STOP all'avvio** (non l'abbiamo fermata noi).
+- **Il filtro `online-restore` ammette** solo i frame canonici del ripristino (lettura, lista dei job, download e `_INSE` con `P`, `_DELE` degli SDB con `A`, STOP e avviamento a caldo). `online-write` rifiuta anche download e `_INSE` di SDB.
+- **Lettura del `.baapbak`:** i byte si contano mentre si decomprimono (manifest 64 KB, blocchi la `length` del manifest, al massimo 1 MB ciascuno, 256 MB in tutto); la dimensione dichiarata nell'archivio non conta più.
+- **I backup non compaiono nell'albero:** si aprono con la finestra dei file. Tenerne l'elenco vorrebbe dire salvare percorsi nel progetto.
 
 ## Simulatore (piano 2A)
 

@@ -26,6 +26,8 @@ import type {
   PlcWriteProgress,
   PlcUploadAllResult,
   PlcBackupResult,
+  PlcRestorePlanResult,
+  PlcRestoreResult,
   PlcUploadProgress,
   DiagPart,
   PlcClockRequest,
@@ -35,6 +37,11 @@ import type {
   PlcWatchTarget,
   PlcWriteVarItem,
   PlcWriteVarsResult,
+  PlcStatusRequest,
+  PlcStatusStartResult,
+  PlcStatusWindowResult,
+  PlcStatusReadResult,
+  PlcStacksResult,
 } from '../src/online/plcTypes';
 
 import type {
@@ -301,6 +308,48 @@ export class FakeBridge implements BaaBridge {
     this.plcReadWatchCalls.push(items);
     return this.plcReadWatchImpl(items);
   }
+  /** Osservazione del blocco: le risposte si programmano, le chiamate si registrano. */
+  plcStatusStartCalls: PlcStatusRequest[] = [];
+  plcStatusStartImpl: (
+    r: PlcStatusRequest,
+  ) => Promise<PlcStatusStartResult> | PlcStatusStartResult = () => ({
+    ok: true,
+    maxLines: 24,
+    pduLength: 240,
+  });
+  async plcStatusStart(r: PlcStatusRequest): Promise<PlcStatusStartResult> {
+    this.plcStatusStartCalls.push(r);
+    return this.plcStatusStartImpl(r);
+  }
+  plcStatusWindowCalls: PlcStatusRequest[] = [];
+  async plcStatusWindow(r: PlcStatusRequest): Promise<PlcStatusWindowResult> {
+    this.plcStatusWindowCalls.push(r);
+    return { ok: true };
+  }
+  plcStatusReadCalls = 0;
+  plcStatusReadImpl: () => Promise<PlcStatusReadResult> | PlcStatusReadResult = () => ({
+    ok: true,
+    state: 'waiting',
+  });
+  async plcStatusRead(): Promise<PlcStatusReadResult> {
+    this.plcStatusReadCalls++;
+    return this.plcStatusReadImpl();
+  }
+  plcStatusStopCalls = 0;
+  async plcStatusStop(): Promise<void> {
+    this.plcStatusStopCalls++;
+  }
+  plcReadStacksCalls: boolean[] = [];
+  plcReadStacksImpl: (experimental: boolean) => Promise<PlcStacksResult> | PlcStacksResult =
+    () => ({
+      ok: false,
+      reason: 'error',
+      error: 'nessun risultato previsto',
+    });
+  async plcReadStacks(experimental: boolean): Promise<PlcStacksResult> {
+    this.plcReadStacksCalls.push(experimental);
+    return this.plcReadStacksImpl(experimental);
+  }
   plcWriteVarsCalls: PlcWriteVarItem[][] = [];
   plcWriteVarsResults: PlcWriteVarsResult[] = [];
   async plcWriteVars(items: PlcWriteVarItem[]): Promise<PlcWriteVarsResult> {
@@ -368,6 +417,22 @@ export class FakeBridge implements BaaBridge {
   }
   async plcBackupCancel() {
     this.plcBackupCancelCalls++;
+  }
+  plcRestorePlanCalls = 0;
+  plcRestorePlanImpl: () => PlcRestorePlanResult = () => ({ ok: false, error: 'non previsto' });
+  async plcRestorePlan(): Promise<PlcRestorePlanResult> {
+    this.plcRestorePlanCalls++;
+    return this.plcRestorePlanImpl();
+  }
+  plcRestoreCalls: { token: string; restart: boolean }[] = [];
+  plcRestoreImpl: () => PlcRestoreResult = () => ({ ok: false, rows: [], cpuStopped: false });
+  async plcRestore(req: { token: string; restart: boolean }): Promise<PlcRestoreResult> {
+    this.plcRestoreCalls.push(req);
+    return this.plcRestoreImpl();
+  }
+  plcRestoreInterruptCalls = 0;
+  async plcRestoreInterrupt() {
+    this.plcRestoreInterruptCalls++;
   }
   plcUploadResults: PlcUploadAllResult[] = [];
   plcUploadCalls: PlcAccess[] = [];

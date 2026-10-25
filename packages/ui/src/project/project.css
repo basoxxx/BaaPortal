@@ -972,3 +972,9 @@
 .baa-app.online .baa-menubar-title {
   color: var(--baa-online-text);
 }
+.baa-status-warn {
+  float: right;
+  margin-left: 12px;
+  color: var(--baa-accent-strong);
+  font-weight: 600;
+}

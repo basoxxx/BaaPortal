@@ -216,7 +216,13 @@ export class SimCpu {
   /** Osserva un blocco: dopo ogni ciclo `monitorSnapshot` dà lo stato dopo le sue istruzioni. */
   setMonitor(req: MonitorRequest | undefined): void {
     this.monitor = req
-      ? { kind: req.kind, number: req.number, steps: [], seen: new Set() }
+      ? {
+          kind: req.kind,
+          number: req.number,
+          ...(req.last ? { last: true } : {}),
+          steps: [],
+          seen: new Set<number>(),
+        }
       : undefined;
   }
 

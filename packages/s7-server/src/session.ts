@@ -1,5 +1,6 @@
 import {
   FrameReader,
+  isRestorableSdb,
   decodeBcdDateTime,
   decodeBlockInfoRequest,
   decodeBlockListOfTypeRequest,
@@ -12,6 +13,7 @@ import {
   decodeS7,
   decodeSetup,
   decodeStartUpload,
+  decodeTisRequest,
   decodeSzlRequest,
   decodeUploadRequest,
   decodeUserdata,
@@ -49,6 +51,14 @@ import {
 import type { CpuBackend } from './backend';
 import { chunked, functionOf } from './faults';
 import { buildSzl } from './szlData';
+import {
+  TIS_ACK_DATA,
+  closeTisSession,
+  tisReplyData,
+  tisReplyParam,
+  tisTable,
+  type TisSession,
+} from './tis';
 
 /**
  * Codici di errore del finto PLC. Sono i codici di proto §3.3; dove una CPU vera li ha mostrati
@@ -67,6 +77,8 @@ const ERR = {
   NOT_IMPLEMENTED: [0x81, 0x04],
   /** Nessun ulteriore upload parallelo possibile. */
   NO_PARALLEL_UPLOAD: [0x83, 0x04],
+  /** La CPU sta assegnando nuovi parametri: la stessa richiesta si ripete dopo un attimo (proto §19.3.1). */
+  PARAMS_BUSY: [0xd2, 0xa9],
   /** Sequenza di servizio non valida: upload id sconosciuto, continuazione fuori sequenza. */
   BAD_SEQUENCE: [0x84, 0x01],
 } as const;
@@ -131,7 +143,7 @@ interface Download {
   bad: boolean;
 }
 
-class Session {
+class Session implements TisSession {
   private readonly reader = new FrameReader();
   private state: 'idle' | 'open' | 'closed' = 'idle';
   private readonly ourRef: number;
@@ -147,12 +159,16 @@ class Session {
   private seqCounter = 0;
   private durCounter = 0;
   private readonly timers = new Set<ReturnType<typeof setTimeout>>();
+  /** Da eseguire dopo l'invio della risposta in corso (l'indication segue sempre l'ack). */
+  private post: (() => void) | undefined;
 
   constructor(
     private readonly cpu: CpuBackend,
     private readonly t: Transport,
   ) {
     this.pdu = cpu.config.pduLength;
+    this.insertBusyLeft = cpu.config.faults.insertBusy ?? 0;
+    this.requestBusyLeft = cpu.config.faults.requestBusy ?? 0;
     this.ourRef = cpu.nextRef();
     t.onData((chunk) => this.onData(chunk));
     t.onClose(() => this.shutdown());
@@ -163,8 +179,26 @@ class Session {
   }
 
   // `state` cambia dentro i gestori: una lettura per metodo evita che TS lo dia per costante
-  private isClosed(): boolean {
+  isClosed(): boolean {
     return this.state === 'closed';
+  }
+
+  get pduLength(): number {
+    return this.pdu;
+  }
+
+  /** PDU non sollecitata (type indication, proto §18.1): `pduRef` nostro, il client non lo usa. */
+  pushIndication(sub: number, seq: number, tisData: Uint8Array, errorCode = 0): void {
+    if (this.state !== 'open') return;
+    this.jobRef = (this.jobRef % 0xffff) + 1;
+    this.sendPdu({
+      rosctr: 7,
+      pduRef: this.jobRef,
+      errorClass: 0,
+      errorCode: 0,
+      param: tisReplyParam(0x01, sub, seq, errorCode),
+      data: tisReplyData(tisData),
+    });
   }
 
   // ---- chiusura ----------------------------------------------------------------------------
@@ -177,6 +211,7 @@ class Session {
     this.upload = undefined;
     this.cont = undefined;
     this.dl = undefined; // un download interrotto prima dell'_INSE non lascia nulla
+    closeTisSession(this.cpu, this); // i job di test della sessione spariscono (salvo orphanJobs)
     this.cpu.detach(this);
     try {
       this.t.close();
@@ -321,6 +356,7 @@ class Session {
     if (pdu.rosctr !== 1 && pdu.rosctr !== 7) return;
     const fn = functionOf(pdu);
     if (fn !== undefined && faults.ignoreFunction === fn) return;
+    this.post = undefined;
     let reply: S7Pdu | undefined;
     try {
       if (fn !== undefined && faults.errorFor?.function === fn) {
@@ -332,11 +368,19 @@ class Session {
       reply = headerError(pdu, ERR.WRONG_FRAMES);
     }
     if (reply) this.sendPdu(reply);
+    this.runPost();
     // l'ack 0x1A è partito: ora il finto PLC chiede la prima fetta
     if (this.dl?.phase === 'start') {
       this.dl.phase = 'block';
       this.sendJob(this.dl, encodeDownloadBlockJob(this.dl.type, this.dl.number, this.dl.fs));
     }
+  }
+
+  // `post` cambia dentro `userdata`: una lettura per metodo evita che TS lo dia per vuoto
+  private runPost(): void {
+    const post = this.post;
+    this.post = undefined;
+    post?.();
   }
 
   private forcedError(pdu: S7Pdu, errorClass: number, errorCode: number): S7Pdu {
@@ -434,6 +478,11 @@ class Session {
   // ---- scrittura e controllo (allowlist) -----------------------------------------------------
 
   /** Con protezione 2 o 3 le funzioni che cambiano stato sono rifiutate (proto §14); la lettura no. */
+  /** `_INSE` ancora da rifiutare con 0xD2A9 (guasto `insertBusy`). */
+  private insertBusyLeft: number;
+  /** Richieste di download ancora da rifiutare con 0xD2A9 (guasto `requestBusy`). */
+  private requestBusyLeft: number;
+
   private writeProtected(): boolean {
     return this.cpu.config.protectionLevel >= 2;
   }
@@ -480,7 +529,10 @@ class Session {
     if (this.writeProtected()) return headerError(p, ERR.PROTECTED);
     if (service === '_DELE') {
       if (!this.cpu.deleteBlock || !block) return headerError(p, ERR.NOT_IMPLEMENTED);
-      if (block.type === 'SDB') return headerError(p, ERR.PROTECTED); // gli SDB non si cancellano
+      // gli SDB si cancellano solo in STOP e solo quelli ripristinabili (scelta del server di prova)
+      if (block.type === 'SDB' && (this.cpu.mode !== 'STOP' || !isRestorableSdb(block.number))) {
+        return headerError(p, ERR.PROTECTED);
+      }
       // il nome e' lungo 8 caratteri e finisce a p[19]: come TIA (proto §10.5), solo il filesystem 'A'
       if (p.param[19] !== 0x41) return headerError(p, ERR.WRONG_FRAMES);
       if (!this.cpu.deleteBlock(block.type, block.number)) {
@@ -500,14 +552,21 @@ class Session {
 
   private requestDownload(p: S7Pdu): S7Pdu {
     if (this.writeProtected()) return headerError(p, ERR.PROTECTED);
+    if (this.requestBusyLeft > 0) {
+      this.requestBusyLeft--;
+      return headerError(p, ERR.PARAMS_BUSY);
+    }
     let req;
     try {
       req = decodeRequestDownload(p.param);
     } catch {
       return headerError(p, ERR.WRONG_FRAMES);
     }
-    // gli SDB non si scrivono in 3C: la CPU li espone solo in lettura
-    if (req.type === 'SDB') return headerError(p, ERR.PROTECTED);
+    // gli SDB si scrivono solo in STOP e solo se ripristinabili: in RUN il rifiuto è quello dei
+    // download rifiutati (scelta del server di prova, proto §19.3: la risposta reale è sconosciuta)
+    if (req.type === 'SDB' && (this.cpu.mode !== 'STOP' || !isRestorableSdb(req.number))) {
+      return headerError(p, ERR.PROTECTED);
+    }
     // un download già in trasferimento blocca il secondo; uno finito che aspetta solo l'_INSE si sostituisce
     if (this.dl && this.dl.phase !== 'insert') return headerError(p, ERR.NO_PARALLEL_UPLOAD);
     this.dl = { ...req, phase: 'start', ref: 0, pieces: [], received: 0, bad: false };
@@ -569,6 +628,11 @@ class Session {
   /** `_INSE` a trasferimento finito: solo qui il blocco entra nel blockMap. */
   private insertBlock(p: S7Pdu, block: { type: BlockType; number: number } | undefined): S7Pdu {
     const d = this.dl!;
+    // `insertBusy`: i primi n _INSE ricevono 0xD2A9 e il download resta in attesa della ripetizione
+    if (this.insertBusyLeft > 0) {
+      this.insertBusyLeft--;
+      return headerError(p, ERR.PARAMS_BUSY);
+    }
     this.dl = undefined; // riuscito o no, questo download è chiuso
     if (!block || block.type !== d.type || block.number !== d.number) {
       return headerError(p, ERR.BLOCK_NAME);
@@ -660,6 +724,11 @@ class Session {
     }
     if (u.param.method !== 'request') return undefined;
     const { group, subfunction } = u.param;
+    // funzioni di test (proto §18): la richiesta TIS ha il parametro di 8 byte ma non e' una continuazione
+    if (group === 1) {
+      const tis = decodeTisRequest(p.param, p.data);
+      if (tis) return this.tis(p, tis);
+    }
     // richiesta di continuazione (proto §6.7): parametro di 8 byte con lo stesso sequence
     if (u.param.dataUnitRef !== undefined) return this.continuation(p, u);
     this.cont = undefined;
@@ -723,6 +792,20 @@ class Session {
       return headerError(p, ERR.PROTECTED);
     }
     return udError(p, u, group === 4 ? UD.SZL_UNKNOWN : UD.NOT_IMPLEMENTED);
+  }
+
+  /** Richiesta TIS: risposta `81` con il numero della richiesta; l'indication parte dopo l'ack. */
+  private tis(p: S7Pdu, req: NonNullable<ReturnType<typeof decodeTisRequest>>): S7Pdu {
+    const ans = tisTable(this.cpu).handle(this, req);
+    this.post = ans.after;
+    return {
+      rosctr: 7,
+      pduRef: p.pduRef,
+      errorClass: 0,
+      errorCode: 0,
+      param: tisReplyParam(0x81, req.sub, ans.seq, ans.errorCode),
+      data: ans.data && ans.errorCode === 0 ? tisReplyData(ans.data) : TIS_ACK_DATA,
+    };
   }
 
   /** Set clock (7/2, proto §12.0): vale in ogni modo; l'ora arriva a 10 byte e il giorno lo calcola la CPU. */

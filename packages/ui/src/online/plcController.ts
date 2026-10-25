@@ -96,6 +96,7 @@ export class PlcController {
       deviceId: dev.id,
       identity: result.identity,
       mode: result.mode,
+      ...(result.force !== undefined ? { force: result.force } : {}),
     });
     // Verifica: l'esito dice «collegato», ma il processo principale potrebbe aver già perso il PLC.
     const status = await this.bridge.plcStatus().catch(() => undefined);
@@ -220,7 +221,13 @@ export class PlcController {
    */
   async backup(): Promise<void> {
     const { online } = this.store.getState();
-    if (online.status !== 'on' || online.comparing || online.downloading || online.commanding) {
+    if (
+      online.status !== 'on' ||
+      online.comparing ||
+      online.downloading ||
+      online.commanding ||
+      online.restoring
+    ) {
       return;
     }
     if (getProgress()) return;
@@ -256,6 +263,10 @@ export class PlcController {
     if (gen !== this.generation || this.store.getState().online.status !== 'on') return;
     if (e.kind === 'mode') {
       this.store.getState().patchOnline({ mode: e.mode });
+      return;
+    }
+    if (e.kind === 'force') {
+      this.store.getState().patchOnline({ force: e.active });
       return;
     }
     this.lose(gen, e.reason);

@@ -1,7 +1,8 @@
-import { S7Error, type S7Client } from '@baaportal/s7comm';
+import { S7Error, isUnavailable, type S7Client } from '@baaportal/s7comm';
 import { connectTcp } from '@baaportal/s7comm/node';
 import type { ConnectOptions } from '@baaportal/s7comm';
 import { toPlcIdentity, toPlcMode } from './plcMap';
+import { FRCE_LED, forceFrom } from './diagnostics';
 import type {
   PlcAccess,
   PlcConnectResult,
@@ -53,6 +54,8 @@ export interface PlcServiceOptions {
 }
 
 const DEFAULT_PORT = 102;
+/** Il LED FRCE si legge una volta ogni tanti giri di sorveglianza (circa 5 s). */
+const FORCE_EVERY = 5;
 const CONNECTION_TYPES = { PG: 'pg', OP: 'op', S7_BASIC: 'basic' } as const;
 
 interface Link {
@@ -70,6 +73,12 @@ interface Link {
   chain: Promise<unknown>;
   failures: number;
   done: boolean;
+  /** Ultimo stato noto del LED FRCE; `undefined` se mai letto. */
+  force: boolean | undefined;
+  /** La CPU non ha la 0x0174 (D401-D409): non si rilegge più su questo collegamento. */
+  forceGone: boolean;
+  /** Giri di sorveglianza fatti: il LED si legge uno ogni `FORCE_EVERY`. */
+  polls: number;
 }
 
 export function connectMessage(err: unknown, access: PlcAccess): string {
@@ -102,6 +111,9 @@ export class PlcService {
   private readonly readTimeoutMs: number;
   private readonly connectTimeoutMs: number;
   private readonly connectFn: PlcConnectFn;
+  /** Chi vuole sapere quando finisce il collegamento di una finestra (offline, perso). */
+  private readonly linkEnds = new Map<PlcOwner, Set<() => void>>();
+  private readonly connectListeners = new Set<(owner: PlcOwner) => void>();
 
   constructor(o: PlcServiceOptions = {}) {
     this.intervalMs = o.intervalMs ?? 1000;
@@ -165,6 +177,18 @@ export class PlcService {
       await client.close().catch(() => undefined);
       return { ok: false, error: 'Collegamento annullato' };
     }
+    // LED FRCE: un di più, come la protezione; senza la lista non si chiede più
+    let force: boolean | undefined;
+    let forceGone = false;
+    try {
+      force = forceFrom(await client.readSzl(0x0174, FRCE_LED));
+    } catch (err) {
+      forceGone = isUnavailable(err);
+    }
+    if (this.epochs.get(owner) !== epoch || owner.isDestroyed()) {
+      await client.close().catch(() => undefined);
+      return { ok: false, error: 'Collegamento annullato' };
+    }
     const link: Link = {
       id: ++this.linkSeq,
       access,
@@ -177,12 +201,26 @@ export class PlcService {
       chain: Promise.resolve(),
       failures: 0,
       done: false,
+      force,
+      forceGone,
+      polls: 0,
     };
     owner.once('destroyed', link.onGone);
     this.links.set(owner, link);
-    return protection === undefined
-      ? { ok: true, identity, mode }
-      : { ok: true, identity, mode, protection };
+    for (const cb of [...this.connectListeners]) {
+      try {
+        cb(owner);
+      } catch {
+        // un ascoltatore che sbaglia non deve far fallire il collegamento
+      }
+    }
+    return {
+      ok: true,
+      identity,
+      mode,
+      ...(protection !== undefined ? { protection } : {}),
+      ...(force !== undefined ? { force } : {}),
+    };
   }
 
   private bump(owner: PlcOwner): number {
@@ -210,6 +248,43 @@ export class PlcService {
   ): { access: PlcAccess; identity: PlcIdentity; linkId: number } | undefined {
     const link = this.links.get(owner);
     return link ? { access: link.access, identity: link.identity, linkId: link.id } : undefined;
+  }
+
+  /**
+   * `cb` viene chiamata una volta quando finisce il collegamento attuale della finestra (offline,
+   * perso, finestra chiusa). Senza collegamento, subito. Restituisce come annullare la richiesta.
+   */
+  onLinkEnd(owner: PlcOwner, cb: () => void): () => void {
+    if (!this.links.has(owner)) {
+      queueMicrotask(cb);
+      return () => undefined;
+    }
+    let set = this.linkEnds.get(owner);
+    if (!set) this.linkEnds.set(owner, (set = new Set()));
+    set.add(cb);
+    return () => {
+      const cur = this.linkEnds.get(owner);
+      cur?.delete(cb);
+      if (cur?.size === 0) this.linkEnds.delete(owner);
+    };
+  }
+
+  /** `cb` viene chiamata a ogni nuovo collegamento riuscito (serve alla pulizia dei job orfani). */
+  onConnect(cb: (owner: PlcOwner) => void): () => void {
+    this.connectListeners.add(cb);
+    return () => void this.connectListeners.delete(cb);
+  }
+
+  private fireLinkEnd(owner: PlcOwner): void {
+    const set = this.linkEnds.get(owner);
+    this.linkEnds.delete(owner);
+    for (const cb of set ?? []) {
+      try {
+        cb();
+      } catch {
+        // idem
+      }
+    }
   }
 
   /** Il modo noto della CPU collegata alla finestra (l'ultimo letto dalla sorveglianza). */
@@ -270,6 +345,7 @@ export class PlcService {
     if (!link) return;
     this.links.delete(owner);
     this.finish(owner, link);
+    this.fireLinkEnd(owner);
     await link.client.close().catch(() => undefined);
   }
 
@@ -287,8 +363,21 @@ export class PlcService {
     if (link.done) return;
     this.links.delete(owner);
     this.finish(owner, link);
+    this.fireLinkEnd(owner);
     void link.client.close().catch(() => undefined);
     this.emit(owner, { kind: 'lost', reason });
+  }
+
+  /** Lettura del LED FRCE nello stesso posto in coda; un suo errore non conta nei `failures`. */
+  private async pollForce(owner: PlcOwner, link: Link, timeout: Promise<never>): Promise<void> {
+    try {
+      const on = forceFrom(await Promise.race([link.client.readSzl(0x0174, FRCE_LED), timeout]));
+      if (link.done || on === link.force) return;
+      link.force = on;
+      this.emit(owner, { kind: 'force', active: on });
+    } catch (err) {
+      if (isUnavailable(err)) link.forceGone = true;
+    }
   }
 
   /** Un giro di sorveglianza; se la lettura precedente non è finita, salta. */
@@ -323,6 +412,9 @@ export class PlcService {
       if (m !== link.mode) {
         link.mode = m;
         this.emit(owner, { kind: 'mode', mode: m });
+      }
+      if (++link.polls % FORCE_EVERY === 0 && !link.forceGone) {
+        await this.pollForce(owner, link, timeout);
       }
     } catch (err) {
       if (link.done) return;

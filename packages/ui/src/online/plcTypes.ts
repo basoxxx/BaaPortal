@@ -1,16 +1,29 @@
 import type { PlcAccess, PlcIdentity, PlcMode, WatchTarget } from '@baaportal/project';
-import type { CycleTime, Led, MemoryArea, ProtectionInfo, S7DateTime } from '@baaportal/s7comm';
+import type {
+  BStackEntry,
+  CycleTime,
+  IStack,
+  LStack,
+  Led,
+  MemoryArea,
+  ProtectionInfo,
+  S7DateTime,
+} from '@baaportal/s7comm';
 
 export type { PlcAccess, PlcIdentity, PlcMode };
 
 /** Eventi dal processo principale sul collegamento online della finestra. */
 /** Perché il collegamento è andato perso: la finestra lo traduce nel messaggio. */
 export type PlcLostReason = 'timeout' | 'closed' | 'errors';
-export type PlcEvent = { kind: 'mode'; mode: PlcMode } | { kind: 'lost'; reason: PlcLostReason };
+export type PlcEvent =
+  | { kind: 'mode'; mode: PlcMode }
+  | { kind: 'lost'; reason: PlcLostReason }
+  /** LED FRCE (forzamento attivo sulla CPU) cambiato; arriva solo a un cambio. */
+  | { kind: 'force'; active: boolean };
 
 /** Esito di `plcConnect`: l'errore è già un testo leggibile, mai un'eccezione grezza. */
 export type PlcConnectResult =
-  | { ok: true; identity: PlcIdentity; mode: PlcMode; protection?: string }
+  | { ok: true; identity: PlcIdentity; mode: PlcMode; protection?: string; force?: boolean }
   | { ok: false; error: string };
 
 export interface PlcStatus {
@@ -135,6 +148,49 @@ export type PlcBackupResult =
   | { ok: false; error: string }
   | { ok: false; cancelled: true };
 
+/** Una riga del piano di ripristino che l'utente conferma (costruita dal processo principale). */
+export interface RestoreRow {
+  /** `SDB 7`, `OB1`: come nelle righe della conferma. */
+  name: string;
+  action: 'load' | 'delete' | 'skip' | 'keep';
+  why?: string;
+}
+
+/**
+ * Esito di `plcRestorePlan` (sperimentale): il piano resta nel processo principale, legato al
+ * collegamento; il renderer riceve le righe e un `token` monouso per `plcRestore`.
+ */
+export type PlcRestorePlanResult =
+  | {
+      ok: true;
+      token: string;
+      rows: RestoreRow[];
+      warnings: string[];
+    }
+  | { ok: false; error: string }
+  | { ok: false; cancelled: true };
+
+export interface RestoreOutcomeRow {
+  name: string;
+  outcome: 'loaded' | 'deleted' | 'skipped' | 'kept' | 'rejected' | 'unknown' | 'notDone';
+  error?: string;
+}
+
+/** Esito di `plcRestore` (sperimentale): una riga per blocco; nessuna ripetizione automatica. */
+export interface PlcRestoreResult {
+  ok: boolean;
+  cancelled?: true;
+  error?: string;
+  rows: RestoreOutcomeRow[];
+  /** La CPU è stata arrestata da noi e non è ripartita. */
+  cpuStopped: boolean;
+  /** STOP inviato ma non confermato entro il tempo: la CPU potrebbe fermarsi più tardi. */
+  stopUnconfirmed?: boolean;
+  restarted?: boolean;
+  /** Prime voci del buffer di diagnostica, se la CPU è rimasta in STOP dopo l'avvio. */
+  diag?: DiagEventView[];
+}
+
 /** Le parti della diagnostica online che si possono chiedere (ognuna una o due SZL, proto §7.5.1). */
 export type DiagPart =
   | 'identity'
@@ -145,7 +201,8 @@ export type DiagPart =
   | 'cycle'
   | 'memory'
   | 'buffer'
-  | 'clock';
+  | 'clock'
+  | 'force';
 
 /** Il valore di una parte: letto, non disponibile nella CPU, o fallito per un errore della CPU. */
 export type DiagValue<T> =
@@ -175,6 +232,8 @@ export interface PlcDiagData {
   /** Dalla voce più recente. */
   buffer: DiagValue<DiagEventView[]>;
   clock: DiagValue<S7DateTime>;
+  /** LED FRCE acceso: c'è un forzamento attivo sulla CPU (proto §7.5.4). */
+  force: DiagValue<boolean>;
 }
 
 /** Esito di `plcDiagnostics`: errore solo se manca il collegamento o si perde durante la lettura. */
@@ -219,3 +278,73 @@ export type PlcWriteVarsResult =
   | { ok: true; results: ({ ok: true } | { ok: false; error: string })[] }
   | { ok: false; error: string }
   | { ok: false; cancelled: true };
+
+/** Registri di una riga osservata (solo quelli chiesti con la maschera). */
+export interface PlcRegs {
+  stw?: number;
+  accu1?: number;
+  accu2?: number;
+  ar1?: number;
+}
+
+/** Richiesta di osservazione di un blocco: il processo principale la ricontrolla del tutto. */
+export interface PlcStatusRequest {
+  type: 'OB' | 'FB' | 'FC';
+  number: number;
+  /** Firma del blocco compilato: la CPU deve avere lo stesso blocco. */
+  expect: { checksum: number; mc7Length: number };
+  /** Offset MC7 delle righe, pari e crescenti. */
+  offsets: number[];
+  /** Fine esclusiva della finestra (offset dell'istruzione dopo l'ultima, o lunghezza MC7). */
+  saz: number;
+  /** Registri chiesti: 0x01 STW, 0x02 ACCU1, 0x04 ACCU2, 0x08 AR1. */
+  mask: number;
+}
+
+export type PlcStatusStartResult =
+  | { ok: true; maxLines: number; pduLength: number }
+  | {
+      ok: false;
+      reason: 'offline' | 'different' | 'missing' | 'unsupported' | 'busy' | 'protection' | 'error';
+      error: string;
+    };
+
+export type PlcStatusWindowResult = { ok: true } | { ok: false; error: string };
+
+export type PlcStatusReadResult =
+  | {
+      ok: true;
+      state: 'values';
+      lines: { offset: number; regs: PlcRegs | null }[];
+      partial?: boolean;
+    }
+  | { ok: true; state: 'stop' }
+  | { ok: true; state: 'waiting' }
+  | { ok: false; ended: true; error: string };
+
+// ---- stack di chiamata (sperimentale, proto §18.6) ---------------------------------------------
+
+/** Un valore com'è sul canale: i `Uint8Array` viaggiano come esadecimale. */
+export type Wire<T> = T extends Uint8Array
+  ? string
+  : T extends object
+    ? { [K in keyof T]: Wire<T[K]> }
+    : T;
+
+/** Una risposta decodificata, o i byte grezzi in esadecimale se il formato non torna. */
+export type Decoded<T> = { ok: true; value: T } | { ok: false; why: string; hex: string };
+
+export type BStackView = Wire<{ entries: BStackEntry[]; rest?: string }>;
+export type IStackView = Wire<IStack>;
+export type LStackView = Wire<LStack>;
+
+export type PlcStacksResult =
+  | {
+      ok: true;
+      mode: PlcMode;
+      bstack: Decoded<BStackView>;
+      ustack: Decoded<IStackView>;
+      /** Un LSTACK per ogni voce del BSTACK (al massimo 16); `depth` è l'indice della voce. */
+      lstack: { depth: number; value: Decoded<LStackView> }[];
+    }
+  | { ok: false; reason: 'run' | 'unsupported' | 'offline' | 'error'; error: string };

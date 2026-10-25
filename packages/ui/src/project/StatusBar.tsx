@@ -31,6 +31,16 @@ export function StatusBar() {
               })}
         </span>
       ) : null}
+      {online.status === 'on' && online.force ? (
+        <span data-testid="plc-force-warning" className="baa-status-warn">
+          {t('diag.force.active')}
+        </span>
+      ) : null}
+      {online.monitor && (online.monitor.reason === 'ok' || online.monitor.reason === 'waiting') ? (
+        <span data-testid="plc-monitor-warning" className="baa-status-warn">
+          {t('plcMonitor.cycleWarning')}
+        </span>
+      ) : null}
       {progress ? (
         <span className="baa-status-progress">
           <span>{t(progress.labelKey)}</span>

@@ -13,7 +13,8 @@ import { CommitInput, CommitTextarea } from '../../components/CommitField';
 import { ContextMenu } from '../../components/ContextMenu';
 import { AwlEditor, type AwlEditorHandle } from '../awl/AwlEditor';
 import { displayText } from '../awl/awlExtensions';
-import { monitorLinesByNetwork } from '../awl/monitorExtension';
+import { monitorLinesByNetwork, monitorLinesFromPlc } from '../awl/monitorExtension';
+import { plcMonitorFor } from '../../online/plcMonitor';
 import { offsetOfLineCol } from '../../project/navigation/sourceActions';
 import { hasRawLines, isLockedImport, lockedBannerKey } from './readOnlyImport';
 import { useMnemonic } from '../awl/mnemonicPreference';
@@ -38,7 +39,7 @@ interface Props {
 
 export function NetworksView({ deviceId, blockId }: Props) {
   const { t } = useTranslation();
-  const { store } = useServices();
+  const { store, bridge } = useServices();
   const block = useAppStore((s) => {
     const dev = s.doc ? findDevice(s.doc.project, deviceId) : undefined;
     const b = dev?.blocks.find((x) => x.id === blockId);
@@ -68,19 +69,59 @@ export function NetworksView({ deviceId, blockId }: Props) {
         : null,
     [mon, monSteps, monHex, lineMap],
   );
+  // Osservazione sulla CPU: stessi valori, dalla CPU invece che dal simulatore.
+  const plcMon = useAppStore((s) =>
+    s.online.monitor?.blockId === blockId && s.online.monitor.deviceId === deviceId
+      ? s.online.monitor
+      : null,
+  );
+  const plcLines = useAppStore((s) => s.online.monitorLines);
+  const plcLinesShown =
+    plcMon && (plcMon.reason === 'ok' || plcMon.reason === 'waiting') && plcLines && lineMap
+      ? monitorLinesFromPlc(lineMap, plcLines, monHex)
+      : null;
   const drafts = useRef(new Map<string, Draft>());
   /** Il testo non confermato sospende l'osservazione finché c'è (poi vale il confronto delle impronte). */
   const markEdited = useCallback(() => {
     const m = store.getState().sim.monitor;
     const edited = drafts.current.size > 0;
+    plcMonitorFor(store, bridge).setEdited(blockId, edited);
     if (m && m.blockId === blockId && m.deviceId === deviceId && m.edited !== edited)
       store.getState().setSim({ monitor: { ...m, edited } });
-  }, [store, blockId, deviceId]);
+  }, [store, bridge, blockId, deviceId]);
   // Se all'accensione c'è già una bozza, l'osservazione parte sospesa.
-  const monitored = mon !== null;
+  const monitored = mon !== null || plcMon !== null;
   useEffect(() => {
     if (monitored) markEdited();
   }, [monitored, markEdited]);
+  // Con l'osservazione sulla CPU, le reti visibili decidono la finestra delle righe osservate.
+  const root = useRef<HTMLDivElement>(null);
+  const plcOn = plcMon !== null;
+  const netCount = block?.networks.length ?? 0;
+  useEffect(() => {
+    if (!plcOn) return;
+    const ctrl = plcMonitorFor(store, bridge);
+    const all = Array.from({ length: netCount }, (_, i) => i);
+    const els = root.current?.querySelectorAll<HTMLElement>('[data-net]');
+    if (typeof IntersectionObserver === 'undefined' || !els) {
+      ctrl.setVisible(blockId, all);
+      return;
+    }
+    const seen = new Set<number>();
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        const n = Number((e.target as HTMLElement).dataset['net']);
+        if (e.isIntersecting) seen.add(n);
+        else seen.delete(n);
+      }
+      ctrl.setVisible(
+        blockId,
+        [...seen].sort((a, b) => a - b),
+      );
+    });
+    els.forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, [plcOn, netCount, store, bridge, blockId]);
   const handles = useRef(new Map<string, AwlEditorHandle>());
   // Le diagnostiche di ogni segmento: un segmento che non cambia tiene lo stesso array, e il suo editor non ricalcola.
   // Chiavi per id del segmento: se un segmento viene inserito o tolto, i problemi restano ai loro segmenti.
@@ -198,7 +239,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
     markEdited();
   };
   return (
-    <div className="baa-block-networks">
+    <div className="baa-block-networks" ref={root}>
       {locked ? (
         <p className="baa-readonly-banner" role="note" data-testid="readonly-banner">
           {t(lockedBannerKey(block))}
@@ -231,6 +272,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
           key={n.id}
           className="baa-network"
           aria-label={t('block.network', { n: i + 1 })}
+          data-net={i}
           onFocus={() => setFocusedId(n.id)}
         >
           <header className="baa-network-head">
@@ -274,7 +316,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
                 mnemonic={mnemonic}
                 aria-label={`${t('block.source')} ${i + 1}`}
                 diagnostics={byNetwork[n.id] ?? NO_DIAGNOSTICS}
-                monitor={monLines?.get(i) ?? null}
+                monitor={(plcLinesShown ?? monLines)?.get(i) ?? null}
                 complete={(offset, text) =>
                   awlCtx
                     ? completeAt(textsShown({ index: i, text }), i, offset, awlCtx, mnemonic)

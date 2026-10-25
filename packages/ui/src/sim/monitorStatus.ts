@@ -1,7 +1,8 @@
 import { findDevice } from '@baaportal/project';
 import type { MonitorRequest } from '@baaportal/sim';
 import { contextHashOf, hashOf } from '../project/compile/compileActions';
-import type { AppState, MonitorReason } from '../state/store';
+import { signatureOf } from '../online/compare';
+import type { AppState, MonitorReason, PlcMonitorReason } from '../state/store';
 
 /** Un blocco di codice (OB, FB, FC) del PLC simulato, aperto in un editor visibile. */
 export interface ActiveBlock extends MonitorRequest {
@@ -9,16 +10,23 @@ export interface ActiveBlock extends MonitorRequest {
   blockId: string;
 }
 
+/** Il dispositivo con cui si osserva: il simulatore o, senza simulazione, la CPU collegata. */
+export function sourceDeviceId(s: AppState): string | null {
+  if (s.sim.phase === 'on') return s.sim.deviceId;
+  return s.online.status === 'on' ? (s.online.deviceId ?? null) : null;
+}
+
 /** I blocchi di codice degli editor attivi dei riquadri visibili, prima quello del riquadro con il fuoco. */
 export function visibleCodeBlocks(s: AppState): ActiveBlock[] {
-  const { sim, doc, workArea: wa } = s;
-  if (sim.phase !== 'on' || !sim.deviceId || !doc) return [];
+  const { doc, workArea: wa } = s;
+  const deviceId = sourceDeviceId(s);
+  if (!deviceId || !doc) return [];
   const order: (0 | 1)[] = wa.split === 'none' ? [0] : wa.focusedPane === 0 ? [0, 1] : [1, 0];
   const out: ActiveBlock[] = [];
   for (const i of order) {
     const key = wa.panes[i];
     const ed = key ? wa.editors.find((e) => e.key === key) : undefined;
-    if (!ed || ed.kind !== 'block' || ed.deviceId !== sim.deviceId) continue;
+    if (!ed || ed.kind !== 'block' || ed.deviceId !== deviceId) continue;
     const found = codeBlockOf(s, ed.deviceId, ed.objectId);
     if (found) out.push(found);
   }
@@ -57,5 +65,23 @@ export function monitorReasonOf(s: AppState, deviceId: string, blockId: string):
   if (loaded === undefined) return 'notLoaded';
   const now = hashOf(b, contextHashOf(dev));
   if (loaded !== now || s.compile.hashes[blockId] !== now) return 'stale';
+  return s.compile.lines[blockId] ? 'ok' : 'noLines';
+}
+
+/**
+ * Se il blocco si può osservare sulla CPU: compilato con le modifiche correnti (impronta uguale),
+ * con la mappa delle righe e con la firma del compilato. Il confronto con la CPU lo fa il main.
+ */
+export function plcMonitorReasonOf(
+  s: AppState,
+  deviceId: string,
+  blockId: string,
+): Extract<PlcMonitorReason, 'ok' | 'stale' | 'noLines'> {
+  const dev = s.doc && findDevice(s.doc.project, deviceId);
+  const b = dev?.blocks.find((x) => x.id === blockId);
+  if (!dev || !b) return 'stale';
+  const file = s.compile.files[blockId];
+  if (s.compile.hashes[blockId] !== hashOf(b, contextHashOf(dev)) || !file) return 'stale';
+  if (!signatureOf(file)) return 'stale';
   return s.compile.lines[blockId] ? 'ok' : 'noLines';
 }

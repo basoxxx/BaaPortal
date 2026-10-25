@@ -10,7 +10,9 @@ import { openReference } from '../project/reference/referenceStore';
 import { requestFind } from '../search/findActions';
 import { activeCodeBlock } from '../sim/monitorStatus';
 import { plcControllerFor } from '../online/plcController';
+import { plcMonitorFor } from '../online/plcMonitor';
 import { preparePlcDownload } from '../online/plcDownload';
+import { getSettings } from '../settings/settings';
 import { simControllerFor } from '../sim/simController';
 import { targetPlcId } from '../project/navigation/treeIds';
 
@@ -59,6 +61,7 @@ export type CommandId =
   | 'online.compress'
   | 'online.diagnostics'
   | 'online.backup'
+  | 'online.restore'
   | 'options.settings'
   | 'tools.crossReferences'
   | 'tools.callStructure'
@@ -91,7 +94,7 @@ const hasDoc = (s: AppState) => s.doc !== null;
 const hasPlc = (s: AppState) => (s.doc?.project.devices.length ?? 0) > 0;
 /** PLC online e libero: nessun caricamento né altro comando della CPU in corso. */
 const plcFree = (s: AppState) =>
-  s.online.status === 'on' && !s.online.downloading && !s.online.commanding;
+  s.online.status === 'on' && !s.online.downloading && !s.online.commanding && !s.online.restoring;
 const always = () => true;
 const never = () => false;
 const noop = () => {};
@@ -291,10 +294,20 @@ const list: Command[] = [
   }),
   def('online.monitor', {
     icon: 'monitor',
-    // Si può spegnere sempre; si accende su un blocco di codice aperto del PLC simulato.
-    isEnabled: (s) => s.sim.monitor !== null || activeCodeBlock(s) !== undefined,
-    isChecked: (s) => s.sim.monitor !== null,
-    run: ({ store }) => simControllerFor(store).toggleMonitor(),
+    // Si può spegnere sempre; si accende su un blocco di codice aperto del simulatore o della CPU.
+    isEnabled: (s) =>
+      s.sim.monitor !== null || !!s.online.monitor || activeCodeBlock(s) !== undefined,
+    isChecked: (s) =>
+      s.sim.monitor !== null || (!!s.online.monitor && s.online.monitor.reason !== 'ended'),
+    run: ({ store, bridge }) => {
+      const st = store.getState();
+      // Simulazione e CPU online non convivono: l'osservazione segue la sorgente attiva.
+      if (st.sim.phase !== 'off' || st.sim.monitor) return simControllerFor(store).toggleMonitor();
+      const m = st.online.monitor;
+      // dopo un «terminata» si riparte dal blocco attivo adesso, non da quello finito
+      const a = (m && m.reason !== 'ended' ? m : undefined) ?? activeCodeBlock(st) ?? m;
+      if (a) plcMonitorFor(store, bridge).toggle(a.deviceId, a.blockId);
+    },
   }),
   // Come in TIA, si carica da un dispositivo anche senza progetto aperto: crea un progetto nuovo.
   // Disponibile finché nessuna operazione lunga o comando della CPU è in corso.
@@ -347,8 +360,21 @@ const list: Command[] = [
       !s.online.comparing &&
       !s.online.downloading &&
       !s.online.commanding &&
+      !s.online.restoring &&
       !getProgress(),
     run: ({ store, bridge }) => plcControllerFor(store, bridge).backup(),
+  }),
+  // Sperimentale: solo con l'impostazione attiva e nessuna operazione in corso.
+  def('online.restore', {
+    isEnabled: (s) =>
+      getSettings().online.experimental &&
+      s.online.status === 'on' &&
+      !s.online.comparing &&
+      !s.online.downloading &&
+      !s.online.commanding &&
+      !s.online.restoring &&
+      !getProgress(),
+    run: ({ store }) => store.getState().openDialog({ kind: 'restore' }),
   }),
   def('options.settings', {
     isEnabled: always,

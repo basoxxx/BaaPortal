@@ -52,11 +52,11 @@ test('Tappa 2: ingresso -> uscita, osservazione, tabella di controllo, STOP, chi
     timeout: 10_000,
   });
 
-  // osservazione dell'OB1: RLO = 1 sulla riga «= Q 4.0»
+  // osservazione dell'OB1: RLC = 1 sulla riga «= Q 4.0»
   await page.getByRole('button', { name: 'Osserva programma', exact: true }).click();
   await expect(page.getByTestId('monitor-bar')).toContainText('Osservazione attiva');
   const line = page.locator('.cm-line', { hasText: '= Q 4.0' });
-  await expect(line.locator('.baa-mon-cell')).toContainText('RLO 1');
+  await expect(line.locator('.baa-mon-cell')).toContainText('RLC 1');
 
   // tabella di controllo: si comanda MW 10 = 1234 e si legge 1234
   await page

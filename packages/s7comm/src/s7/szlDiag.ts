@@ -250,3 +250,42 @@ export function isUnavailable(err: unknown): boolean {
   const { errorClass, errorCode } = err.detail ?? {};
   return errorClass === 0xd4 && errorCode !== undefined && errorCode >= 0x01 && errorCode <= 0x09;
 }
+
+// ---- funzioni di test supportate (§7.5.9) -----------------------------------------------------
+
+export interface TisFunctions {
+  /** Block status v2 (`0x13`). */
+  blockStatusV2: boolean;
+  istack: boolean;
+  bstack: boolean;
+  lstack: boolean;
+  jobList: boolean;
+  enable: boolean;
+  del: boolean;
+  /** Trigger «area di codice» (`0x0600`), bit 6 di trgereig_0. */
+  codeAreaTrigger: boolean;
+  /** Numero massimo di variabili modificabili o forzabili. */
+  forceMax: number;
+}
+
+/** 0x0131 indice 2: il bit n di funkt_0…5 è la sottofunzione n del gruppo 1 (§7.5.9). */
+export function tisFunctionsFrom(s0131_2: SzlList): TisFunctions {
+  expectId(s0131_2, [0x0131], 'funzioni di test');
+  expectIndex(s0131_2, 2, 'funzioni di test');
+  const r = s0131_2.records[0];
+  if (!r || r.length < 34) {
+    throw new S7Error('PROTOCOL', 'funzioni di test: record mancante o troppo corto');
+  }
+  const sub = (n: number): boolean => ((r[2 + (n >> 3)]! >> (n & 7)) & 1) === 1;
+  return {
+    blockStatusV2: sub(0x13),
+    istack: sub(0x03),
+    bstack: sub(0x04),
+    lstack: sub(0x05),
+    jobList: sub(0x10),
+    enable: sub(0x0e),
+    del: sub(0x0f),
+    codeAreaTrigger: ((r[20]! >> 6) & 1) === 1,
+    forceMax: readU16(r, 32),
+  };
+}

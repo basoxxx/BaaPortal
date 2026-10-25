@@ -181,6 +181,20 @@ export function SettingsDialog({ onClose }: { onClose(): void }) {
             />
           </Row>
         </section>
+        <section>
+          <h3>{t('settings.online.title')}</h3>
+          <Row label={t('settings.online.experimental')}>
+            <input
+              type="checkbox"
+              checked={draft.online.experimental}
+              onChange={(e) =>
+                setDraft((d) => ({ ...d, online: { experimental: e.target.checked } }))
+              }
+              data-testid="settings-experimental"
+            />
+          </Row>
+          <p className="baa-settings-note">{t('settings.online.note')}</p>
+        </section>
         <section data-testid="settings-updates">
           <h3>{t('settings.updates')}</h3>
           <Row label={t('settings.updatesCheck')}>

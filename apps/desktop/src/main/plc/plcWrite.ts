@@ -1,6 +1,15 @@
-import { parseBlockFile, planWrites, S7Error } from '@baaportal/s7comm';
+import { createHash, randomUUID } from 'node:crypto';
+import {
+  diagRecordsFrom,
+  modeFrom,
+  parseBlockFile,
+  planWrites,
+  protectionFrom,
+  S7Error,
+} from '@baaportal/s7comm';
 import type { BlockType, ConnectOptions, S7DateTime, S7WriteClient } from '@baaportal/s7comm';
 import { connectWriteTcp } from '@baaportal/s7comm/node';
+import { BACKUP_MAX_BYTES, BackupFormatError, decodeBackup } from '@baaportal/project';
 import type {
   PlcAccess,
   PlcBlockRef,
@@ -8,10 +17,23 @@ import type {
   PlcClockResult,
   PlcControlResult,
   PlcDownloadResult,
+  PlcRestorePlanResult,
+  PlcRestoreResult,
   PlcWriteProgress,
   PlcWriteVarsResult,
+  RestoreOutcomeRow,
 } from '@baaportal/ui';
 import type { ConfirmFn, WriteConfirmTexts } from './confirm';
+import { FRCE_LED, forceFrom, view as diagView } from './diagnostics';
+import { toPlcMode } from './plcMap';
+import {
+  planRestore,
+  restoreLines,
+  restoreRows,
+  stepName,
+  type RestorePlan,
+  type RestoreStep,
+} from './restore';
 import { connectMessage, type PlcOwner, type PlcService } from './plcService';
 import { confirmLine, parseWriteItems, toWriteItem } from './watchOnline';
 
@@ -52,14 +74,32 @@ export type PlcWriteConnectFn = (
   o: Omit<ConnectOptions, 'transport' | 'mode'>,
 ) => Promise<WriteClient>;
 
+/** Il collegamento del ripristino: il client di scrittura più SZL, lista dei job e `_DELE` degli SDB. */
+export type RestoreClient = WriteClient &
+  Pick<S7WriteClient, 'readSzl' | 'readJobList' | 'deleteSystemBlock'>;
+export type PlcRestoreConnectFn = (
+  o: Omit<ConnectOptions, 'transport' | 'mode'>,
+) => Promise<RestoreClient>;
+
+/** Scelta e lettura del file da ripristinare (la finestra nativa sta in `ipc.ts`). */
+export interface RestoreFileIo {
+  pick(owner: PlcOwner): Promise<string | null>;
+  size(path: string): Promise<number>;
+  read(path: string): Promise<Uint8Array>;
+}
+
 export interface PlcWriteOptions {
-  service: Pick<PlcService, 'target'>;
+  service: Pick<PlcService, 'target'> & Partial<Pick<PlcService, 'read' | 'modeOf' | 'onLinkEnd'>>;
   confirm: ConfirmFn;
   connectTimeoutMs?: number;
   /** Iniettabile nei test (collegamento finto). */
   connect?: PlcWriteConnectFn;
   /** Iniettabile nei test: orologio per il limite degli avanzamenti. */
   now?: () => number;
+  /** Ripristino (sperimentale): collegamento `online-restore`, file e attese iniettabili. */
+  restoreConnect?: PlcRestoreConnectFn;
+  restoreFile?: RestoreFileIo;
+  sleep?: (ms: number) => Promise<void>;
 }
 
 export interface DownloadRequest {
@@ -224,16 +264,62 @@ export class PlcWriteService {
   private readonly ops = new Map<PlcOwner, Op>();
   /** Le CPU (host:porta/rack/slot) con una scrittura in corso, da qualunque finestra. */
   private readonly busyCpus = new Set<string>();
+  /** Le CPU con un ripristino in corso: l'osservazione del blocco non parte (vedi `restoringOn`). */
+  private readonly restoringCpus = new Set<string>();
   /** Dopo `abortAll` (uscita dall'app) non parte più nessuna scrittura. */
   private closing = false;
   private readonly connectFn: PlcWriteConnectFn;
+  private readonly restoreConnectFn: PlcRestoreConnectFn;
   private readonly connectTimeoutMs: number;
   private readonly now: () => number;
+  private readonly sleep: (ms: number) => Promise<void>;
+  /** Piani di ripristino preparati: restano qui, legati alla finestra e al collegamento. */
+  private readonly plans = new Map<
+    string,
+    {
+      owner: PlcOwner;
+      linkId: number;
+      plan: RestorePlan;
+      /** Gli SDB che la CPU aveva alla preparazione. */
+      sdbs: number[];
+      dispose: () => void;
+    }
+  >();
+  /** Prima di un ripristino ferma l'osservazione del blocco sulla stessa CPU (la imposta `plcIpc`). */
+  beforeRestore?: (owner: PlcOwner) => Promise<void>;
+  private restoreFileIo?: RestoreFileIo;
 
   constructor(private readonly o: PlcWriteOptions) {
-    this.connectFn = o.connect ?? connectWriteTcp;
+    this.connectFn = o.connect ?? ((a) => connectWriteTcp(a));
+    this.restoreConnectFn =
+      o.restoreConnect ?? ((a) => connectWriteTcp(a, 'online-restore') as Promise<RestoreClient>);
+    this.restoreFileIo = o.restoreFile;
+    this.sleep = o.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
     this.connectTimeoutMs = o.connectTimeoutMs ?? 3000;
     this.now = o.now ?? Date.now;
+  }
+
+  /** Piani di ripristino ancora in attesa di essere usati (serve ai test). */
+  pendingPlans(): number {
+    return this.plans.size;
+  }
+
+  /** Toglie un piano (e i suoi byte) dalla memoria: usato, sostituito, finestra chiusa o link finito. */
+  private dropPlan(token: string): void {
+    const p = this.plans.get(token);
+    if (!p) return;
+    this.plans.delete(token);
+    p.dispose();
+  }
+
+  /** Un ripristino è in corso su questa CPU. */
+  restoringOn(access: PlcAccess): boolean {
+    return this.restoringCpus.has(cpuKey(access));
+  }
+
+  /** C'è un ripristino in corso su una qualunque CPU (conta come lavoro sul PLC per `busy`). */
+  restoring(): boolean {
+    return this.restoringCpus.size > 0;
   }
 
   /** C'è una scrittura con il collegamento aperto (serve all'uscita dall'app). */
@@ -248,6 +334,17 @@ export class PlcWriteService {
   /** Ferma le scritture in corso prima del blocco successivo, senza impedirne di nuove. */
   interruptAll(): void {
     for (const op of this.ops.values()) op.aborted = true;
+  }
+
+  /** Imposta la scelta e la lettura del file da ripristinare (la finestra nativa sta in `ipc.ts`). */
+  setRestoreFile(io: RestoreFileIo): void {
+    this.restoreFileIo = io;
+  }
+
+  /** Ferma il ripristino (o ogni scrittura) di questa finestra prima del passo successivo. */
+  interrupt(owner: PlcOwner): void {
+    const op = this.ops.get(owner);
+    if (op) op.aborted = true;
   }
 
   /** Annulla `abortAll`: l'uscita o l'aggiornamento sono stati rinviati. */
@@ -469,6 +566,399 @@ export class PlcWriteService {
     );
   }
 
+  // ---- ripristino di un backup (sperimentale, proto §19.5) -----------------------------------
+
+  /**
+   * Prepara il ripristino: finestra di apertura nativa, lettura sicura del `.baapbak`, elenco dei
+   * blocchi e controllo del forzamento sulla CPU collegata. Nessuna scrittura e nessuna rete oltre
+   * alla lettura sul collegamento della sorveglianza. Il piano resta qui; il renderer riceve le
+   * righe e un `token` monouso.
+   */
+  async restorePlan(owner: PlcOwner): Promise<PlcRestorePlanResult> {
+    const io = this.restoreFileIo;
+    const svc = this.o.service;
+    if (!io || !svc.read) return { ok: false, error: 'Ripristino non disponibile' };
+    try {
+      const target = this.o.service.target(owner);
+      if (!target) return { ok: false, error: 'Nessun collegamento online' };
+      const path = await io.pick(owner);
+      if (path === null || owner.isDestroyed()) return { ok: false, cancelled: true };
+      const now = this.o.service.target(owner);
+      if (!now || now.linkId !== target.linkId) {
+        return { ok: false, error: 'Nessun collegamento online' };
+      }
+      if ((await io.size(path)) > BACKUP_MAX_BYTES) {
+        return { ok: false, error: 'File di backup troppo grande' };
+      }
+      let decoded;
+      try {
+        decoded = decodeBackup(await io.read(path), (b) =>
+          createHash('sha256').update(b).digest('hex'),
+        );
+      } catch (e) {
+        if (e instanceof BackupFormatError) return { ok: false, error: e.message };
+        throw e;
+      }
+      const warnings: string[] = [];
+      const online = await svc.read(owner, async (run) => {
+        const blocks: { type: string; number: number }[] = [];
+        for (const type of ['OB', 'FB', 'FC', 'DB', 'SDB'] as const) {
+          for (const e of await run((c) => c.listBlocks(type)))
+            blocks.push({ type, number: e.number });
+        }
+        let force = false;
+        try {
+          force = forceFrom(await run((c) => c.readSzl(0x0174, FRCE_LED)));
+        } catch (e) {
+          if (e instanceof S7Error && (e.code === 'CLOSED' || e.code === 'TIMEOUT')) throw e;
+          warnings.push('Stato del forzamento non leggibile dalla CPU');
+        }
+        let protection: string | undefined;
+        try {
+          const p = protectionFrom(await run((c) => c.readSzl(0x0232, 4)));
+          if ((p.validLevel ?? 0) >= 2) protection = PROTECTED;
+        } catch (e) {
+          if (e instanceof S7Error && (e.code === 'CLOSED' || e.code === 'TIMEOUT')) throw e;
+          protection = PROTECTION_UNREADABLE;
+        }
+        return { blocks, force, protection };
+      });
+      if (!online.ok) return { ok: false, error: online.error };
+      if (online.value.protection) return { ok: false, error: online.value.protection };
+      if (online.value.force) {
+        return {
+          ok: false,
+          error: FORCE_ACTIVE,
+        };
+      }
+      // §19.5.0: il backup si ripristina solo su una CPU dello stesso tipo
+      const backupCpu = decoded.manifest.cpu.orderNumber;
+      if (backupCpu !== target.identity.orderNumber) {
+        return {
+          ok: false,
+          error: `Il backup è di una CPU di tipo diverso (${backupCpu}) da quella collegata (${target.identity.orderNumber}): ripristino non possibile`,
+        };
+      }
+      const plan = planRestore(decoded.manifest, decoded.files, online.value.blocks);
+      if (typeof plan === 'string') return { ok: false, error: plan };
+      for (const [t, p] of this.plans) if (p.owner === owner) this.dropPlan(t);
+      const token = randomUUID();
+      // I byte del backup non restano in memoria se la finestra si chiude o il collegamento finisce
+      const drop = (): void => this.dropPlan(token);
+      const offLink = this.o.service.onLinkEnd?.(owner, drop);
+      owner.once('destroyed', drop);
+      const dispose = (): void => {
+        offLink?.();
+        owner.removeListener('destroyed', drop);
+      };
+      const sdbs = online.value.blocks.filter((b) => b.type === 'SDB').map((b) => b.number);
+      this.plans.set(token, { owner, linkId: target.linkId, plan, sdbs, dispose });
+      return { ok: true, token, rows: restoreRows(plan), warnings };
+    } catch (e) {
+      return { ok: false, error: errText(e) }; // mai un'eccezione verso il renderer
+    }
+  }
+
+  /**
+   * Esegue il ripristino (SPERIMENTALE, mai provato su una CPU reale): osservazione fermata, conferma,
+   * collegamento `online-restore` con identità ricontrollata,
+   * lista dei job, conferma e STOP, i passi del piano uno dopo l'altro, riavvio solo se richiesto e
+   * confermato, elenco dei blocchi riletto. Nessuna ripetizione, nessun annullamento di ciò che è
+   * già stato fatto.
+   */
+  async restore(owner: PlcWriteOwner, raw: unknown): Promise<PlcRestoreResult> {
+    const req = parseRestoreRequest(raw);
+    if (typeof req === 'string') return restoreFail(req);
+    return this.exclusive<PlcRestoreResult>(
+      owner,
+      (m) => restoreFail(m),
+      (err) => restoreFail(errText(err)),
+      async (op) => {
+        const t = this.o.service.target(owner);
+        const cpu = t && cpuKey(t.access);
+        if (cpu !== undefined) this.restoringCpus.add(cpu);
+        try {
+          const res = await this.runRestore(owner, op, req);
+          await this.settleOutcome(owner, res);
+          return res;
+        } finally {
+          if (cpu !== undefined) this.restoringCpus.delete(cpu);
+        }
+      },
+    );
+  }
+
+  private async runRestore(
+    owner: PlcWriteOwner,
+    op: Op,
+    req: { token: string; restart: boolean },
+  ): Promise<PlcRestoreResult> {
+    const saved = this.plans.get(req.token);
+    if (!saved || saved.owner !== owner) {
+      return restoreFail('Piano di ripristino non valido o già usato: prepararlo di nuovo');
+    }
+    this.dropPlan(req.token); // monouso
+    const plan = saved.plan;
+    const target = this.o.service.target(owner);
+    if (!target || target.linkId !== saved.linkId) {
+      return restoreFail('Il collegamento online è cambiato dopo la preparazione: ripetere');
+    }
+    const rows: RestoreOutcomeRow[] = [
+      ...plan.steps.map<RestoreOutcomeRow>((s) => ({
+        name: stepName(s.type, s.number),
+        outcome: 'notDone',
+        error: 'Non caricato',
+      })),
+      ...plan.skipped.map<RestoreOutcomeRow>((s) => ({
+        name: stepName(s.type, s.number),
+        outcome: 'skipped',
+        error: s.why,
+      })),
+      ...plan.cpuOnly.map<RestoreOutcomeRow>((b) => ({
+        name: stepName(b.type, b.number),
+        outcome: 'kept',
+      })),
+    ];
+    let stopConfirmed = false;
+    const cancelled = (): PlcRestoreResult => ({
+      ok: false,
+      cancelled: true,
+      rows,
+      cpuStopped: false,
+    });
+    const fin = (error: string, cpuStopped = false, stopUnconfirmed = false): PlcRestoreResult => ({
+      ok: false,
+      error,
+      rows,
+      cpuStopped,
+      ...(stopUnconfirmed ? { stopUnconfirmed } : {}),
+    });
+
+    await this.beforeRestore?.(owner);
+    const lines = restoreLines(plan);
+    const go = await this.o.confirm(owner, {
+      title: 'Ripristina backup (sperimentale)',
+      message: `Ripristinare il backup nella CPU ${cpuName(target)}?`,
+      detail: `${listLines(lines)}\n${RESTORE_NOTICE}`,
+      confirmLabel: 'Ripristina backup (sperimentale)',
+    });
+    if (!go || op.aborted) return cancelled();
+    if (owner.isDestroyed()) return fin('Finestra chiusa');
+    const again = this.o.service.target(owner);
+    if (!again || again.linkId !== target.linkId) {
+      return fin('Collegamento online cambiato: operazione annullata');
+    }
+    op.stage = 'running';
+    const opened = await this.open(target, this.restoreConnectFn);
+    if (typeof opened === 'string') return fin(opened);
+    const c = opened as RestoreClient;
+    let stopSent = false;
+    let restarted = false;
+    try {
+      // 1. nessun job di test: altrimenti la CPU rifiuterebbe l'assegnazione dei parametri
+      const noJobs = async (): Promise<boolean> =>
+        !(await c.readJobList()).some((j) => j.fn !== 0x10);
+      if (!(await noJobs())) return fin(JOBS_ACTIVE);
+      // forzamento e protezione si ricontrollano qui: dal piano può essere cambiato tutto
+      const refusal = await safetyRefusal(c);
+      if (refusal) return fin(refusal);
+      // 2. STOP (conferma separata), poi si rilegge il modo: conta solo STOP, HOLD no
+      const mode = async (): Promise<string> => toPlcMode(modeFrom(await c.readSzl(0x0424, 0)));
+      const m0 = await mode();
+      if (m0 === 'HOLD') {
+        return fin('La CPU è in HOLD (arresto su breakpoint): ripristino rifiutato');
+      }
+      if (m0 !== 'STOP') {
+        const stop = await this.o.confirm(owner, {
+          title: 'Ripristina backup (sperimentale)',
+          message: 'Portare la CPU in STOP?',
+          detail: 'Il ripristino degli SDB si fa solo con la CPU in STOP.',
+          confirmLabel: 'Porta in STOP',
+        });
+        if (!stop || op.aborted) return cancelled();
+        stopSent = true;
+        await c.stop();
+        for (let waited = 0; waited <= STOP_WAIT_MS; waited += POLL_MS) {
+          if ((await mode()) === 'STOP') {
+            stopConfirmed = true;
+            break;
+          }
+          await this.sleep(POLL_MS);
+        }
+        if (!stopConfirmed) {
+          return fin(
+            'STOP inviato ma non confermato entro 5 s: la CPU potrebbe fermarsi più tardi. Nulla è stato scritto',
+            false,
+            true,
+          );
+        }
+      }
+      // un job può essere nato durante le conferme: ultimo controllo prima del primo passo
+      if (!(await noJobs())) {
+        return fin(
+          `${JOBS_ACTIVE}. La CPU è rimasta in STOP, nulla è stato scritto`,
+          stopConfirmed,
+        );
+      }
+      // la lista degli SDB può essere cambiata (altro PG) dopo la preparazione: si rilegge prima di scrivere
+      const live = await this.o.service.read?.(owner, async (run) =>
+        (await run((x) => x.listBlocks('SDB'))).map((e) => e.number),
+      );
+      if (!live || !live.ok) {
+        return fin(
+          'Elenco degli SDB della CPU non rileggibile. La CPU è rimasta in STOP, nulla è stato scritto',
+          stopConfirmed,
+        );
+      }
+      const expected = [...saved.sdbs].sort((a, b) => a - b);
+      const now = [...live.value].sort((a, b) => a - b);
+      if (now.length !== expected.length || now.some((n, i) => n !== expected[i])) {
+        return fin(
+          'Gli SDB della CPU sono cambiati dopo la preparazione del ripristino: prepararlo di nuovo. La CPU è rimasta in STOP, nulla è stato scritto',
+          stopConfirmed,
+        );
+      }
+      // 3. i passi
+      const failedAt = await this.runRestoreSteps(owner, op, c, plan.steps, rows);
+      const ok = failedAt === undefined;
+      let diag: PlcRestoreResult['diag'];
+      let startUnknown: string | undefined;
+      // 4. riavvio, solo con tutti i passi riusciti, richiesto e confermato
+      if (ok && req.restart) {
+        const run = await this.o.confirm(owner, {
+          title: 'Ripristina backup (sperimentale)',
+          message: 'Avviare la CPU (avviamento a caldo)?',
+          detail: 'Il ripristino è finito. La CPU è in STOP.',
+          confirmLabel: 'Avvia',
+        });
+        if (run && !op.aborted) {
+          try {
+            await c.start();
+          } catch (err) {
+            // il comando può essere arrivato: lo stato della CPU non è noto
+            startUnknown = `Avviamento inviato ma esito sconosciuto, lo stato della CPU non è noto (${errText(err)})`;
+          }
+          for (let waited = 0; !startUnknown && waited <= RUN_WAIT_MS; waited += POLL_MS) {
+            if ((await mode()) === 'RUN') {
+              restarted = true;
+              break;
+            }
+            await this.sleep(POLL_MS);
+          }
+          if (!restarted && !startUnknown) {
+            try {
+              diag = diagRecordsFrom(await c.readSzl(0x00a0, 0))
+                .slice(0, 5)
+                .map(diagView);
+            } catch {
+              // il buffer è un di più
+            }
+          }
+        }
+      }
+      const result: PlcRestoreResult = {
+        // blocchi caricati, ma con lo stato della CPU ignoto il ripristino non si dice riuscito
+        ok: ok && !startUnknown,
+        ...(failedAt !== undefined
+          ? { error: failedAt }
+          : startUnknown
+            ? { error: startUnknown }
+            : {}),
+        rows,
+        cpuStopped: stopConfirmed && !restarted && !startUnknown,
+        ...(req.restart && ok ? { restarted } : {}),
+        ...(diag ? { diag } : {}),
+      };
+      return result;
+    } catch (err) {
+      // errore fuori dai passi (lista dei job, modo, STOP): niente è stato scritto, a parte uno STOP
+      return fin(errText(err), stopConfirmed && !restarted, stopSent && !stopConfirmed);
+    } finally {
+      await c.close().catch(() => undefined);
+    }
+  }
+
+  /**
+   * Riletto l'elenco dei blocchi, l'esito si ricalcola: una riga declassata a `unknown` non può stare
+   * sotto «Ripristino completato.».
+   */
+  private async settleOutcome(owner: PlcOwner, res: PlcRestoreResult): Promise<void> {
+    try {
+      await this.verifyLoaded(owner, res.rows);
+    } catch {
+      // l'elenco è un di più: le righe restano come sono
+    }
+    if (!res.ok) return;
+    const bad = res.rows.find((r) => r.outcome === 'unknown' || r.outcome === 'rejected');
+    if (bad) {
+      res.ok = false;
+      res.error = `${bad.name}: ${bad.error ?? 'Esito sconosciuto'}`;
+    }
+  }
+
+  /** I passi del piano; si ferma al primo errore. Dà il messaggio d'errore, `undefined` se tutti riusciti. */
+  private async runRestoreSteps(
+    owner: PlcWriteOwner,
+    op: Op,
+    c: RestoreClient,
+    steps: RestoreStep[],
+    rows: RestoreOutcomeRow[],
+  ): Promise<string | undefined> {
+    let lastSent = -Infinity;
+    for (const [i, s] of steps.entries()) {
+      const name = stepName(s.type, s.number);
+      const row = rows[i]!;
+      if (owner.isDestroyed() || op.aborted) {
+        return `${op.aborted ? 'Interrotto' : 'Finestra chiusa'} prima di ${name}`;
+      }
+      try {
+        if (s.kind === 'deleteSdb') await c.deleteSystemBlock(s.number);
+        else await c.downloadBlock(s.file!, { busyRetry: { sleep: (ms) => this.sleep(ms) } });
+      } catch (err) {
+        // Un rifiuto certo (errore della CPU o del filtro) non ha scritto nulla; ogni altro errore,
+        // collegamento caduto compreso, lascia l'esito sconosciuto.
+        const certain =
+          err instanceof S7Error && (err.code === 'CPU_ERROR' || err.code === 'FORBIDDEN');
+        row.outcome = certain ? 'rejected' : 'unknown';
+        row.error = !certain
+          ? 'Esito sconosciuto'
+          : err instanceof S7Error && err.code === 'FORBIDDEN'
+            ? FILTER_REFUSED // l'ha fermato il nostro filtro, non la CPU
+            : `Rifiutato dalla CPU: ${errText(err)}`;
+        return `${name}: ${row.error}`;
+      }
+      row.outcome = s.kind === 'deleteSdb' ? 'deleted' : 'loaded';
+      row.error = s.kind === 'deleteSdb' ? 'Cancellato' : 'Caricato';
+      const done = i + 1;
+      const t = this.now();
+      if ((done === steps.length || t - lastSent >= PROGRESS_MIN_MS) && !owner.isDestroyed()) {
+        lastSent = t;
+        owner.send('plc:writeProgress', { done, total: steps.length, current: name });
+      }
+    }
+    return undefined;
+  }
+
+  /** Riletto l'elenco, una riga `loaded` il cui blocco non c'è diventa `unknown`. */
+  private async verifyLoaded(owner: PlcOwner, rows: RestoreOutcomeRow[]): Promise<void> {
+    const svc = this.o.service;
+    if (!svc.read || !rows.some((r) => r.outcome === 'loaded')) return;
+    const r = await svc.read(owner, async (run) => {
+      const names = new Set<string>();
+      for (const type of ['OB', 'FB', 'FC', 'DB', 'SDB'] as const) {
+        for (const e of await run((c) => c.listBlocks(type))) names.add(stepName(type, e.number));
+      }
+      return names;
+    });
+    if (!r.ok) return;
+    for (const row of rows) {
+      if (row.outcome === 'loaded' && !r.value.has(row.name)) {
+        row.outcome = 'unknown';
+        row.error = 'Esito sconosciuto: il blocco non risulta nella CPU';
+      }
+    }
+  }
+
   /**
    * Una scrittura per finestra, anche durante la conferma, e una per CPU fra tutte le finestre;
    * registra l'operazione per `abortAll`.
@@ -528,11 +1018,14 @@ export class PlcWriteService {
     return typeof c === 'string' ? { result: { ok: false, error: c } } : { c };
   }
 
-  private async open(target: Target): Promise<WriteClient | string> {
+  private async open(
+    target: Target,
+    connect: PlcWriteConnectFn = this.connectFn,
+  ): Promise<WriteClient | string> {
     const access = target.access;
     let c: WriteClient;
     try {
-      c = await this.connectFn({
+      c = await connect({
         host: access.host,
         port: access.port ?? DEFAULT_PORT,
         rack: access.rack,
@@ -597,6 +1090,50 @@ export class PlcWriteService {
       await c.close().catch(() => undefined);
     }
   }
+}
+
+const RESTORE_NOTICE = 'FUNZIONE SPERIMENTALE, mai provata su una CPU reale. La CPU andrà in STOP.';
+const JOBS_ACTIVE =
+  "Una funzione di test attiva impedisce l'assegnazione dei parametri (job di test sulla CPU). Chiudere osservazioni e forzamenti in TIA o STEP 7 e riprovare";
+const FILTER_REFUSED = 'Rifiutato da BaaPortal (frame non ammesso)';
+const FORCE_ACTIVE =
+  'Forzamento attivo sulla CPU: terminarlo con TIA o STEP 7 prima del ripristino';
+const PROTECTED =
+  'La protezione della CPU (livello 2 o 3) non permette la scrittura e BaaPortal non gestisce le password: ripristino rifiutato';
+const PROTECTION_UNREADABLE = 'Livello di protezione della CPU non leggibile: ripristino rifiutato';
+const FORCE_UNREADABLE = 'Stato del forzamento non leggibile dalla CPU: ripristino rifiutato';
+
+/** Forzamento e protezione letti sul collegamento del ripristino; il testo del rifiuto, se c'è. */
+async function safetyRefusal(c: Pick<RestoreClient, 'readSzl'>): Promise<string | undefined> {
+  try {
+    if (forceFrom(await c.readSzl(0x0174, FRCE_LED))) return FORCE_ACTIVE;
+  } catch {
+    return FORCE_UNREADABLE;
+  }
+  try {
+    if ((protectionFrom(await c.readSzl(0x0232, 4)).validLevel ?? 0) >= 2) return PROTECTED;
+  } catch {
+    return PROTECTION_UNREADABLE;
+  }
+  return undefined;
+}
+const POLL_MS = 200;
+const STOP_WAIT_MS = 5000;
+const RUN_WAIT_MS = 10_000;
+
+function restoreFail(error: string): PlcRestoreResult {
+  return { ok: false, error, rows: [], cpuStopped: false };
+}
+
+/** Controlla ciò che arriva dal renderer: un token e se riavviare. */
+function parseRestoreRequest(raw: unknown): { token: string; restart: boolean } | string {
+  if (typeof raw !== 'object' || raw === null) return 'Richiesta di ripristino non valida';
+  const r = raw as { token?: unknown; restart?: unknown };
+  if (typeof r.token !== 'string' || r.token.length === 0 || r.token.length > 100) {
+    return 'Richiesta di ripristino non valida';
+  }
+  if (typeof r.restart !== 'boolean') return 'Richiesta di ripristino non valida';
+  return { token: r.token, restart: r.restart };
 }
 
 type Target = NonNullable<ReturnType<PlcService['target']>>;

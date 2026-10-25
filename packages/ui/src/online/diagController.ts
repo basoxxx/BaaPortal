@@ -3,15 +3,16 @@ import type { BaaBridge } from '../bridge';
 import type { AppState } from '../state/store';
 import type { DiagPart, PlcClockRequest, PlcDiagData } from './plcTypes';
 
-export type DiagPage = 'general' | 'buffer' | 'cycle' | 'memory' | 'clock';
+export type DiagPage = 'general' | 'buffer' | 'cycle' | 'memory' | 'clock' | 'stacks';
 
 /** Parti di ogni pagina; `mode` e `leds` si chiedono sempre, per l'intestazione. */
 export const PAGE_PARTS: Record<DiagPage, DiagPart[]> = {
-  general: ['identity', 'protection', 'lastModeChange', 'memory'],
+  general: ['identity', 'protection', 'lastModeChange', 'memory', 'force'],
   buffer: ['buffer'],
   cycle: ['cycle'],
   memory: ['memory'],
   clock: ['clock'],
+  stacks: [],
 };
 
 export interface DiagState {

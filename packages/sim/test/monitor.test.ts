@@ -34,6 +34,24 @@ const fc1: BlockSpec = {
 };
 
 describe('osservazione', () => {
+  it('last: la riga di FC1 chiamato due volte tiene la seconda esecuzione', () => {
+    const fc: BlockSpec = {
+      kind: 'FC',
+      number: 1,
+      networks: ['\tL MW 20;\n\tL 1;\n\t+I;\n\tT MW 20;'],
+    };
+    const run = (last: boolean): number => {
+      const cpu = makeCpu([ob1('\tCALL FC 1;\n\tCALL FC 1;'), fc]);
+      cpu.setMonitor({ kind: 'FC', number: 1, ...(last ? { last } : {}) });
+      cpu.run();
+      cpu.cycle();
+      const steps = cpu.monitorSnapshot()!;
+      return steps[steps.length - 1]!.accu1;
+    };
+    expect(run(false)).toBe(1);
+    expect(run(true)).toBe(2);
+  });
+
   it('monitor di FC1: RLO e ACCU dopo ogni riga, prima esecuzione nel ciclo', () => {
     const cpu = makeCpu([ob1('\tCALL FC 1;\n\tCALL FC 1;'), fc1]);
     cpu.setMonitor({ kind: 'FC', number: 1 });

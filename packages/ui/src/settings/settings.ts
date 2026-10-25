@@ -15,6 +15,8 @@ export interface Settings {
     autocomplete: boolean;
     lineNumbers: boolean;
   };
+  /** Funzioni online non provate su una CPU reale (p.es. gli stack di chiamata). */
+  online: { experimental: boolean };
   /** `prerelease: null` segue il canale della build. */
   updates: { checkOnStartup: boolean; prerelease: boolean | null };
 }
@@ -31,6 +33,7 @@ export const DEFAULT_SETTINGS: Settings = {
   general: { language: 'it', author: '', recoveryMinutes: 1 },
   appearance: { uiScale: 100 },
   editor: { mnemonic: 'int', fontSize: 13, tabSize: 4, autocomplete: true, lineNumbers: true },
+  online: { experimental: false },
   updates: { checkOnStartup: true, prerelease: null },
 };
 
@@ -52,6 +55,7 @@ export function normalizeSettings(raw: unknown): Settings {
   const g = obj(r.general);
   const a = obj(r.appearance);
   const e = obj(r.editor);
+  const o = obj(r.online);
   const u = obj(r.updates);
   const d = DEFAULT_SETTINGS;
   return {
@@ -68,6 +72,7 @@ export function normalizeSettings(raw: unknown): Settings {
       autocomplete: bool(e.autocomplete, d.editor.autocomplete),
       lineNumbers: bool(e.lineNumbers, d.editor.lineNumbers),
     },
+    online: { experimental: bool(o.experimental, d.online.experimental) },
     updates: {
       checkOnStartup: bool(u.checkOnStartup, d.updates.checkOnStartup),
       prerelease: typeof u.prerelease === 'boolean' ? u.prerelease : null,
@@ -80,6 +85,7 @@ function mergeSettings(base: Settings, patch: DeepPartial<Settings>): Settings {
     general: { ...base.general, ...patch.general },
     appearance: { ...base.appearance, ...patch.appearance },
     editor: { ...base.editor, ...patch.editor },
+    online: { ...base.online, ...patch.online },
     updates: { ...base.updates, ...patch.updates },
   });
 }

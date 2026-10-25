@@ -13,6 +13,7 @@ import {
   parseClockFields,
 } from '../../online/diagFormat';
 import type { DiagEventView, DiagValue, PlcDiagData } from '../../online/plcTypes';
+import { StacksPage } from './StacksPage';
 import './diag.css';
 
 const DIAG_PAGES: DiagPage[] = ['general', 'buffer', 'cycle', 'memory'];
@@ -120,6 +121,14 @@ function ConnectedDiag() {
         >
           {t('onlineDiag.page.clock')}
         </button>
+        <button
+          type="button"
+          aria-current={page === 'stacks'}
+          onClick={() => choose('stacks')}
+          data-testid="diag-page-stacks"
+        >
+          {t('diag.stacks.page')}
+        </button>
       </nav>
       <section className="baa-diag-page">
         <header className="baa-diag-head" data-testid="diag-head">
@@ -145,13 +154,14 @@ function ConnectedDiag() {
             {t('onlineDiag.stopped', { message: st.error })}
           </p>
         ) : null}
-        <h3>{t(`onlineDiag.page.${page}`)}</h3>
+        <h3>{page === 'stacks' ? t('diag.stacks.page') : t(`onlineDiag.page.${page}`)}</h3>
         {page === 'general' ? <General d={d} t={t} lang={lang} /> : null}
         {page === 'buffer' ? (
           <BufferPage d={d} t={t} lang={lang} frozen={frozen} onFreeze={freeze} />
         ) : null}
         {page === 'cycle' ? <CyclePage d={d} t={t} /> : null}
         {page === 'memory' ? <MemoryPage d={d} t={t} /> : null}
+        {page === 'stacks' ? <StacksPage mode={d.mode?.ok ? d.mode.value : undefined} /> : null}
         {page === 'clock' ? <ClockPage d={d} t={t} readAt={st.readAt} ctrl={ctrl} /> : null}
       </section>
     </div>
@@ -210,6 +220,15 @@ function General({ d, t, lang }: PageProps & { lang: 'it' | 'en' }) {
           }}
         </Part>
       </dd>
+      {d.force?.ok && d.force.value ? (
+        <>
+          <dt>{t('diag.force.label')}</dt>
+          <dd data-testid="diag-force">
+            {t('diag.force.active')}
+            <span className="baa-diag-note"> {t('diag.force.note')}</span>
+          </dd>
+        </>
+      ) : null}
       <dt>{t('onlineDiag.protection')}</dt>
       <dd>
         <Part value={d.protection} t={t}>

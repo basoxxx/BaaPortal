@@ -9,10 +9,20 @@ import {
   type CpuMode,
   type DiagEntry,
   type ReadItem,
+  type Regs,
   type S7DateTime,
   type WriteItem,
 } from '@baaportal/s7comm';
-import type { CpuBackend, CpuConfig, ItemRead, MemoryUsage, StoredBlock } from './backend';
+import type {
+  BackendChange,
+  CpuBackend,
+  CpuConfig,
+  ItemRead,
+  MemoryUsage,
+  StackData,
+  StoredBlock,
+} from './backend';
+import { bstackEntry, istackBytes, lstackBytes } from './tis';
 import { encodeStoredBlockInfo } from './blockInfo';
 import { modeByte } from './szlData';
 import { checkFaults, type FaultPlan } from './faults';
@@ -47,6 +57,15 @@ export interface FakeCpuOptions {
   systemBlocks?: Uint8Array[];
   /** Memoria di lavoro in byte, per la SZL 0x0013 (predefinito 256 KB). */
   memory?: { workBytes: number };
+  /** LED FRCE acceso (forzamento attivo); il server non implementa il forzamento. Default no. */
+  forceActive?: boolean;
+  /** Funzioni di test v2 (block status): `false` come la CPU del 2010 (proto §7.5.9). Default si'. */
+  tisV2?: boolean;
+  /**
+   * Blocchi FC/FB che il programma chiama (p.es. `['FC10']`): il block status di un FC o FB non
+   * elencato non produce risultati (blocco mai chiamato). Gli OB sono sempre eseguiti.
+   */
+  calledBlocks?: string[];
 }
 
 const hexOf = (b: Uint8Array): string =>
@@ -92,6 +111,11 @@ export class FakeCpu implements CpuBackend {
   private readonly workBytes: number;
   /** LED SF (errore cumulativo): lo imposta il test. */
   faultLed = false;
+  /** LED FRCE (forzamento attivo): lo imposta il test. */
+  forceActive: boolean;
+  readonly tisV2: boolean;
+  private readonly called: ReadonlySet<string>;
+  private readonly listeners = new Set<(e: BackendChange) => void>();
 
   constructor(o: FakeCpuOptions = {}) {
     const sizes = o.sizes ?? {
@@ -149,6 +173,9 @@ export class FakeCpu implements CpuBackend {
       Q: new Uint8Array(sizes.outputBytes),
       M: new Uint8Array(sizes.mBytes),
     };
+    this.forceActive = o.forceActive ?? false;
+    this.tisV2 = o.tisV2 ?? true;
+    this.called = new Set(o.calledBlocks ?? []);
     this.cpuMode = o.mode ?? 'RUN';
     this.modeTime = this.clockFn();
     this.workBytes = int('memory.workBytes', o.memory?.workBytes ?? 256 * 1024, 0, 0x7fffffff);
@@ -211,11 +238,58 @@ export class FakeCpu implements CpuBackend {
       file: copy,
       parsed,
     });
+    this.emit({ kind: 'block', type, number: parsed.header.number });
   }
 
   setMode(m: CpuMode): void {
     this.cpuMode = m;
     this.modeTime = this.clockFn();
+    this.emit({ kind: 'mode' });
+  }
+
+  private emit(e: BackendChange): void {
+    for (const cb of this.listeners) cb(e);
+  }
+
+  /** @internal Per i job di test (proto §18.4.1): modo e blocchi cambiati. */
+  onChange(cb: (e: BackendChange) => void): () => void {
+    this.listeners.add(cb);
+    return () => this.listeners.delete(cb);
+  }
+
+  /** @internal Valori sintetici (scelta del server di prova): STW 0x0106, ACCU1 = offset della riga. */
+  blockStatus(
+    type: 'OB' | 'FB' | 'FC',
+    number: number,
+    lines: { offset: number; mask: number }[],
+  ): Promise<(Regs | null)[] | undefined> {
+    if (type !== 'OB' && !this.called.has(`${type}${number}`)) return Promise.resolve(undefined);
+    return Promise.resolve(
+      lines.map((l) => ({ stw: 0x0106, accu1: l.offset, accu2: 0, ar1: 0x84000000 })),
+    );
+  }
+
+  /** @internal Stack sintetici (proto §18.6): BSTACK = OB1 + FC10, ISTACK di 76 byte, LSTACK di 20. */
+  stacks(): StackData {
+    const t = this.clockFn();
+    return {
+      bstack: Uint8Array.from([
+        ...bstackEntry(0x08, 1, 0x20, { priority: 1, time: t }),
+        ...bstackEntry(0x0c, 10, 0x08),
+      ]),
+      istack: istackBytes({
+        resume: [0x08, 1, 0x22],
+        interrupted: [0x0c, 10, 0x10],
+        stw: 0x0106,
+        accu1: 0x11111111,
+        accu2: 0x22222222,
+        ar1: 0x84000000,
+        ar2: 0,
+        obStart: [0x11, 0x01, 0x01, 0x01, 0, 0, 0, 0, 0, 0, 0, 0],
+        time: t,
+      }),
+      lstack: (priority) => lstackBytes(priority, t),
+    };
   }
 
   addDiagnostic(e: DiagEntry): void {
@@ -307,7 +381,9 @@ export class FakeCpu implements CpuBackend {
 
   /** @internal Cancella il blocco; `false` se non c'era. Solo dalla sessione (`_DELE`). */
   deleteBlock(type: BlockType, number: number): boolean {
-    return this.blockMap.delete(`${type}:${number}`);
+    const had = this.blockMap.delete(`${type}:${number}`);
+    if (had) this.emit({ kind: 'block', type, number });
+    return had;
   }
 
   /** @internal `_MODU`: nel finto PLC non c'è una ROM separata, quindi non cambia nulla. */
@@ -353,6 +429,7 @@ export class FakeCpu implements CpuBackend {
       throw new RangeError(`il file non è ${type}${number}`);
     }
     this.blockMap.set(`${type}:${number}`, { type, number, file: copy, parsed });
+    this.emit({ kind: 'block', type, number });
   }
 
   /** @internal Write var: un return code per item (0xFF ok, 0x0A DB mancante, 0x05 fuori campo). Solo dal gestore 0x05. */

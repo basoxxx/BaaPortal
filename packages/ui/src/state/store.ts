@@ -4,7 +4,7 @@ import type { DiagEntry, MonitorStep, SimMode } from '@baaportal/sim';
 import type { LineMapRow } from '../editors/awl/monitorExtension';
 import type { OnlineCompare } from '../online/compare';
 import type { DownloadPlan } from '../online/plcDownload';
-import type { PlcAccess, PlcIdentity, PlcMode } from '../online/plcTypes';
+import type { PlcAccess, PlcIdentity, PlcMode, PlcRegs } from '../online/plcTypes';
 import type { SimStats, SimWarning, WatchValue } from '../sim/protocol';
 import type { ImportSummary } from '../project/navigation/tagTableIo';
 import * as wa from './workArea';
@@ -27,6 +27,7 @@ export type DialogState =
   | { kind: 'settings' }
   | { kind: 'accessibleDevices' }
   | { kind: 'download'; plan: DownloadPlan }
+  | { kind: 'restore' }
   | { kind: 'importTagsReport'; fileName: string; tableName: string; summary: ImportSummary }
   | null;
 
@@ -188,6 +189,8 @@ export interface OnlineUiState {
   access?: PlcAccess;
   identity?: PlcIdentity;
   mode?: PlcMode;
+  /** LED FRCE acceso: forzamento attivo sulla CPU (assente se la CPU non lo dice). */
+  force?: boolean;
   deviceId?: string;
   /** Confronto con la CPU: assente finché non è fatto; sparisce andando offline. */
   compare?: OnlineCompare;
@@ -197,6 +200,39 @@ export interface OnlineUiState {
   downloading?: boolean;
   /** Un comando della CPU (RUN, STOP, copia RAM in ROM, comprimi) è in corso. */
   commanding?: boolean;
+  /** Un ripristino di backup (sperimentale) è in corso. */
+  restoring?: boolean;
+  /** Osservazione del blocco aperto sulla CPU (una sola alla volta). */
+  monitor?: PlcMonitorUiState | null;
+  /** Ultime righe osservate (offset e registri); `null` finché non arrivano e se non ci sono valori. */
+  monitorLines?: { offset: number; regs: PlcRegs | null }[] | null;
+  /** Registri facoltativi chiesti oltre a STW e ACCU1. */
+  monitorRegs?: { accu2: boolean; ar1: boolean };
+}
+
+/** Perché l'osservazione sulla CPU non mostra (ancora) valori; `ok` = valori in arrivo. */
+export type PlcMonitorReason =
+  | 'ok'
+  | 'stale'
+  | 'noLines'
+  | 'edited'
+  | 'different'
+  | 'missing'
+  | 'unsupported'
+  | 'busy'
+  | 'stop'
+  | 'waiting'
+  | 'noVisible'
+  | 'ended';
+
+export interface PlcMonitorUiState {
+  deviceId: string;
+  blockId: string;
+  reason: PlcMonitorReason;
+  message?: string;
+  partial?: boolean;
+  /** Righe osservate, se le righe visibili sono di più di quelle che la CPU concede. */
+  limit?: number;
 }
 
 export const ONLINE_OFF: OnlineUiState = { status: 'off' };

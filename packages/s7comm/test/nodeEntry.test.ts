@@ -7,6 +7,7 @@ describe('punti di ingresso', () => {
     expect(Object.keys(node).sort()).toEqual([
       'collectTcp',
       'connectTcp',
+      'connectTestTcp',
       'connectWriteTcp',
       'openTcp',
       'probePort',

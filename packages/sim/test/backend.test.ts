@@ -1,8 +1,13 @@
 import { findCpu } from '@baaportal/catalog';
 import { syntheticSdb, serve, type CpuBackend } from '@baaportal/s7-server';
 import {
+  S7TestClient,
   S7WriteClient,
   buildBlockFile,
+  decodeBStack,
+  decodeBlockStatusResult,
+  decodeLStack,
+  type BlockStatusRequest,
   cycleConfigFrom,
   cycleTimeFrom,
   diagRecordsFrom,
@@ -14,9 +19,9 @@ import {
   parseBlockFile,
   type TransportFactory,
 } from '@baaportal/s7comm';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { SimCpu, connectToSim, simBackend, type SimCpuOptions } from '../src';
-import { buildFiles } from './programHelpers';
+import { buildFiles, buildProgram } from './programHelpers';
 
 const PROPS: SimCpuOptions['props'] = {
   maxCycleMs: 150,
@@ -30,13 +35,16 @@ const newCpu = (o: Partial<SimCpuOptions> = {}): SimCpu =>
   new SimCpu({ cpuTypeId: 'cpu-315-2-pn-dp', props: PROPS, ...o });
 
 /** Un client collegato a un backend preparato dal test (per le opzioni che `connectToSim` non ha). */
-async function connectTo(backend: CpuBackend): Promise<S7WriteClient> {
+async function connectTo(
+  backend: CpuBackend,
+  mode: 'online-write' | 'online-restore' = 'online-write',
+): Promise<S7WriteClient> {
   const transport: TransportFactory = async () => {
     const [a, b] = memoryTransportPair();
     serve(backend, b);
     return a;
   };
-  return S7WriteClient.connect({ host: 'sim', transport, timeoutMs: 3000 });
+  return S7WriteClient.connect({ host: 'sim', transport, timeoutMs: 3000 }, mode);
 }
 
 const OB1 = { kind: 'OB' as const, number: 1, networks: ['\tL 7;\n\tT MW 10;'] };
@@ -237,8 +245,29 @@ describe('CPU simulata: SDB sintetici', () => {
 
   it('download di un SDB → rifiutato; il programma della CPU non lo vede', async () => {
     const cpu = newCpu();
-    const c = await connectTo(simBackend(cpu, { systemBlocks: [sdb0] }));
+    cpu.run(); // in RUN gli SDB non si scrivono
+    const c = await connectTo(simBackend(cpu, { systemBlocks: [sdb0] }), 'online-restore');
     await expect(c.downloadBlock(syntheticSdb(5, 16))).rejects.toMatchObject({ code: 'CPU_ERROR' });
+    expect((await c.blockCounts()).SDB).toBe(1);
+    expect(cpu.program.list().some((b) => (b.kind as string) === 'SDB')).toBe(false);
+    await c.close();
+  });
+
+  it('in STOP, con il modo del ripristino: SDB scaricato e cancellato come blob opaco', async () => {
+    const cpu = newCpu();
+    const backend = simBackend(cpu, { systemBlocks: [sdb0] });
+    const transport: TransportFactory = async () => {
+      const [a, b] = memoryTransportPair();
+      serve(backend, b);
+      return a;
+    };
+    const c = await S7WriteClient.connect(
+      { host: 'sim', transport, timeoutMs: 3000 },
+      'online-restore',
+    );
+    await c.downloadBlock(syntheticSdb(5, 16));
+    expect((await c.blockCounts()).SDB).toBe(2);
+    await c.deleteSystemBlock(5);
     expect((await c.blockCounts()).SDB).toBe(1);
     expect(cpu.program.list().some((b) => (b.kind as string) === 'SDB')).toBe(false);
     await c.close();
@@ -247,5 +276,157 @@ describe('CPU simulata: SDB sintetici', () => {
   it('systemBlocks accetta solo SDB', () => {
     const [ob] = buildFiles([OB1]);
     expect(() => simBackend(newCpu(), { systemBlocks: [ob!] })).toThrow(RangeError);
+  });
+});
+
+describe('CPU simulata: funzioni di test TIS', () => {
+  async function connectTest(cpu: SimCpu): Promise<S7TestClient> {
+    const backend = simBackend(cpu);
+    const transport: TransportFactory = async () => {
+      const [a, b] = memoryTransportPair();
+      serve(backend, b);
+      return a;
+    };
+    return S7TestClient.connect({ host: 'sim', transport, timeoutMs: 3000 });
+  }
+
+  /** CPU in RUN con il programma `blocks`, caricato direttamente (senza file sul server). */
+  function runningCpu(blocks: Parameters<typeof buildProgram>[0]): SimCpu {
+    const cpu = newCpu({ now: () => 0 });
+    for (const b of buildProgram(blocks).list()) cpu.program.put(b);
+    cpu.run();
+    return cpu;
+  }
+
+  const lines = (...offsets: number[]): BlockStatusRequest => ({
+    type: 'OB',
+    number: 1,
+    initMask: 0x03,
+    lines: offsets.map((offset) => ({ offset, mask: 0x03 })),
+  });
+
+  /** Fa girare i cicli mentre il test aspetta il risultato (l'osservazione dura fino al ciclo dopo l'enable). */
+  async function withCycles<T>(cpu: SimCpu, f: () => Promise<T>): Promise<T> {
+    const timer = setInterval(() => cpu.cycle(), 5);
+    try {
+      return await f();
+    } finally {
+      clearInterval(timer);
+    }
+  }
+
+  it('L 5 / T MW 10 in OB1: ACCU1 = 5 sulla riga della T; il monitor torna libero', async () => {
+    const cpu = runningCpu([{ kind: 'OB', number: 1, networks: ['\tL 5;\n\tT MW 10;'] }]);
+    const c = await connectTest(cpu);
+    const r = lines(0, 4);
+    const res = await withCycles(cpu, async () => {
+      const job = await c.createBlockStatus(r, 6);
+      return c.enableAndWait(0x13, job, 2000);
+    });
+    if (!('result' in res)) throw new Error('nessun risultato');
+    const dec = decodeBlockStatusResult(res.result, r);
+    if (!dec.ok) throw new Error(dec.why);
+    expect(dec.lines[1]).toMatchObject({ accu1: 5 });
+    expect(cpu.monitorSnapshot()).toBeUndefined();
+    await c.close();
+  });
+
+  it("riga dopo un salto preso → assente dall'indication", async () => {
+    // offset: SET 0, JC 2, L 1 6 e T MW 10 8 (saltate), NOP 12, L 5 14, T MW 12 18
+    const cpu = runningCpu([
+      {
+        kind: 'OB',
+        number: 1,
+        networks: ['\tSET;\n\tJC fine;\n\tL 1;\n\tT MW 10;\nfine: NOP 0;\n\tL 5;\n\tT MW 12;'],
+      },
+    ]);
+    const c = await connectTest(cpu);
+    const r = lines(6, 8, 14, 18);
+    const res = await withCycles(cpu, async () => {
+      const job = await c.createBlockStatus(r, 20);
+      return c.enableAndWait(0x13, job, 2000);
+    });
+    if (!('result' in res)) throw new Error('nessun risultato');
+    // 2 byte di offset + iniziali (6) + due righe eseguite da 8 byte: le due saltate mancano
+    expect(res.result.length).toBe(2 + 6 + 2 * 8);
+    const dec = decodeBlockStatusResult(res.result, r);
+    if (!dec.ok) throw new Error(dec.why);
+    expect(dec.lines[0]).toBeNull();
+    expect(dec.lines[1]).toBeNull();
+    expect(dec.lines[3]).toMatchObject({ accu1: 5 });
+    await c.close();
+  });
+
+  it("senza cicli l'osservazione scade e non blocca quella dopo", async () => {
+    vi.useFakeTimers();
+    try {
+      const cpu = runningCpu([{ kind: 'OB', number: 1, networks: ['\tL 5;\n\tT MW 10;'] }]);
+      const b = simBackend(cpu);
+      const first = b.blockStatus!('OB', 1, [{ offset: 0, mask: 3 }]);
+      const second = b.blockStatus!('OB', 1, [{ offset: 0, mask: 3 }]);
+      await vi.advanceTimersByTimeAsync(3000);
+      await expect(first).resolves.toBeUndefined();
+      await vi.advanceTimersByTimeAsync(3000);
+      await expect(second).resolves.toBeUndefined();
+      expect(cpu.monitorSnapshot()).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('FC mai chiamato → nessuna indication; il monitor torna libero', async () => {
+    const cpu = runningCpu([
+      { kind: 'OB', number: 1, networks: ['\tL 5;\n\tT MW 10;'] },
+      { kind: 'FC', number: 1, networks: ['\tL 7;\n\tT MW 12;'] },
+    ]);
+    const c = await connectTest(cpu);
+    const r: BlockStatusRequest = { ...lines(0, 4), type: 'FC', number: 1 };
+    const res = await withCycles(cpu, async () => {
+      const job = await c.createBlockStatus(r, 6);
+      return c.enableAndWait(0x13, job, 300);
+    });
+    expect(res).toEqual({ timeout: true });
+    expect(cpu.monitorSnapshot()).toBeUndefined();
+    await c.close();
+  });
+
+  it('blocco assente → 0xD012; in STOP → 0xD081', async () => {
+    const cpu = runningCpu([{ kind: 'OB', number: 1, networks: ['\tL 5;\n\tT MW 10;'] }]);
+    const c = await connectTest(cpu);
+    await expect(
+      c.createBlockStatus({ ...lines(0), type: 'FC', number: 9 }, 6),
+    ).rejects.toMatchObject({ detail: { errorClass: 0xd0, errorCode: 0x12 } });
+    cpu.stop();
+    await expect(c.createBlockStatus(lines(0, 4), 6)).rejects.toMatchObject({
+      detail: { errorClass: 0xd0, errorCode: 0x81 },
+    });
+    await c.close();
+  });
+
+  it("il passaggio in STOP cancella i job: l'enable dopo dà 0xD0A5", async () => {
+    const cpu = runningCpu([{ kind: 'OB', number: 1, networks: ['\tL 5;\n\tT MW 10;'] }]);
+    const c = await connectTest(cpu);
+    const job = await c.createBlockStatus(lines(0, 4), 6);
+    cpu.stop();
+    await expect(c.enableAndWait(0x13, job, 300)).rejects.toMatchObject({
+      detail: { errorClass: 0xd0, errorCode: 0xa5 },
+    });
+    await c.close();
+  });
+
+  it('stack: in RUN 0xD081; in STOP BSTACK = OB1, LSTACK a zero', async () => {
+    const cpu = runningCpu([{ kind: 'OB', number: 1, networks: ['\tL 5;\n\tT MW 10;'] }]);
+    const c = await connectTest(cpu);
+    await expect(c.readStack('BSTACK')).rejects.toMatchObject({
+      detail: { errorClass: 0xd0, errorCode: 0x81 },
+    });
+    cpu.stop();
+    const b = decodeBStack(await c.readStack('BSTACK'));
+    if (!b.ok) throw new Error(b.why);
+    expect(b.value.entries.map((e) => `${e.blockType}${e.number}`)).toEqual(['OB1']);
+    expect((await c.readStack('ISTACK')).length).toBe(76);
+    const l = decodeLStack(await c.readStack('LSTACK', { priority: 1, depth: 0 }));
+    expect(l).toMatchObject({ ok: true, value: { priority: 0 } });
+    await c.close();
   });
 });

@@ -13,9 +13,19 @@ import type {
   PlcUploadBlockResult,
   PlcReadWatchResult,
   PlcWriteVarsResult,
+  PlcStatusStartResult,
+  PlcStatusWindowResult,
+  PlcStatusReadResult,
+  PlcStacksResult,
+  PlcRestorePlanResult,
+  PlcRestoreResult,
 } from '@baaportal/ui';
+import { BlockStatusService } from './blockStatus';
+import { memoryJobStore, type TisJobStore } from './tisJobs';
 import { BackupService, type PickBackupPath } from './backup';
 import type { ConfirmFn } from './confirm';
+import type { RestoreFileIo } from './plcWrite';
+import { readStacks } from './stacks';
 import { readDiagnostics } from './diagnostics';
 import { PlcWriteService, isControlOp } from './plcWrite';
 import { isUploadableType, listOnlineBlocks, uploadOneBlock } from './onlineBlocks';
@@ -70,19 +80,26 @@ export function registerPlc(
   uploads = new UploadService(),
   pickBackupPath: PickBackupPath = async () => null,
   appVersion: () => string = () => '',
+  jobs: TisJobStore = memoryJobStore(),
+  restoreFile?: RestoreFileIo,
 ): {
   closeAll(): Promise<void>;
   writing(): boolean;
   busy(): boolean;
-  /** Annulla `closeAll`: scritture, caricamenti e backup possono ripartire. */
+  /** Annulla `closeAll`: scritture, ripristini, caricamenti e backup possono ripartire. */
   resume(): void;
   interruptWrites(): void;
 } {
+  const status = new BlockStatusService({ service, jobs, blocked: (a) => writes.restoringOn(a) });
+  if (restoreFile) writes.setRestoreFile(restoreFile);
+  writes.beforeRestore = (owner) => status.stopForCpu(owner);
   handle('plc:connect', async (e, raw): Promise<PlcConnectResult> => {
     const access = parsePlcAccess(raw);
     if (typeof access === 'string') return { ok: false, error: access };
     return service.connect(e.sender, access);
   });
+  // Pulizia dei job di test nostri rimasti sulla CPU dopo una chiusura anomala.
+  service.onConnect((owner) => void status.cleanup(owner));
   handle('plc:disconnect', (e) => service.disconnect(e.sender));
   handle('plc:status', (e) => service.status(e.sender));
   // Ricerca: parte solo da questo canale, su richiesta; l'indirizzo deve essere di un'interfaccia reale.
@@ -114,6 +131,15 @@ export function registerPlc(
   handle('plc:writeVars', (e, items): Promise<PlcWriteVarsResult> =>
     writes.writeVars(e.sender, items),
   );
+  // Osservazione del blocco: bersaglio e CPU li decide il servizio; qui solo la forma della richiesta.
+  handle('plc:statusStart', (e, raw): Promise<PlcStatusStartResult> => status.start(e.sender, raw));
+  handle('plc:statusWindow', (e, raw): PlcStatusWindowResult => status.window(e.sender, raw));
+  handle('plc:statusRead', (e): Promise<PlcStatusReadResult> => status.read(e.sender));
+  handle('plc:statusStop', (e) => status.stop(e.sender));
+  // Stack di chiamata (sperimentale): il servizio rifiuta se l'impostazione non è proprio `true`.
+  handle('plc:readStacks', (e, experimental): Promise<PlcStacksResult> =>
+    readStacks(service, e.sender, { experimental: experimental === true }),
+  );
   // Elenco dei blocchi della CPU: sola lettura, sul collegamento della finestra.
   handle('plc:blocks', (e): Promise<PlcBlocksResult> => listOnlineBlocks(service, e.sender));
   // Un solo blocco della CPU collegata: sola lettura, solo OB, FB, FC e DB.
@@ -140,9 +166,14 @@ export function registerPlc(
   });
   handle('plc:backup', (e): Promise<PlcBackupResult> => backups.backup(e.sender));
   handle('plc:backupCancel', (e) => backups.cancel(e.sender));
+  // Ripristino di un backup (sperimentale): il piano resta nel main, il renderer riceve righe e token.
+  handle('plc:restorePlan', (e): Promise<PlcRestorePlanResult> => writes.restorePlan(e.sender));
+  handle('plc:restore', (e, raw): Promise<PlcRestoreResult> => writes.restore(e.sender, raw));
+  handle('plc:restoreInterrupt', (e) => writes.interrupt(e.sender));
   return {
     closeAll: async () => {
       await Promise.all([
+        status.stopAll(),
         scans.cancelAll(),
         (async () => backups.abortAll())(),
         uploads.abortAll(),
@@ -150,13 +181,14 @@ export function registerPlc(
       ]);
     },
     writing: () => writes.writing(),
-    // Operazioni che un aggiornamento non deve interrompere: scrittura, caricamento dalla CPU, backup.
+    // Operazioni che un aggiornamento non deve interrompere: scrittura, ripristino, caricamento dalla CPU, backup.
+    // Le osservazioni invece si fermano in modo pulito (`closeAll`).
     resume: () => {
       writes.resume();
       uploads.resume();
       backups.resume();
     },
-    busy: () => writes.writing() || uploads.active() || backups.active(),
+    busy: () => writes.writing() || writes.restoring() || uploads.active() || backups.active(),
     interruptWrites: () => writes.interruptAll(),
   };
 }
