@@ -8,7 +8,7 @@ import { SimCpu, simBackend } from '@baaportal/sim';
 import type { PlcAccess } from '@baaportal/ui';
 import type { ConfirmFn, WriteConfirmTexts } from '../../src/main/plc/confirm';
 import { registerPlc } from '../../src/main/plc/plcIpc';
-import { createConfirm } from '../../src/main/plc/confirm';
+import { createConfirm, e2eSavePath } from '../../src/main/plc/confirm';
 import { PlcService } from '../../src/main/plc/plcService';
 import {
   PlcWriteService,
@@ -482,6 +482,25 @@ describe('createConfirm: aggancio e2e', () => {
     process.env['BAAPORTAL_E2E_CONFIRM'] = 'yes';
     expect(await c(null, t)).toBe(false);
     expect(show).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('e2eSavePath: aggancio e2e del salvataggio', () => {
+  afterEach(() => {
+    delete process.env['BAAPORTAL_E2E_SAVE_PATH'];
+    electronApp.isPackaged = false;
+  });
+
+  it('non impacchettata: usa il percorso; senza variabile nulla', () => {
+    expect(e2eSavePath()).toBeNull();
+    process.env['BAAPORTAL_E2E_SAVE_PATH'] = '/tmp/x.baapbak';
+    expect(e2eSavePath()).toBe('/tmp/x.baapbak');
+  });
+
+  it('impacchettata: la variabile è ignorata', () => {
+    electronApp.isPackaged = true;
+    process.env['BAAPORTAL_E2E_SAVE_PATH'] = '/tmp/x.baapbak';
+    expect(e2eSavePath()).toBeNull();
   });
 });
 
