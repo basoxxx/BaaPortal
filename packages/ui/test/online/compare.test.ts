@@ -106,4 +106,20 @@ describe('compareBlocks', () => {
     const rows = compareBlocks([blk('a', 'FC', 1, file('FC', 1, 4, 5))], [online('FB', 1, 4, 5)]);
     expect(rows.map((r) => r.state)).toEqual(['offlineOnly', 'onlineOnly']);
   });
+
+  it('illeggibile nella CPU: il blocco del progetto è illeggibile, uno solo nella CPU resta in elenco', () => {
+    const bad = (type: OnlineBlock['type'], number: number): OnlineBlock => ({
+      ...online(type, number, 0, 0),
+      unreadable: true,
+    });
+    const rows = compareBlocks(
+      [blk('a', 'FC', 1, file('FC', 1, 4, 5)), blk('b', 'FC', 2)],
+      [bad('FC', 1), bad('FC', 2), bad('DB', 3)],
+    );
+    expect(rows.map((r) => [r.number, r.state])).toEqual([
+      [1, 'unreadable'],
+      [2, 'notCompiled'],
+      [3, 'unreadable'],
+    ]);
+  });
 });

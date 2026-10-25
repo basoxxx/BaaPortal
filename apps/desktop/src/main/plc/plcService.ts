@@ -51,8 +51,8 @@ interface Link {
   mode: PlcMode;
   timer: NodeJS.Timeout;
   onGone: () => void;
-  /** Richieste in coda o in corso (sorveglianza compresa): se > 0 il giro di sorveglianza salta. */
-  active: number;
+  /** Un giro di sorveglianza è in coda o in corso: il prossimo salta (ne basta uno). */
+  polling: boolean;
   /** Coda: una sola richiesta alla volta sulla connessione. */
   chain: Promise<unknown>;
   failures: number;
@@ -160,7 +160,7 @@ export class PlcService {
       mode,
       timer: setInterval(() => void this.tick(owner, link), this.intervalMs),
       onGone: () => void this.drop(owner),
-      active: 0,
+      polling: false,
       chain: Promise.resolve(),
       failures: 0,
       done: false,
@@ -200,38 +200,44 @@ export class PlcService {
   }
 
   /**
-   * Esegue una lettura sul collegamento della finestra, in coda dietro alle altre richieste e alla
-   * sorveglianza: sulla connessione non corrono mai due richieste insieme. Senza collegamento
-   * (o se cade durante l'attesa) dà `{ ok: false, error }`; mai eccezioni.
+   * Una lettura fatta di più passi sul collegamento della finestra. `body` riceve `run`, che prende
+   * un posto in coda per ogni passo: tra un passo e l'altro la sorveglianza può girare e sulla
+   * connessione non corrono mai due richieste insieme. Se un passo trova il collegamento chiuso o
+   * senza risposta, il collegamento è perso come nella sorveglianza (la finestra riceve `lost`).
+   * Oltre `deadlineMs` i passi successivi non partono. Senza collegamento dà
+   * `{ ok: false, error }`; mai eccezioni.
    */
   async read<T>(
     owner: PlcOwner,
-    fn: (client: ReadClient) => Promise<T>,
+    body: (run: <R>(fn: (client: ReadClient) => Promise<R>) => Promise<R>) => Promise<T>,
+    deadlineMs = 60_000,
   ): Promise<{ ok: true; value: T } | { ok: false; error: string }> {
     const link = this.links.get(owner);
     if (!link) return { ok: false, error: 'Nessun collegamento online' };
-    try {
-      const value = await this.exclusive(link, async () => {
+    const end = Date.now() + deadlineMs;
+    const run = <R>(fn: (client: ReadClient) => Promise<R>): Promise<R> =>
+      this.exclusive(link, async () => {
         if (link.done) throw new S7Error('CLOSED', 'collegamento chiuso');
+        if (Date.now() > end) {
+          throw new S7Error('ABORTED', `Lettura troppo lunga: oltre ${deadlineMs / 1000} s`);
+        }
         return fn(link.client);
       });
-      return { ok: true, value };
+    try {
+      return { ok: true, value: await body(run) };
     } catch (err) {
-      return {
-        ok: false,
-        error: err instanceof Error ? err.message : String(err),
-      };
+      if (err instanceof S7Error && (err.code === 'CLOSED' || err.code === 'TIMEOUT')) {
+        this.lost(owner, link, err.code === 'TIMEOUT' ? 'timeout' : 'closed');
+      }
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
   }
 
   /** Accoda `fn` dietro alle richieste precedenti del collegamento. */
   private exclusive<T>(link: Link, fn: () => Promise<T>): Promise<T> {
-    link.active++;
     const run = link.chain.then(fn, fn);
     link.chain = run.catch(() => undefined);
-    return run.finally(() => {
-      link.active--;
-    });
+    return run;
   }
 
   /** Chiude tutto (uscita dall'app). */
@@ -269,12 +275,18 @@ export class PlcService {
 
   /** Un giro di sorveglianza; se la lettura precedente non è finita, salta. */
   private async tick(owner: PlcOwner, link: Link): Promise<void> {
-    if (link.done || link.active > 0) return;
+    if (link.done || link.polling) return;
     if (link.client.closed) {
       this.lost(owner, link, 'closed');
       return;
     }
-    await this.exclusive(link, () => this.poll(owner, link));
+    // In coda dietro ciò che c'è: una lettura a lotti cede il posto alla sorveglianza tra un lotto e l'altro.
+    link.polling = true;
+    try {
+      await this.exclusive(link, () => this.poll(owner, link));
+    } finally {
+      link.polling = false;
+    }
   }
 
   private async poll(owner: PlcOwner, link: Link): Promise<void> {

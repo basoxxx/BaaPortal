@@ -82,6 +82,8 @@ export interface OnlineBlock {
   checksum: number;
   /** Data e ora di compilazione del codice, `AAAA-MM-GG hh:mm:ss`, se la CPU la dà. */
   codeTime?: string;
+  /** La CPU l'elenca ma le sue informazioni non si sono potute leggere (lunghezze e checksum a 0). */
+  unreadable?: boolean;
 }
 
 /** Esito di `plcBlocks`: l'elenco dei blocchi OB, FB, FC e DB della CPU collegata. */

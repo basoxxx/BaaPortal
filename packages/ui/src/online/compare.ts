@@ -2,7 +2,8 @@ import { parseBlockFile } from '@baaportal/s7comm';
 import type { OnlineBlock } from './plcTypes';
 
 /** Stato di un blocco nel confronto con la CPU. */
-export type CompareState = 'same' | 'different' | 'offlineOnly' | 'onlineOnly' | 'notCompiled';
+export type CompareState =
+  'same' | 'different' | 'offlineOnly' | 'onlineOnly' | 'notCompiled' | 'unreadable';
 
 /** Blocco del progetto: `file` è il compilato aggiornato (assente: da compilare o con errori). */
 export interface CompareProjectBlock {
@@ -45,7 +46,11 @@ function signatureOf(file: Uint8Array): { checksum: number; mc7Length: number } 
 /**
  * Confronta i blocchi compilati del progetto con quelli della CPU. «Uguale» vuol dire stesso
  * checksum e stessa lunghezza MC7; ogni altra differenza è «diverso». Un blocco senza compilato
- * aggiornato è «da compilare» qualunque cosa abbia la CPU. SFC, SFB e SDB sono esclusi.
+ * aggiornato è «da compilare» qualunque cosa abbia la CPU. Un blocco della CPU le cui informazioni
+ * non si sono lette è «illeggibile». SFC, SFB e SDB sono esclusi.
+ *
+ * Il numero è quello dichiarato dal progetto: il numero 0 dell'SSB dei blocchi protetti (know-how)
+ * e degli OB riguarda solo la sezione SSB, non l'intestazione, che porta il numero vero.
  */
 export function compareBlocks(project: CompareProjectBlock[], online: OnlineBlock[]): CompareRow[] {
   const cpu = new Map<string, OnlineBlock>();
@@ -60,13 +65,19 @@ export function compareBlocks(project: CompareProjectBlock[], online: OnlineBloc
     const sig = b.file ? signatureOf(b.file) : undefined;
     if (!sig) rows.push({ ...base, state: 'notCompiled' });
     else if (!o) rows.push({ ...base, state: 'offlineOnly' });
+    else if (o.unreadable) rows.push({ ...base, state: 'unreadable' });
     else {
       const same = sig.checksum === o.checksum && sig.mc7Length === o.mc7Length;
       rows.push({ ...base, state: same ? 'same' : 'different' });
     }
   }
   for (const [k, o] of cpu) {
-    if (!seen.has(k)) rows.push({ type: o.type, number: o.number, state: 'onlineOnly' });
+    if (!seen.has(k))
+      rows.push({
+        type: o.type,
+        number: o.number,
+        state: o.unreadable ? 'unreadable' : 'onlineOnly',
+      });
   }
   return rows;
 }

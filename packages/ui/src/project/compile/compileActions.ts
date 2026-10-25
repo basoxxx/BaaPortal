@@ -135,13 +135,15 @@ async function yieldToUi(): Promise<void> {
  * sessione, `full` tutti; con `only` solo quei blocchi, sempre. La scheda Compila si svuota
  * all'inizio; un'eccezione del compilatore lascia il progetto com'è e finisce in Informazioni.
  * Un passo per blocco, con avanzamento nella barra di stato; Interrompi ferma tra un blocco e
- * l'altro: i blocchi già compilati restano compilati, gli altri da compilare.
+ * l'altro: i blocchi già compilati restano compilati, gli altri da compilare. Con `silent` la
+ * scheda Compila non si apre e le sue righe restano come erano (restano aggiornati file e impronte).
  */
 export async function compileProgram(
   ctx: CompileCtx,
   deviceId: string,
   mode: CompileMode,
   only?: string[],
+  opts: { silent?: boolean } = {},
 ): Promise<void> {
   const { store } = ctx;
   if (getProgress()) return; // un'altra operazione lunga è in corso
@@ -150,8 +152,12 @@ export async function compileProgram(
   const doc = store.getState().doc;
   const dev = doc && findDevice(doc.project, deviceId);
   if (!dev) return;
-  store.getState().beginCompile();
-  showCompileTab(store);
+  // In silenzio (confronto automatico) la scheda Compila non si apre e righe e riepilogo restano.
+  const kept = opts.silent ? store.getState().compile : undefined;
+  if (!kept) {
+    store.getState().beginCompile();
+    showCompileTab(store);
+  }
   // Se durante la compilazione si chiude il progetto o ne si apre un altro, l'esito si scarta.
   const session = store.getState().docLoadId;
   const sameSession = () => store.getState().docLoadId === session;
@@ -203,6 +209,17 @@ export async function compileProgram(
     if (sameSession() && rows.length > 0)
       store.getState().finishCompile({ rows, summary: summaryOf(rows), compiled, failed });
     compileFailed(store, e);
+  } finally {
+    if (kept && sameSession()) {
+      store.setState((s) => ({
+        compile: {
+          ...s.compile,
+          rows: kept.rows,
+          summary: kept.summary,
+          interrupted: kept.interrupted,
+        },
+      }));
+    }
   }
 }
 

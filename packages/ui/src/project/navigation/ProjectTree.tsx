@@ -76,6 +76,7 @@ const BADGE_COLOR: Record<CompareState, string> = {
   offlineOnly: 'var(--baa-text-muted)',
   onlineOnly: 'var(--baa-text-muted)',
   notCompiled: 'var(--baa-disabled)',
+  unreadable: 'var(--baa-online)',
 };
 
 /** Distintivo del confronto con la CPU, come in TIA: cerchio, cerchio pieno, mezzo cerchio, grigio. */
@@ -98,6 +99,8 @@ function CompareBadge({ state }: { state: CompareState }) {
         <circle cx="5" cy="5" r="3.5" fill="none" stroke={c} strokeWidth="1.5" />
       ) : state === 'different' ? (
         <circle cx="5" cy="5" r="4" fill={c} />
+      ) : state === 'unreadable' ? (
+        <path d="M5 1.5v4M5 7v1.5" stroke={c} strokeWidth="1.5" fill="none" />
       ) : state === 'notCompiled' ? (
         <circle
           cx="5"
@@ -296,6 +299,7 @@ export function ProjectTree() {
   };
 
   const openMenuAt = (nodeId: string, x: number, y: number) => {
+    if (rows.find((r) => r.node.id === nodeId)?.node.onlineOnly) return; // sola lettura: nessun menu
     if (!selected.has(nodeId)) pick(nodeId, false);
     setMenu({ x, y, nodeId });
   };

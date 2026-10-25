@@ -18,6 +18,8 @@ export interface TreeNode {
   ref?: ObjectRef;
   /** Stato del confronto con la CPU (solo online). */
   compare?: CompareState;
+  /** Blocco presente solo nella CPU: sola lettura, senza menu, trascinamento o rinomina. */
+  onlineOnly?: boolean;
   /** Blocco di sistema richiamato (nodo in sola lettura). */
   system?: SystemBlockUse;
   /** Cartelle e gruppi dove si può rilasciare un oggetto (Task 9). */
@@ -127,9 +129,7 @@ function compareStates(
 function deviceNode(dev: PlcDevice, compare?: OnlineCompare): TreeNode {
   const states = compareStates(dev, compare);
   const onlineOnly =
-    compare && compare.deviceId === dev.id
-      ? compare.rows.filter((r) => r.state === 'onlineOnly')
-      : [];
+    compare && compare.deviceId === dev.id ? compare.rows.filter((r) => !r.blockId) : [];
   const blockObjects = dev.blocks.map((b) => ({
     name: b.name,
     group: b.group,
@@ -245,7 +245,8 @@ function deviceNode(dev: PlcDevice, compare?: OnlineCompare): TreeNode {
                     icon: BLOCK_ICON[r.type === 'DB' ? 'DB' : (r.type as 'OB' | 'FB' | 'FC')],
                     enabled: true,
                     children: [],
-                    compare: 'onlineOnly',
+                    compare: r.state,
+                    onlineOnly: true,
                   })),
                 } satisfies TreeNode,
               ]

@@ -110,6 +110,7 @@
     "plcDisconnected": "Online connection closed.",
     "plcConnectFailed": "Connection failed: {{message}}",
     "plcLostTimeout": "Connection lost: the CPU is not responding.",
+    "plcCompareSkipped": "Comparison: compile skipped because another operation is running; changed blocks show as not compiled.",
     "plcCompareFailed": "Comparison with the CPU failed: {{message}}",
     "plcLostClosed": "Connection lost: connection closed.",
     "plcLostErrors": "Connection lost: repeated communication errors.",
@@ -297,7 +298,8 @@
     "different": "Different from CPU",
     "offlineOnly": "Project only",
     "onlineOnly": "CPU only",
-    "notCompiled": "Not compiled"
+    "notCompiled": "Not compiled",
+    "unreadable": "Unreadable (information not read from the CPU)"
   },
   "tree": {
     "project": "Project",

@@ -110,6 +110,7 @@
     "plcDisconnected": "Collegamento online interrotto.",
     "plcConnectFailed": "Collegamento non riuscito: {{message}}",
     "plcLostTimeout": "Collegamento interrotto: la CPU non risponde.",
+    "plcCompareSkipped": "Confronto: compilazione saltata perché un'altra operazione è in corso; i blocchi cambiati risultano da compilare.",
     "plcCompareFailed": "Confronto con la CPU non riuscito: {{message}}",
     "plcLostClosed": "Collegamento interrotto: connessione chiusa.",
     "plcLostErrors": "Collegamento interrotto: errori ripetuti di comunicazione.",
@@ -297,7 +298,8 @@
     "different": "Diverso dalla CPU",
     "offlineOnly": "Solo nel progetto",
     "onlineOnly": "Solo nella CPU",
-    "notCompiled": "Da compilare"
+    "notCompiled": "Da compilare",
+    "unreadable": "Illeggibile (informazioni non lette dalla CPU)"
   },
   "tree": {
     "project": "Progetto",
