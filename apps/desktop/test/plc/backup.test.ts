@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
 import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -141,7 +142,9 @@ describe('backup online contro il PLC di prova', () => {
   it('OB1, DB1, SDB 0 e SDB 1 → 4 blocchi, byte identici all’upload, manifest con la CPU', async () => {
     const r = await make().backup(owner);
     expect(r).toMatchObject({ ok: true, path: target(), count: 4, failed: [] });
-    const { manifest, files } = decodeBackup(new Uint8Array(await readFile(target())));
+    const { manifest, files } = decodeBackup(new Uint8Array(await readFile(target())), (b) =>
+      createHash('sha256').update(b).digest('hex'),
+    );
     expect(manifest.blocks.map((b) => `${b.type}${b.number}`).sort()).toEqual([
       'DB1',
       'OB1',
@@ -226,9 +229,63 @@ describe('backup online contro il PLC di prova', () => {
     expect(r.failed).toEqual([
       { type: 'DB', number: 1, error: expect.stringContaining('protetto') },
     ]);
-    const { manifest } = decodeBackup(new Uint8Array(await readFile(target())));
+    const { manifest } = decodeBackup(new Uint8Array(await readFile(target())), (b) =>
+      createHash('sha256').update(b).digest('hex'),
+    );
     expect(manifest.failed).toHaveLength(1);
     expect(manifest.blocks).toHaveLength(3);
+  });
+
+  it('tutti i blocchi rifiutati → errore, nessun file', async () => {
+    const uploads = new UploadService({
+      connect: wrapping(() => ({
+        uploadWithInfo: async () => {
+          throw new S7Error('CPU_ERROR', 'protetto');
+        },
+      })),
+    });
+    const r = await make({ uploads }).backup(owner);
+    expect(r.ok === false && 'error' in r && r.error).toMatch(/^Nessun blocco copiato: .*protetto/);
+    expect(await readdir(dir)).toEqual([]);
+  });
+
+  it('Interrompi mentre la finestra di salvataggio è aperta → nessun collegamento', async () => {
+    const seen: string[] = [];
+    const uploads = new UploadService({ connect: wrapping(() => ({}), seen) });
+    let release!: () => void;
+    const holder: { svc?: BackupService } = {};
+    const svc = make({
+      uploads,
+      pick: () => new Promise((res) => (release = () => res(target()))),
+    });
+    holder.svc = svc;
+    const p = svc.backup(owner);
+    await new Promise((r) => setTimeout(r, 10));
+    svc.cancel(owner);
+    release();
+    expect(await p).toEqual({ ok: false, cancelled: true });
+    expect(seen).toEqual([]);
+    // anche abortAll
+    const p2 = svc.backup(owner);
+    await new Promise((r) => setTimeout(r, 10));
+    svc.abortAll();
+    release();
+    expect(await p2).toEqual({ ok: false, cancelled: true });
+    expect(seen).toEqual([]);
+  });
+
+  it('collegamento caduto durante la finestra → errore, nessun collegamento', async () => {
+    const seen: string[] = [];
+    const uploads = new UploadService({ connect: wrapping(() => ({}), seen) });
+    const r = await make({
+      uploads,
+      pick: async () => {
+        await service.disconnect(owner);
+        return target();
+      },
+    }).backup(owner);
+    expect(r).toEqual({ ok: false, error: 'Nessun collegamento online' });
+    expect(seen).toEqual([]);
   });
 
   it('oltre MAX_BLOCKS → errore senza file', async () => {

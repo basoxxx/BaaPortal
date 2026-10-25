@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
 import { strToU8, zipSync } from 'fflate';
-import { decodeBackup, encodeBackup, sha256Hex, type BackupManifest } from '../src/backupFile';
+import {
+  BACKUP_MAX_BYTES,
+  decodeBackup,
+  encodeBackup,
+  type BackupManifest,
+} from '../src/backupFile';
 
+const sha256Hex = (b: Uint8Array) => createHash('sha256').update(b).digest('hex');
+const decode = (b: Uint8Array) => decodeBackup(b, sha256Hex);
 const A = new Uint8Array([1, 2, 3, 4]);
 const B = new Uint8Array(300).map((_, i) => i % 251);
 
@@ -22,23 +30,9 @@ function manifest(): BackupManifest {
 }
 const files = () => ({ 'blocks/OB1.blk': A, 'blocks/SDB0.blk': B });
 
-describe('sha256Hex', () => {
-  it('vettori noti', () => {
-    expect(sha256Hex(new Uint8Array())).toBe(
-      'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-    );
-    expect(sha256Hex(strToU8('abc'))).toBe(
-      'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
-    );
-    expect(sha256Hex(strToU8('a'.repeat(1000)))).toBe(
-      '41edece42d63e8d9bf515a9ba6932e1c20cbc9f5a5d134645adb5db1b9737ea3',
-    );
-  });
-});
-
 describe('backupFile', () => {
   it('encodeBackup/decodeBackup: andata e ritorno identica', () => {
-    const r = decodeBackup(encodeBackup(manifest(), files()));
+    const r = decode(encodeBackup(manifest(), files()));
     expect(r.manifest).toEqual(manifest());
     expect(r.files['blocks/OB1.blk']).toEqual(A);
     expect(r.files['blocks/SDB0.blk']).toEqual(B);
@@ -48,27 +42,57 @@ describe('backupFile', () => {
     zipSync({ 'manifest.json': strToU8(JSON.stringify(m)), ...f });
 
   it('formato sbagliato → errore', () => {
-    expect(() => decodeBackup(strToU8('non zip'))).toThrow(/zip/);
-    expect(() => decodeBackup(zipWith({ ...manifest(), format: 'altro' }))).toThrow(/formato/);
-    expect(() => decodeBackup(zipWith({ ...manifest(), version: 2 }))).toThrow(/versione/);
-    expect(() => decodeBackup(zipSync({ 'x.txt': A }))).toThrow(/manifest/);
+    expect(() => decode(strToU8('non zip'))).toThrow(/zip/);
+    expect(() => decode(zipWith({ ...manifest(), format: 'altro' }))).toThrow(/formato/);
+    expect(() => decode(zipWith({ ...manifest(), version: 2 }))).toThrow(/versione/);
+    expect(() => decode(zipSync({ 'x.txt': A }))).toThrow(/manifest/);
   });
 
   it('file mancante → errore', () => {
-    expect(() => decodeBackup(zipWith(manifest(), { 'blocks/OB1.blk': A }))).toThrow(/mancante/);
+    expect(() => decode(zipWith(manifest(), { 'blocks/OB1.blk': A }))).toThrow(/mancante/);
   });
 
   it('sha256 diverso → errore', () => {
     const bad = { ...files(), 'blocks/OB1.blk': new Uint8Array([9, 9, 9, 9]) };
-    expect(() => decodeBackup(zipWith(manifest(), bad))).toThrow(/diverso/);
+    expect(() => decode(zipWith(manifest(), bad))).toThrow(/diverso/);
   });
 
   it('percorso con .. o assoluto → errore', () => {
     for (const file of ['../OB1.blk', '/etc/passwd', 'blocks/../../x', 'C:/x', 'a\\b']) {
       const m = manifest();
       m.blocks[0]!.file = file;
-      expect(() => decodeBackup(zipWith(m))).toThrow(/percorso/);
+      expect(() => decode(zipWith(m))).toThrow(/percorso/);
     }
-    expect(() => encodeBackup(manifest(), { '../x': A })).toThrow(/percorso/);
+    expect(() => encodeBackup(manifest(), { '../x': A })).toThrow();
+  });
+
+  it('numero, lunghezza, nome del file, duplicati, errori di failed', () => {
+    const bad = (mut: (m: BackupManifest) => void) => {
+      const m = manifest();
+      mut(m);
+      return () => decode(zipWith(m));
+    };
+    expect(bad((m) => (m.blocks[0]!.file = 'blocks/DB9.blk'))).toThrow(/coerente/);
+    expect(bad((m) => (m.blocks[0]!.number = -1))).toThrow();
+    expect(bad((m) => (m.blocks[0]!.number = 1.5))).toThrow();
+    expect(bad((m) => (m.blocks[0]!.length = 1.5))).toThrow();
+    expect(bad((m) => m.blocks.push({ ...m.blocks[0]! }))).toThrow(/duplicat/);
+    expect(bad((m) => ((m.failed[0] as { error: unknown }).error = 5))).toThrow(/rifiutato/);
+  });
+
+  it('encodeBackup controlla che i file corrispondano al manifest', () => {
+    expect(() => encodeBackup(manifest(), { 'blocks/OB1.blk': A })).toThrow(/corrispondono/);
+    expect(() => encodeBackup(manifest(), { ...files(), 'blocks/DB1.blk': A })).toThrow(
+      /corrispondono/,
+    );
+  });
+
+  it('bomba zip: voce troppo grande dichiarata → errore', () => {
+    const big = new Uint8Array(BACKUP_MAX_BYTES + 1);
+    const bomb = zipSync({
+      'manifest.json': strToU8(JSON.stringify(manifest())),
+      'blocks/OB1.blk': big,
+    });
+    expect(() => decode(bomb)).toThrow(/troppo grande/);
   });
 });

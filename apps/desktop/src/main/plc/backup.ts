@@ -1,8 +1,8 @@
+import { createHash } from 'node:crypto';
 import type { PlcBackupResult, PlcIdentity } from '@baaportal/ui';
 import {
   backupFileName,
   encodeBackup,
-  sha256Hex,
   type BackupBlockEntry,
   type BackupManifest,
 } from '@baaportal/project';
@@ -47,30 +47,44 @@ const sameCpu = (a: PlcIdentity, b: PlcIdentity): boolean =>
  * scrive solo a caricamento finito, in un temporaneo accanto e poi rinominato.
  */
 export class BackupService {
-  private readonly running = new Set<BackupOwner>();
+  private readonly running = new Map<BackupOwner, { cancelled: boolean }>();
 
   constructor(private readonly o: BackupServiceOptions) {}
 
+  /** Interrompe anche mentre la finestra di salvataggio è aperta (prima del collegamento). */
   cancel(owner: BackupOwner): void {
+    const st = this.running.get(owner);
+    if (st) st.cancelled = true;
     this.o.uploads.cancel(owner);
+  }
+
+  /** Uscita dall'app: nessun backup prosegue dopo la finestra di salvataggio. */
+  abortAll(): void {
+    for (const owner of [...this.running.keys()]) this.cancel(owner);
   }
 
   async backup(owner: BackupOwner): Promise<PlcBackupResult> {
     if (this.running.has(owner)) return { ok: false, error: 'Un backup è già in corso' };
-    this.running.add(owner);
+    const state = { cancelled: false };
+    this.running.set(owner, state);
     try {
-      return await this.run(owner);
+      return await this.run(owner, state);
     } finally {
       this.running.delete(owner);
     }
   }
 
-  private async run(owner: BackupOwner): Promise<PlcBackupResult> {
+  private async run(owner: BackupOwner, state: { cancelled: boolean }): Promise<PlcBackupResult> {
     const target = this.o.service.target(owner);
     if (!target) return { ok: false, error: 'Nessun collegamento online' };
     const at = (this.o.now ?? (() => new Date()))();
     const path = await this.o.pick(owner, suggestedBackupName(target.identity, at));
-    if (path === null) return { ok: false, cancelled: true };
+    if (path === null || state.cancelled || owner.isDestroyed())
+      return { ok: false, cancelled: true };
+    // Durante la finestra il collegamento può essere caduto o cambiato: si rilegge il bersaglio.
+    const now = this.o.service.target(owner);
+    if (!now || now.linkId !== target.linkId)
+      return { ok: false, error: 'Nessun collegamento online' };
 
     const r = await this.o.uploads.collect(owner, target.access, {
       types: BACKUP_TYPES,
@@ -80,6 +94,16 @@ export class BackupService {
           : 'La CPU raggiunta è diversa da quella del collegamento online: backup annullato',
     });
     if (!r.ok) return r;
+    if (r.files.length === 0) {
+      const first = r.failed
+        .slice(0, 3)
+        .map((f) => `${f.type}${f.number}: ${f.error}`)
+        .join('; ');
+      return {
+        ok: false,
+        error: `Nessun blocco copiato${first ? `: ${first}` : ': la CPU non ne ha elencati'}`,
+      };
+    }
 
     const entries: BackupBlockEntry[] = [];
     const files: Record<string, Uint8Array> = {};
@@ -91,7 +115,7 @@ export class BackupService {
         number: f.number,
         file,
         length: f.bytes.length,
-        sha256: sha256Hex(f.bytes),
+        sha256: createHash('sha256').update(f.bytes).digest('hex'),
       });
     }
     const id = target.identity;

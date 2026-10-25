@@ -137,6 +137,7 @@ export function registerPlc(
     closeAll: async () => {
       await Promise.all([
         scans.cancelAll(),
+        (async () => backups.abortAll())(),
         uploads.abortAll(),
         writes.abortAll().then(() => service.closeAll()),
       ]);
