@@ -17,6 +17,7 @@ export type LadDiagCode =
   | 'MUST_BE_ALONE'
   | 'BOX_IN_PARALLEL'
   | 'BOX_IN_TBRANCH'
+  | 'BOX_IN_PIN'
   | 'BAD_LABEL'
   | 'BAD_INSTANCE'
   | 'TOO_MANY_LABELS';
@@ -30,23 +31,24 @@ type Add = (elemId: string, code: LadDiagCode, params?: Record<string, string>) 
 
 const blank = (s: string) => s.trim() === '';
 
-// Istanze dei box: forma assoluta, simbolo "…" o parametro/variabile locale #… (il resto del
-// controllo dell'operando lo fa il pacchetto awl sul codice generato).
+// Istanze dei box: forma assoluta (anche con `%` davanti, come la scrive formatNetwork), simbolo
+// "…" o parametro/variabile locale #… (il resto del controllo dell'operando lo fa il pacchetto awl
+// sul codice generato).
 const SYM = '"[^"]+"(?:\\.[^\\s,]+)?';
 const LOCAL = '#[^\\s,]+';
-const anyOf = (...forms: string[]) => new RegExp(`^(?:${forms.join('|')})$`);
+const anyOf = (...forms: string[]) => new RegExp(`^(?:${forms.join('|')})$`, 'i');
 const INSTANCE_RE: Partial<Record<BoxGroup, RegExp>> = {
-  timer: anyOf('T\\s*\\d+', SYM, LOCAL),
-  counter: anyOf('C\\s*\\d+', SYM, LOCAL),
+  timer: anyOf('%?T\\s*\\d+', SYM, LOCAL),
+  counter: anyOf('%?C\\s*\\d+', SYM, LOCAL),
   bistable: anyOf(
-    '[IQML]\\s*\\d+\\.[0-7]',
-    '(?:DB\\s*\\d+\\s*\\.\\s*)?D[BI]X\\s*\\d+\\.[0-7]',
+    '%?[IQML]\\s*\\d+\\.[0-7]',
+    '(?:%?DB\\s*\\d+\\s*\\.\\s*)?%?D[BI]X\\s*\\d+\\.[0-7]',
     SYM,
     LOCAL,
   ),
   call: anyOf(
-    '(?:S?FC\\s*\\d+|"[^"]+")',
-    '(?:S?FB\\s*\\d+|"[^"]+")\\s*,\\s*(?:DB\\s*\\d+|"[^"]+")',
+    '(?:%?S?FC\\s*\\d+|"[^"]+")',
+    '(?:%?S?FB\\s*\\d+|"[^"]+")\\s*,\\s*(?:%?DB\\s*\\d+|"[^"]+")',
     LOCAL,
   ),
 };
@@ -66,7 +68,7 @@ function checkBox(b: LadBox, add: Add): void {
     [...def.dataInputs, ...def.outputs].forEach((p) => need(p.name));
   // i pin BOOL hanno logica propria che parte dalla barra; un box lì dentro non è ammesso
   const pins = def.kind === 'CALL' ? Object.keys(b.boolPins) : def.boolInputs;
-  for (const name of pins) checkSeries(b.boolPins[name] ?? [], true, true, add);
+  for (const name of pins) checkSeries(b.boolPins[name] ?? [], true, true, add, true);
 }
 
 /**
@@ -78,9 +80,16 @@ const FLOW_CODE = { not: 'NOT_ON_RAIL', midline: 'MIDLINE_ON_RAIL', edge: 'EDGE_
 
 /**
  * Controlla una serie. `railInput`: la serie riceve il flusso direttamente dalla barra (niente
- * logica davanti); `inBranch`: la serie è un ramo di un parallelo.
+ * logica davanti); `inBranch`: la serie è un ramo di un parallelo; `inPin`: la serie è (o sta
+ * dentro) la logica di un pin BOOL di un box.
  */
-function checkSeries(list: LadElem[], inBranch: boolean, railInput: boolean, add: Add): void {
+function checkSeries(
+  list: LadElem[],
+  inBranch: boolean,
+  railInput: boolean,
+  add: Add,
+  inPin = false,
+): void {
   let logic = !railInput;
   for (const e of list) {
     switch (e.k) {
@@ -104,11 +113,12 @@ function checkSeries(list: LadElem[], inBranch: boolean, railInput: boolean, add
       case 'parallel':
         e.branches.forEach((b, i) => {
           if (b.length === 0) add(e.id, 'EMPTY_BRANCH', { branch: String(i) });
-          else checkSeries(b, true, !logic, add);
+          else checkSeries(b, true, !logic, add, inPin);
         });
         break;
       case 'box':
-        if (inBranch) add(e.id, 'BOX_IN_PARALLEL');
+        if (inPin) add(e.id, 'BOX_IN_PIN');
+        else if (inBranch) add(e.id, 'BOX_IN_PARALLEL');
         checkBox(e, add);
         break;
     }

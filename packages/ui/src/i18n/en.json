@@ -1522,6 +1522,7 @@
       "FLOW_IN_BRANCH": "This element transforms the flow and cannot sit in a parallel branch with logic on its left: start it from the rail or move it out of the branch.",
       "BOX_IN_PARALLEL": "A box cannot sit inside a parallel branch.",
       "BOX_IN_TBRANCH": "A box cannot sit in a T branch after which the flow splits.",
+      "BOX_IN_PIN": "A box cannot sit in the logic of a pin.",
       "BAD_LABEL": "Invalid label \"{{label}}\": 1 to 4 characters, the first one a letter.",
       "BAD_INSTANCE": "The box instance is not valid.",
       "MUST_BE_ALONE": "This output must be the only one at its point: it cannot have other outputs in parallel.",

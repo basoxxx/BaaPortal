@@ -1522,6 +1522,7 @@
       "FLOW_IN_BRANCH": "Questo elemento trasforma il flusso e non può stare in un ramo parallelo con logica a sinistra: parte dalla barra o spostalo fuori dal ramo.",
       "BOX_IN_PARALLEL": "Un box non può stare dentro un ramo parallelo.",
       "BOX_IN_TBRANCH": "Un box non può stare in un ramo a T dopo il quale il flusso si dirama.",
+      "BOX_IN_PIN": "Un box non può stare nella logica di un pin.",
       "BAD_LABEL": "Etichetta «{{label}}» non valida: da 1 a 4 caratteri, il primo è una lettera.",
       "BAD_INSTANCE": "L'istanza del box non è valida.",
       "MUST_BE_ALONE": "Questa uscita deve essere la sola del suo punto: non può avere altre uscite in parallelo.",

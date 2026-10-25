@@ -160,9 +160,9 @@ const BOX_LIST: BoxDef[] = [
   binary('SUB_R', 'math', 'REAL', '-R', true),
   binary('MUL_R', 'math', 'REAL', '*R', true),
   binary('DIV_R', 'math', 'REAL', '/R', true),
-  ...(
-    ['ABS', 'SQR', 'SQRT', 'EXP', 'LN', 'SIN', 'COS', 'TAN', 'ASIN', 'ACOS', 'ATAN'] as const
-  ).map((k) => unary(k, 'math', 'REAL', 'REAL', k, true)),
+  ...(['ABS', 'SQR', 'SQRT', 'EXP', 'LN', 'SIN', 'COS', 'TAN', 'ASIN', 'ACOS', 'ATAN'] as const)
+    // ABS non tocca la parola di stato (manuale AWL, «ABS»): niente errore da controllare, ENO = EN
+    .map((k) => unary(k, 'math', 'REAL', 'REAL', k, k !== 'ABS')),
   // Conversioni (§4.6)
   unary('BCD_I', 'convert', 'WORD', 'INT', 'BTI', false),
   unary('I_BCD', 'convert', 'INT', 'WORD', 'ITB', true),

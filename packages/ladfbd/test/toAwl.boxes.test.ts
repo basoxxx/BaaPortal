@@ -2,7 +2,7 @@
 // viene l'AWL atteso, o la regola del piano 4A per le ipotesi aperte (H12, H17, H18).
 import { describe, expect, it } from 'vitest';
 import { formatNetwork, parseNetwork } from '@baaportal/awl';
-import { networkToAwl } from '../src/index.js';
+import { networkToAwl, normalizeInstance } from '../src/index.js';
 import type {
   BoxKind,
   LadBox,
@@ -217,6 +217,16 @@ describe('box con EN/ENO (§4.1–§4.9)', () => {
   it('§4.4 MOVE con ENO libero', () => {
     expect(awl(net([c('I 0.0'), move()], []))).toBe(
       fmt('A I 0.0', 'JNB _001', 'L MW 10', 'T MW 12', '_001: NOP 0'),
+    );
+  });
+
+  it('§4.5 ABS non tocca la parola di stato: forma H12, senza AN OV', () => {
+    const abs = box('ABS', { IN: 'MD 0', OUT: 'MD 8' });
+    expect(awl(net([c('I 0.0'), abs], [coil('Q 4.0')]))).toBe(
+      fmt('A I 0.0', 'JNB _001', 'L MD 0', 'ABS', 'T MD 8', '_001: A BR', '= Q 4.0'),
+    );
+    expect(awl(net([box('ABS', { IN: 'MD 0', OUT: 'MD 8' })], [coil('Q 4.0')]))).toBe(
+      fmt('L MD 0', 'ABS', 'T MD 8', 'SET', 'SAVE', 'CLR', 'A BR', '= Q 4.0'),
     );
   });
 
@@ -465,6 +475,39 @@ describe('chiamate di blocco (§4.11)', () => {
         '= Q 4.0',
       ),
     );
+  });
+});
+
+describe('normalizeInstance (chiave di callParams)', () => {
+  it('forma canonica delle istanze di CALL', () => {
+    const cases: [string, string][] = [
+      ['FC 1', 'FC 1'],
+      [' fc1 ', 'FC 1'],
+      ['%FC1', 'FC 1'],
+      ['FC   01', 'FC 1'],
+      ['sfc 46', 'SFC 46'],
+      ['%FB1, %DB1', 'FB 1, DB 1'],
+      ['fb 1 ,db  2', 'FB 1, DB 2'],
+      ['FB1,DB1', 'FB 1, DB 1'],
+      ['"Nastro" , "Nastro DB"', '"Nastro", "Nastro DB"'],
+      ['"Calcola"', '"Calcola"'],
+      ['#Motore', '#Motore'],
+      ['  #Motore ', '#Motore'],
+    ];
+    for (const [raw, norm] of cases) expect([raw, normalizeInstance(raw)]).toEqual([raw, norm]);
+  });
+
+  it('callParams riceve l’istanza in forma canonica', () => {
+    const seen: string[] = [];
+    const b = box('CALL', { OUT1: 'MW 12', IN1: 'MW 10' }, '%fb1 ,  %db 2');
+    const src = awl(net([c('I 0.0'), b], []), {
+      callParams: (inst) => {
+        seen.push(inst);
+        return inst === 'FB 1, DB 2' ? ['IN1', 'OUT1'] : undefined;
+      },
+    });
+    expect(seen).toEqual(['FB 1, DB 2']);
+    expect(src.indexOf('IN1')).toBeLessThan(src.indexOf('OUT1'));
   });
 });
 

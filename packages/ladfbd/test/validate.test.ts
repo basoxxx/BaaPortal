@@ -147,7 +147,7 @@ describe('validateNetwork: box', () => {
     ]);
   });
 
-  it('BOX_IN_PARALLEL: box in un ramo parallelo, anche annidato, o nella logica di un pin', () => {
+  it('BOX_IN_PARALLEL: box in un ramo parallelo, anche annidato; BOX_IN_PIN nella logica di un pin', () => {
     const p: LadElem = { id: 'p', k: 'parallel', branches: [[c('a')], [move('m')]] };
     expect(validateNetwork(net([p], [coil('q')]))).toEqual([
       { elemId: 'm', code: 'BOX_IN_PARALLEL' },
@@ -158,8 +158,12 @@ describe('validateNetwork: box', () => {
       { elemId: 'm2', code: 'BOX_IN_PARALLEL' },
     ]);
     const sr = box('s', 'SR', 'M 0.0', {}, { R: [c('a'), move('m3')] });
-    expect(validateNetwork(net([c('b'), sr], []))).toEqual([
-      { elemId: 'm3', code: 'BOX_IN_PARALLEL' },
+    expect(validateNetwork(net([c('b'), sr], []))).toEqual([{ elemId: 'm3', code: 'BOX_IN_PIN' }]);
+    // anche dentro un parallelo della logica del pin
+    const pp: LadElem = { id: 'pp', k: 'parallel', branches: [[c('e')], [move('m4')]] };
+    const call = box('k', 'CALL', 'FC 1', {}, { START: [pp] });
+    expect(validateNetwork(net([c('b'), call], []))).toEqual([
+      { elemId: 'm4', code: 'BOX_IN_PIN' },
     ]);
   });
 
@@ -194,6 +198,15 @@ describe('validateNetwork: box', () => {
       ['CALL', 'FB 1', false],
       ['CALL', 'DB 1', false],
       ['CALL', '', false],
+      // la forma con % che scrive formatNetwork
+      ['S_ODT', '%T1', true],
+      ['S_CU', '%C1', true],
+      ['SR', '%M0.0', true],
+      ['SR', '%DB10.%DBX2.0', true],
+      ['CALL', '%FC1', true],
+      ['CALL', '%FB1, %DB1', true],
+      ['CALL', '%SFC46', true],
+      ['CALL', '%%FC1', false],
     ];
     for (const [kind, instance, ok] of cases) {
       const b = box('b', kind, instance, { TV: 'S5T#1S' });

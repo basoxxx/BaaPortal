@@ -127,6 +127,9 @@ function ladBox(b: LadBox, fx: Effects): boolean {
     case 'MOVE':
       write(pin('IN'));
       return false;
+    case 'ABS': // modellato sulle parole: basta che non dia mai errore
+      write(Math.abs(pin('IN')));
+      return false;
     case 'ADD_I':
     case 'SUB_I': {
       const r = b.box === 'ADD_I' ? pin('IN1') + pin('IN2') : pin('IN1') - pin('IN2');
@@ -350,6 +353,10 @@ function runAwl(source: string, s: Stw, fx: Effects): void {
         fx.br = s.rlo;
         break;
       case 'NOP':
+        break;
+      case 'ABS':
+        // float.ts: azzera il segno, la parola di stato non cambia (OV resta com'è)
+        accu1 = Math.abs(accu1);
         break;
       case 'FP':
       case 'FN': {
@@ -707,6 +714,16 @@ describe('equivalenza KOP ↔ AWL generato: box con EN/ENO', () => {
     expectEquivalent(net([c('I 0.0'), add('MW 20', 'MW 22', 'MW 24')], [save()]));
     expectEquivalent(net([c('I 0.0'), add('MW 20', 'MW 22', 'MW 24')], []));
     expectEquivalent(net([c('I 0.0')], [save()]), net([add('MW 20', 'MW 22', 'MW 24')], []));
+  });
+
+  it('ABS con OV = 1 lasciato dal segmento prima: ENO = EN', () => {
+    const abs = () => box('ABS', { IN: 'MW 26', OUT: 'MW 28' });
+    // il primo segmento va in overflow e lascia OV = 1
+    expectEquivalent(
+      net([add('MW 20', 'MW 22', 'MW 24')], []),
+      net([c('I 0.0'), abs()], [coil('Q 4.0')]),
+      net([abs()], [coil('Q 4.1')]),
+    );
   });
 
   it('box nei rami a T (§4.10) e dalla barra', () => {

@@ -26,8 +26,9 @@ export type NetworkAwlOpts = {
   /** Numero della prossima etichetta automatica del blocco (`_001` = 1). */
   firstLabel: number;
   /**
-   * Ordine dei parametri del blocco chiamato da un box CALL (istanza come scritta nel box, ad
-   * esempio "FC 1"); senza risposta i parametri seguono l'ordine delle chiavi del box.
+   * Ordine dei parametri del blocco chiamato da un box CALL; riceve l'istanza in forma canonica
+   * (`normalizeInstance`: "FC 1", "FB 1, DB 1", "#nome"). Senza risposta i parametri seguono
+   * l'ordine delle chiavi del box.
    */
   callParams?: (instance: string) => string[] | undefined;
 };
@@ -88,6 +89,24 @@ function inlineChain(node: LadNode): LadNode[] {
     chain.push(n);
   }
   return chain;
+}
+
+/**
+ * Forma canonica dell'istanza di un box CALL, chiave per l'ordine dei parametri: spazi ridotti,
+ * niente `%`, tipo di blocco maiuscolo, numero senza zeri davanti (`FC 1`, `FB 1, DB 1`, `SFC 46`);
+ * simboli `"…"` e `#nome` restano come sono (senza spazi ai bordi).
+ */
+export function normalizeInstance(instance: string): string {
+  const s = instance.trim();
+  if (s.startsWith('#')) return s;
+  const part = (p: string) => {
+    if (p.startsWith('"')) return p;
+    const m = /^%?\s*(S?FC|S?FB|DB)\s*(\d+)$/i.exec(p);
+    return m ? `${m[1]!.toUpperCase()} ${Number(m[2])}` : p.replace(/\s+/g, ' ');
+  };
+  const m = /^("[^"]*"|[^,"]+?)\s*(?:,\s*("[^"]*"|[^,"]+?))?$/.exec(s);
+  if (!m) return s;
+  return m[2] === undefined ? part(m[1]!) : `${part(m[1]!)}, ${part(m[2])}`;
 }
 
 /** Pin di un box CALL nell'ordine dell'interfaccia (se nota), poi gli altri nell'ordine del box. */
@@ -216,7 +235,7 @@ class Emitter {
     const instance = b.instance.trim();
     const bits = this.pinBits.get(b.id);
     const params: string[] = [];
-    for (const name of callPinOrder(b, this.opts.callParams?.(instance))) {
+    for (const name of callPinOrder(b, this.opts.callParams?.(normalizeInstance(instance)))) {
       const value = bits?.get(name) ?? (b.pins[name] ?? '').trim();
       if (value) params.push(`${name} := ${value}`);
     }
