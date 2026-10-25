@@ -555,7 +555,10 @@ describe('assertOnlineWrite: aree della write var', () => {
         { area, db: 0, start: 1, size, count: 1, data: Uint8Array.of(0, 1) },
       ]);
       expect(() => assertOnlineWrite(job(w.param, w.data))).toThrowError(
-        expect.objectContaining({ code: 'FORBIDDEN', message: expect.stringContaining(`area ${area}`) }),
+        expect.objectContaining({
+          code: 'FORBIDDEN',
+          message: expect.stringContaining(`area ${area}`),
+        }),
       );
     }
   });

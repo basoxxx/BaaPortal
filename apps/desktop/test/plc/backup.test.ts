@@ -220,7 +220,7 @@ describe('backup online contro il PLC di prova', () => {
     expect(await readdir(dir)).toEqual([]);
   });
 
-  it('l\'interruzione del caricamento non ferma il backup', async () => {
+  it("l'interruzione del caricamento non ferma il backup", async () => {
     const uploads = new UploadService({
       connect: wrapping((c) => ({
         uploadWithInfo: async (t: never, n: number) => {
@@ -232,7 +232,7 @@ describe('backup online contro il PLC di prova', () => {
     expect(await make({ uploads }).backup(owner)).toMatchObject({ ok: true, count: 4 });
   });
 
-  it('stessa CPU se numero d\'ordine e seriale concordano: nome del modulo e firmware non contano', async () => {
+  it("stessa CPU se numero d'ordine e seriale concordano: nome del modulo e firmware non contano", async () => {
     const real = await (async () => {
       const c = await connectTcp({ host: '127.0.0.1', port: plc.port, timeoutMs: 2000 });
       try {

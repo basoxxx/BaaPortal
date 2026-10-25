@@ -128,7 +128,7 @@ describe('UploadService contro il PLC di prova', () => {
     expect(await p).toEqual({ ok: false, cancelled: true });
   });
 
-  it('cancel interrompe solo l\'esecuzione del proprio tipo', async () => {
+  it("cancel interrompe solo l'esecuzione del proprio tipo", async () => {
     await put([rawBlock('OB', 1, 20)]);
     const owner = new FakeOwner();
     const svc = new UploadService();
