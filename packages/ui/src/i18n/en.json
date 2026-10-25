@@ -1122,6 +1122,10 @@
     "errNotIpv4": "An IPv4 address is required (for example 192.0.2.10): host names are not allowed.",
     "errOctet": "Each number of the address must be between 0 and 255.",
     "errPort": "The port must be a number between 1 and 65535.",
-    "rowSelect": "Select {{host}}"
+    "rowSelect": "Select {{host}}",
+    "errLeadingZero": "Leading zeros are not allowed: write 192.168.1.1, not 192.168.01.1.",
+    "errInterfaces": "Cannot read the network interfaces: {{error}}",
+    "rackInvalid": "The rack must be a number between 0 and 7.",
+    "slotInvalid": "The slot must be a number between 0 and 31."
   }
 }

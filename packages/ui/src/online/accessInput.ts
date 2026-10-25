@@ -17,6 +17,9 @@ export function parseAccessInput(text: string): AccessInput {
   if (octets.length !== 4 || !octets.every((o) => /^\d+$/.test(o))) {
     return { error: 'accessDevices.errNotIpv4' };
   }
+  if (octets.some((o) => o.length > 1 && o.startsWith('0'))) {
+    return { error: 'accessDevices.errLeadingZero' };
+  }
   if (!octets.every((o) => OCTET.test(o) && Number(o) <= 255)) {
     return { error: 'accessDevices.errOctet' };
   }

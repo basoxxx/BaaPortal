@@ -86,9 +86,9 @@ const deviceShape = {
     cyclicInterrupts: obj({ ob35Ms: z.number() }),
     access: obj({
       host: str,
-      port: z.number().optional(),
-      rack: z.number(),
-      slot: z.number(),
+      port: z.number().int().min(1).max(65535).optional(),
+      rack: z.number().int().min(0).max(7),
+      slot: z.number().int().min(0).max(31),
       connectionType: z.enum(['PG', 'OP', 'S7_BASIC']),
       remoteTsap: z.number().optional(),
     }).optional(),

@@ -40,10 +40,22 @@ describe('CpuProperties.access', () => {
     expect(back.devices[0]!.properties.access).toBeUndefined();
   });
 
-  it('un access malformato è rifiutato', () => {
+  it.each([
+    ['connectionType errato', { host: 'h', rack: 0, slot: 2, connectionType: 'XX' }],
+    ['rack mancante', { host: 'h', slot: 2, connectionType: 'PG' }],
+    ['rack fuori campo', { host: 'h', rack: 8, slot: 2, connectionType: 'PG' }],
+    ['slot fuori campo', { host: 'h', rack: 0, slot: 32, connectionType: 'PG' }],
+    ['porta fuori campo', { host: 'h', port: 0, rack: 0, slot: 2, connectionType: 'PG' }],
+  ])('access malformato (%s): INVALID_SCHEMA', (_n, access) => {
     const p = projectWithPlc();
-    (p.devices[0]!.properties as unknown as Record<string, unknown>).access = { host: 5 };
-    expect(() => readBaap(writeBaap(p, { appVersion: '0.1.0' }))).toThrow();
+    (p.devices[0]!.properties as unknown as Record<string, unknown>).access = access;
+    let err: unknown;
+    try {
+      readBaap(writeBaap(p, { appVersion: '0.1.0' }));
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toMatchObject({ name: 'BaapFormatError', code: 'INVALID_SCHEMA' });
   });
 
   it('access con host non valido: avviso dei controlli', () => {

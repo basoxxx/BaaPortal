@@ -20,11 +20,16 @@ describe('parseAccessInput', () => {
       '192.0.2.10:0',
       '192.0.2.10:70000',
       '192.0.2.10:1:2',
+      '192.168.01.1',
       '',
     ]) {
       expect(parseAccessInput(bad), bad).toHaveProperty('error');
     }
   });
+});
+
+it('zeri iniziali: messaggio dedicato', () => {
+  expect(parseAccessInput('192.168.01.1')).toEqual({ error: 'accessDevices.errLeadingZero' });
 });
 
 describe('parseTsap', () => {
@@ -177,5 +182,105 @@ describe('finestra «Dispositivi accessibili»', () => {
       remoteTsap: 0x0302,
     });
     goOnline.mockRestore();
+  });
+});
+
+describe('finestra «Dispositivi accessibili»: chiusura e casi limite', () => {
+  it('chiusa durante la ricerca: manda scanCancel e toglie il listener', async () => {
+    const { user, bridge, dlg } = await openDialog();
+    bridge.plcScanResults = [{ ok: true, scanId: 1, total: 254 }];
+    await user.click(within(dlg).getByRole('button', { name: 'Avvia ricerca' }));
+    await waitFor(() => expect(bridge.plcScanStartCalls).toHaveLength(1));
+    await user.click(within(dlg).getByRole('button', { name: 'Chiudi' }));
+    expect(bridge.plcScanCancelCalls).toBe(1);
+    expect((bridge as unknown as { plcScanCbs: Set<unknown> }).plcScanCbs.size).toBe(0);
+  });
+
+  it("un found di una ricerca vecchia, dopo l'avvio di una nuova, si scarta", async () => {
+    const { user, bridge, dlg } = await openDialog();
+    bridge.plcScanResults = [
+      { ok: true, scanId: 1, total: 254 },
+      { ok: true, scanId: 2, total: 254 },
+    ];
+    const start = () => within(dlg).getByRole('button', { name: 'Avvia ricerca' });
+    await user.click(start());
+    await waitFor(() => expect(bridge.plcScanStartCalls).toHaveLength(1));
+    act(() => bridge.emitPlcScanEvent({ scanId: 1, kind: 'done', found: 0, cancelled: false }));
+    await user.click(start());
+    await waitFor(() => expect(bridge.plcScanStartCalls).toHaveLength(2));
+    act(() => bridge.emitPlcScanEvent({ scanId: 1, kind: 'found', device: CPU_DEV }));
+    expect(within(dlg).queryByRole('row', { name: /192\.0\.2\.10/ })).not.toBeInTheDocument();
+    act(() => bridge.emitPlcScanEvent({ scanId: 2, kind: 'found', device: CPU_DEV }));
+    expect(within(dlg).getByRole('row', { name: /192\.0\.2\.10/ })).toBeInTheDocument();
+  });
+
+  it('rack e slot fuori campo: messaggio e Collega disattivo', async () => {
+    const { user, dlg } = await openDialog();
+    await user.type(within(dlg).getByLabelText('Indirizzo manuale'), '192.0.2.30');
+    await user.click(within(dlg).getByRole('button', { name: 'Aggiungi indirizzo' }));
+    await user.click(within(dlg).getByRole('row', { name: /192\.0\.2\.30/ }));
+    await user.clear(within(dlg).getByLabelText('Rack'));
+    await user.type(within(dlg).getByLabelText('Rack'), '9');
+    expect(within(dlg).getByRole('alert')).toHaveTextContent(/rack/i);
+    expect(within(dlg).getByRole('button', { name: 'Collega' })).toBeDisabled();
+  });
+
+  it('plcInterfaces che fallisce: messaggio nella finestra', async () => {
+    const app = await renderApp({ view: 'project', withProject: true, withPlc: true });
+    app.bridge.plcInterfaces = async () => {
+      throw new Error('boom');
+    };
+    await act(async () => {
+      await commands['online.accessibleDevices'].run({
+        store: app.store,
+        service: app.service,
+        bridge: app.bridge,
+      });
+    });
+    const dlg = await screen.findByRole('dialog', { name: 'Dispositivi accessibili' });
+    expect(await within(dlg).findByRole('alert')).toHaveTextContent(/boom/);
+  });
+
+  describe('più CPU', () => {
+    async function twoCpus(select: 'second' | 'none') {
+      const app = await renderApp({ view: 'project', withProject: true, withPlc: true });
+      app.store.getState().edit('history.addDevice', (p) => {
+        const d = JSON.parse(JSON.stringify(p.devices[0]));
+        d.id = 'id2';
+        d.name = 'PLC_2';
+        p.devices.push(d);
+      });
+      if (select === 'second') app.store.getState().select('plc:id2');
+      app.bridge.plcInterfacesValue = [IFACE];
+      await act(async () => {
+        await commands['online.accessibleDevices'].run({
+          store: app.store,
+          service: app.service,
+          bridge: app.bridge,
+        });
+      });
+      const dlg = await screen.findByRole('dialog', { name: 'Dispositivi accessibili' });
+      return { ...app, dlg };
+    }
+
+    it('il select parte dalla CPU selezionata nell’albero', async () => {
+      const { dlg } = await twoCpus('second');
+      expect(within(dlg).getByLabelText('CPU del progetto')).toHaveValue('id2');
+    });
+
+    it('senza selezione parte dalla prima e Collega salva sulla scelta', async () => {
+      const { user, store, dlg } = await twoCpus('none');
+      const goOnline = vi.spyOn(commands['online.goOnline'], 'run').mockImplementation(() => {});
+      const sel = within(dlg).getByLabelText('CPU del progetto');
+      expect(sel).toHaveValue('id1');
+      await user.selectOptions(sel, 'id2');
+      await user.type(within(dlg).getByLabelText('Indirizzo manuale'), '192.0.2.40');
+      await user.click(within(dlg).getByRole('button', { name: 'Aggiungi indirizzo' }));
+      await user.click(within(dlg).getByRole('button', { name: 'Collega' }));
+      const devs = store.getState().doc!.project.devices;
+      expect(devs[1]!.properties.access?.host).toBe('192.0.2.40');
+      expect(devs[0]!.properties.access).toBeUndefined();
+      goOnline.mockRestore();
+    });
   });
 });

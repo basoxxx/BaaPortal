@@ -99,11 +99,16 @@ export function AccessibleDevicesDialog({ onClose }: { onClose(): void }) {
 
   useEffect(() => {
     let alive = true;
-    void bridge.plcInterfaces().then((list) => {
-      if (!alive) return;
-      setInterfaces(list);
-      setIfaceAddr((cur) => cur || (list[0]?.address ?? ''));
-    });
+    bridge
+      .plcInterfaces()
+      .then((list) => {
+        if (!alive) return;
+        setInterfaces(list);
+        setIfaceAddr((cur) => cur || (list[0]?.address ?? ''));
+      })
+      .catch((e: unknown) => {
+        if (alive) setScanError(t('accessDevices.errInterfaces', { error: String(e) }));
+      });
     const off = bridge.onPlcScanEvent((e) => {
       if (startingRef.current) bufferRef.current.push(e);
       else if (scanIdRef.current === e.scanId) applyRef.current(e);
@@ -171,6 +176,8 @@ export function AccessibleDevicesDialog({ onClose }: { onClose(): void }) {
 
   const rackN = toInt(rack);
   const slotN = toInt(slot);
+  const rackBad = rackN === null || rackN > 7;
+  const slotBad = slotN === null || slotN > 31;
   const tsapN = kind === 'gateway' ? parseTsap(tsap) : null;
   const tsapBad = kind === 'gateway' && tsap.trim() !== '' && tsapN === null;
   const row = rows.find((r) => rowKey(r) === selected);
@@ -308,6 +315,11 @@ export function AccessibleDevicesDialog({ onClose }: { onClose(): void }) {
             value={slot}
             onChange={(e) => setSlot(e.target.value)}
           />
+          {rackBad || slotBad ? (
+            <span role="alert" className="baa-field-error">
+              {t(rackBad ? 'accessDevices.rackInvalid' : 'accessDevices.slotInvalid')}
+            </span>
+          ) : null}
           <button type="button" disabled={scanning || !ifaceAddr} onClick={() => void start()}>
             {t('accessDevices.start')}
           </button>
