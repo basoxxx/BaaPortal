@@ -1218,7 +1218,7 @@
     "none": "No action",
     "delete": "Delete",
     "unreadableNote": "CPU information not read, downloaded anyway",
-    "runWarning": "The CPU is in RUN and the download contains OBs or changes the interface of an FB or DB: downloading in RUN may send the CPU to STOP.",
+    "runWarning": "The CPU is in RUN and the download contains OBs, deletes blocks or changes the interface of an FB or DB: downloading in RUN may send the CPU to STOP.",
     "stopCpu": "Stop the CPU",
     "waiting": "Waiting for confirmation...",
     "progress": "{{done}} of {{total}} ({{current}})",

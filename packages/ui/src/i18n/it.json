@@ -1218,7 +1218,7 @@
     "none": "Nessuna azione",
     "delete": "Cancella",
     "unreadableNote": "informazioni della CPU non lette, si carica comunque",
-    "runWarning": "La CPU è in RUN e il caricamento contiene OB o cambia l'interfaccia di un FB o di un DB: caricare a CPU in RUN può portarla in STOP.",
+    "runWarning": "La CPU è in RUN e il caricamento contiene OB, cancella blocchi o cambia l'interfaccia di un FB o di un DB: caricare a CPU in RUN può portarla in STOP.",
     "stopCpu": "Arresta la CPU",
     "waiting": "In attesa di conferma...",
     "progress": "{{done}} di {{total}} ({{current}})",
