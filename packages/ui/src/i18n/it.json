@@ -325,6 +325,7 @@
     "reload": "Ricarica dalla CPU",
     "notCompiled": "non compilato",
     "approximate": "Blocco molto grande: le righe sono confrontate per posizione, senza allineamento fine.",
+    "sourceFallback": "Blocco non compilato: confronto sul testo sorgente, gli operandi simbolici possono risultare diversi.",
     "network": "Rete {{n}}",
     "onlyProject": "solo nel progetto",
     "onlyCpu": "solo nella CPU",

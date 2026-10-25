@@ -11,6 +11,7 @@ import {
 import { useAppStore, useServices } from '../../state/AppContext';
 import type { EditorRef } from '../../state/workArea';
 import { diffNetworks, hexDump, type NetworkText } from './lineDiff';
+import { contextHashOf, hashOf } from '../../project/compile/compileActions';
 import './compare.css';
 
 interface Side {
@@ -112,8 +113,18 @@ export function CompareView({ editor }: { editor: EditorRef }) {
     };
   }, [bridge, type, number, status, reload]);
 
-  const offlineFile = block ? compile.files[block.id] : undefined;
-  const left = useMemo(() => (block ? blockText(block) : []), [block]);
+  // Compilato aggiornato del progetto (stessa impronta del sorgente attuale), altrimenti nessuno.
+  const offlineFile =
+    block && device && compile.hashes[block.id] === hashOf(block, contextHashOf(device))
+      ? compile.files[block.id]
+      : undefined;
+  // Lato progetto: il compilato decodificato come quello della CPU (stessa notazione); se manca
+  // o non si decodifica, il testo sorgente.
+  const leftDecoded = useMemo(
+    () => (offlineFile && device ? decodeOnline(device, offlineFile) : null),
+    [offlineFile, device],
+  );
+  const left = useMemo(() => leftDecoded ?? (block ? blockText(block) : []), [leftDecoded, block]);
   const decoded = useMemo(
     () => (online.state === 'ready' && device ? decodeOnline(device, online.bytes) : null),
     [online, device],
@@ -124,6 +135,7 @@ export function CompareView({ editor }: { editor: EditorRef }) {
 
   if (!block) return null;
   const dash = '-';
+  const fromSource = leftDecoded === null;
   const notCompiled = offlineFile === undefined ? t('compareView.notCompiled') : undefined;
   const num = (v: number | undefined) => (v === undefined ? dash : String(v));
   const hex = (v: number | undefined) =>
@@ -156,6 +168,11 @@ export function CompareView({ editor }: { editor: EditorRef }) {
           ))}
         </tbody>
       </table>
+      {fromSource ? (
+        <p className="baa-compare-note" data-testid="compare-source-note">
+          {t('compareView.sourceFallback')}
+        </p>
+      ) : null}
       {status !== 'on' ? (
         <p className="baa-compare-note" data-testid="compare-offline">
           {t('compareView.offline')}

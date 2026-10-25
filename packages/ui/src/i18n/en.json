@@ -325,6 +325,7 @@
     "reload": "Reload from CPU",
     "notCompiled": "not compiled",
     "approximate": "Very large block: lines are compared by position, without fine alignment.",
+    "sourceFallback": "Block not compiled: comparing the source text, symbolic operands may show as different.",
     "network": "Network {{n}}",
     "onlyProject": "project only",
     "onlyCpu": "CPU only",

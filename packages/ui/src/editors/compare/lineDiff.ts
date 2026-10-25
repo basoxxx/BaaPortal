@@ -1,6 +1,6 @@
 /**
  * Chiave di confronto di una riga AWL. Nel codice (fuori da `'...'`, `"..."` e dai commenti `//`)
- * spazi, maiuscole e il «%» degli indirizzi assoluti (`%MW10` e `MW10`) non contano, e un solo «;» finale nemmeno (il testo decodificato lo aggiunge);
+ * spazi, maiuscole e il «%» davanti a un indirizzo assoluto (`%MW10` e `MW10`) non contano, e un solo «;» finale nemmeno (il testo decodificato lo aggiunge);
  * i testi tra apici e i commenti si confrontano esattamente.
  */
 export function normLine(line: string): string {
@@ -41,7 +41,10 @@ export function normLine(line: string): string {
   return parts
     .map((p, k) => {
       if (!p.code) return p.text;
-      let t = p.text.replace(/%/g, '').replace(/\s+/g, ' ').toUpperCase();
+      let t = p.text
+        .replace(/%(?=[A-Z]{1,3}\d)/gi, '')
+        .replace(/\s+/g, ' ')
+        .toUpperCase();
       if (k === last && lastIsTail) t = t.replace(/\s+$/, '').replace(/;$/, '');
       if (k === last) t = t.replace(/\s+$/, '');
       return t;

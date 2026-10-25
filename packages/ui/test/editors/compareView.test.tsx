@@ -4,6 +4,7 @@ import { findCpu } from '@baaportal/catalog';
 import { blockFromMc7, blockToMc7File, findDevice, type CodeBlock } from '@baaportal/project';
 import { blockText } from '../../src/editors/compare/CompareView';
 import { diffNetworks, lineDiff, lineDiffEx, normLine } from '../../src/editors/compare/lineDiff';
+import { compileProgram } from '../../src/project/compile/compileActions';
 import { ids } from '../../src/project/navigation/treeIds';
 import { PLC, setupOnline } from '../online/downloadHelpers';
 
@@ -142,6 +143,78 @@ describe('editor di confronto', () => {
     expect(d.flatMap((n) => n.rows).filter((r) => r.kind !== 'same')).toEqual([]);
   }, 30_000);
 
+  async function symbolic() {
+    const { app, blocks } = await setupOnline([['OB', 1]]);
+    act(() => {
+      app.store.getState().edit('history.sym', (p) => {
+        const d = findDevice(p, PLC)!;
+        for (const [name, address] of [
+          ['Start', '%I0.0'],
+          ['Lamp', '%Q0.0'],
+          ['Lamp2', '%Q0.1'],
+        ] as const) {
+          d.tagTables[0]!.tags.push({
+            id: `tg${name}`,
+            name,
+            type: 'Bool',
+            address,
+            hmi: false,
+            comment: '',
+          });
+        }
+        (d.blocks.find((b) => b.id === blocks[0]!.id) as CodeBlock).networks[0]!.source =
+          'A "Start"\n= "Lamp"';
+      });
+    });
+    await act(async () => {
+      await compileProgram(
+        { store: app.store, service: app.service, bridge: app.bridge },
+        PLC,
+        'full',
+      );
+    });
+    const b = findDevice(app.store.getState().doc!.project, PLC)!.blocks.find(
+      (x) => x.id === blocks[0]!.id,
+    ) as CodeBlock;
+    return { app, b };
+  }
+
+  it('operandi simbolici: compilato scaricato nella CPU → nessuna riga diversa', async () => {
+    const { app, b } = await symbolic();
+    app.bridge.plcUploadBlockResults.set('OB1', {
+      ok: true,
+      bytes: app.store.getState().compile.files[b.id]!,
+    });
+    await openCompare(app, b);
+    await waitFor(() => expect(screen.getByTestId('compare-net-0')).toBeInTheDocument());
+    expect(screen.queryByTestId('compare-source-note')).toBeNull();
+    const rows = [...screen.getByTestId('compare-net-0').querySelectorAll('tr')];
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.filter((r) => r.getAttribute('data-diff') !== 'same')).toHaveLength(0);
+  }, 30_000);
+
+  it('operando cambiato → esattamente una riga diversa', async () => {
+    const { app, b } = await symbolic();
+    app.bridge.plcUploadBlockResults.set('OB1', {
+      ok: true,
+      bytes: cpuFile(app, b, (c) => {
+        c.networks[0]!.source = 'A "Start"\n= "Lamp2"';
+      }),
+    });
+    await openCompare(app, b);
+    await waitFor(() => expect(screen.getByTestId('compare-net-0')).toBeInTheDocument());
+    const rows = [...screen.getByTestId('compare-net-0').querySelectorAll('tr')];
+    expect(rows.filter((r) => r.getAttribute('data-diff') === 'changed')).toHaveLength(1);
+  }, 30_000);
+
+  it('senza compilato: confronto sul sorgente con la nota', async () => {
+    const { app, b } = await symbolic();
+    act(() => app.store.setState({ compile: { ...app.store.getState().compile, files: {} } }));
+    app.bridge.plcUploadBlockResults.set('OB1', { ok: true, bytes: cpuFile(app, b, () => {}) });
+    await openCompare(app, b);
+    expect(await screen.findByTestId('compare-source-note')).toBeInTheDocument();
+  }, 30_000);
+
   it('menu contestuale: attivo solo per «diverso»; assente fuori linea o su un altro dispositivo', async () => {
     const { app, blocks } = await setupOnline([
       ['FC', 1],
@@ -189,6 +262,7 @@ describe('editor di confronto', () => {
     expect(changed('A I0.0;', 'A I0.0')).toBe('same');
     expect(changed('"Motor"', '"MOTOR"')).toBe('changed');
     expect(changed('a   i0.0', 'A I0.0;  ')).toBe('same');
+    expect(changed('L "MW1"', 'L "%MW1"')).toBe('changed');
     expect(changed('A I0.0 // Uno', 'A I0.0 // UNO')).toBe('changed');
     expect(normLine('A I0.0; // x')).toBe(normLine('A I0.0 // x'));
   });
