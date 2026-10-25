@@ -27,7 +27,7 @@ import {
 const NOTHING = new Uint8Array(0);
 /** Filesystem dei blocchi scaricati: il passivo `P`, come STEP 7 (proto §10.1, §10.4). */
 const DOWNLOAD_FS = 'P';
-/** Filesystem della cancellazione: `B`, la "subfun" 0x42 di proto §10.5. */
+/** Filesystem della cancellazione: `A`, come TIA nella cattura reale (proto §10.5). */
 const DELETE_FS = 'A';
 /** Tipi cancellabili con `_DELE`: SDB, SFC e SFB non si cancellano. */
 const DELETABLE: readonly BlockType[] = ['OB', 'FB', 'FC', 'DB'];
