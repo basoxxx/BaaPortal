@@ -56,6 +56,11 @@ export class BackupService {
     this.o.uploads.cancel(owner, 'backup');
   }
 
+  /** C'è un backup in corso, anche con la finestra di salvataggio ancora aperta. */
+  active(): boolean {
+    return this.running.size > 0;
+  }
+
   /** Uscita dall'app: nessun backup prosegue dopo la finestra di salvataggio. */
   abortAll(): void {
     for (const owner of [...this.running.keys()]) this.cancel(owner);

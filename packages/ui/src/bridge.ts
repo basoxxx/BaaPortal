@@ -1,4 +1,10 @@
 import type {
+  UpdateCanInstall,
+  UpdateEvent,
+  UpdateInfoView,
+  UpdatePrefs,
+} from './update/updateTypes';
+import type {
   DiagPart,
   NetInterface,
   PlcClockRequest,
@@ -184,5 +190,19 @@ export interface BaaBridge {
    */
   plcBackup(): Promise<PlcBackupResult>;
   plcBackupCancel(): Promise<void>;
+  /** Aggiornamenti dell'app (solo build pacchettizzate; altrove `enabled` è falso). */
+  updateInfo(): Promise<UpdateInfoView>;
+  /** L'ultimo evento significativo, per ricostruire l'avviso dopo una ricarica. */
+  updateState(): Promise<UpdateEvent | null>;
+  updateSetPrefs(p: UpdatePrefs): Promise<void>;
+  updateCheck(): Promise<void>;
+  updateDownload(): Promise<void>;
+  updateCancelDownload(): Promise<void>;
+  updateCanInstall(): Promise<UpdateCanInstall>;
+  /** Con successo l'app esce; altrimenti dice perché non può. */
+  updateInstall(): Promise<{ ok: false; reason: 'busy' | 'notReady' } | undefined>;
+  updateLater(version: string): Promise<void>;
+  updateOpenNotes(version: string): Promise<void>;
+  onUpdateEvent(cb: (e: UpdateEvent) => void): () => void;
   testOverrides(): Promise<{ recoveryIntervalMs?: number }>; // sempre {} nelle build pacchettizzate
 }

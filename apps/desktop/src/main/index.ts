@@ -195,6 +195,7 @@ if (!app.requestSingleInstanceLock()) {
   }
   app.on('window-all-closed', () => app.quit());
 
+  let onlineClosed = false;
   const ipc = registerIpc(
     () => win,
     trust,
@@ -206,6 +207,11 @@ if (!app.requestSingleInstanceLock()) {
       rendererIsReady = true;
       for (const p of pendingOpen.splice(0)) win?.webContents.send('app:open-file', p);
     },
+    // Uscita per aggiornamento: l'installatore parte da solo, né la finestra né before-quit rimandano.
+    () => {
+      allowClose = true;
+      onlineClosed = true;
+    },
   );
   writeGuard = new WriteCloseGuard(
     () => ipc.writing(),
@@ -214,7 +220,6 @@ if (!app.requestSingleInstanceLock()) {
   );
   // Prima di uscire si chiude il collegamento online (al massimo 1 s), poi si esce davvero. Con una
   // scrittura nella CPU in corso si ferma prima del blocco successivo (al massimo 15 s).
-  let onlineClosed = false;
   app.on('before-quit', (e) => {
     // Anche l'uscita (Cmd+Q) chiede prima di interrompere una scrittura in corso.
     if (writeGuard?.needsConfirm()) {

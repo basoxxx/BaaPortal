@@ -4,6 +4,7 @@ import {
   clipboard,
   dialog,
   ipcMain,
+  shell,
   type IpcMainEvent,
   type IpcMainInvokeEvent,
   type WebContents,
@@ -20,6 +21,10 @@ import { parseOpenOptions, parseSaveOptions } from './fileDialogOptions';
 import { registerKit } from './kit';
 import { createConfirm, e2eSavePath } from './plc/confirm';
 import { registerPlc } from './plc/plcIpc';
+import { loadUpdater } from './update/updaterPort';
+import { registerUpdate } from './update/updateIpc';
+import { UpdateService } from './update/updateService';
+import type { UpdateInfoView } from '../shared/updateTypes';
 import { addRecent, removeRecent, type Platform, type StoredRecent } from './recentProjects';
 
 const platform = process.platform as Platform;
@@ -50,7 +55,13 @@ export function registerIpc(
   trust: TrustOptions,
   onCloseConfirmed: () => void,
   onRendererReady: () => void,
-): { closeOnline(): Promise<void>; writing(): boolean; interruptWrites(): void } {
+  prepareQuit: () => void,
+): {
+  closeOnline(): Promise<void>;
+  writing(): boolean;
+  busy(): boolean;
+  interruptWrites(): void;
+} {
   // Ogni canale risponde solo al frame principale della pagina dell'app.
   const trusted = (e: IpcMainEvent | IpcMainInvokeEvent) =>
     isTrustedFrame(e.senderFrame as FrameLike | null, trust);
@@ -207,6 +218,41 @@ export function registerIpc(
     () => app.getVersion(),
   );
 
+  // Aggiornamenti: il servizio esiste solo nelle build pacchettizzate (electron-updater non si carica altrove).
+  const mode = platform === 'win32' ? 'install' : platform === 'darwin' ? 'dmg' : 'none';
+  const info: UpdateInfoView = {
+    enabled: app.isPackaged,
+    prereleaseBuild: __BAA_PRERELEASE_BUILD__,
+    current: app.getVersion(),
+    platform: process.platform as UpdateInfoView['platform'],
+    mode,
+  };
+  const updates = app.isPackaged
+    ? new UpdateService({
+        updater: loadUpdater,
+        newToken: async () => {
+          const m = await import('builder-util-runtime');
+          return new m.default.CancellationToken();
+        },
+        platform: info.platform,
+        arch: process.arch,
+        prereleaseBuild: info.prereleaseBuild,
+        current: info.current,
+        busy: () => plc.busy(),
+        closeOnline: () => plc.closeAll(),
+        prepareQuit,
+        send: (e) => {
+          const w = getWindow();
+          if (w && !w.isDestroyed()) w.webContents.send('update:event', e);
+        },
+        openExternal: (url) => shell.openExternal(url),
+        setTimeout: (fn, ms) => setTimeout(fn, ms),
+        clearTimeout: (t) => clearTimeout(t as NodeJS.Timeout),
+        now: () => Date.now(),
+      })
+    : null;
+  registerUpdate(handle, updates, info);
+
   // Valori solo per i test e2e: come BAA_USER_DATA, mai onorati nelle build pacchettizzate.
   handle('app:test-overrides', () => {
     const ms = Number(process.env['BAA_RECOVERY_MS']);
@@ -216,6 +262,7 @@ export function registerIpc(
   return {
     closeOnline: () => plc.closeAll(),
     writing: () => plc.writing(),
+    busy: () => plc.busy(),
     interruptWrites: () => plc.interruptWrites(),
   };
 }

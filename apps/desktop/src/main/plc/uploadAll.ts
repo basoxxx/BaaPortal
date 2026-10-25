@@ -129,6 +129,11 @@ export class UploadService {
     if (run && run.kind === kind) run.ctl.abort();
   }
 
+  /** C'è un caricamento (o il suo giro per un backup) in corso. */
+  active(): boolean {
+    return this.runs.size > 0;
+  }
+
   /** Uscita dall'app: interrompe tutto e aspetta che i collegamenti siano chiusi. */
   async abortAll(): Promise<void> {
     const runs = [...this.runs.values()];
