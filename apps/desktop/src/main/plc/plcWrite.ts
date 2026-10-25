@@ -410,7 +410,7 @@ export class PlcWriteService {
     const requests = planWrites(items, NOTICE_PDU).length;
     const notice =
       requests > 1
-        ? `\nLe scritture partono in ${requests} richieste: se una fallisce, quelle precedenti restano scritte.`
+        ? `\nLe scritture partono in più richieste (fino a ${requests}): se una fallisce, quelle precedenti restano scritte.`
         : '';
     return this.exclusive<PlcWriteVarsResult>(
       owner,

@@ -421,7 +421,7 @@ describe('watch online contro il PLC di prova', () => {
       await w.writeVars(owner, many(45));
       await w.writeVars(owner, many(2));
       expect(seen[0]).toContain(
-        'Le scritture partono in 4 richieste: se una fallisce, quelle precedenti restano scritte.',
+        'Le scritture partono in più richieste (fino a 4): se una fallisce, quelle precedenti restano scritte.',
       );
       expect(seen[1]).not.toContain('Le scritture partono');
     });
