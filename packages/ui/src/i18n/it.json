@@ -886,7 +886,10 @@
     "awlNoProblems": "Nessun problema",
     "readOnlyBanner": "Blocco importato che non si può ricodificare identico: in sola lettura.",
     "knowHowBanner": "Blocco protetto know-how: si mostra solo l'interfaccia.",
-    "rawHint": "Questa rete contiene istruzioni MC7 grezze: si può modificare solo togliendole o ripristinandola."
+    "rawHint": "Questa rete contiene istruzioni MC7 grezze: si può modificare solo togliendole o ripristinandola.",
+    "showAwl": "Mostra AWL",
+    "hideAwl": "Nascondi AWL",
+    "kopAwlOnly": "Segmento in AWL: la conversione arriva con il piano 4C"
   },
   "props": {
     "banner": "Queste proprietà servono al simulatore e ai controlli offline. Fino alla tappa 6 non vengono caricate nel PLC.",
@@ -1680,6 +1683,20 @@
       "block": "Blocco",
       "db": "Blocco dati",
       "instance": "Istanza"
+    },
+    "problemRow": "Segmento {{pos}}: {{message}}",
+    "palettePanel": {
+      "bitLogic": "Logica a bit",
+      "timers": "Temporizzatori",
+      "counters": "Contatori",
+      "compare": "Confronto",
+      "move": "Trasferimento",
+      "math": "Matematica",
+      "convert": "Conversione",
+      "wordLogic": "Logica a parola",
+      "shift": "Scorrimento",
+      "jumps": "Salti",
+      "program": "Controllo del programma"
     }
   }
 }

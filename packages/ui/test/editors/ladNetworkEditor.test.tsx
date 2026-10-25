@@ -165,6 +165,30 @@ describe('LadNetworkEditor', () => {
     expect(screen.getByRole('button', { name: 'Contatto NA ??.?' })).toBeTruthy();
   });
 
+  it('onActive: il focus consegna l’api di inserimento, lo smontaggio la ritira', async () => {
+    const onActive = vi.fn();
+    const { unmount } = render(
+      <I18nextProvider i18n={i18next}>
+        <LadNetworkEditor
+          net={emptyNetwork(newId)}
+          index={0}
+          diagnostics={new Map()}
+          readOnly={false}
+          onChange={vi.fn()}
+          onActive={onActive}
+          newId={newId}
+        />
+      </I18nextProvider>,
+    );
+    screen.getByRole('group').focus();
+    expect(onActive).toHaveBeenCalledWith(
+      expect.objectContaining({ insertPalette: expect.any(Function) }),
+      true,
+    );
+    unmount();
+    expect(onActive).toHaveBeenLastCalledWith(expect.anything(), false);
+  });
+
   it('le frecce spostano la selezione nella griglia', async () => {
     const { user, canvas } = setup();
     canvas.focus();

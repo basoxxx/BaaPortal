@@ -171,3 +171,20 @@
   min-height: 16px;
   color: var(--baa-error);
 }
+
+.baa-lad-palette {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.baa-lad-palette-head {
+  padding: 3px 8px;
+  font-weight: 600;
+  background: var(--baa-panel-header);
+}
+.baa-lad-palette button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  cursor: grab;
+}

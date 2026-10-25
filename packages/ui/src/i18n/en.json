@@ -886,7 +886,10 @@
     "awlNoProblems": "No problems",
     "readOnlyBanner": "Imported block that cannot be re-encoded identically: read-only.",
     "knowHowBanner": "Know-how protected block: only the interface is shown.",
-    "rawHint": "This network contains raw MC7 instructions: it can only be edited by removing them or restoring them."
+    "rawHint": "This network contains raw MC7 instructions: it can only be edited by removing them or restoring them.",
+    "showAwl": "Show AWL",
+    "hideAwl": "Hide AWL",
+    "kopAwlOnly": "AWL network: conversion arrives with plan 4C"
   },
   "props": {
     "banner": "These properties are used by the simulator and the offline checks. Until stage 6 they are not downloaded to the PLC.",
@@ -1680,6 +1683,20 @@
       "block": "Block",
       "db": "Data block",
       "instance": "Instance"
+    },
+    "problemRow": "Network {{pos}}: {{message}}",
+    "palettePanel": {
+      "bitLogic": "Bit logic",
+      "timers": "Timers",
+      "counters": "Counters",
+      "compare": "Comparison",
+      "move": "Move",
+      "math": "Math",
+      "convert": "Conversion",
+      "wordLogic": "Word logic",
+      "shift": "Shift",
+      "jumps": "Jumps",
+      "program": "Program control"
     }
   }
 }

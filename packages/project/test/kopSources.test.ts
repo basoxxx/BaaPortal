@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   blockSources,
   createCodeBlock,
+  kopCallParams,
   kopSources,
   tempEnd,
   type CodeBlock,
@@ -116,6 +117,26 @@ describe('kopSources', () => {
     const src = blockSources(b, dev)[0]!;
     expect(src.indexOf('Zeta')).toBeGreaterThan(-1);
     expect(src.indexOf('Zeta')).toBeLessThan(src.indexOf('Alfa'));
+  });
+
+  it('kopCallParams: nome, direzione e tipo dall interfaccia, RET_VAL è un uscita', () => {
+    const dev = makeDevice(seq('k'));
+    const fc = createCodeBlock({ kind: 'FC', number: 32, name: 'Cp', language: 'AWL' });
+    fc.interface.input.push(member('In1', 'Bool'));
+    fc.interface.output.push(member('Out1', 'Int'));
+    fc.interface.inOut.push(member('Io1', 'Word'));
+    fc.interface.returnType = 'Int';
+    dev.blocks.push(fc);
+    const b = kopFc(dev);
+    const params = kopCallParams(b, dev);
+    expect(params('FC 32')).toEqual([
+      { name: 'In1', dir: 'in', type: 'Bool' },
+      { name: 'RET_VAL', dir: 'out', type: 'Int' },
+      { name: 'Out1', dir: 'out', type: 'Int' },
+      { name: 'Io1', dir: 'inout', type: 'Word' },
+    ]);
+    expect(params('"Cp"')).toHaveLength(4);
+    expect(params('FC 99')).toBeUndefined();
   });
 
   it('multi-instance FB40 assoluta, RET_VAL dopo gli ingressi, #"quotato"', () => {

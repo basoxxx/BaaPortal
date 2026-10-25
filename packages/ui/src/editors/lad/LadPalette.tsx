@@ -1,0 +1,109 @@
+// Tavolozza delle istruzioni KOP: un clic inserisce nella selezione dell'editor attivo, il
+// trascinamento rilascia sul segmento.
+import type { DragEvent } from 'react';
+import { useTranslation } from 'react-i18next';
+import { BOX_CATALOG, PALETTE } from '@baaportal/ladfbd';
+import type { BoxGroup, BoxKind } from '@baaportal/ladfbd';
+import { LAD_DRAG_TYPE } from './LadNetworkEditor';
+import { activeLad } from './ladActive';
+
+type Group =
+  | 'bitLogic'
+  | 'timers'
+  | 'counters'
+  | 'compare'
+  | 'move'
+  | 'math'
+  | 'convert'
+  | 'wordLogic'
+  | 'shift'
+  | 'jumps'
+  | 'program';
+const GROUPS: Group[] = [
+  'bitLogic',
+  'timers',
+  'counters',
+  'compare',
+  'move',
+  'math',
+  'convert',
+  'wordLogic',
+  'shift',
+  'jumps',
+  'program',
+];
+
+const OF_PALETTE: Record<string, Group> = {
+  bits: 'bitLogic',
+  edge: 'bitLogic',
+  outputs: 'bitLogic',
+  compare: 'compare',
+  timers: 'timers',
+  counters: 'counters',
+  call: 'program',
+};
+const OF_BOX: Record<BoxGroup, Group> = {
+  bistable: 'bitLogic',
+  timer: 'timers',
+  counter: 'counters',
+  move: 'move',
+  math: 'math',
+  convert: 'convert',
+  wordLogic: 'wordLogic',
+  shift: 'shift',
+  call: 'program',
+};
+const JUMPS = new Set(['jmp', 'jmpn']);
+
+type Item = { key: string; label: string; payload: { palette: string } | { box: BoxKind } };
+
+function itemsByGroup(): Map<Group, Item[]> {
+  const by = new Map<Group, Item[]>(GROUPS.map((g) => [g, []]));
+  for (const p of PALETTE) {
+    const g = JUMPS.has(p.id) ? 'jumps' : p.group === 'flow' ? 'program' : OF_PALETTE[p.group]!;
+    by.get(g)!.push({ key: `p-${p.id}`, label: p.label, payload: { palette: p.id } });
+  }
+  for (const d of Object.values(BOX_CATALOG)) {
+    by.get(OF_BOX[d.group])!.push({
+      key: `b-${d.kind}`,
+      label: `lad.box.${d.kind}`,
+      payload: { box: d.kind },
+    });
+  }
+  return by;
+}
+const ITEMS = itemsByGroup();
+
+export function LadPalette() {
+  const { t } = useTranslation();
+  const click = (item: Item) => {
+    const api = activeLad();
+    if (!api) return;
+    if ('palette' in item.payload) api.insertPalette(item.payload.palette);
+    else api.insertBox(item.payload.box);
+  };
+  const drag = (e: DragEvent<HTMLButtonElement>, item: Item) => {
+    e.dataTransfer.setData(LAD_DRAG_TYPE, JSON.stringify(item.payload));
+    e.dataTransfer.effectAllowed = 'copy';
+  };
+  return (
+    <div className="baa-lad-palette" data-testid="lad-palette">
+      {GROUPS.map((g) => (
+        <div key={g} role="group" aria-label={t(`lad.palettePanel.${g}`)}>
+          <div className="baa-lad-palette-head">{t(`lad.palettePanel.${g}`)}</div>
+          {ITEMS.get(g)!.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              draggable
+              onClick={() => click(item)}
+              onDragStart={(e) => drag(e, item)}
+            >
+              {t(item.label)}
+            </button>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}

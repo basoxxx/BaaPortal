@@ -2,9 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { checkBlockCode, completeAt, type AwlDiagnostic, type Mnemonic } from '@baaportal/awl';
 import { findCpu } from '@baaportal/catalog';
+import { current } from 'immer';
+import { emptyNetwork, type LadNetwork } from '@baaportal/ladfbd';
 import {
   createAwlContext,
   findDevice,
+  kopCallParams,
+  kopSources,
   type CodeBlock,
   type Network,
   type PlcDevice,
@@ -16,6 +20,8 @@ import { displayText } from '../awl/awlExtensions';
 import { monitorLinesByNetwork, monitorLinesFromPlc } from '../awl/monitorExtension';
 import { plcMonitorFor } from '../../online/plcMonitor';
 import { offsetOfLineCol } from '../../project/navigation/sourceActions';
+import { LadNetworkEditor } from '../lad/LadNetworkEditor';
+import { setLadActive } from '../lad/ladActive';
 import { hasRawLines, isLockedImport, lockedBannerKey } from './readOnlyImport';
 import { useMnemonic } from '../awl/mnemonicPreference';
 import { useAppStore, useServices } from '../../state/AppContext';
@@ -24,6 +30,24 @@ const newId = () => globalThis.crypto.randomUUID();
 const CHECK_DELAY_MS = 250;
 const NO_DIAGNOSTICS: AwlDiagnostic[] = [];
 const shown = displayText;
+const NO_MESSAGES = new Map<string, string[]>();
+
+/** Il blocco trascinato dall'albero come istanza di un box CALL: simbolo, con il suo DB per un FB. */
+function callInstanceOf(dev: PlcDevice | undefined, raw: string): string | undefined {
+  let ref: { deviceId?: string; refs?: { kind?: string; id?: string }[] };
+  try {
+    ref = JSON.parse(raw) as typeof ref;
+  } catch {
+    return undefined;
+  }
+  const r = ref.refs?.length === 1 ? ref.refs[0] : undefined;
+  const b = r?.kind === 'block' ? dev?.blocks.find((x) => x.id === r.id) : undefined;
+  if (!dev || ref.deviceId !== dev.id || !b || (b.kind !== 'FC' && b.kind !== 'FB'))
+    return undefined;
+  if (b.kind === 'FC') return `"${b.name}"`;
+  const idb = dev.blocks.find((x) => x.kind === 'IDB' && x.instanceOf === b.name);
+  return idb ? `"${b.name}", "${idb.name}"` : `"${b.name}"`;
+}
 
 /** Testo non ancora confermato di un segmento, valido finché sorgente e mnemonica sono quelli da cui parte. */
 interface Draft {
@@ -48,11 +72,30 @@ export function NetworksView({ deviceId, blockId }: Props) {
   const dev = useAppStore((s) => (s.doc ? findDevice(s.doc.project, deviceId) : undefined));
   const [mnemonic] = useMnemonic();
   const isAwl = block?.language === 'AWL';
+  const isKop = block?.language === 'KOP';
   // Il contesto del controllo si rifà a ogni revisione del dispositivo, non a ogni tasto.
   const awlCtx = useMemo(
-    () => (dev && isAwl ? createAwlContext(dev, blockId, findCpu(dev.cpu.typeId)) : null),
-    [dev, blockId, isAwl],
+    () =>
+      dev && (isAwl || isKop) ? createAwlContext(dev, blockId, findCpu(dev.cpu.typeId)) : null,
+    [dev, blockId, isAwl, isKop],
   );
+  // Segmenti KOP: la sorgente generata di ognuno, con le righe per elemento e le diagnostiche.
+  const kop = useMemo(
+    () => (block && dev && isKop ? kopSources(block, dev) : null),
+    [block, dev, isKop],
+  );
+  const callParams = useMemo(
+    () => (block && dev && isKop ? kopCallParams(block, dev) : undefined),
+    [block, dev, isKop],
+  );
+  // La rete vuota di un segmento senza `lad` resta la stessa finché non si modifica (poi diventa sua).
+  const placeholders = useRef(new Map<string, LadNetwork>());
+  const placeholder = (id: string): LadNetwork => {
+    let net = placeholders.current.get(id);
+    if (!net) placeholders.current.set(id, (net = emptyNetwork(newId)));
+    return net;
+  };
+  const [awlShown, setAwlShown] = useState<ReadonlySet<string>>(new Set());
   // Osservazione (simulatore): i valori valgono solo se disponibile e senza testo non confermato.
   const mon = useAppStore((s) =>
     s.sim.monitor?.blockId === blockId && s.sim.monitor.deviceId === deviceId
@@ -146,9 +189,21 @@ export function NetworksView({ deviceId, blockId }: Props) {
       const n = b.networks.find((x) => x.id === id);
       if (n) n[field] = value;
     });
+  /** Una modifica del grafico riscrive la sorgente di tutti i segmenti (le etichette sono per blocco). */
+  const editLad = (id: string, next: LadNetwork, labelKey: string) =>
+    edit(labelKey, (b, d) => {
+      const n = b.networks.find((x) => x.id === id);
+      if (!n) return;
+      n.lad = next;
+      const sources = kopSources(current(b), d);
+      b.networks.forEach((x, i) => {
+        x.source = sources[i]?.source ?? x.source;
+      });
+    });
   const insert = () =>
     edit('history.addNetwork', (b) => {
       const fresh: Network = { id: newId(), title: '', comment: '', source: '' };
+      if (b.language === 'KOP') fresh.lad = emptyNetwork(newId);
       const at = b.networks.findIndex((x) => x.id === focusedId);
       b.networks.splice(at < 0 ? b.networks.length : at + 1, 0, fresh);
     });
@@ -162,6 +217,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
   const textsShown = (override?: { index: number; text: string }): string[] =>
     (networks ?? []).map((n, i) => {
       if (override && override.index === i) return override.text;
+      if (kop) return shown(kop[i]?.source ?? n.source, mnemonic);
       const d = drafts.current.get(n.id);
       return d && d.base === n.source && d.mnemonic === mnemonic
         ? d.text
@@ -199,7 +255,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
   }, []);
   useEffect(() => {
     scheduleCheck();
-  }, [awlCtx, networks, mnemonic, scheduleCheck]);
+  }, [awlCtx, networks, mnemonic, kop, scheduleCheck]);
   useEffect(() => () => clearTimeout(timer.current), []);
 
   // Un clic su un messaggio di compilazione porta il cursore a rete e riga (come i Problemi).
@@ -223,6 +279,28 @@ export function NetworksView({ deviceId, blockId }: Props) {
   // I problemi nell'ordine attuale dei segmenti; la posizione è quella di adesso, non quella del controllo.
   const problems = block.networks.flatMap((n, i) =>
     (byNetwork[n.id] ?? NO_DIAGNOSTICS).map((d) => ({ d, id: n.id, pos: i + 1 })),
+  );
+  // Problemi di un blocco KOP: le diagnostiche del grafico e quelle dell'AWL generato, che
+  // tornano sull'elemento che ha prodotto la riga.
+  const kopMessages = block.networks.map((n, i) => {
+    const byElem = new Map<string, string[]>();
+    const loose: string[] = [];
+    const res = kop?.[i];
+    if (!res) return { byElem, loose };
+    const add = (elemId: string | undefined, msg: string) => {
+      if (elemId === undefined) loose.push(msg);
+      else byElem.set(elemId, [...(byElem.get(elemId) ?? []), msg]);
+    };
+    for (const d of res.diagnostics) add(d.elemId, t(`lad.diag.${d.code}`, d.params ?? {}));
+    for (const d of byNetwork[n.id] ?? NO_DIAGNOSTICS) {
+      const line = d.range.from.line;
+      const owner = res.lines.filter((l) => l.line <= line).at(-1);
+      add(owner?.elemId, t(`awl.diag.${d.code}`, d.params ?? {}));
+    }
+    return { byElem, loose };
+  });
+  const kopProblems = kopMessages.flatMap((m, i) =>
+    [...[...m.byElem.values()].flat(), ...m.loose].map((message) => ({ pos: i + 1, message })),
   );
   const onDraft = (n: Network, text: string) => {
     if (text === shown(n.source, mnemonic)) drafts.current.delete(n.id);
@@ -308,6 +386,54 @@ export function NetworksView({ deviceId, blockId }: Props) {
               {t('block.rawHint')}
             </p>
           ) : null}
+          {isKop ? (
+            n.lad || n.source === '' ? (
+              <>
+                <LadNetworkEditor
+                  net={n.lad ?? placeholder(n.id)}
+                  index={i}
+                  diagnostics={kopMessages[i]?.byElem ?? NO_MESSAGES}
+                  readOnly={locked}
+                  onChange={(next, key) => editLad(n.id, next, key)}
+                  callParams={callParams}
+                  onActive={setLadActive}
+                  callOfDrop={(raw) => callInstanceOf(dev, raw)}
+                />
+                <button
+                  type="button"
+                  className="baa-panel-btn"
+                  aria-pressed={awlShown.has(n.id)}
+                  onClick={() =>
+                    setAwlShown((cur) => {
+                      const next = new Set(cur);
+                      if (!next.delete(n.id)) next.add(n.id);
+                      return next;
+                    })
+                  }
+                >
+                  {t(awlShown.has(n.id) ? 'block.hideAwl' : 'block.showAwl')}
+                </button>
+              </>
+            ) : (
+              <p className="baa-raw-hint" data-testid="kop-awl-hint">
+                {t('block.kopAwlOnly')}
+              </p>
+            )
+          ) : null}
+          {isKop && (awlShown.has(n.id) || (!n.lad && n.source !== '')) ? (
+            <div className="baa-network-source">
+              <AwlEditor
+                value={kop?.[i]?.source ?? n.source}
+                readOnly
+                mnemonic={mnemonic}
+                aria-label={`${t('block.source')} ${i + 1}`}
+                diagnostics={byNetwork[n.id] ?? NO_DIAGNOSTICS}
+                monitor={(plcLinesShown ?? monLines)?.get(i) ?? null}
+                complete={(offset) => ({ from: offset, options: [] })}
+                onCommit={() => {}}
+              />
+            </div>
+          ) : null}
           {isAwl ? (
             <div className="baa-network-source">
               <AwlEditor
@@ -330,7 +456,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
                 }}
               />
             </div>
-          ) : (
+          ) : isKop ? null : (
             <div className="baa-network-source" title={t('block.sourceHint')}>
               <CommitTextarea
                 value={n.source}
@@ -368,6 +494,23 @@ export function NetworksView({ deviceId, blockId }: Props) {
                   })}
                 </button>
               </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      {isKop ? (
+        <section className="baa-awl-problems-panel" aria-label={t('block.awlProblems')}>
+          <h4 className="baa-block-networks-title">{t('block.awlProblems')}</h4>
+          {kopProblems.length === 0 ? (
+            <p className="baa-prop-note">{t('block.awlNoProblems')}</p>
+          ) : null}
+          <ul
+            className="baa-awl-problems"
+            aria-label={t('block.awlProblems')}
+            hidden={kopProblems.length === 0}
+          >
+            {kopProblems.map((p, k) => (
+              <li key={k}>{t('lad.problemRow', p)}</li>
             ))}
           </ul>
         </section>

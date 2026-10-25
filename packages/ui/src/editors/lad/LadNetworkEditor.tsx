@@ -40,11 +40,19 @@ import {
 import './lad.css';
 
 export const LAD_DRAG_TYPE = 'application/x-baaportal-lad';
+/** Trascinamento di oggetti dall'albero del progetto (`beginDrag`), accettato per creare un CALL. */
+export const TREE_DRAG_TYPE = 'application/x-baaportal';
 const HISTORY_KEY = 'history.editLad';
 const PAD = 12;
 
 type Selection = { t: 'elem'; id: string } | { t: 'slot'; at: InsertPoint } | null;
 type Editing = { id: string; key: string; value: string };
+
+/** Inserimento nella selezione dell'editor: lo usa la tavolozza delle istruzioni. */
+export type LadInsertApi = {
+  insertPalette: (paletteId: string) => void;
+  insertBox: (kind: BoxKind) => void;
+};
 
 type Props = {
   net: LadNetwork;
@@ -56,6 +64,13 @@ type Props = {
   callParams?: CallParams;
   /** Generatore di id; di norma `crypto.randomUUID`. */
   newId?: () => string;
+  /** L'editor prende il focus (`true`) o sparisce (`false`): la tavolozza inserisce nell'ultimo attivo. */
+  onActive?: (api: LadInsertApi, active: boolean) => void;
+  /**
+   * Un oggetto dell'albero rilasciato sulla rete (`TREE_DRAG_TYPE`, testo grezzo): restituisce
+   * l'istanza del box CALL da creare, o `undefined` se non è un blocco chiamabile.
+   */
+  callOfDrop?: (raw: string) => string | undefined;
 };
 
 const defaultId = () => globalThis.crypto.randomUUID();
@@ -95,6 +110,8 @@ export function LadNetworkEditor({
   onChange,
   callParams,
   newId = defaultId,
+  onActive,
+  callOfDrop,
 }: Props) {
   const { t } = useTranslation();
   const layout = useMemo(() => layoutNetwork(net), [net]);
@@ -167,6 +184,35 @@ export function LadNetworkEditor({
     const { at } = target();
     apply(() => insertElem(net, at, elem), { t: 'elem', id: elem.id });
   }
+
+  /** Voce della tavolozza (`PALETTE`) nella selezione: un'uscita va a fine linea del nodo, il resto in serie. */
+  function insertPalette(paletteId: string) {
+    const entry = PALETTE.find((p) => p.id === paletteId);
+    if (!entry || readOnly) return;
+    const el = { id: newId(), ...structuredClone(entry.preset) };
+    if (entry.where === 'out') {
+      const { nodeId } = target();
+      apply(() => addOutput(net, nodeId, el as LadOut), { t: 'elem', id: el.id });
+    } else insertNew(el as LadElem);
+  }
+
+  const insertApi = useRef<LadInsertApi>({ insertPalette, insertBox: () => {} });
+  insertApi.current = {
+    insertPalette,
+    insertBox: (kind) => {
+      if (!readOnly) insertNew(newBox(kind, newId()));
+    },
+  };
+  const stableApi = useRef<LadInsertApi>({
+    insertPalette: (id) => insertApi.current.insertPalette(id),
+    insertBox: (k) => insertApi.current.insertBox(k),
+  });
+  const onActiveRef = useRef(onActive);
+  onActiveRef.current = onActive;
+  useEffect(() => {
+    const api = stableApi.current;
+    return () => onActiveRef.current?.(api, false);
+  }, []);
 
   function addContact(neg: boolean) {
     insertNew({ id: newId(), k: 'contact', neg, op: '' });
@@ -299,16 +345,8 @@ export function LadNetworkEditor({
     run(a);
   }
 
-  function onDrop(e: DragEvent<HTMLDivElement>) {
-    const raw = e.dataTransfer.getData(LAD_DRAG_TYPE);
-    if (!raw || readOnly) return;
-    e.preventDefault();
-    let payload: { palette?: string; box?: BoxKind };
-    try {
-      payload = JSON.parse(raw) as typeof payload;
-    } catch {
-      return;
-    }
+  /** Il punto di inserimento più vicino al rilascio. */
+  function slotAt(e: DragEvent<HTMLDivElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
     const x = (e.clientX || 0) - rect.left - PAD;
     const y = (e.clientY || 0) - rect.top - PAD;
@@ -321,6 +359,41 @@ export function LadNetworkEditor({
         best = s;
       }
     }
+    return best;
+  }
+
+  /** Un blocco dall'albero diventa un box CALL con i pin del blocco chiamato. */
+  function dropCall(e: DragEvent<HTMLDivElement>, raw: string) {
+    const instance = callOfDrop?.(raw);
+    const best = slotAt(e);
+    if (instance === undefined || !best) return;
+    e.preventDefault();
+    const at = best.at;
+    const box = newBox('CALL', newId());
+    const fld = fieldsOf(box).find((f) => f.key === 'instance');
+    const patch = fld ? fieldPatch(box, fld, instance, callParams) : { instance };
+    apply(() => updateElem(insertElem(net, at, box), box.id, patch), {
+      t: 'elem',
+      id: box.id,
+    });
+  }
+
+  function onDrop(e: DragEvent<HTMLDivElement>) {
+    if (readOnly) return;
+    const raw = e.dataTransfer.getData(LAD_DRAG_TYPE);
+    if (!raw) {
+      const tree = e.dataTransfer.getData(TREE_DRAG_TYPE);
+      if (tree) dropCall(e, tree);
+      return;
+    }
+    e.preventDefault();
+    let payload: { palette?: string; box?: BoxKind };
+    try {
+      payload = JSON.parse(raw) as typeof payload;
+    } catch {
+      return;
+    }
+    const best = slotAt(e);
     if (!best) return;
     const at = best.at;
     if (payload.box && payload.box in BOX_CATALOG) {
@@ -365,7 +438,7 @@ export function LadNetworkEditor({
   ];
 
   return (
-    <div className="baa-lad">
+    <div className="baa-lad" onFocus={() => onActive?.(stableApi.current, true)}>
       {
         <div className="baa-lad-toolbar" role="toolbar" aria-label={t('lad.toolbar')}>
           {tools.map((tool) => (
@@ -429,7 +502,10 @@ export function LadNetworkEditor({
           if (!(e.target as HTMLElement).closest('button, input')) setSel(null);
         }}
         onDragOver={(e) => {
-          if (!readOnly && e.dataTransfer.types.includes(LAD_DRAG_TYPE)) e.preventDefault();
+          const types = e.dataTransfer.types;
+          if (readOnly) return;
+          if (types.includes(LAD_DRAG_TYPE) || (callOfDrop && types.includes(TREE_DRAG_TYPE)))
+            e.preventDefault();
         }}
         onDrop={onDrop}
       >

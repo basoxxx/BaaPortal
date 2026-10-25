@@ -200,7 +200,7 @@ describe("segmenti AWL con l'editor CodeMirror", () => {
   it(
     "i blocchi non AWL tengono l'area di testo del piano 1B",
     async () => {
-      const k = createCodeBlock({ kind: 'FC', number: 5, name: 'Kop', language: 'KOP' });
+      const k = createCodeBlock({ kind: 'FC', number: 5, name: 'Fup', language: 'FUP' });
       await openEditor('block', k.id, (d) => void d.blocks.push(k));
       expect(textbox().tagName).toBe('TEXTAREA');
       expect(textbox().parentElement).toHaveAttribute(
@@ -309,7 +309,9 @@ describe("segmenti AWL con l'editor CodeMirror", () => {
         }),
       );
       expect(block(app, f.id).networks[0]!.source).toBe('A I 0.0');
-      expect(textbox().tagName).toBe('TEXTAREA');
+      // Un segmento KOP con sorgente e senza grafico si vede in AWL, in sola lettura.
+      expect(screen.getByTestId('kop-awl-hint')).toHaveTextContent('Segmento in AWL');
+      expect(viewOf().state.readOnly).toBe(true);
     },
     T,
   );
