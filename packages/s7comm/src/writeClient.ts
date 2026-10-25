@@ -27,6 +27,10 @@ import {
 const NOTHING = new Uint8Array(0);
 /** Filesystem dei blocchi scaricati: il passivo `P`, come STEP 7 (proto §10.1, §10.4). */
 const DOWNLOAD_FS = 'P';
+/** Filesystem della cancellazione: `B`, la "subfun" 0x42 di proto §10.5. */
+const DELETE_FS = 'B';
+/** Tipi cancellabili con `_DELE`: SDB, SFC e SFB non si cancellano. */
+const DELETABLE: readonly BlockType[] = ['OB', 'FB', 'FC', 'DB'];
 
 const h2 = (n: number): string => `0x${n.toString(16).padStart(2, '0')}`;
 
@@ -145,9 +149,14 @@ export class S7WriteClient extends S7Client {
     return this.#control(encodeWarmRestart(), 'avvio');
   }
 
-  /** Cancella un blocco dal filesystem passivo (proto §10.5). Un esito diverso da 0 lancia CPU_ERROR. */
+  /** Cancella un blocco nel filesystem B (proto §10.5); solo OB, FB, FC, DB. Un esito diverso da 0 lancia CPU_ERROR. */
   deleteBlock(type: BlockType, number: number): Promise<void> {
-    return this.#controlOk(encodeDeleteBlock(type, number, DOWNLOAD_FS), `_DELE ${type}${number}`);
+    if (!DELETABLE.includes(type)) {
+      return Promise.reject(
+        new S7Error('PROTOCOL', `_DELE: il tipo ${type} non si cancella (solo OB, FB, FC, DB)`),
+      );
+    }
+    return this.#controlOk(encodeDeleteBlock(type, number, DELETE_FS), `_DELE ${type}${number}`);
   }
 
   /** Copia la RAM in ROM (`_MODU`, proto §11.3). Un esito diverso da 0 lancia CPU_ERROR. */

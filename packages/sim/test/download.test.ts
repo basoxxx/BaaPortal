@@ -221,3 +221,25 @@ describe('download nella CPU simulata attraverso il server S7', () => {
     await c.close();
   });
 });
+
+describe('cancellazione di blocchi nella CPU simulata (_DELE)', () => {
+  it('cancella un DB e un FC: upload e blockInfo non li trovano più, la lista si svuota', async () => {
+    const { cpu, c } = await loaded();
+    await c.deleteBlock('DB', 1);
+    await c.deleteBlock('FC', 1);
+    expect(cpu.program.get('FC', 1)).toBeUndefined();
+    expect(cpu.memory.dbs.has(1)).toBe(false);
+    for (const [t, n] of [
+      ['DB', 1],
+      ['FC', 1],
+    ] as const) {
+      await expect(c.upload(t, n)).rejects.toMatchObject({ code: 'CPU_ERROR' });
+      await expect(c.blockInfo(t, n)).rejects.toMatchObject({ code: 'CPU_ERROR' });
+    }
+    expect((await c.listBlocks('FC')).length).toBe(0);
+    expect((await c.listBlocks('OB')).map((b) => b.number)).toEqual([1]);
+    // un blocco già cancellato: errore della CPU
+    await expect(c.deleteBlock('FC', 1)).rejects.toMatchObject({ code: 'CPU_ERROR' });
+    await c.close();
+  });
+});

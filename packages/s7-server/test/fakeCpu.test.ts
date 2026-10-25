@@ -372,8 +372,8 @@ describe('lo stato non cambia da rete per le funzioni non ammesse', () => {
     const before = cpu.snapshot();
     const p = await new TestPeer(cpu).open();
     // PDU costruite a mano; write var e stop sono funzioni ammesse (session.test.ts)
-    const garb = Uint8Array.of(0x28, 0, 0, 0, 0, 0, 0, 0xfd, 0, 0, 5, 0x5f, 0x4d, 0x52, 0x45, 0x53);
-    expect(await p.job(garb)).toMatchObject({ rosctr: 2, errorClass: 0xd2, errorCode: 0x41 });
+    const mres = Uint8Array.of(0x28, 0, 0, 0, 0, 0, 0, 0xfd, 0, 0, 5, 0x5f, 0x4d, 0x52, 0x45, 0x53);
+    expect(await p.job(mres)).toMatchObject({ rosctr: 2, errorClass: 0xd2, errorCode: 0x41 });
     // 0x1A è ammesso (download, session.test.ts): troncato è una richiesta malformata
     expect(await p.job(Uint8Array.of(0x1a, 0, 1, 0, 0, 0, 0, 0))).toMatchObject({
       rosctr: 2,

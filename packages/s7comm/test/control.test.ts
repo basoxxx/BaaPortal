@@ -116,8 +116,8 @@ describe('PLC control (0x28) e stop (0x29)', () => {
   });
 
   it('_DELE OB1 canonico: struttura di _INSE con servizio _DELE', () => {
-    const b = encodeDeleteBlock('OB', 1, 'P');
-    expect(hex(b)).toBe('28000000000000fd000a01003038303030303150055f44454c45');
+    const b = encodeDeleteBlock('OB', 1, 'B');
+    expect(hex(b)).toBe('28000000000000fd000a01003038303030303142055f44454c45');
     expect(decodePlcControlRequest(b)).toEqual({
       function: 0x28,
       service: '_DELE',
@@ -136,6 +136,10 @@ describe('PLC control (0x28) e stop (0x29)', () => {
     const real = controlParams(1).map((p) => decodePlcControlRequest(p));
     expect(real.map((r) => r.service)).toEqual(['P_PROGRAM', '_MODU', '_GARB', undefined]);
     // _DELE con conteggio diverso da 1: non ammesso
+    // il vecchio vettore con filesystem B (DB1) è un _DELE canonico
+    const old = fromHex('28000000000000fd000a01003041303030303142055f44454c45');
+    expect(hex(encodeDeleteBlock('DB', 1, 'B'))).toBe(hex(old));
+    expect(decodePlcControlRequest(old).service).toBe('_DELE');
     const dele = fromHex('28000000000000fd000a02003041303030303142055f44454c45');
     expect(decodePlcControlRequest(dele).service).toBeUndefined();
   });

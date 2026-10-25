@@ -64,7 +64,8 @@ describe('assertOnlineWrite', () => {
       job(encodePlcStop()),
       job(encodeWarmRestart()),
       job(encodeInsertBlock('DB', 1, 'P')),
-      job(encodeDeleteBlock('OB', 1, 'P')),
+      job(encodeDeleteBlock('OB', 1, 'B')),
+      job(encodeDeleteBlock('DB', 7, 'B')),
       job(encodeCopyRamToRom()),
       job(encodeCompressMemory()),
       // ack-data 0x1B e 0x1C
@@ -98,12 +99,15 @@ describe('assertOnlineWrite', () => {
       job(ctl([1, 0, ...ascii('0A00001P')], '_GARB')), // _GARB con argomenti
       job(ctl([1, 0, ...ascii('0A00001P')], '_MODU')), // _MODU con argomenti
       job(ctl(ascii('EQ'), '_MODU')),
-      job(ctl([1, 0, ...ascii('0800001B')], '_DELE')), // _DELE su filesystem B
+      job(ctl([1, 0, ...ascii('0800001P')], '_DELE')), // _DELE solo su filesystem B
       job(ctl([1, 0, ...ascii('0800001A')], '_DELE')),
-      job(ctl([2, 0, ...ascii('0800001P')], '_DELE')), // conteggio diverso da 1
+      job(ctl([2, 0, ...ascii('0800001B')], '_DELE')), // conteggio diverso da 1
+      job(encodeDeleteBlock('SDB', 1, 'B')), // tipi non cancellabili
+      job(encodeDeleteBlock('SFC', 1, 'B')),
+      job(encodeDeleteBlock('SFB', 1, 'B')),
       job(Uint8Array.from([...encodeCompressMemory(), 0])),
       job(Uint8Array.from([...encodeCopyRamToRom(), 0])),
-      job(encodeDeleteBlock('OB', 1, 'P'), Uint8Array.of(1)), // dati in più
+      job(encodeDeleteBlock('OB', 1, 'B'), Uint8Array.of(1)), // dati in più
       job(ctl(ascii('C '), 'P_PROGRAM')), // cold restart
       job(ctl(ascii('H '), 'P_PROGRAM')), // hot restart
       job(ctl([], '_MRES')),
@@ -213,7 +217,7 @@ describe('modo della connessione', () => {
       10,
       1,
       0,
-      ...[...'0A00001B'].map((c) => c.charCodeAt(0)),
+      ...[...'0A00001P'].map((c) => c.charCodeAt(0)),
       5,
       ...[...'_DELE'].map((c) => c.charCodeAt(0)),
     ]);

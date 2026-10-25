@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { S7WriteClient, memoryTransportPair, type TransportFactory } from '@baaportal/s7comm';
+import {
+  S7WriteClient,
+  encodeCompressMemory,
+  encodeCopyRamToRom,
+  encodeDeleteBlock,
+  memoryTransportPair,
+  type TransportFactory,
+} from '@baaportal/s7comm';
 import { FakeCpu, serve, type CpuBackend } from '../src';
 import { TestPeer, blockFile, seq } from './helpers';
 
@@ -43,25 +50,26 @@ describe('_DELE, _MODU e _GARB contro il server di prova', () => {
     await expect(c.deleteBlock('FC', 1)).rejects.toMatchObject({ code: 'CPU_ERROR' });
   });
 
-  it('con protezione 2 i tre servizi rispondono 0xD241', async () => {
+  it('deleteBlock rifiuta SDB, SFC e SFB senza inviare nulla', async () => {
+    const c = await connect(new FakeCpu());
+    for (const t of ['SDB', 'SFC', 'SFB'] as const) {
+      await expect(c.deleteBlock(t, 1)).rejects.toMatchObject({ code: 'PROTOCOL' });
+    }
+  });
+
+  it('con protezione 2 _MODU, _GARB e _DELE rispondono 0xD241 e lo stato non cambia', async () => {
     const cpu = new FakeCpu({ protectionLevel: 2 });
+    cpu.addDb(1, seq(8));
+    const before = cpu.snapshot();
     const p = await new TestPeer(cpu).open();
-    const modu = Uint8Array.from([
-      0x28,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0xfd,
-      0,
-      2,
-      0x45,
-      0x50,
-      5,
-      ...[...'_MODU'].map((x) => x.charCodeAt(0)),
-    ]);
-    expect(await p.job(modu)).toMatchObject({ rosctr: 2, errorClass: 0xd2, errorCode: 0x41 });
+    for (const param of [
+      encodeCopyRamToRom(),
+      encodeCompressMemory(),
+      encodeDeleteBlock('DB', 1, 'B'),
+    ]) {
+      expect(await p.job(param)).toMatchObject({ rosctr: 2, errorClass: 0xd2, errorCode: 0x41 });
+    }
+    expect(cpu.snapshot()).toBe(before);
+    expect(cpu.block('DB', 1)).toBeDefined();
   });
 });

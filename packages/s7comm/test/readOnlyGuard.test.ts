@@ -59,7 +59,7 @@ const FORBIDDEN: [string, S7Pdu][] = [
   ['download block 0x1B', job(hexb('1b 00 00 00 00 00 00 01 00'))],
   ['download ended 0x1C', job(hexb('1c 00 00 00 00 00 00 01 00'))],
   ['PLC control 0x28', job(hexb('28 00 00 00 00 00 00 fd 00 00 09 50 5f 50 52 4f 47 52 41 4d'))],
-  ['_DELE', job(encodeDeleteBlock('OB', 1, 'P'))],
+  ['_DELE', job(encodeDeleteBlock('OB', 1, 'B'))],
   ['_MODU', job(encodeCopyRamToRom())],
   ['_GARB', job(encodeCompressMemory())],
   ['PLC stop 0x29', job(hexb('29 00 00 00 00 00 09 50 5f 50 52 4f 47 52 41 4d'))],
