@@ -46,7 +46,10 @@
     "progress": "Avanzamento",
     "simulation": "Simulazione: {{mode}}",
     "simulationStarting": "Simulazione in avvio…",
-    "simulationFailed": "Simulazione non disponibile"
+    "simulationFailed": "Simulazione non disponibile",
+    "online": "Online: {{module}} {{host}} - {{mode}}",
+    "onlineConnecting": "Collegamento online in corso…",
+    "onlineTitleSuffix": " — Online"
   },
   "messages": {
     "replaced": "Sostituiti {{replaced}} testi, saltati {{skipped}}.",
@@ -102,7 +105,12 @@
     "simInputsFailed": "Il simulatore non ha accettato gli ingressi: {{message}}",
     "simInterruptFailed": "Il simulatore non ha accettato l'allarme: {{message}}",
     "simWatchFailed": "Osservazione della tabella di controllo non riuscita: {{message}}",
-    "simWriteFailed": "Comando non riuscito: {{message}}"
+    "simWriteFailed": "Comando non riuscito: {{message}}",
+    "plcConnected": "Collegato a {{name}} ({{host}}) in sola lettura.",
+    "plcDisconnected": "Collegamento online interrotto.",
+    "plcConnectFailed": "Collegamento non riuscito: {{message}}",
+    "plcLost": "Collegamento interrotto: {{reason}}",
+    "plcMismatch": "La CPU collegata ({{connected}}) è diversa da quella del progetto ({{project}})."
   },
   "commands": {
     "project.new": "Nuovo…",
@@ -1020,7 +1028,13 @@
       "SFB_NON_SIMULATA": "SFB non simulato"
     },
     "ledOn": "acceso",
-    "ledOff": "spento"
+    "ledOff": "spento",
+    "readOnly": "Collegamento in sola lettura",
+    "module": "Modulo",
+    "orderNumber": "Numero di ordinazione",
+    "firmware": "Firmware",
+    "mode": "Modo",
+    "unavailableReadOnly": "Non disponibile in sola lettura"
   },
   "ioPanel": {
     "inputs": "Ingressi",

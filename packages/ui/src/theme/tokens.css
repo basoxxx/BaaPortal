@@ -12,6 +12,9 @@
   --baa-selection: #cfe8ec;
   --baa-disabled: #9aa7ae;
   --baa-online: #f29100;
+  /* Modalità online (PLC vero): arancione come in TIA. Il tema ha un solo aspetto, chiaro e scuro lo condividono. */
+  --online-accent: #ff9900;
+  --online-accent-text: #1b262c;
   --baa-font: 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif;
   --baa-font-size: 12px;
   --baa-row-height: 20px;

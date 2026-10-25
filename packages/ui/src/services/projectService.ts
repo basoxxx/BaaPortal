@@ -12,6 +12,7 @@ import {
   type Project,
 } from '@baaportal/project';
 import type { BaaBridge } from '../bridge';
+import { shutdownOnline } from '../online/plcController';
 import { shutdownSimulation } from '../sim/simController';
 import type { AppState } from '../state/store';
 
@@ -377,6 +378,7 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
 
   async function handleCloseRequest(): Promise<void> {
     if (!(await ensureCanDiscard())) return;
+    shutdownOnline(store);
     shutdownSimulation(store); // il worker del simulatore non deve restare in esecuzione
     try {
       await deps.beforeWindowClose?.();
@@ -387,7 +389,10 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
   }
 
   // Titolo della finestra sempre allineato al documento.
-  const titleFor = (s: AppState) => (s.doc ? `${APP_TITLE} - ${s.doc.filePath}` : APP_TITLE);
+  const titleFor = (s: AppState) => {
+    const base = s.doc ? `${APP_TITLE} - ${s.doc.filePath}` : APP_TITLE;
+    return s.online.status === 'on' ? `${base}${t('status.onlineTitleSuffix')}` : base;
+  };
   let lastTitle = titleFor(store.getState());
   bridge.setWindowTitle(lastTitle);
   const unsubscribeStore = store.subscribe((s) => {

@@ -36,6 +36,8 @@ export function CpuPanel() {
   const { t } = useTranslation();
   const { store, bridge } = useServices();
   const sim = useAppStore((s) => s.sim);
+  const online = useAppStore((s) => s.online);
+  if (online.status === 'on') return <OnlineCpuPanel />;
   if (sim.phase !== 'on') return <p className="baa-placeholder">{t('cpuPanel.needSim')}</p>;
 
   const ctrl = simControllerFor(store);
@@ -140,6 +142,70 @@ export function CpuPanel() {
           ))}
         </ol>
       )}
+    </div>
+  );
+}
+
+/** Pannello della CPU vera: solo LED e identità, tutto il resto in sola lettura. */
+function OnlineCpuPanel() {
+  const { t } = useTranslation();
+  const online = useAppStore((s) => s.online);
+  const mode = online.mode ?? 'UNKNOWN';
+  const id = online.identity;
+  const ledLabel = (k: 'run' | 'stop', on: boolean) =>
+    `${t(`cpuPanel.${k}`)}: ${t(on ? 'cpuPanel.ledOn' : 'cpuPanel.ledOff')}`;
+  return (
+    <div className="baa-cpu-panel" data-testid="cpu-panel-online">
+      <p className="baa-placeholder" data-testid="cpu-readonly">
+        {t('cpuPanel.readOnly')}
+      </p>
+      <div className="baa-cpu-leds" role="status">
+        <span
+          data-testid="led-run"
+          data-on={mode === 'RUN'}
+          aria-label={ledLabel('run', mode === 'RUN')}
+          className="baa-led baa-led-run"
+        >
+          {t('cpuPanel.run')}
+        </span>
+        <span
+          data-testid="led-stop"
+          data-on={mode === 'STOP'}
+          aria-label={ledLabel('stop', mode === 'STOP')}
+          className="baa-led baa-led-stop"
+        >
+          {t('cpuPanel.stop')}
+        </span>
+      </div>
+      <div className="baa-cpu-buttons">
+        <button type="button" disabled data-testid="cpu-run" title={t('cpuPanel.readOnly')}>
+          {t('cpuPanel.runBtn')}
+        </button>
+        <button type="button" disabled data-testid="cpu-stop" title={t('cpuPanel.readOnly')}>
+          {t('cpuPanel.stopBtn')}
+        </button>
+        <button type="button" disabled data-testid="cpu-mres" title={t('cpuPanel.readOnly')}>
+          {t('cpuPanel.mres')}
+        </button>
+      </div>
+      <dl data-testid="cpu-identity">
+        <dt>{t('cpuPanel.mode')}</dt>
+        <dd>{mode}</dd>
+        <dt>{t('cpuPanel.module')}</dt>
+        <dd>{id?.moduleName ?? ''}</dd>
+        <dt>{t('cpuPanel.orderNumber')}</dt>
+        <dd>{id?.orderNumber ?? ''}</dd>
+        {id?.firmware ? (
+          <>
+            <dt>{t('cpuPanel.firmware')}</dt>
+            <dd>{id.firmware}</dd>
+          </>
+        ) : null}
+      </dl>
+      <h4>{t('cpuPanel.cycle')}</h4>
+      <p className="baa-placeholder">{t('cpuPanel.unavailableReadOnly')}</p>
+      <h4>{t('cpuPanel.diagnostics')}</h4>
+      <p className="baa-placeholder">{t('cpuPanel.unavailableReadOnly')}</p>
     </div>
   );
 }

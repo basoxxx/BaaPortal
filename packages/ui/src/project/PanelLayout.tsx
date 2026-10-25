@@ -37,7 +37,7 @@ function PanelFrame({ name, children }: { name: PanelName; children: ReactNode }
   const { store } = useServices();
   const pinned = useAppStore((s) => s.panels[name].pinned);
   return (
-    <section className="baa-panel" data-testid={TESTID[name]}>
+    <section className="baa-panel" data-panel={name} data-testid={TESTID[name]}>
       <header className="baa-panel-header">
         <h2>{t(`panel.${name}`)}</h2>
         <button

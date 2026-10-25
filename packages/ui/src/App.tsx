@@ -46,13 +46,14 @@ function Shell() {
   useShortcuts();
   const { store } = useServices();
   const view = useAppStore((s) => s.view);
+  const online = useAppStore((s) => s.online.status === 'on');
   const dialog = useAppStore((s) => s.dialog);
   const close = () => store.getState().closeDialog();
   const [settings] = useSettings();
   // Scala e carattere degli editor: variabili CSS su :root, senza riavvio.
   useEffect(() => applyDisplaySettings(document, settings), [settings]);
   return (
-    <div data-testid="app-root" className="baa-app">
+    <div data-testid="app-root" className={online ? 'baa-app online' : 'baa-app'}>
       {view === 'portal' ? <PortalView /> : <ProjectView />}
       {dialog?.kind === 'addDevice' ? <AddDeviceDialog onClose={close} /> : null}
       {dialog?.kind === 'settings' ? <SettingsDialog onClose={close} /> : null}

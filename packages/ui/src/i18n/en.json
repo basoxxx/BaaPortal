@@ -46,7 +46,10 @@
     "progress": "Progress",
     "simulation": "Simulation: {{mode}}",
     "simulationStarting": "Starting simulation…",
-    "simulationFailed": "Simulation unavailable"
+    "simulationFailed": "Simulation unavailable",
+    "online": "Online: {{module}} {{host}} - {{mode}}",
+    "onlineConnecting": "Going online…",
+    "onlineTitleSuffix": " — Online"
   },
   "messages": {
     "replaced": "Replaced {{replaced}} texts, skipped {{skipped}}.",
@@ -102,7 +105,12 @@
     "simInputsFailed": "The simulator did not accept the inputs: {{message}}",
     "simInterruptFailed": "The simulator did not accept the interrupt: {{message}}",
     "simWatchFailed": "Watch table monitoring failed: {{message}}",
-    "simWriteFailed": "Command failed: {{message}}"
+    "simWriteFailed": "Command failed: {{message}}",
+    "plcConnected": "Connected to {{name}} ({{host}}) read-only.",
+    "plcDisconnected": "Online connection closed.",
+    "plcConnectFailed": "Connection failed: {{message}}",
+    "plcLost": "Connection lost: {{reason}}",
+    "plcMismatch": "The connected CPU ({{connected}}) differs from the project CPU ({{project}})."
   },
   "commands": {
     "project.new": "New…",
@@ -1020,7 +1028,13 @@
       "SFB_NON_SIMULATA": "SFB not simulated"
     },
     "ledOn": "on",
-    "ledOff": "off"
+    "ledOff": "off",
+    "readOnly": "Read-only connection",
+    "module": "Module",
+    "orderNumber": "Order number",
+    "firmware": "Firmware",
+    "mode": "Mode",
+    "unavailableReadOnly": "Not available in read-only mode"
   },
   "ioPanel": {
     "inputs": "Inputs",
