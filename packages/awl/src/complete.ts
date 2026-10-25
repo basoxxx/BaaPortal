@@ -353,7 +353,7 @@ function compute(
   const prefix = before.slice(lineStart);
   if (commentStart(prefix) >= 0) return none(offset);
 
-  const label = /^[ \t]*[A-Za-z][A-Za-z0-9]{0,3}[ \t]*:(?!=)/.exec(prefix);
+  const label = /^[ \t]*[A-Za-z_][A-Za-z0-9_]{0,3}[ \t]*:(?!=)/.exec(prefix);
   const rest = prefix.slice(label ? label[0].length : 0);
   const restAt = lineStart + (label ? label[0].length : 0);
   const body = rest.trimStart();

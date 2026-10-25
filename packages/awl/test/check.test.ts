@@ -496,4 +496,14 @@ describe('puntatore a un locale: P##nome', () => {
     expect(summary([call('P##Tmp')])).toEqual([]);
     expect(summary([call('P##Boh')])).toEqual(['UNKNOWN_LOCAL@0:Boh']);
   });
+
+  it('etichette che iniziano con _: valide fino a 4 caratteri, oltre sono troppo lunghe', () => {
+    expect(check(['A I 0.0\nJNB _001\nL MW 10\nT MW 12\n_001: NOP 0'])).toEqual([]);
+    expect(summary(['_ABCD: NOP 0'])).toEqual(['LABEL_TOO_LONG@0:_ABCD']);
+    expect(summary(['JU _ABCD\n_ABCD: NOP 0'])).toEqual([
+      'LABEL_TOO_LONG@0:_ABCD',
+      'LABEL_TOO_LONG@0:_ABCD',
+    ]);
+    expect(codes(check(['1AB: NOP 0']))).not.toEqual([]);
+  });
 });

@@ -328,6 +328,20 @@ describe('compilatore dei blocchi del progetto (Task 7)', () => {
     expect(f.add.jumps).toHaveLength(4);
   });
 
+  it('etichetta automatica _001 (KOP): salto in avanti compilato', () => {
+    const s = emptySections({});
+    const r = compile({
+      kind: 'FC',
+      number: 11,
+      sections: s,
+      initials: {},
+      networks: ['A I 0.0\nJNB _001\nL MW 10\nT MW 12\n_001: NOP 0'],
+      ctx: makeCtx('FC', s),
+    });
+    expect(errors(r.diagnostics)).toEqual([]);
+    expect(r.file).toBeDefined();
+    expect(decodeBlock(r.file!).exact).toBe(true);
+  });
   it('FB con multi-istanza e CALL di FC: equivalente ai blocchi reali dello stesso schema', () => {
     const s = emptySections({
       in: [m('Start', el('Bool')), m('Vel', el('Int'))],
