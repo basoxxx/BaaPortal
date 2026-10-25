@@ -1696,7 +1696,8 @@
       "wordLogic": "Word logic",
       "shift": "Shift",
       "jumps": "Jumps",
-      "program": "Program control"
+      "program": "Program control",
+      "noTarget": "Select a point in a LAD network"
     }
   }
 }

@@ -34,12 +34,13 @@ const NO_MESSAGES = new Map<string, string[]>();
 
 /** Il blocco trascinato dall'albero come istanza di un box CALL: simbolo, con il suo DB per un FB. */
 function callInstanceOf(dev: PlcDevice | undefined, raw: string): string | undefined {
-  let ref: { deviceId?: string; refs?: { kind?: string; id?: string }[] };
+  let ref: { deviceId?: string; refs?: { kind?: string; id?: string }[] } | null;
   try {
     ref = JSON.parse(raw) as typeof ref;
   } catch {
     return undefined;
   }
+  if (!ref || typeof ref !== 'object') return undefined;
   const r = ref.refs?.length === 1 ? ref.refs[0] : undefined;
   const b = r?.kind === 'block' ? dev?.blocks.find((x) => x.id === r.id) : undefined;
   if (!dev || ref.deviceId !== dev.id || !b || (b.kind !== 'FC' && b.kind !== 'FB'))
@@ -269,6 +270,29 @@ export function NetworksView({ deviceId, blockId }: Props) {
     store.getState().clearCompileReveal(reveal.n);
   }, [reveal, block, blockId, deviceId, store]);
 
+  // Problemi di un blocco KOP: le diagnostiche del grafico e quelle dell'AWL generato, che
+  // tornano sull'elemento che ha prodotto la riga.
+  const kopMessages = useMemo(
+    () =>
+      (networks ?? []).map((n, i) => {
+        const byElem = new Map<string, string[]>();
+        const loose: string[] = [];
+        const res = kop?.[i];
+        if (!res) return { byElem, loose };
+        const add = (elemId: string | undefined, msg: string) => {
+          if (elemId === undefined) loose.push(msg);
+          else byElem.set(elemId, [...(byElem.get(elemId) ?? []), msg]);
+        };
+        for (const d of res.diagnostics) add(d.elemId, t(`lad.diag.${d.code}`, d.params ?? {}));
+        for (const d of byNetwork[n.id] ?? NO_DIAGNOSTICS) {
+          const line = d.range.from.line;
+          const owner = res.lines.filter((l) => l.line <= line).at(-1);
+          add(owner?.elemId, t(`awl.diag.${d.code}`, d.params ?? {}));
+        }
+        return { byElem, loose };
+      }),
+    [networks, kop, byNetwork, t],
+  );
   if (!block) return null;
   const locked = isLockedImport(block);
   const editHeader = (field: 'title' | 'comment', value: string) =>
@@ -280,25 +304,6 @@ export function NetworksView({ deviceId, blockId }: Props) {
   const problems = block.networks.flatMap((n, i) =>
     (byNetwork[n.id] ?? NO_DIAGNOSTICS).map((d) => ({ d, id: n.id, pos: i + 1 })),
   );
-  // Problemi di un blocco KOP: le diagnostiche del grafico e quelle dell'AWL generato, che
-  // tornano sull'elemento che ha prodotto la riga.
-  const kopMessages = block.networks.map((n, i) => {
-    const byElem = new Map<string, string[]>();
-    const loose: string[] = [];
-    const res = kop?.[i];
-    if (!res) return { byElem, loose };
-    const add = (elemId: string | undefined, msg: string) => {
-      if (elemId === undefined) loose.push(msg);
-      else byElem.set(elemId, [...(byElem.get(elemId) ?? []), msg]);
-    };
-    for (const d of res.diagnostics) add(d.elemId, t(`lad.diag.${d.code}`, d.params ?? {}));
-    for (const d of byNetwork[n.id] ?? NO_DIAGNOSTICS) {
-      const line = d.range.from.line;
-      const owner = res.lines.filter((l) => l.line <= line).at(-1);
-      add(owner?.elemId, t(`awl.diag.${d.code}`, d.params ?? {}));
-    }
-    return { byElem, loose };
-  });
   const kopProblems = kopMessages.flatMap((m, i) =>
     [...[...m.byElem.values()].flat(), ...m.loose].map((message) => ({ pos: i + 1, message })),
   );
@@ -396,7 +401,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
                   readOnly={locked}
                   onChange={(next, key) => editLad(n.id, next, key)}
                   callParams={callParams}
-                  onActive={setLadActive}
+                  onActive={(api, on) => setLadActive(api, on, { deviceId, blockId })}
                   callOfDrop={(raw) => callInstanceOf(dev, raw)}
                 />
                 <button

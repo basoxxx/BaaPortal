@@ -1,11 +1,13 @@
 // Tavolozza delle istruzioni KOP: un clic inserisce nella selezione dell'editor attivo, il
 // trascinamento rilascia sul segmento.
+import { useSyncExternalStore } from 'react';
 import type { DragEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BOX_CATALOG, PALETTE } from '@baaportal/ladfbd';
 import type { BoxGroup, BoxKind } from '@baaportal/ladfbd';
 import { LAD_DRAG_TYPE } from './LadNetworkEditor';
-import { activeLad } from './ladActive';
+import { useAppStore } from '../../state/AppContext';
+import { activeLad, subscribeLad } from './ladActive';
 
 type Group =
   | 'bitLogic'
@@ -76,8 +78,17 @@ const ITEMS = itemsByGroup();
 
 export function LadPalette() {
   const { t } = useTranslation();
+  const active = useSyncExternalStore(subscribeLad, activeLad);
+  // L'editor del blocco visibile nel riquadro con il focus: solo a lui si inserisce.
+  const visible = useAppStore((s) => {
+    const wa = s.workArea;
+    const key = wa.panes[wa.focusedPane];
+    const e = wa.editors.find((x) => x.key === key);
+    return e?.kind === 'block' ? `${e.deviceId}/${e.objectId}` : null;
+  });
+  const ready = active !== null && visible === `${active.deviceId}/${active.blockId}`;
   const click = (item: Item) => {
-    const api = activeLad();
+    const api = ready ? active.api : null;
     if (!api) return;
     if ('palette' in item.payload) api.insertPalette(item.payload.palette);
     else api.insertBox(item.payload.box);
@@ -96,6 +107,8 @@ export function LadPalette() {
               key={item.key}
               type="button"
               draggable
+              disabled={!ready}
+              title={ready ? undefined : t('lad.palettePanel.noTarget')}
               onClick={() => click(item)}
               onDragStart={(e) => drag(e, item)}
             >

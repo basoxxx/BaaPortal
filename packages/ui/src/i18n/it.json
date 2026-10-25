@@ -1696,7 +1696,8 @@
       "wordLogic": "Logica a parola",
       "shift": "Scorrimento",
       "jumps": "Salti",
-      "program": "Controllo del programma"
+      "program": "Controllo del programma",
+      "noTarget": "Seleziona un punto in un segmento KOP"
     }
   }
 }

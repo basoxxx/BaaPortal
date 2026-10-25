@@ -1,6 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createCodeBlock, findDevice, type CodeBlock } from '@baaportal/project';
+import { setLadActive } from '../../src/editors/lad/ladActive';
 import { fakeDataTransfer, PLC } from '../blockFixtures';
 import { renderApp, type RenderedApp } from '../renderApp';
 
@@ -10,6 +11,11 @@ const kopBlocks = (app: RenderedApp) =>
     (b) => b.kind !== 'DB' && b.kind !== 'IDB' && b.language === 'KOP',
   ) as CodeBlock[];
 const canvas = (n = 1) => screen.getByRole('group', { name: `Segmento KOP ${n}` });
+
+const kopBlocksOf = (p: Parameters<typeof findDevice>[0]) =>
+  findDevice(p, PLC)!.blocks.filter(
+    (b) => b.kind !== 'DB' && b.kind !== 'IDB' && b.language === 'KOP',
+  ) as CodeBlock[];
 
 /** Crea un FC in KOP dal dialogo e lo apre. */
 async function newKopFc() {
@@ -118,6 +124,12 @@ describe('blocchi KOP nell’editor dei blocchi', () => {
       const box = screen.getByRole('button', { name: /Box CALL/ });
       expect(box).toHaveTextContent('Dest');
 
+      // Un payload «null» non è un oggetto dell'albero: niente CALL, niente errori.
+      const bad = fakeDataTransfer();
+      bad.setData('application/x-baaportal', 'null');
+      fireEvent.drop(canvas(), { dataTransfer: bad, clientX: 0, clientY: 0 });
+      expect(screen.getAllByRole('button', { name: /Box CALL/ })).toHaveLength(1);
+
       await app.user.click(screen.getByRole('button', { name: 'Inserisci segmento' }));
       const nets = kopBlocks(app)[0]!.networks;
       expect(nets).toHaveLength(2);
@@ -147,6 +159,59 @@ describe('blocchi KOP nell’editor dei blocchi', () => {
       expect(screen.getByRole('textbox', { name: 'Codice del segmento 1' })).toHaveTextContent(
         'A I 0.0',
       );
+    },
+    T,
+  );
+
+  it(
+    'senza editor attivo i pulsanti della tavolozza sono disattivati',
+    async () => {
+      await newKopFc();
+      const pal = await screen.findByTestId('lad-palette');
+      const b = within(pal).getByRole('button', { name: 'Contatto NA' });
+      expect(b).toBeDisabled();
+      expect(b).toHaveAttribute('title', 'Seleziona un punto in un segmento KOP');
+    },
+    T,
+  );
+
+  it(
+    'un editor attivo di un altro blocco non riceve gli inserimenti',
+    async () => {
+      const app = await newKopFc();
+      const other = { insertPalette: vi.fn(), insertBox: vi.fn() };
+      act(() => setLadActive(other, true, { deviceId: PLC, blockId: 'altro-blocco' }));
+      const pal = await screen.findByTestId('lad-palette');
+      const b = within(pal).getByRole('button', { name: 'Contatto NA' });
+      expect(b).toBeDisabled();
+      await app.user.click(b);
+      expect(other.insertPalette).not.toHaveBeenCalled();
+      act(() => setLadActive(other, false, { deviceId: PLC, blockId: 'altro-blocco' }));
+    },
+    T,
+  );
+
+  it(
+    'un blocco KOP importato non ricodificabile è in sola lettura',
+    async () => {
+      const app = await newKopFc();
+      act(() =>
+        app.store.getState().edit('history.editLad', (p) => {
+          const b = kopBlocksOf(p)[0]!;
+          b.mc7 = { exact: false } as never;
+        }),
+      );
+      const before = app.store.getState().history.past.length;
+      canvas().focus();
+      await app.user.keyboard('{F2}');
+      for (const name of ['NA', 'NC']) {
+        expect(screen.getByRole('button', { name })).toBeDisabled();
+      }
+      expect(screen.getByRole('button', { name: 'Inserisci segmento' })).toBeDisabled();
+      const pal = screen.getByTestId('lad-palette');
+      await app.user.click(within(pal).getByRole('button', { name: 'Contatto NA' }));
+      expect(app.store.getState().history.past.length).toBe(before);
+      expect(within(canvas()).queryByRole('button', { name: /^Contatto / })).toBeNull();
     },
     T,
   );

@@ -18,8 +18,9 @@ const SECTIONS: Record<TaskCardId, string[]> = {
 const IDS: TaskCardId[] = ['instructions', 'test', 'tasks', 'libraries'];
 
 /** L'editor attivo nel riquadro con il focus è un blocco KOP. */
-function useKopActive(): boolean {
+function useKopActive(enabled: boolean): boolean {
   return useAppStore((s) => {
+    if (!enabled) return false;
     const wa = s.workArea;
     const key = wa.panes[wa.focusedPane];
     const e = wa.editors.find((x) => x.key === key);
@@ -32,7 +33,7 @@ function useKopActive(): boolean {
 function Section({ card, id }: { card: TaskCardId; id: string }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(true);
-  const kop = useKopActive();
+  const kop = useKopActive(card === 'instructions' && id === 'basic');
   return (
     <section className="baa-tc-section">
       <h3>
