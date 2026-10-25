@@ -425,10 +425,10 @@ export class PlcWriteService {
         }));
         if (!('c' in p)) return p.result;
         const results: ({ ok: true } | { ok: false; error: string })[] = [];
-        // Un gruppo per richiesta, come la PDU negoziata col collegamento aperto.
-        const groups = planWrites(items, p.c.pduLength);
         let failed = false;
         try {
+          // Un gruppo per richiesta, come la PDU negoziata col collegamento aperto.
+          const groups = planWrites(items, p.c.pduLength);
           for (const group of groups) {
             if (failed || owner.isDestroyed() || op.aborted) {
               const why = failed
