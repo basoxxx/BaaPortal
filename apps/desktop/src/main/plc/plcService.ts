@@ -6,6 +6,7 @@ import type {
   PlcAccess,
   PlcConnectResult,
   PlcEvent,
+  PlcLostReason,
   PlcIdentity,
   PlcMode,
   PlcStatus,
@@ -197,7 +198,7 @@ export class PlcService {
     if (!owner.isDestroyed()) owner.send('plc:event', event);
   }
 
-  private lost(owner: PlcOwner, link: Link, reason: string): void {
+  private lost(owner: PlcOwner, link: Link, reason: PlcLostReason): void {
     if (link.done) return;
     this.links.delete(owner);
     this.finish(owner, link);
@@ -209,7 +210,7 @@ export class PlcService {
   private async tick(owner: PlcOwner, link: Link): Promise<void> {
     if (link.done || link.reading) return;
     if (link.client.closed) {
-      this.lost(owner, link, 'Collegamento interrotto');
+      this.lost(owner, link, 'closed');
       return;
     }
     link.reading = true;
@@ -233,7 +234,15 @@ export class PlcService {
       link.failures++;
       const fatal = err instanceof S7Error && (err.code === 'TIMEOUT' || err.code === 'CLOSED');
       if (fatal || link.failures >= 2 || link.client.closed) {
-        this.lost(owner, link, 'Collegamento interrotto');
+        this.lost(
+          owner,
+          link,
+          err instanceof S7Error && err.code === 'TIMEOUT'
+            ? 'timeout'
+            : fatal || link.client.closed
+              ? 'closed'
+              : 'errors',
+        );
       }
     } finally {
       if (timer) clearTimeout(timer);

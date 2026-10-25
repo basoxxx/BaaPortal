@@ -166,6 +166,40 @@ describe('finestra «Dispositivi accessibili»', () => {
     goOnline.mockRestore();
   });
 
+  it('Collega con un collegamento online attivo: messaggio, niente access, finestra aperta', async () => {
+    const { user, store, dlg } = await openDialog();
+    const goOnline = vi
+      .spyOn(PlcController.prototype, 'goOnline')
+      .mockImplementation(async () => {});
+    await user.type(within(dlg).getByLabelText('Indirizzo manuale'), '192.0.2.40');
+    await user.click(within(dlg).getByRole('button', { name: 'Aggiungi indirizzo' }));
+    await user.click(within(dlg).getByRole('row', { name: /192\.0\.2\.40/ }));
+    act(() => store.getState().patchOnline({ status: 'on' }));
+    await user.click(within(dlg).getByRole('button', { name: 'Collega' }));
+    expect(within(dlg).getByRole('alert')).toHaveTextContent(
+      'Interrompi prima il collegamento online',
+    );
+    expect(findDevice(store.getState().doc!.project, 'id1')!.properties.access).toBeUndefined();
+    expect(goOnline).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    goOnline.mockRestore();
+  });
+
+  it('plcScanStart che fallisce: errore e si può riprovare', async () => {
+    const { user, bridge, dlg } = await openDialog();
+    bridge.plcScanStart = async () => {
+      throw new Error('boom');
+    };
+    await user.click(within(dlg).getByRole('button', { name: 'Avvia ricerca' }));
+    expect(await within(dlg).findByRole('alert')).toHaveTextContent('boom');
+    expect(within(dlg).getByRole('button', { name: 'Avvia ricerca' })).toBeEnabled();
+    bridge.plcScanStart = async () => ({ ok: true, scanId: 1, total: 254 });
+    await user.click(within(dlg).getByRole('button', { name: 'Avvia ricerca' }));
+    await waitFor(() =>
+      expect(within(dlg).getByRole('button', { name: 'Interrompi' })).toBeEnabled(),
+    );
+  });
+
   it('gateway RFC 1006: il TSAP si valida e finisce in remoteTsap', async () => {
     const { user, store, dlg } = await openDialog();
     const goOnline = vi

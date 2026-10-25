@@ -19,6 +19,7 @@ export type {
   PlcIdentity,
   PlcMode,
   PlcEvent,
+  PlcLostReason,
   PlcConnectResult,
   PlcStatus,
   NetInterface,

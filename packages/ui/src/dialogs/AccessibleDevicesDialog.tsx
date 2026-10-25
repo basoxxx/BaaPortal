@@ -55,6 +55,7 @@ export function AccessibleDevicesDialog({ onClose }: { onClose(): void }) {
   const [scanError, setScanError] = useState<string | null>(null);
   const [manual, setManual] = useState('');
   const [manualError, setManualError] = useState<string | null>(null);
+  const [connectError, setConnectError] = useState<string | null>(null);
 
   // Il numero della ricerca è noto solo alla risposta di `plcScanStart`, ma gli eventi possono
   // arrivare prima: finché è ignoto si accumulano, poi si tengono solo quelli della ricerca giusta.
@@ -139,7 +140,16 @@ export function AccessibleDevicesDialog({ onClose }: { onClose(): void }) {
     scanIdRef.current = null;
     bufferRef.current = [];
     startingRef.current = true;
-    const r = await bridge.plcScanStart(ifaceAddr);
+    let r: Awaited<ReturnType<typeof bridge.plcScanStart>>;
+    try {
+      r = await bridge.plcScanStart(ifaceAddr);
+    } catch (e) {
+      startingRef.current = false;
+      bufferRef.current = [];
+      setScanning(false);
+      setScanError(String(e));
+      return;
+    }
     startingRef.current = false;
     const buffered = bufferRef.current;
     bufferRef.current = [];
@@ -193,6 +203,11 @@ export function AccessibleDevicesDialog({ onClose }: { onClose(): void }) {
 
   const connect = (): void => {
     if (!canConnect || !row || !cpu || rackN === null || slotN === null) return;
+    if (store.getState().online.status !== 'off') {
+      setConnectError(t('accessDevices.errOnline'));
+      return;
+    }
+    setConnectError(null);
     const access: PlcAccess = {
       host: row.host,
       ...(row.port !== undefined ? { port: row.port } : {}),
@@ -332,6 +347,11 @@ export function AccessibleDevicesDialog({ onClose }: { onClose(): void }) {
             </span>
           ) : null}
         </div>
+        {connectError ? (
+          <p role="alert" className="baa-field-error">
+            {connectError}
+          </p>
+        ) : null}
         {notice ? <p role="status">{notice}</p> : null}
         {scanError ? (
           <p role="alert" className="baa-field-error">

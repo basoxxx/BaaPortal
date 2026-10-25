@@ -109,7 +109,9 @@
     "plcConnected": "Collegato a {{name}} ({{host}}) in sola lettura.",
     "plcDisconnected": "Collegamento online interrotto.",
     "plcConnectFailed": "Collegamento non riuscito: {{message}}",
-    "plcLost": "Collegamento interrotto: {{reason}}",
+    "plcLostTimeout": "Collegamento interrotto: la CPU non risponde.",
+    "plcLostClosed": "Collegamento interrotto: connessione chiusa.",
+    "plcLostErrors": "Collegamento interrotto: errori ripetuti di comunicazione.",
     "plcMismatch": "La CPU collegata ({{connected}}) è diversa da quella del progetto ({{project}}).",
     "plcBlockedBySim": "Termina la simulazione prima di collegarti al PLC.",
     "simBlockedByOnline": "Interrompi il collegamento online prima di avviare la simulazione."
@@ -1139,7 +1141,8 @@
     "errOctet": "Ogni numero dell'indirizzo deve essere tra 0 e 255.",
     "errPort": "La porta deve essere un numero tra 1 e 65535.",
     "rowSelect": "Seleziona {{host}}",
-    "errLeadingZero": "Zeri iniziali non ammessi: scrivi 192.168.1.1, non 192.168.01.1.",
+    "errOnline": "Interrompi prima il collegamento online.",
+    "errLeadingZero": "Zeri iniziali non ammessi: scrivi 192.0.2.1, non 192.0.2.01.",
     "errInterfaces": "Impossibile leggere le interfacce di rete: {{error}}",
     "rackInvalid": "Il rack deve essere un numero tra 0 e 7.",
     "slotInvalid": "Lo slot deve essere un numero tra 0 e 31."

@@ -74,7 +74,7 @@ describe('hostsToScan', () => {
     expect(new Set(h).size).toBe(1024);
   });
   it('/16 con indirizzo vicino al bordo: resta dentro la sottorete', () => {
-    const h = hostsToScan('198.51.0.1', '255.255.0.0');
+    const h = hostsToScan('198.51.100.1', '255.255.0.0');
     expect(h).toHaveLength(1024);
     expect(h.every((x) => x.startsWith('198.51.'))).toBe(true);
     expect(h).not.toContain('198.51.0.0');

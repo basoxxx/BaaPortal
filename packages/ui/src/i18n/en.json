@@ -109,7 +109,9 @@
     "plcConnected": "Connected to {{name}} ({{host}}) read-only.",
     "plcDisconnected": "Online connection closed.",
     "plcConnectFailed": "Connection failed: {{message}}",
-    "plcLost": "Connection lost: {{reason}}",
+    "plcLostTimeout": "Connection lost: the CPU is not responding.",
+    "plcLostClosed": "Connection lost: connection closed.",
+    "plcLostErrors": "Connection lost: repeated communication errors.",
     "plcMismatch": "The connected CPU ({{connected}}) differs from the project CPU ({{project}}).",
     "plcBlockedBySim": "Stop the simulation before going online with the PLC.",
     "simBlockedByOnline": "Go offline before starting the simulation."
@@ -1139,7 +1141,8 @@
     "errOctet": "Each number of the address must be between 0 and 255.",
     "errPort": "The port must be a number between 1 and 65535.",
     "rowSelect": "Select {{host}}",
-    "errLeadingZero": "Leading zeros are not allowed: write 192.168.1.1, not 192.168.01.1.",
+    "errOnline": "Go offline first.",
+    "errLeadingZero": "Leading zeros are not allowed: write 192.0.2.1, not 192.0.2.01.",
     "errInterfaces": "Cannot read the network interfaces: {{error}}",
     "rackInvalid": "The rack must be a number between 0 and 7.",
     "slotInvalid": "The slot must be a number between 0 and 31."

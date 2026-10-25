@@ -103,8 +103,7 @@ describe('collegamento online', () => {
     act(() => s.app.bridge.emitPlcEvent({ kind: 'lost', reason: 'timeout' }));
     expect(s.online().status).toBe('off');
     const m = s.app.store.getState().messages.at(-1)!;
-    expect(m.textKey).toBe('messages.plcLost');
-    expect(m.params).toEqual({ reason: 'timeout' });
+    expect(m.textKey).toBe('messages.plcLostTimeout');
     // un evento tardivo non risuscita nulla
     act(() => s.app.bridge.emitPlcEvent({ kind: 'mode', mode: 'RUN' }));
     expect(s.online().status).toBe('off');
@@ -155,8 +154,8 @@ describe('collegamento online', () => {
     });
     expect(s.online().status).toBe('off');
     expect(s.app.bridge.plcDisconnectCalls).toBe(1);
-    act(() => s.app.bridge.emitPlcEvent({ kind: 'lost', reason: 'x' }));
-    expect(s.messages()).not.toContain('messages.plcLost');
+    act(() => s.app.bridge.emitPlcEvent({ kind: 'lost', reason: 'closed' }));
+    expect(s.messages()).not.toContain('messages.plcLostClosed');
   });
 
   it('plcStatus dice non collegato dopo il collegamento: off con plcLost', async () => {
@@ -165,7 +164,7 @@ describe('collegamento online', () => {
     s.app.bridge.plcStatus = async () => ({ connected: false });
     await s.run('online.goOnline');
     expect(s.online().status).toBe('off');
-    expect(s.messages()).toContain('messages.plcLost');
+    expect(s.messages()).toContain('messages.plcLostClosed');
     expect(s.messages()).not.toContain('messages.plcConnected');
   });
 
@@ -209,12 +208,12 @@ describe('collegamento online', () => {
     const answer = gate(s.app);
     const p = s.run('online.goOnline');
     expect(commands['online.simulation'].isEnabled(s.app.store.getState())).toBe(false);
-    act(() => s.app.bridge.emitPlcEvent({ kind: 'lost', reason: 'x' }));
+    act(() => s.app.bridge.emitPlcEvent({ kind: 'lost', reason: 'closed' }));
     expect(s.online().status).toBe('connecting');
     await answer(OK);
     await p;
     expect(s.online().status).toBe('on');
-    expect(s.messages()).not.toContain('messages.plcLost');
+    expect(s.messages()).not.toContain('messages.plcLostClosed');
   });
 
   it('aprire un altro progetto da online scollega', async () => {

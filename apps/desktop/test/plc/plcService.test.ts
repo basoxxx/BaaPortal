@@ -121,7 +121,7 @@ describe('PlcService contro il PLC di prova (CPU simulata su 127.0.0.1)', () => 
     await service.connect(owner, access());
     await plc.close();
     await waitFor(() => owner.events.length > 0);
-    expect(owner.events).toEqual([{ kind: 'lost', reason: 'Collegamento interrotto' }]);
+    expect(owner.events).toEqual([{ kind: 'lost', reason: 'closed' }]);
     expect(service.status(owner)).toEqual({ connected: false });
   });
 
@@ -253,7 +253,7 @@ describe('PlcService, casi di rete', () => {
       });
       expect(r.ok).toBe(true);
       await vi.advanceTimersByTimeAsync(4900);
-      expect(owner.events).toEqual([{ kind: 'lost', reason: 'Collegamento interrotto' }]);
+      expect(owner.events).toEqual([{ kind: 'lost', reason: 'timeout' }]);
       expect(close).toHaveBeenCalled();
       expect(service.status(owner)).toEqual({ connected: false });
       await vi.advanceTimersByTimeAsync(5000);
@@ -300,7 +300,7 @@ describe('PlcService, casi di rete', () => {
       await vi.advanceTimersByTimeAsync(1100);
       expect(owner.events).toEqual([]); // un errore solo non basta
       await vi.advanceTimersByTimeAsync(1000);
-      expect(owner.events).toEqual([{ kind: 'lost', reason: 'Collegamento interrotto' }]);
+      expect(owner.events).toEqual([{ kind: 'lost', reason: 'errors' }]);
     });
   });
 });

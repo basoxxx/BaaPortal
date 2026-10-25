@@ -45,6 +45,16 @@ describe('CpuProperties.access', () => {
     ['rack mancante', { host: 'h', slot: 2, connectionType: 'PG' }],
     ['rack fuori campo', { host: 'h', rack: 8, slot: 2, connectionType: 'PG' }],
     ['slot fuori campo', { host: 'h', rack: 0, slot: 32, connectionType: 'PG' }],
+    [
+      'remoteTsap fuori campo',
+      { host: 'h', rack: 0, slot: 2, connectionType: 'PG', remoteTsap: 65536 },
+    ],
+    ['remoteTsap negativo', { host: 'h', rack: 0, slot: 2, connectionType: 'PG', remoteTsap: -1 }],
+    [
+      'remoteTsap non intero',
+      { host: 'h', rack: 0, slot: 2, connectionType: 'PG', remoteTsap: 1.5 },
+    ],
+    ['host troppo lungo', { host: 'a'.repeat(65), rack: 0, slot: 2, connectionType: 'PG' }],
     ['porta fuori campo', { host: 'h', port: 0, rack: 0, slot: 2, connectionType: 'PG' }],
   ])('access malformato (%s): INVALID_SCHEMA', (_n, access) => {
     const p = projectWithPlc();

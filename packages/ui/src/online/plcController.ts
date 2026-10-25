@@ -3,7 +3,7 @@ import { findDevice } from '@baaportal/project';
 import type { BaaBridge } from '../bridge';
 import { targetPlcId } from '../project/navigation/treeIds';
 import { ONLINE_OFF, type AppState } from '../state/store';
-import type { PlcEvent } from './plcTypes';
+import type { PlcEvent, PlcLostReason } from './plcTypes';
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const norm = (s: string) => s.replace(/\s+/g, '').toUpperCase();
@@ -95,7 +95,7 @@ export class PlcController {
     const status = await this.bridge.plcStatus().catch(() => undefined);
     if (gen !== this.generation) return;
     if (status && !status.connected) {
-      this.lose(gen, 'connection closed');
+      this.lose(gen, 'closed');
       return;
     }
     this.push('info', 'plcConnected', { name: dev.name, host: access.host });
@@ -116,13 +116,20 @@ export class PlcController {
     this.lose(gen, e.reason);
   }
 
-  private lose(gen: number, reason: string): void {
+  private lose(gen: number, reason: PlcLostReason): void {
     if (gen !== this.generation) return;
     this.generation++;
     this.unlisten?.();
     this.unlisten = undefined;
     this.store.getState().setOnline(ONLINE_OFF);
-    this.push('error', 'plcLost', { reason });
+    this.push(
+      'error',
+      reason === 'timeout'
+        ? 'plcLostTimeout'
+        : reason === 'errors'
+          ? 'plcLostErrors'
+          : 'plcLostClosed',
+    );
   }
 
   /** «Interrompi collegamento online». */

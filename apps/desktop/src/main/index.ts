@@ -197,7 +197,15 @@ if (!app.requestSingleInstanceLock()) {
       for (const p of pendingOpen.splice(0)) win?.webContents.send('app:open-file', p);
     },
   );
-  app.on('before-quit', () => void ipc.closeOnline());
+  // Prima di uscire si chiude il collegamento online (al massimo 1 s), poi si esce davvero.
+  let onlineClosed = false;
+  app.on('before-quit', (e) => {
+    if (onlineClosed) return;
+    e.preventDefault();
+    onlineClosed = true;
+    const cap = new Promise<void>((r) => setTimeout(r, 1000));
+    void Promise.race([ipc.closeOnline().catch(() => undefined), cap]).finally(() => app.quit());
+  });
 
   // Solo sviluppo: PLC di prova locale (CPU simulata) per provare il collegamento online.
   if (!app.isPackaged && process.env['BAAPORTAL_TEST_PLC'] === '1') {

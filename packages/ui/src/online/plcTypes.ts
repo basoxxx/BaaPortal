@@ -3,7 +3,9 @@ import type { PlcAccess, PlcIdentity, PlcMode } from '@baaportal/project';
 export type { PlcAccess, PlcIdentity, PlcMode };
 
 /** Eventi dal processo principale sul collegamento online della finestra. */
-export type PlcEvent = { kind: 'mode'; mode: PlcMode } | { kind: 'lost'; reason: string };
+/** Perché il collegamento è andato perso: la finestra lo traduce nel messaggio. */
+export type PlcLostReason = 'timeout' | 'closed' | 'errors';
+export type PlcEvent = { kind: 'mode'; mode: PlcMode } | { kind: 'lost'; reason: PlcLostReason };
 
 /** Esito di `plcConnect`: l'errore è già un testo leggibile, mai un'eccezione grezza. */
 export type PlcConnectResult =
