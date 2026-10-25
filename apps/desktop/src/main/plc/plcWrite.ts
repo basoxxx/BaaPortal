@@ -144,6 +144,8 @@ type Prepared =
  */
 export class PlcWriteService {
   private readonly ops = new Map<PlcOwner, Op>();
+  /** Dopo `abortAll` (uscita dall'app) non parte più nessuna scrittura. */
+  private closing = false;
   private readonly connectFn: PlcWriteConnectFn;
   private readonly connectTimeoutMs: number;
   private readonly now: () => number;
@@ -164,6 +166,7 @@ export class PlcWriteService {
    * collegamento. Quelle ancora alla finestra di conferma vengono annullate senza attendere.
    */
   async abortAll(): Promise<void> {
+    this.closing = true;
     const running: Promise<void>[] = [];
     for (const op of this.ops.values()) {
       op.aborted = true;
@@ -262,6 +265,7 @@ export class PlcWriteService {
     onError: (err: unknown) => R,
     fn: (op: Op) => Promise<R>,
   ): Promise<R> {
+    if (this.closing) return onError(new Error('Chiusura in corso'));
     if (this.ops.has(owner)) return busy;
     let settle!: () => void;
     const op: Op = {

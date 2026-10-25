@@ -617,6 +617,31 @@ describe('PlcWriteService: sicurezza del bersaglio e uscita', () => {
     expect(connect).not.toHaveBeenCalled();
   });
 
+  it('abortAll alla conferma, poi «Sì»: nessun collegamento, cancelled; dopo, «Chiusura in corso»', async () => {
+    const connect = vi.fn();
+    let release!: (v: boolean) => void;
+    const w = new PlcWriteService({
+      service: { target: () => mk() },
+      confirm: () => new Promise<boolean>((r) => (release = r)),
+      connect,
+    });
+    const first = w.control(new FakeOwner(), 'STOP');
+    await Promise.resolve();
+    await w.abortAll();
+    release(true);
+    expect(await first).toEqual({ ok: false, cancelled: true });
+    expect(connect).not.toHaveBeenCalled();
+    expect(await w.control(new FakeOwner(), 'RUN')).toEqual({
+      ok: false,
+      error: 'Chiusura in corso',
+    });
+    expect(await w.download(new FakeOwner(), F)).toMatchObject({
+      ok: false,
+      error: 'Chiusura in corso',
+    });
+    expect(connect).not.toHaveBeenCalled();
+  });
+
   it('abortAll durante un download: si ferma prima del blocco successivo, chiude e riporta', async () => {
     const { c, log } = client();
     const o = new FakeOwner();
