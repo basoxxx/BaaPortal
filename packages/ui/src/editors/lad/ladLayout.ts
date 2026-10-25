@@ -6,9 +6,16 @@
 // - un punto di un filo o di uno slot `[col, row]` sta sul bordo sinistro della colonna `col`,
 //   a metà della riga `row`: un filo orizzontale da `[a, r]` a `[b, r]` copre le colonne a..b-1,
 //   uno verticale corre sul bordo tra due colonne e non attraversa nessuna cella;
+// - la colonna 0 è la barra di alimentazione di sinistra;
 // - la serie va a destra, i rami di un parallelo si impilano in basso, le uscite stanno tutte
 //   nell'ultima colonna e un ramo a T scende dal suo nodo con un filo verticale;
-// - la logica dei pin BOOL di un box sta a sinistra del box, sulla riga del pin.
+// - i pin BOOL di un box (oltre al primo pin, che sta sulla riga della serie) hanno la loro
+//   logica che parte dalla barra di sinistra (colonna 0) su righe riservate in fondo al nodo
+//   ("zona dei pin"), mai sotto altre celle; un filo la porta fino al bordo sinistro del box e
+//   sale lungo quel bordo fino alla riga del pin. Il box si sposta a destra se la logica è più
+//   larga della serie che lo precede, e i fili della serie si allungano per raggiungerlo;
+// - le coordinate degli slot sono intere tranne gli estremi dei rami di un parallelo (e i pochi
+//   punti che altrimenti coinciderebbero), spostati di poco perché ogni slot abbia un punto suo.
 import { BOX_CATALOG, isNode } from '@baaportal/ladfbd';
 import type { InsertPoint, LadBox, LadElem, LadNetwork, LadNode } from '@baaportal/ladfbd';
 
@@ -21,9 +28,11 @@ export type LadCell = {
   h: number;
   /** Solo per i box: riga (relativa alla cella) di ogni pin d'ingresso, EN o primo pin compresi. */
   pinRows?: Record<string, number>;
+  /** Solo per i box: riga (relativa alla cella) di ogni pin d'uscita; ENO/Q sta sulla riga 0. */
+  outRows?: Record<string, number>;
 };
 export type LadWire = { from: [col: number, row: number]; to: [col: number, row: number] };
-/** Dove si può inserire (per clic e trascinamento): bordo sinistro dell'elemento che seguirebbe. */
+/** Dove si può inserire (per clic e trascinamento); `col` può essere frazionario. */
 export type LadInsertSlot = { at: InsertPoint; col: number; row: number };
 export type LadLayout = {
   cells: LadCell[];
@@ -35,203 +44,268 @@ export type LadLayout = {
 
 const BOX_W = 2;
 const BOX_MIN_H = 2;
+const EDGE_SLOT = 0.25;
+const NUDGE = 1 / 64;
 
-type Dim = { w: number; h: number };
 type BoxPlan = {
-  /** Nomi dei pin BOOL con logica: quelli del catalogo, poi eventuali altri presenti nel box. */
+  /** Pin BOOL con logica propria: quelli del catalogo, più eventuali altri presenti nel box. */
   pins: string[];
-  /** Riga (relativa al box) di ogni pin d'ingresso: primo pin, pin BOOL con logica, pin di dati. */
-  rows: Record<string, number>;
-  /** Larghezza della zona di logica a sinistra del box. */
-  pinW: number;
+  inRows: Record<string, number>;
+  outRows: Record<string, number>;
   h: number;
 };
-type NodeDim = { h: number; need: number };
+type NodeInfo = {
+  /** Righe della serie più quelle della zona dei pin. */
+  ownH: number;
+  seriesH: number;
+  pool: number;
+  /** Il nodo o un suo ramo a T usa la zona dei pin. */
+  hasPool: boolean;
+  /** Riga (relativa al nodo) di ogni uscita o ramo a T. */
+  itemRows: number[];
+  h: number;
+};
 
-const elemDims = new WeakMap<object, Dim>();
-const listDims = new WeakMap<object, Dim>();
+const elemHs = new WeakMap<object, number>();
+const listHs = new WeakMap<object, number>();
+const pools = new WeakMap<object, number>();
 const boxPlans = new WeakMap<object, BoxPlan>();
-const nodeDims = new WeakMap<object, NodeDim>();
+const nodeInfos = new WeakMap<object, NodeInfo>();
 
-function listDim(list: LadElem[]): Dim {
-  let d = listDims.get(list);
-  if (!d) {
-    let w = 0;
-    let h = 1;
-    for (const e of list) {
-      const x = elemDim(e);
-      w += x.w;
-      h = Math.max(h, x.h);
-    }
-    d = { w, h };
-    listDims.set(list, d);
+const cached = <T>(m: WeakMap<object, T>, k: object, f: () => T): T => {
+  let v = m.get(k);
+  if (v === undefined) {
+    v = f();
+    m.set(k, v);
   }
-  return d;
+  return v;
+};
+
+function listH(list: LadElem[]): number {
+  return cached(listHs, list, () => list.reduce((h, e) => Math.max(h, elemH(e)), 1));
+}
+
+function elemH(e: LadElem): number {
+  return cached(elemHs, e, () => {
+    if (e.k === 'parallel')
+      return Math.max(
+        1,
+        e.branches.reduce((h, b) => h + listH(b), 0),
+      );
+    if (e.k === 'box') return boxPlan(e).h;
+    return 1;
+  });
 }
 
 function boxPlan(b: LadBox): BoxPlan {
-  let p = boxPlans.get(b);
-  if (p) return p;
-  const def = BOX_CATALOG[b.box];
-  const pins = [...def.boolInputs];
-  for (const name of Object.keys(b.boolPins)) if (!pins.includes(name)) pins.push(name);
-  const rows: Record<string, number> = {};
-  const first = def.en ? 'EN' : def.firstPin;
-  if (first) rows[first] = 0;
-  let r = 1;
-  let pinW = 0;
-  for (const name of pins) {
-    rows[name] = r;
-    const list = b.boolPins[name] ?? [];
-    r += listDim(list).h;
-    pinW = Math.max(pinW, listDim(list).w);
-  }
-  for (const d of def.dataInputs) rows[d.name] = r++;
-  if (def.dynamicPins) for (const name of Object.keys(b.pins)) rows[name] = r++;
-  const outRows = (def.en ? 1 : 0) + def.outputs.length;
-  p = { pins, rows, pinW, h: Math.max(BOX_MIN_H, r, outRows) };
-  boxPlans.set(b, p);
-  return p;
+  return cached(boxPlans, b, () => {
+    const def = BOX_CATALOG[b.box];
+    const first = def.en ? 'EN' : def.firstPin;
+    const pins = [...def.boolInputs];
+    for (const name of Object.keys(b.boolPins))
+      if (name !== first && name !== 'EN' && !pins.includes(name)) pins.push(name);
+    const inRows: Record<string, number> = {};
+    if (first) inRows[first] = 0;
+    let r = 1;
+    for (const name of pins) inRows[name] = r++;
+    for (const d of def.dataInputs) inRows[d.name] = r++;
+    if (def.dynamicPins) for (const name of Object.keys(b.pins)) inRows[name] = r++;
+    // Il flusso (ENO o Q) esce sempre dalla riga 0 del box; gli altri pin seguono.
+    const flow = def.en ? 'ENO' : (def.outputs.find((o) => o.name === 'Q')?.name ?? '');
+    const outRows: Record<string, number> = {};
+    let o = 0;
+    if (flow) outRows[flow] = o++;
+    for (const out of def.outputs) if (out.name !== flow) outRows[out.name] = o++;
+    return { pins, inRows, outRows, h: Math.max(BOX_MIN_H, r, o) };
+  });
 }
 
-function elemDim(e: LadElem): Dim {
-  let d = elemDims.get(e);
-  if (!d) {
-    if (e.k === 'parallel') {
-      let w = 0;
-      let h = 0;
-      for (const br of e.branches) {
-        const x = listDim(br);
-        w = Math.max(w, x.w);
-        h += x.h;
-      }
-      d = { w, h: Math.max(1, h) };
-    } else if (e.k === 'box') {
-      const p = boxPlan(e);
-      d = { w: p.pinW + BOX_W, h: p.h };
-    } else d = { w: 1, h: 1 };
-    elemDims.set(e, d);
-  }
-  return d;
+/** Righe della zona dei pin che servono a una lista (logica dei pin BOOL dei box che contiene). */
+function poolOfList(list: LadElem[]): number {
+  return cached(pools, list, () => list.reduce((n, e) => n + poolOfElem(e), 0));
 }
 
-/** Altezza del nodo in righe e colonne che gli servono a destra del suo inizio (uscite incluse). */
-function nodeDim(n: LadNode): NodeDim {
-  let d = nodeDims.get(n);
-  if (!d) {
-    const s = listDim(n.series);
-    let items = 0;
-    let sub = 1;
+function poolOfElem(e: LadElem): number {
+  if (e.k === 'parallel') return e.branches.reduce((n, b) => n + poolOfList(b), 0);
+  if (e.k !== 'box') return 0;
+  let n = 0;
+  for (const name of boxPlan(e).pins) {
+    const l = e.boolPins[name];
+    if (l && l.length > 0) n += listH(l) + poolOfList(l);
+  }
+  return n;
+}
+
+function nodeInfo(n: LadNode): NodeInfo {
+  return cached(nodeInfos, n, () => {
+    const seriesH = listH(n.series);
+    const pool = poolOfList(n.series);
+    const ownH = seriesH + pool;
+    let hasPool = pool > 0;
+    for (const o of n.outs) if (isNode(o) && nodeInfo(o).hasPool) hasPool = true;
+    // Un ramo a T che usa la zona dei pin parte sotto quella del nodo, che occupa tutta la
+    // larghezza a sinistra: così nessuna cella le finisce sopra.
+    const itemRows: number[] = [];
+    let r = 0;
     for (const o of n.outs) {
-      if (isNode(o)) {
-        const x = nodeDim(o);
-        items += x.h;
-        sub = Math.max(sub, x.need);
-      } else items += 1;
+      if (isNode(o) && nodeInfo(o).hasPool) r = Math.max(r, ownH);
+      itemRows.push(r);
+      r += isNode(o) ? nodeInfo(o).h : 1;
     }
-    d = { h: Math.max(s.h, items, 1), need: s.w + sub };
-    nodeDims.set(n, d);
-  }
-  return d;
+    return { ownH, seriesH, pool, hasPool, itemRows, h: Math.max(ownH, r, 1) };
+  });
 }
 
-type Out = Pick<LadLayout, 'cells' | 'wires' | 'slots'>;
+type Ctx = {
+  cells: LadCell[];
+  wires: LadWire[];
+  slots: LadLayout['slots'];
+  /** Uscite da collocare nell'ultima colonna, nota solo alla fine. */
+  outs: { cell: LadCell; end: number }[];
+  maxEnd: number;
+  /** Prossima riga libera della zona dei pin del nodo che si sta posando. */
+  poolNext: number;
+};
 
-const wire = (o: Out, c1: number, r1: number, c2: number, r2: number) =>
-  o.wires.push({ from: [c1, r1], to: [c2, r2] });
+const wire = (c: Ctx, c1: number, r1: number, c2: number, r2: number) =>
+  c.wires.push({ from: [c1, r1], to: [c2, r2] });
 
-/** Posa una lista in serie da `col` sulla riga `row`; restituisce la colonna di fine. */
+/**
+ * Posa una lista in serie da `col` sulla riga `row`; restituisce la colonna di fine.
+ * `edge`: spostamento degli slot estremi (rami di un parallelo), 0 altrove.
+ */
 function placeList(
-  o: Out,
+  c: Ctx,
   list: LadElem[],
   col: number,
   row: number,
   at: (index: number) => InsertPoint,
+  edge: number,
+  depth: number,
 ): number {
-  let c = col;
+  let x = col;
   list.forEach((e, i) => {
-    o.slots.push({ at: at(i), col: c, row });
-    placeElem(o, e, c, row);
-    c += elemDim(e).w;
+    c.slots.push({ at: at(i), col: i === 0 ? x + edge : x, row });
+    x = placeElem(c, e, x, row, depth);
   });
-  o.slots.push({ at: at(list.length), col: c, row });
-  return c;
+  if (list.length === 0) c.slots.push({ at: at(0), col: x + edge, row });
+  else c.slots.push({ at: at(list.length), col: x - edge, row });
+  return x;
 }
 
-function placeElem(o: Out, e: LadElem, col: number, row: number): void {
+function placeElem(c: Ctx, e: LadElem, col: number, row: number, depth: number): number {
   if (e.k === 'parallel') {
-    const pw = elemDim(e).w;
     let r = row;
     let last = row;
+    let end = col;
+    const ends: number[] = [];
+    const edge = EDGE_SLOT / 2 ** depth;
     e.branches.forEach((br, k) => {
       last = r;
-      const end = placeList(o, br, col, r, (index) => ({ branchOf: e.id, branch: k, index }));
-      if (end < col + pw) wire(o, end, r, col + pw, r);
-      r += listDim(br).h;
+      const x = placeList(
+        c,
+        br,
+        col,
+        r,
+        (index) => ({ branchOf: e.id, branch: k, index }),
+        edge,
+        depth + 1,
+      );
+      ends.push(x);
+      end = Math.max(end, x);
+      r += listH(br);
     });
-    wire(o, col, row, col, last);
-    wire(o, col + pw, row, col + pw, last);
-    return;
+    r = row;
+    e.branches.forEach((br, k) => {
+      if (ends[k]! < end) wire(c, ends[k]!, r, end, r);
+      r += listH(br);
+    });
+    wire(c, col, row, col, last);
+    wire(c, end, row, end, last);
+    return end;
   }
-  if (e.k === 'box') return placeBox(o, e, col, row);
-  o.cells.push({ elemId: e.id, kind: e.k, col, row, w: 1, h: 1 });
+  if (e.k === 'box') return placeBox(c, e, col, row);
+  c.cells.push({ elemId: e.id, kind: e.k, col, row, w: 1, h: 1 });
+  return col + 1;
 }
 
-function placeBox(o: Out, b: LadBox, col: number, row: number): void {
+function placeBox(c: Ctx, b: LadBox, col: number, row: number): number {
   const p = boxPlan(b);
-  const bx = col + p.pinW;
-  const pinRows: Record<string, number> = {};
-  for (const [name, r] of Object.entries(p.rows)) pinRows[name] = r;
-  o.cells.push({ elemId: b.id, kind: 'box', col: bx, row, w: BOX_W, h: p.h, pinRows });
-  // La serie arriva al primo pin del box.
-  if (bx > col) wire(o, col, row, bx, row);
-  let rail = row;
+  // La logica dei pin parte dalla colonna 0 su righe della zona dei pin.
+  const placed: { name: string; r: number; end: number }[] = [];
+  let bx = col;
   for (const name of p.pins) {
     const list = b.boolPins[name] ?? [];
-    const r = row + p.rows[name]!;
-    const start = bx - listDim(list).w;
-    placeList(o, list, start, r, (index) => ({ box: b.id, pin: name, index }));
-    // Un pin senza logica resta scollegato: niente fili.
-    if (list.length > 0) {
-      if (start > col) wire(o, col, r, start, r);
-      rail = r;
+    if (list.length === 0) continue;
+    const r = c.poolNext;
+    c.poolNext += listH(list);
+    const end = placeList(c, list, 0, r, (index) => ({ box: b.id, pin: name, index }), 0, 0);
+    placed.push({ name, r, end });
+    bx = Math.max(bx, end);
+  }
+  if (bx > col) wire(c, col, row, bx, row);
+  for (const { name, r, end } of placed) {
+    if (end < bx) wire(c, end, r, bx, r);
+    wire(c, bx, row + p.inRows[name]!, bx, r);
+  }
+  // Pin senza logica: resta scollegato, ma si può rilasciare un elemento sul suo bordo.
+  for (const name of p.pins) {
+    if ((b.boolPins[name] ?? []).length === 0) {
+      const at: InsertPoint = { box: b.id, pin: name, index: 0 };
+      c.slots.push({ at, col: bx - 0.5, row: row + p.inRows[name]! });
     }
   }
-  if (rail > row) wire(o, col, row, col, rail);
+  c.cells.push({
+    elemId: b.id,
+    kind: 'box',
+    col: bx,
+    row,
+    w: BOX_W,
+    h: p.h,
+    pinRows: p.inRows,
+    outRows: p.outRows,
+  });
+  return bx + BOX_W;
 }
 
-function placeNode(o: Out, n: LadNode, start: number, row: number, lastCol: number): void {
-  const end = placeList(o, n.series, start, row, (index) => ({ node: n.id, index }));
-  let r = row;
-  for (const out of n.outs) {
-    if (isNode(out)) {
-      placeNode(o, out, end, r, lastCol);
-      r += nodeDim(out).h;
-    } else {
-      o.cells.push({ elemId: out.id, kind: 'out', col: lastCol, row: r, w: 1, h: 1 });
-      if (lastCol > end) wire(o, end, r, lastCol, r);
-      r += 1;
+function placeNode(c: Ctx, n: LadNode, start: number, row: number): void {
+  const info = nodeInfo(n);
+  const saved = c.poolNext;
+  c.poolNext = row + info.seriesH;
+  const end = placeList(c, n.series, start, row, (index) => ({ node: n.id, index }), 0, 0);
+  c.poolNext = saved;
+  c.maxEnd = Math.max(c.maxEnd, end);
+  n.outs.forEach((out, i) => {
+    const r = row + info.itemRows[i]!;
+    if (isNode(out)) placeNode(c, out, end, r);
+    else {
+      const cell: LadCell = { elemId: out.id, kind: 'out', col: end, row: r, w: 1, h: 1 };
+      c.cells.push(cell);
+      c.outs.push({ cell, end });
     }
-  }
+  });
   // Rotaia da cui scendono le uscite e i rami a T, fino all'ultimo elemento.
-  const lastStart = rowOfLastItem(n, row);
-  if (lastStart > row) wire(o, end, row, end, lastStart);
+  const last = row + (info.itemRows[info.itemRows.length - 1] ?? 0);
+  if (last > row) wire(c, end, row, end, last);
 }
 
-/** Riga su cui comincia l'ultima uscita (o ramo a T) del nodo. */
-function rowOfLastItem(n: LadNode, row: number): number {
-  let r = row;
-  let last = row;
-  for (const out of n.outs) {
-    last = r;
-    r += isNode(out) ? nodeDim(out).h : 1;
+/** Se due slot coincidono, il successivo si sposta di poco: ogni slot ha un punto suo. */
+function separate(slots: LadLayout['slots']): void {
+  const seen = new Set<string>();
+  for (const s of slots) {
+    while (seen.has(`${s.col},${s.row}`)) s.col += NUDGE;
+    seen.add(`${s.col},${s.row}`);
   }
-  return last;
 }
 
 export function layoutNetwork(net: LadNetwork): LadLayout {
-  const o: Out = { cells: [], wires: [], slots: [] };
-  const cols = nodeDim(net.root).need;
-  placeNode(o, net.root, 0, 0, cols - 1);
-  return { ...o, cols, rows: nodeDim(net.root).h };
+  const c: Ctx = { cells: [], wires: [], slots: [], outs: [], maxEnd: 0, poolNext: 0 };
+  placeNode(c, net.root, 0, 0);
+  const cols = c.maxEnd + 1;
+  for (const { cell, end } of c.outs) {
+    cell.col = cols - 1;
+    if (cols - 1 > end) wire(c, end, cell.row, cols - 1, cell.row);
+  }
+  separate(c.slots);
+  return { cells: c.cells, wires: c.wires, slots: c.slots, cols, rows: nodeInfo(net.root).h };
 }
