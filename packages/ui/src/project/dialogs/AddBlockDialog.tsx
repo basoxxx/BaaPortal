@@ -23,7 +23,7 @@ type Kind = 'OB' | 'FB' | 'FC' | 'DB';
 const KINDS: Kind[] = ['OB', 'FB', 'FC', 'DB'];
 const LANGUAGES: { id: Language; enabled: boolean }[] = [
   { id: 'AWL', enabled: true },
-  { id: 'KOP', enabled: false },
+  { id: 'KOP', enabled: true },
   { id: 'FUP', enabled: false },
   { id: 'SCL', enabled: false },
 ];
@@ -65,6 +65,7 @@ function BlockForm({
   const [event, setEvent] = useState<number | null>(null);
   const [fbName, setFbName] = useState<string | null>(null);
   const [openAfter, setOpenAfter] = useState(true);
+  const [language, setLanguage] = useState<Language>('AWL');
 
   // OB ammessi dalla CPU e non ancora presenti.
   const usedObs = new Set(device.blocks.filter((b) => b.kind === 'OB').map((b) => b.number));
@@ -128,7 +129,7 @@ function BlockForm({
     if (invalid || number === null) return;
     let block: Block;
     if (kind === 'OB' || kind === 'FB' || kind === 'FC') {
-      block = createCodeBlock({ kind, number, name: trimmed, language: 'AWL' });
+      block = createCodeBlock({ kind, number, name: trimmed, language });
     } else if (isInstance && instanceFb) {
       block = createInstanceDb({ number, name: trimmed, instanceOf: instanceFb.name });
     } else {
@@ -186,7 +187,11 @@ function BlockForm({
         {kind !== 'DB' ? (
           <div className="baa-dialog-field">
             <label htmlFor={fid.lang}>{t('addBlock.language')}</label>
-            <select id={fid.lang} defaultValue="AWL">
+            <select
+              id={fid.lang}
+              value={language}
+              onChange={(e) => setLanguage(e.target.value as Language)}
+            >
               {LANGUAGES.map((l) => (
                 <option key={l.id} value={l.id} disabled={!l.enabled}>
                   {l.id}

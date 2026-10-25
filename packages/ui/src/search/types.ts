@@ -43,7 +43,7 @@ export interface Hit {
   match: string;
   preview: string;
   editable: boolean;
-  reason?: 'PROTETTO' | 'MC7_GREZZO';
+  reason?: 'PROTETTO' | 'MC7_GREZZO' | 'KOP';
 }
 
 export type FindError = { error: 'REGEX_NON_VALIDA'; detail: string };

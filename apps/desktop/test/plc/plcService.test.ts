@@ -372,7 +372,9 @@ describe('startTestPlc e parsePlcAccess', () => {
             localDataLength: 0,
             mc7Length: 20,
           },
-          Uint8Array.from({ length: 20 }, (_, i) => 2 + i),
+          // MC7 valido (9 × NOP 0, BE): con byte a caso il ciclo della CPU simulata poteva andare in
+          // STOP prima della richiesta di stato del blocco, che vuole RUN.
+          Uint8Array.from({ length: 20 }, (_, i) => (i === 18 ? 0x65 : 0)),
           { author: 'BAA', family: 'TEST', name: 'OB1', version: '1.1', checksum: 0x1234 },
         ),
       );

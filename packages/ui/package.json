@@ -23,6 +23,7 @@
     "@baaportal/awl": "*",
     "@baaportal/catalog": "*",
     "@baaportal/importers": "*",
+    "@baaportal/ladfbd": "*",
     "@baaportal/project": "*",
     "@baaportal/s7-types": "*",
     "@baaportal/s7comm": "*",

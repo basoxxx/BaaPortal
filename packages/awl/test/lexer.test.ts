@@ -14,6 +14,14 @@ describe('lexer', () => {
     ]);
   });
 
+  it("un'etichetta può iniziare con _ (etichette automatiche del KOP)", () => {
+    expect(kinds('_001: NOP 0')).toEqual([
+      ['label', '_001:'],
+      ['word', 'NOP'],
+      ['number', '0'],
+    ]);
+  });
+
   it('le costanti solo AWL sono un unico token literal', () => {
     for (const c of [
       'B#16#FF',

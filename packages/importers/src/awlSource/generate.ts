@@ -1,5 +1,6 @@
 // Scrittura di una sorgente AWL in stile TIA: nomi tra virgolette, tipi canonici, indirizzi con '%'.
 import { convertMnemonics, formatNetwork, parseNetwork, type Mnemonic } from '@baaportal/awl';
+import { blockSources, kopSources } from '@baaportal/project';
 import type {
   Block,
   BlockHeader,
@@ -45,11 +46,11 @@ function namedTypes(list: Member[], out: string[] = []): string[] {
   return out;
 }
 
-function calledBlocks(block: CodeBlock, blocks: CodeBlock[]): CodeBlock[] {
+function calledBlocks(block: CodeBlock, blocks: CodeBlock[], device: PlcDevice): CodeBlock[] {
   const out: CodeBlock[] = [];
-  for (const n of block.networks) {
-    if (n.source === '') continue;
-    for (const st of parseNetwork(n.source, 'international').statements) {
+  for (const source of blockSources(block, device)) {
+    if (source === '') continue;
+    for (const st of parseNetwork(source, 'international').statements) {
       if (!st.instruction.def || !CALLS.has(st.instruction.def.id) || !st.operand) continue;
       const op = st.operand;
       if (op.kind === 'block') {
@@ -146,7 +147,7 @@ function udtLines(u: Udt): string[] {
   ];
 }
 
-function codeLines(b: CodeBlock, mnemonic: Mnemonic): string[] {
+function codeLines(b: CodeBlock, mnemonic: Mnemonic, device: PlcDevice): string[] {
   const unit =
     b.kind === 'OB'
       ? `ORGANIZATION_BLOCK OB ${b.number}`
@@ -174,17 +175,17 @@ function codeLines(b: CodeBlock, mnemonic: Mnemonic): string[] {
     out.push(kw, ...memberLines(list, 1), 'END_VAR', '');
   }
   out.push('BEGIN');
-  for (const n of b.networks) {
+  const sources = blockSources(b, device);
+  for (const [k, n] of b.networks.entries()) {
+    const source = sources[k]!;
     out.push(
       'NETWORK',
       n.title === '' ? 'TITLE =' : `TITLE = ${n.title}`,
       ...commentLines(n.comment),
     );
-    if (n.source === '') continue;
+    if (source === '') continue;
     const text =
-      mnemonic === 'international'
-        ? n.source
-        : convertMnemonics(n.source, 'international', mnemonic);
+      mnemonic === 'international' ? source : convertMnemonics(source, 'international', mnemonic);
     out.push(...formatNetwork(text, mnemonic).split(/\r?\n/));
   }
   out.push(
@@ -262,9 +263,15 @@ export function generateAwlSource(
   for (const b of blocks) {
     if (b.kind === 'DB' || b.kind === 'IDB') continue;
     const ref: ObjectRef = { kind: 'block', deviceId: device.id, id: b.id };
-    // SCL, KOP e FUP non sono AWL: scritti come reti AWL non si potrebbero rileggere.
-    if (b.language !== 'AWL') {
+    // SCL e FUP non sono AWL: scritti come reti AWL non si potrebbero rileggere. Un blocco KOP
+    // si esporta con l'AWL generato.
+    if (b.language !== 'AWL' && b.language !== 'KOP') {
       warnings.push({ kind: 'language', ref, name: b.name, language: b.language });
+      continue;
+    }
+    // Un segmento KOP con errori darebbe una rete vuota: AWL parziale, quindi il blocco si salta.
+    if (kopSources(b, device).some((r) => r.diagnostics.length > 0)) {
+      warnings.push({ kind: 'kop', ref, name: b.name });
       continue;
     }
     const i = b.interface;
@@ -278,12 +285,12 @@ export function generateAwlSource(
     const i = b.interface;
     const typed = namedTypes([...i.input, ...i.output, ...i.inOut, ...i.static]);
     const fbs = typed.flatMap((n) => code.filter((x) => x.kind === 'FB' && sameName(x.name, n)));
-    return [...fbs, ...calledBlocks(b, code)].filter((x) => x !== b);
+    return [...fbs, ...calledBlocks(b, code, device)].filter((x) => x !== b);
   });
   const dbs = blocks.filter((b): b is GlobalDb | InstanceDb => b.kind === 'DB' || b.kind === 'IDB');
   const units: string[][] = [
     ...sortedUdts.map(udtLines),
-    ...sortedCode.map((b) => codeLines(b, mnemonic)),
+    ...sortedCode.map((b) => codeLines(b, mnemonic, device)),
     ...dbs.map(dbLines),
   ];
   const text = units.map((u) => u.join('\n')).join('\n\n') + (units.length > 0 ? '\n' : '');

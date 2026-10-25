@@ -1,6 +1,6 @@
 import { parseNetwork } from '@baaportal/awl';
 import { findSystemBlock } from '@baaportal/catalog';
-import { findSystemFb, type Member, type PlcDevice } from '@baaportal/project';
+import { blockSources, findSystemFb, type Member, type PlcDevice } from '@baaportal/project';
 import { parseType, sameName } from '@baaportal/s7-types';
 
 export interface SystemBlockUse {
@@ -66,8 +66,8 @@ export function systemBlocksOf(device: PlcDevice): SystemBlockUse[] {
       if (!own(b.instanceOf)) add(findSystemFb(b.instanceOf));
       continue;
     }
-    for (const n of b.networks) {
-      for (const c of callsIn(n.source)) {
+    for (const source of blockSources(b, device)) {
+      for (const c of callsIn(source)) {
         if ('name' in c) {
           if (!own(c.name)) add(findSystemBlock({ name: c.name }));
         } else add(findSystemBlock(c));

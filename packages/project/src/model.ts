@@ -1,4 +1,5 @@
 import type { BlockMeta } from '@baaportal/mc7';
+import type { LadNetwork } from '@baaportal/ladfbd';
 import type { PlcAccess } from './plcAccess';
 
 export const FORMAT_VERSION = 4;
@@ -91,7 +92,10 @@ export interface Network {
   id: string;
   title: string;
   comment: string;
+  /** Sorgente AWL; in un segmento KOP con `lad` è quella generata (non si legge: vedi `kopSources`). */
   source: string;
+  /** Segmento KOP grafico (solo blocchi KOP); la sorgente da compilare ne deriva. */
+  lad?: LadNetwork;
 }
 
 export interface BlockInterface {

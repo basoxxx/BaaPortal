@@ -38,7 +38,7 @@ export interface ParseResult {
 
 const SPECIAL_NAMES = new Set(['STW', 'DBLG', 'DBNO', 'DILG', 'DINO']);
 const LONG_LABEL = /[A-Za-z_][A-Za-z0-9_]*[ \t]*:(?!=)/y;
-const LABEL_REF = /[A-Za-z][A-Za-z0-9_]*/y;
+const LABEL_REF = /[A-Za-z_][A-Za-z0-9_]*/y;
 const WORD = /[A-Za-z][A-Za-z0-9]*/y;
 const PARAM_NAME = /[A-Za-z_][A-Za-z0-9_]*/y;
 const MAX_MNEMONIC = 6;
@@ -114,7 +114,7 @@ export function parseDetailed(source: string, mnemonic: Mnemonic): ParseResult {
     const labEnd = matchLabel(source, i);
     let longLabel: RegExpExecArray | null;
     if (labEnd >= 0) {
-      const name = sticky(WORD, source, i)![0];
+      const name = sticky(LABEL_REF, source, i)![0];
       label = { name, range: idx.range(i, i + name.length) };
       i = skipWs(source, labEnd);
     } else if ((longLabel = sticky(LONG_LABEL, source, i))) {

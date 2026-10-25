@@ -41,13 +41,13 @@ describe('Aggiungi nuovo blocco', () => {
     expect(within(dlg).getByLabelText('Numero')).toHaveValue(2);
   });
 
-  it('i linguaggi KOP, FUP e SCL sono visibili ma disattivati', async () => {
+  it('KOP è attivo; FUP e SCL sono visibili ma disattivati', async () => {
     const app = await renderApp({ view: 'project', withProject: true, withPlc: true });
     const dlg = await openBlockDialog(app);
     const lang = within(dlg).getByLabelText('Linguaggio') as HTMLSelectElement;
     expect([...lang.options].map((o) => [o.value, o.disabled])).toEqual([
       ['AWL', false],
-      ['KOP', true],
+      ['KOP', false],
       ['FUP', true],
       ['SCL', true],
     ]);

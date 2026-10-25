@@ -1,6 +1,6 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { createTagTable, type CodeBlock } from '@baaportal/project';
+import { createCodeBlock, createTagTable, type CodeBlock } from '@baaportal/project';
 import { updateSettings } from '../src/settings/settings';
 import { registerEditDocument } from '../src/flushPendingEdits';
 import { replaceHits, runFind } from '../src/search/findActions';
@@ -215,6 +215,43 @@ describe('Trova e sostituisci', () => {
     await app.user.click(screen.getByRole('button', { name: 'Sostituisci' }));
     expect(app.store.getState().find.selected).toBe(1);
     expect(app.store.getState().messages.at(-1)?.params).toEqual({ replaced: '0', skipped: '1' });
+  });
+
+  it('Sostituisci tutto non tocca i segmenti KOP e non li conta come sostituiti', async () => {
+    const k = createCodeBlock({ kind: 'FC', number: 21, name: 'K', language: 'KOP' });
+    k.id = 'fc-K';
+    k.networks = [
+      {
+        id: 'k0',
+        title: '',
+        comment: '',
+        source: 'A %M10.0\n= %M10.1',
+        lad: {
+          root: {
+            id: 'r',
+            series: [{ id: 'c', k: 'contact', neg: false, op: 'M 10.0' }],
+            outs: [{ id: 'o', k: 'coil', op: 'M 10.1' }],
+          },
+        },
+      },
+    ];
+    const a = netBlock('A', ['L MW10']);
+    const app = await openEditor('block', a.id, (d) => {
+      d.blocks.push(k, a);
+    });
+    await search(app, 'M10.');
+    const hits = (app.store.getState().find.outcome as { hits: { editable: boolean }[] }).hits;
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits.every((h) => !h.editable)).toBe(true);
+    await app.user.type(screen.getByRole('textbox', { name: 'Sostituisci con' }), 'M20.');
+    await app.user.click(screen.getByRole('button', { name: 'Sostituisci tutto' }));
+    const kb = dev(app).blocks.find((b) => b.id === k.id) as CodeBlock;
+    expect(kb.networks[0]!.source).toBe('A %M10.0\n= %M10.1');
+    expect(kb.networks[0]!.lad).toBeDefined();
+    expect(app.store.getState().messages.at(-1)?.params).toEqual({
+      replaced: '0',
+      skipped: String(hits.length),
+    });
   });
 
   it("l'ambito Editor attivo è disattivato senza editor aperto", async () => {

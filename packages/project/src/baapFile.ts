@@ -1,4 +1,5 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
+import { ladNetworkSchema } from '@baaportal/ladfbd';
 import { z } from 'zod';
 import {
   FORMAT_VERSION,
@@ -181,7 +182,9 @@ const blockSchema = z.discriminatedUnion('kind', [
       temp: z.array(memberSchema),
       returnType: str,
     }),
-    networks: z.array(obj({ id, title: str, comment: str, source: str })),
+    networks: z.array(
+      obj({ id, title: str, comment: str, source: str, lad: ladNetworkSchema.optional() }),
+    ),
   }),
   obj({
     ...blockBase,

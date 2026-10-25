@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { findDevice } from '@baaportal/project';
+import { LadPalette } from '../../editors/lad/LadPalette';
 import { useAppStore, useServices } from '../../state/AppContext';
 import type { TaskCardId } from '../../state/store';
 import { CallStack } from './CallStack';
@@ -15,9 +17,23 @@ const SECTIONS: Record<TaskCardId, string[]> = {
 };
 const IDS: TaskCardId[] = ['instructions', 'test', 'tasks', 'libraries'];
 
+/** L'editor attivo nel riquadro con il focus è un blocco KOP. */
+function useKopActive(enabled: boolean): boolean {
+  return useAppStore((s) => {
+    if (!enabled) return false;
+    const wa = s.workArea;
+    const key = wa.panes[wa.focusedPane];
+    const e = wa.editors.find((x) => x.key === key);
+    if (!e || e.kind !== 'block' || !s.doc) return false;
+    const b = findDevice(s.doc.project, e.deviceId)?.blocks.find((x) => x.id === e.objectId);
+    return b !== undefined && b.kind !== 'DB' && b.kind !== 'IDB' && b.language === 'KOP';
+  });
+}
+
 function Section({ card, id }: { card: TaskCardId; id: string }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(true);
+  const kop = useKopActive(card === 'instructions' && id === 'basic');
   return (
     <section className="baa-tc-section">
       <h3>
@@ -30,7 +46,11 @@ function Section({ card, id }: { card: TaskCardId; id: string }) {
           {t(`taskcards.section.${card}.${id}`)}
         </button>
       </h3>
-      {open && id === 'findReplace' ? (
+      {open && card === 'instructions' && id === 'basic' && kop ? (
+        <div id={`tc-${card}-${id}`}>
+          <LadPalette />
+        </div>
+      ) : open && id === 'findReplace' ? (
         <div id={`tc-${card}-${id}`}>
           <FindReplace />
         </div>

@@ -125,6 +125,41 @@ Per ogni voce si indica che cosa succede oggi. "Errore chiaro" vuol dire che Baa
 - **Lettura del `.baapbak`:** i byte si contano mentre si decomprimono (manifest 64 KB, blocchi la `length` del manifest, al massimo 1 MB ciascuno, 256 MB in tutto); la dimensione dichiarata nell'archivio non conta più.
 - **I backup non compaiono nell'albero:** si aprono con la finestra dei file. Tenerne l'elenco vorrebbe dire salvare percorsi nel progetto.
 
+## Editor KOP (piano 4A)
+
+- **Mai provato su una CPU reale.** Il codice generato è provato solo con il simulatore e contro il compilatore MC7 di BaaPortal (spec §5). Nessun blocco KOP è mai stato caricato su una CPU.
+- **Nessun marcatore BLD (H5).** Il generatore non scrive i `BLD` che STEP 7 mette nei blocchi KOP. STEP 7 potrebbe quindi riaprire i blocchi generati in AWL invece che in KOP (H20 è aperta: non sappiamo come decida STEP 7 la lingua). Il byte di linguaggio dell'intestazione è `02` (KOP).
+- **Schemi AWL: sono ipotesi, non verificate con STEP 7.** Ogni forma viene dalla documentazione pubblica e dalle ipotesi di `docs/linguaggi/kop-awl.md` §8; i test ne verificano il comportamento, non l'identità con STEP 7.
+  - **H1, H2:** parallelo sulla barra con `O x`; in un parallelo misto i rami di un solo contatto usano `O x` e tutti gli altri `O(`…`)`, anche se fatti di soli contatti in serie.
+  - **H3:** `(#)` genera `= b` seguito da `A b`.
+  - **H4:** i bit L dei nodi condivisi partono dal primo byte dopo l'area TEMP, ricominciano in ogni segmento e sono assegnati in pre-ordine.
+  - **H6, H9:** flip-flop, temporizzatori e contatori a box: uscita Q con `A istanza` solo se collegata; con Q libero niente `A` e niente `NOP 0`.
+  - **H7:** bobina collegata alla barra: `SET` davanti alle uscite che usano l'RLO; lo stesso per il primo pin di un box sulla barra.
+  - **H8, H10:** confronto e fronti POS/NEG senza parentesi quando non c'è un RLO davanti (sulla barra, primo in una parentesi, inizio di un ramo a T dalla barra).
+  - **H11:** etichette automatiche `_001`…`_999` numerate per blocco; oltre, errore `TOO_MANY_LABELS` e il segmento non genera AWL.
+  - **H12:** box che non possono sbagliare (MOVE, logica a parola, ABS…) con ENO collegato: `_00n: A BR` diretto con logica davanti, `SET; SAVE; CLR; A BR` con EN sulla barra.
+  - **H13:** box che possono sbagliare: `AN OV; SAVE; CLR` prima di `A BR`. Per ABS non c'è il controllo di OV (non lo scrive).
+  - **H14:** scorrimenti: `L N; L IN; <istruzione>; T OUT`.
+  - **H15:** box in cascata (ENO verso EN): `A BR` e `JNB _00n`.
+  - **H16:** bobina JMP come `JU`, bobina CALL come `UC`.
+  - **H17:** box CALL: `A BR` subito dopo la CALL, senza `CLR` (se il blocco chiamato esce con /FC = 1 l'`A BR` si combina con quello); con ENO libero `NOP 0`.
+  - **H18:** i pin BOOL con logica di una CALL si calcolano in bit L prima di tutta la serie che porta al box. Una logica di pin che legge un bit scritto più a sinistra nello stesso segmento vede il valore del ciclo precedente.
+  - **H19:** `X` e `XN` non si usano in KOP.
+  - **SAVE:** generato come `SAVE; CLR` (scostamento dal manuale §2.14). Il comparatore del simulatore combina come `A`, mentre §3.5 dice che «scrive» l'RLO: la traduzione resta corretta perché un confronto con logica davanti è sempre fra parentesi.
+- **Ordine delle uscite cambiato.** Le uscite che distruggono l'RLO vanno in fondo al nodo, i salti e i RET per ultimi, con `MCR(` dopo gli altri rami a T. Con più salti o RET in rami a T diversi, il primo eseguito salta le uscite che seguono. Un ramo a T con un salto o un RET si esegue comunque dopo `MCR(`.
+- **Rifiutati con un errore chiaro:** NOT, `(#)` o un fronte in un ramo parallelo che ha già logica davanti; NOT senza logica davanti; `(#)` o fronte all'inizio di un ramo dalla barra. OPN, `)MCR`, MCRA e MCRD solo da soli sulla barra.
+- **Box.** Ammessi solo in serie sulla linea principale, o come primo elemento di un ramo a T; mai in un ramo parallelo né nella logica di un pin (errori `BOX_IN_PARALLEL`, `BOX_IN_TBRANCH`, `BOX_IN_PIN`).
+- **Controlli solo di forma.** L'istanza di un box (`T n`, `C n`, `FC n`, `FB n, DB m`, simbolo, `#locale`, con `%` facoltativo) è controllata solo nella forma; l'esistenza e il tipo li controlla il controllo AWL sul codice generato. Gli operandi devono stare su una riga.
+- **Parametri di CALL.** Sempre `nome := valore`, anche per le uscite; i pin vuoti si omettono e il controllo AWL segnala poi i parametri mancanti sulla riga della CALL. Un FB trascinato dall'albero senza DB di istanza diventa `"Nome", ` con il DB vuoto: il box dà l'errore `BAD_INSTANCE` finché non si sceglie il DB a mano.
+- **Fuori dal test di equivalenza** KOP/AWL: temporizzatori, contatori, `MCR(`, CALL e box in virgola mobile (ABS è provato sui valori interi).
+- **Cerca/Sostituisci e rinomina non toccano i KOP.** Trova mostra i segmenti KOP con grafico come risultati non modificabili (motivo «Segmento KOP») e Sostituisci li salta, contandoli fra i non sostituiti: il compilatore parte dal grafico, non dal testo AWL. Titoli e commenti si sostituiscono come negli altri blocchi. La rinomina non aggiorna i riferimenti dentro il grafico.
+- **Messaggi di compilazione e risultati di Trova non portano all'elemento.** Per un blocco KOP aprono il blocco ma non selezionano l'elemento del grafico.
+- **Il test e2e si ferma alla compilazione.** L'esecuzione nel simulatore è coperta da `packages/project/test/kopCompile.test.ts`.
+- **Problemi non cliccabili.** Le voci del pannello _Problemi_ di un blocco KOP non portano all'elemento. Un errore senza elemento di riferimento compare solo nel pannello.
+- **Esportazione con KOP in errore.** «Genera sorgente AWL» salta i blocchi KOP con errori e lo segnala. Un blocco KOP il cui `source` non è aggiornato non si legge direttamente: contano il grafico e il codice generato da esso.
+- **Blocchi caricati con lingua `02`.** Un blocco letto dalla CPU con il byte di linguaggio KOP si importa come AWL, senza grafico.
+- **Niente conversione di linguaggio.** FUP e conversione AWL → KOP arrivano nei piani 4B e 4C; fino ad allora un segmento AWL in un blocco KOP si vede in sola lettura.
+
 ## Simulatore (piano 2A)
 
 Le scelte sono descritte in `docs/protocollo/sim.md` (§4.1 per la semantica). Tutte restano **non confermate** da una CPU reale.
