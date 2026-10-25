@@ -116,13 +116,19 @@ describe('PLC control (0x28) e stop (0x29)', () => {
   });
 
   it('_DELE OB1 canonico: struttura di _INSE con servizio _DELE', () => {
-    const b = encodeDeleteBlock('OB', 1, 'B');
-    expect(hex(b)).toBe('28000000000000fd000a01003038303030303142055f44454c45');
+    const b = encodeDeleteBlock('OB', 1, 'A');
+    expect(hex(b)).toBe('28000000000000fd000a01003038303030303141055f44454c45');
     expect(decodePlcControlRequest(b)).toEqual({
       function: 0x28,
       service: '_DELE',
       block: { type: 'OB', number: 1 },
     });
+  });
+
+  it("_DELE SDB 2000 uguale all'errata §10.5", () => {
+    expect(hex(encodeDeleteBlock('SDB', 2000, 'A'))).toBe(
+      '28000000000000fd000a0100304230323030304105' + '5f44454c45',
+    );
   });
 
   it('decodePlcControlRequest rifiuta il cold restart come "non ammesso"', () => {
@@ -140,7 +146,7 @@ describe('PLC control (0x28) e stop (0x29)', () => {
     const old = fromHex('28000000000000fd000a01003041303030303142055f44454c45');
     expect(hex(encodeDeleteBlock('DB', 1, 'B'))).toBe(hex(old));
     expect(decodePlcControlRequest(old).service).toBe('_DELE');
-    const dele = fromHex('28000000000000fd000a02003041303030303142055f44454c45');
+    const dele = fromHex('28000000000000fd000a02003041303030303141055f44454c45');
     expect(decodePlcControlRequest(dele).service).toBeUndefined();
   });
 

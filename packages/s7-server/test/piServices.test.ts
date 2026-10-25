@@ -30,6 +30,16 @@ describe('_DELE, _MODU e _GARB contro il server di prova', () => {
     await expect(c.deleteBlock('FC', 9)).rejects.toMatchObject({ code: 'CPU_ERROR' });
   });
 
+  it('il server rifiuta _DELE con filesystem B', async () => {
+    const cpu = new FakeCpu();
+    cpu.addDb(1, seq(8));
+    const p = await new TestPeer(cpu).open();
+    expect(await p.job(encodeDeleteBlock('DB', 1, 'B'))).toMatchObject({ rosctr: 2 });
+    expect(cpu.block('DB', 1)).toBeDefined();
+    await p.job(encodeDeleteBlock('DB', 1, 'A'));
+    expect(cpu.block('DB', 1)).toBeUndefined();
+  });
+
   it('copyRamToRom e compressMemory rispondono OK', async () => {
     const c = await connect(new FakeCpu());
     await expect(c.copyRamToRom()).resolves.toBeUndefined();
@@ -65,7 +75,7 @@ describe('_DELE, _MODU e _GARB contro il server di prova', () => {
     for (const param of [
       encodeCopyRamToRom(),
       encodeCompressMemory(),
-      encodeDeleteBlock('DB', 1, 'B'),
+      encodeDeleteBlock('DB', 1, 'A'),
     ]) {
       expect(await p.job(param)).toMatchObject({ rosctr: 2, errorClass: 0xd2, errorCode: 0x41 });
     }

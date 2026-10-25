@@ -60,8 +60,8 @@ export function encodeInsertBlock(
 
 /**
  * `_DELE` (proto §10.5): stessa struttura di `_INSE` con servizio `"_DELE"`. L'argomento è il
- * nome del blocco come in `_INSE` (tipo, numero, filesystem); la "subfun" 0x42 del proto è il filesystem `B`. Non verificato su CPU reale;
- * provato contro il server di prova.
+ * nome del blocco come in `_INSE` (tipo, numero, filesystem). TIA usa il filesystem `'A'` (cattura reale,
+ * §10.5): verificato per gli SDB; per OB, FB, FC e DB è un'ipotesi, provata contro il server di prova.
  */
 export function encodeDeleteBlock(
   type: BlockType,

@@ -233,10 +233,10 @@ export function assertOnlineWrite(pdu: S7Pdu): void {
             '_INSE non canonico',
           );
         } else if (r.service === '_DELE' && r.block) {
-          // solo la forma canonica, filesystem B, solo OB/FB/FC/DB
+          // solo la forma canonica, filesystem A (come TIA, §10.5), solo OB/FB/FC/DB
           must(['OB', 'FB', 'FC', 'DB'].includes(r.block.type), '_DELE: tipo non cancellabile');
           must(
-            sameBytes(p, encodeDeleteBlock(r.block.type, r.block.number, 'B')),
+            sameBytes(p, encodeDeleteBlock(r.block.type, r.block.number, 'A')),
             '_DELE non canonico',
           );
         } else if (r.service === '_MODU') {

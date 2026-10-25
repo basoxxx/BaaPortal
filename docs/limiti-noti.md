@@ -30,7 +30,7 @@ Per ogni voce si indica che cosa succede oggi. "Errore chiaro" vuol dire che Baa
 - **Blocchi di sistema (SDB).** Non si caricano né si confrontano. Il backup arriva nel 3C.
 - **Carica dal dispositivo senza simboli né commenti.** Il progetto nuovo ha solo i blocchi in AWL.
 - **Blocchi non caricati.** I blocchi che la CPU rifiuta o che non si decodificano non vengono caricati: sono elencati nel commento del progetto nuovo. I loro byte originali non si conservano.
-- **Cancellazione dei blocchi.** Usa `_DELE` con il filesystem 'B', verificato solo contro il server di prova.
+- **Cancellazione dei blocchi.** `_DELE` usa il filesystem 'A', come TIA nella cattura reale (§10.5). È verificato per gli SDB; per OB, FB, FC e DB è un'ipotesi.
 - **Controllo dell'identità prima di scrivere.** Confronta il numero d'ordine, e il numero di serie solo se ce l'hanno entrambi i lati.
 - **Il confronto non si aggiorna a ogni modifica.** Parte al collegamento, dopo ogni caricamento e col comando _Confronta con la CPU_. Dopo una modifica di un blocco il suo distintivo passa a «Da compilare» e resta tale finché non si rilancia il confronto; una modifica fatta sulla CPU da altri non si vede finché non lo si rilancia.
 - **Editor di confronto.**

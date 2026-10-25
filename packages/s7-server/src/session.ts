@@ -473,6 +473,8 @@ class Session {
     if (this.writeProtected()) return headerError(p, ERR.PROTECTED);
     if (service === '_DELE') {
       if (!this.cpu.deleteBlock || !block) return headerError(p, ERR.NOT_IMPLEMENTED);
+      // il nome e' lungo 8 caratteri e finisce a p[19]: come TIA (proto §10.5), solo il filesystem 'A'
+      if (p.param[19] !== 0x41) return headerError(p, ERR.WRONG_FRAMES);
       if (!this.cpu.deleteBlock(block.type, block.number)) {
         return headerError(p, ERR.UPLOAD_MISSING); // blocco assente: stesso d20c di snap7.pcap
       }
