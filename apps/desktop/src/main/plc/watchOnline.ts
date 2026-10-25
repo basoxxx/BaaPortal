@@ -55,12 +55,19 @@ export function parseWatchTarget(raw: unknown, areas: readonly string[]): PlcWat
   return out;
 }
 
-/** Controlla l'elenco di operandi da leggere: al più `ONLINE_MAX_ITEMS`, aree osservabili. */
-export function parseWatchItems(raw: unknown): PlcWatchTarget[] | string {
+/** Controlla la forma dell'elenco da leggere: al più `ONLINE_MAX_ITEMS`. Gli operandi si controllano uno per uno. */
+export function parseWatchList(raw: unknown): unknown[] | string {
   if (!Array.isArray(raw)) return 'Elenco di operandi non valido';
   if (raw.length > ONLINE_MAX_ITEMS) return `Troppi operandi (massimo ${ONLINE_MAX_ITEMS})`;
+  return raw;
+}
+
+/** Controlla l'elenco di operandi da leggere: il primo non valido dà il suo motivo. */
+export function parseWatchItems(raw: unknown): PlcWatchTarget[] | string {
+  const list = parseWatchList(raw);
+  if (typeof list === 'string') return list;
   const out: PlcWatchTarget[] = [];
-  for (const r of raw) {
+  for (const r of list) {
     const t = parseWatchTarget(r, READ_AREAS);
     if (typeof t === 'string') return t;
     out.push(t);
@@ -155,21 +162,29 @@ export async function readWatch(
   rawItems: unknown,
   deadlineMs = DEADLINE_MS,
 ): Promise<PlcReadWatchResult> {
-  const targets = parseWatchItems(rawItems);
-  if (typeof targets === 'string') return { ok: false, error: targets };
-  if (targets.length === 0) return { ok: true, values: [] };
-  const items = targets.map(toReadItem);
+  const list = parseWatchList(rawItems);
+  if (typeof list === 'string') return { ok: false, error: list };
+  // Un operando non valido dà l'errore della sua sola riga e non entra nella richiesta.
+  const values: PlcWatchValue[] = list.map(() => ({ error: 'Operando non valido' }));
+  const valid: { at: number; target: PlcWatchTarget }[] = [];
+  list.forEach((raw, at) => {
+    const t = parseWatchTarget(raw, READ_AREAS);
+    if (typeof t === 'string') values[at] = { error: t };
+    else valid.push({ at, target: t });
+  });
+  if (valid.length === 0) return { ok: true, values };
+  const items = valid.map((v) => toReadItem(v.target));
   const r = await service.read(owner, (run) => run((c) => c.readItems(items)), deadlineMs);
   if (!r.ok) return { ok: false, error: r.error };
-  if (r.value.length !== targets.length) {
+  if (r.value.length !== valid.length) {
     return { ok: false, error: 'La CPU ha risposto con un numero di valori inatteso' };
   }
-  const values = r.value.map<PlcWatchValue>((res, i) => {
-    if (!res.ok) return { error: res.name };
-    if (res.data.length !== expectedBytes(targets[i]!)) {
-      return { error: 'Valore di lunghezza inattesa' };
-    }
-    return { bytes: res.data };
+  r.value.forEach((res, i) => {
+    const { at, target } = valid[i]!;
+    if (!res.ok) values[at] = { error: res.name };
+    else if (res.data.length !== expectedBytes(target)) {
+      values[at] = { error: 'Valore di lunghezza inattesa' };
+    } else values[at] = { bytes: res.data };
   });
   return { ok: true, values };
 }

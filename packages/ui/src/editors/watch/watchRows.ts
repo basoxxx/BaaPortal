@@ -68,6 +68,7 @@ function decRange(size: Size, sign: Sign): [number, number] {
   const bits = BYTES[size] * 8;
   const signed: [number, number] = [-(2 ** (bits - 1)), 2 ** (bits - 1) - 1];
   const unsigned: [number, number] = [0, 2 ** bits - 1];
+  if (sign === 'any' && size === 'B') return unsigned; // un byte nudo si mostra senza segno
   if (sign === 'signed') return signed;
   if (sign === 'unsigned') return unsigned;
   // Tipo non noto (indirizzo nudo): si accetta tutto ciò che sta nella dimensione.
@@ -318,6 +319,13 @@ export function resolveRow(resolve: (text: string) => WatchResolution, row: Watc
 /** Dove si osserva: il simulatore o il PLC collegato. */
 export type WatchSource = 'sim' | 'plc';
 
+/** Se l'operando sta nei limiti che il processo principale accetta online (gli stessi controlli). */
+function inOnlineLimits(t: WatchTarget): boolean {
+  if (t.area === 'DB' && !(Number.isInteger(t.db) && t.db! >= 1 && t.db! <= 65535)) return false;
+  if (t.area === 'T' || t.area === 'C') return t.byte >= 0 && t.byte <= 0xffff;
+  return t.byte >= 0 && t.byte + BYTES[t.size] - 1 <= 0x1fffff;
+}
+
 /** Al più tante righe osservabili sul PLC collegato (il processo principale rifiuta oltre). */
 export const ONLINE_MAX_ITEMS = 200;
 
@@ -338,6 +346,8 @@ export function resolveRows(
     let info = resolveRow(resolve, row);
     if (info.ok && source === 'plc' && info.target.area === 'PQ') {
       info = { ok: false, error: err('ONLINE_UNSUPPORTED') };
+    } else if (info.ok && source === 'plc' && !inOnlineLimits(info.target)) {
+      info = { ok: false, error: err('ONLINE_ADDRESS') };
     } else if (info.ok && !info.formatError) {
       if (observable >= limit) {
         info = { ok: false, error: err(source === 'plc' ? 'ONLINE_TOO_MANY' : 'TOO_MANY') };

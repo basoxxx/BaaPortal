@@ -85,6 +85,8 @@ describe('validazione del valore di comando', () => {
     expect(ok('-32768', 'DEC', 'W', 'any')).toBe('8000');
     expect(ok('255', 'DEC', 'B', 'unsigned')).toBe('ff');
     expect(ok('256', 'DEC', 'B', 'unsigned')).toBe('!RANGE');
+    expect(ok('255', 'DEC', 'B', 'any')).toBe('ff'); // byte nudo: come si mostra, 0-255
+    expect(ok('-1', 'DEC', 'B', 'any')).toBe('!RANGE');
     expect(ok('-2147483648', 'DEC', 'D', 'signed')).toBe('80000000');
     expect(ok('2147483648', 'DEC', 'D', 'signed')).toBe('!RANGE');
     expect(ok('1.5', 'DEC', 'W')).toBe('!SYNTAX');

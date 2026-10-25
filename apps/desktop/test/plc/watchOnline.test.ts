@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const electronApp = vi.hoisted(() => ({ isPackaged: false }));
 vi.mock('electron', () => ({ app: electronApp }));
-import { planReads } from '@baaportal/s7comm';
+import { planReads, type S7Client } from '@baaportal/s7comm';
+import { connectTcp } from '@baaportal/s7comm/node';
 import { listen, type ListeningCpu } from '@baaportal/s7-server/node';
 import { SimCpu, simBackend } from '@baaportal/sim';
 import type { PlcAccess, PlcWatchTarget } from '@baaportal/ui';
@@ -117,18 +118,45 @@ describe('watch online contro il PLC di prova', () => {
     ]);
   });
 
-  it('60 item validi → 3 richieste read var, valori nell’ordine delle righe', async () => {
-    for (let i = 0; i < 60; i++) cpu.memory.M[i] = i + 1;
-    const items = Array.from({ length: 60 }, (_, i) => M('B', i));
-    // 20 item per richiesta (§5.11, PDU 480): 60 item sono 3 richieste.
-    expect(planReads(items.map(toReadItem), 480)).toHaveLength(3);
-    const r = await readWatch(service, owner, items);
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
-    expect(r.values.map((v) => ('bytes' in v ? v.bytes[0] : -1))).toEqual(
-      Array.from({ length: 60 }, (_, i) => i + 1),
-    );
-  });
+  for (const pdu of [480, 240]) {
+    it(`60 item validi con PDU ${pdu} → tante richieste read var quante ne pianifica planReads, valori in ordine`, async () => {
+      for (let i = 0; i < 60; i++) cpu.memory.M[i] = i + 1;
+      await service.closeAll();
+      await plc.close();
+      const backend = simBackend(cpu);
+      backend.config.pduLength = pdu;
+      plc = await listen(backend, { port: 0 });
+      let requests = 0;
+      let client: S7Client | undefined;
+      const recorder = {
+        record: (dir: 'tx' | 'rx', b: Uint8Array) => {
+          // TPKT già tolto: COTP DT (3 byte), poi PDU S7 (0x32), ROSCTR 1, parametro dal byte 10.
+          if (dir === 'tx' && b[3] === 0x32 && b[4] === 1 && b[3 + 10] === 0x04) requests++;
+        },
+        frames: () => [],
+      };
+      service = new PlcService({
+        intervalMs: 5000,
+        connect: async (o) => {
+          client = await connectTcp({ ...o, recorder });
+          return client;
+        },
+      });
+      owner = new FakeOwner();
+      expect((await service.connect(owner, access())).ok).toBe(true);
+      const items = Array.from({ length: 60 }, (_, i) => M('B', i));
+      const r = await readWatch(service, owner, items);
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect(client!.pduLength).toBe(pdu);
+      const expected = planReads(items.map(toReadItem), client!.pduLength).length;
+      expect(expected).toBe(pdu === 480 ? 3 : 4);
+      expect(requests).toBe(expected);
+      expect(r.values.map((v) => ('bytes' in v ? v.bytes[0] : -1))).toEqual(
+        Array.from({ length: 60 }, (_, i) => i + 1),
+      );
+    });
+  }
 
   it('righe miste: DB inesistente → errore solo sulla sua riga, le altre lette', async () => {
     cpu.memory.M[1] = 7;
@@ -155,10 +183,24 @@ describe('watch online contro il PLC di prova', () => {
     expect(read).not.toHaveBeenCalled();
   });
 
-  it('area PQ dal renderer → rifiutata', async () => {
+  it('area PQ o operando non valido dal renderer → errore della sola riga, le altre lette', async () => {
+    cpu.memory.M[1] = 7;
+    const r = await readWatch(service, owner, [
+      M('B', 1),
+      { area: 'PQ', size: 'B', byte: 0 },
+      { area: 'DB', db: 0, size: 'W', byte: 0 },
+      M('B', 1),
+    ]);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.values[0]).toEqual({ bytes: Uint8Array.of(7) });
+    expect(r.values[1]).toEqual({ error: expect.stringContaining('PQ') });
+    expect(r.values[2]).toMatchObject({ error: expect.any(String) });
+    expect(r.values[3]).toEqual({ bytes: Uint8Array.of(7) });
+    // solo righe non valide: nessuna lettura
     const read = vi.spyOn(service, 'read');
-    const r = await readWatch(service, owner, [{ area: 'PQ', size: 'B', byte: 0 }]);
-    expect(r).toMatchObject({ ok: false });
+    const only = await readWatch(service, owner, [{ area: 'PQ', size: 'B', byte: 0 }]);
+    expect(only).toEqual({ ok: true, values: [{ error: expect.any(String) }] });
     expect(read).not.toHaveBeenCalled();
     expect(parseWatchItems([{ area: 'L', size: 'B', byte: 0 }])).toEqual(expect.any(String));
     expect(parseWatchItems([{ area: 'M', size: 'Q', byte: 0 }])).toEqual(expect.any(String));
@@ -167,6 +209,7 @@ describe('watch online contro il PLC di prova', () => {
     );
     expect(parseWatchItems([{ area: 'DB', size: 'B', byte: 0 }])).toEqual(expect.any(String));
     expect(parseWatchItems('x')).toEqual(expect.any(String));
+    expect(await readWatch(service, owner, 'x')).toMatchObject({ ok: false });
   });
 
   it('toReadItem: PI diventa P, T e C contano 1, X diventa BIT', () => {
@@ -305,5 +348,94 @@ describe('watch online contro il PLC di prova', () => {
     await service.disconnect(owner);
     expect(await writes.writeVars(owner, [W(M('B', 0), 1)])).toMatchObject({ ok: false });
     expect(confirm).not.toHaveBeenCalled();
+  });
+
+  describe('writeVars: gruppi per richiesta', () => {
+    const many = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({ target: M('B', i), data: Uint8Array.of(i) }));
+    const fake = (failGroup?: number) => {
+      const log: string[] = [];
+      let n = 0;
+      const client = {
+        pduLength: 480,
+        close: vi.fn(async () => void log.push('close')),
+        identity: vi.fn(async () => ({
+          orderNumber: '6ES7 315-2EH14-0AB0',
+          serialNumber: undefined,
+        })),
+        writeItems: vi.fn(async (g: unknown[]) => {
+          n++;
+          log.push(`w${g.length}`);
+          if (n === failGroup) throw new Error('connessione caduta');
+          return g.map(() => ({ returnCode: 0xff, name: 'ok' }));
+        }),
+      };
+      return { client, log };
+    };
+    const svc = () => ({
+      target: () => ({
+        access: { host: '192.0.2.10', rack: 0, slot: 2, connectionType: 'PG' as const },
+        identity: { orderNumber: '6ES7 315-2EH14-0AB0' },
+        linkId: 1,
+      }),
+    });
+
+    it('gruppo 1 ok, gruppo 2 lancia, gruppo 3 non scritto; close chiamato', async () => {
+      const { client, log } = fake(2);
+      const w = new PlcWriteService({
+        service: svc(),
+        confirm,
+        connect: async () => client as never,
+      });
+      const r = await w.writeVars(owner, many(45));
+      expect(r.ok).toBe(true);
+      if (!r.ok || !('results' in r)) return;
+      expect(r.results.slice(0, 20).every((x) => x.ok)).toBe(true);
+      for (const x of r.results.slice(20, 40)) {
+        expect(x).toEqual({
+          ok: false,
+          error: 'Esito sconosciuto: la CPU potrebbe averlo scritto',
+        });
+      }
+      for (const x of r.results.slice(40)) {
+        expect(x).toEqual({
+          ok: false,
+          error: 'Non scritto: scrittura interrotta dopo un errore',
+        });
+      }
+      expect(r.results).toHaveLength(45);
+      expect(log).toEqual(['w20', 'w20', 'close']);
+    });
+
+    it('la conferma annuncia le richieste (stima con PDU 240) quando sono più d’una', async () => {
+      const seen: string[] = [];
+      const { client } = fake();
+      const w = new PlcWriteService({
+        service: svc(),
+        confirm: async (_o, t) => {
+          seen.push(t.detail);
+          return true;
+        },
+        connect: async () => client as never,
+      });
+      await w.writeVars(owner, many(45));
+      await w.writeVars(owner, many(2));
+      expect(seen[0]).toContain(
+        'Le scritture partono in 4 richieste: se una fallisce, quelle precedenti restano scritte.',
+      );
+      expect(seen[1]).not.toContain('Le scritture partono');
+    });
+
+    it("errore di rete: nessun «Uscita dall'app» nei risultati", async () => {
+      const { client } = fake(1);
+      const w = new PlcWriteService({
+        service: svc(),
+        confirm,
+        connect: async () => client as never,
+      });
+      const r = await w.writeVars(owner, many(25));
+      if (!r.ok || !('results' in r)) throw new Error('atteso results');
+      expect(JSON.stringify(r.results)).not.toContain('Uscita');
+    });
   });
 });

@@ -46,6 +46,8 @@ export class WatchOnlineController {
   private inFlight = false;
   private session = 0;
   private commanding = false;
+  /** `start` arrivato mentre la richiesta di una sessione chiusa è ancora in corso. */
+  private deferred = false;
   private unsub: (() => void) | undefined;
   private onVisibility = (): void => {
     if (!this.state.running || document.hidden) return;
@@ -98,7 +100,8 @@ export class WatchOnlineController {
       if (s.online.status !== 'on') this.stop();
     });
     document.addEventListener('visibilitychange', this.onVisibility);
-    if (!this.inFlight) void this.tick(this.session);
+    if (this.inFlight) this.deferred = true;
+    else void this.tick(this.session);
   }
 
   stop(): void {
@@ -108,6 +111,7 @@ export class WatchOnlineController {
     this.timer = undefined;
     this.unsub?.();
     this.unsub = undefined;
+    this.deferred = false;
     document.removeEventListener('visibilitychange', this.onVisibility);
     this.set({ running: false, values: null });
   }
@@ -134,7 +138,14 @@ export class WatchOnlineController {
       result = { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
     this.inFlight = false;
-    if (session !== this.session) return;
+    if (session !== this.session) {
+      // Risposta di una sessione chiusa: si scarta; chi ha riavviato nel frattempo parte ora.
+      if (this.deferred && this.state.running) {
+        this.deferred = false;
+        void this.tick(this.session);
+      }
+      return;
+    }
     if (this.store.getState().online.status !== 'on') {
       this.stop(); // collegamento perso durante il giro
       return;

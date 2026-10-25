@@ -1255,6 +1255,7 @@
       "S5_RESOLUTION": "Tempo non rappresentabile: risoluzione minima 10 ms (100 ms oltre 9,99 s, 1 s oltre 99,9 s, 10 s oltre 999 s).",
       "TOO_MANY": "Troppe righe da osservare: il simulatore ne accetta al più 1000.",
       "ONLINE_UNSUPPORTED": "Non disponibile online: l'area PQ non si legge né si comanda sul PLC collegato.",
+      "ONLINE_ADDRESS": "Indirizzo fuori dai limiti accettati online (DB da 1 a 65535, area entro 2 MB).",
       "ONLINE_TOO_MANY": "Troppe righe da osservare online: la CPU ne accetta al più 200.",
       "ONLINE_NO_COMMAND": "Online questa riga si può solo osservare: PI, temporizzatori e contatori non si comandano."
     }

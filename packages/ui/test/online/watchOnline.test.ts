@@ -145,6 +145,31 @@ describe('WatchOnlineController: osservazione', () => {
     ctrl.stop();
   });
 
+  it('riavvio durante una lettura in corso: finita quella, ne parte una nuova', async () => {
+    const { bridge, ctrl } = setup();
+    let release: () => void = () => undefined;
+    bridge.plcReadWatchImpl = () =>
+      new Promise<PlcReadWatchResult>((res) => {
+        release = () => res({ ok: true, values: [] });
+      });
+    ctrl.start();
+    await flush();
+    ctrl.stop();
+    ctrl.start();
+    await flush();
+    expect(bridge.plcReadWatchCalls).toHaveLength(1); // nessuna sovrapposizione
+    bridge.plcReadWatchImpl = () => ({
+      ok: true,
+      values: [{ bytes: Uint8Array.of(1) }, { bytes: Uint8Array.of(2) }],
+    });
+    release();
+    await flush();
+    expect(bridge.plcReadWatchCalls).toHaveLength(2);
+    expect(ctrl.getState().running).toBe(true);
+    expect(ctrl.getState().values).not.toBeNull();
+    ctrl.stop();
+  });
+
   it('start senza collegamento non parte', async () => {
     const { store, bridge, ctrl } = setup();
     store.setState({ online: { status: 'off' } } as never);

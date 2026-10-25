@@ -1,4 +1,4 @@
-import { parseBlockFile } from '@baaportal/s7comm';
+import { parseBlockFile, planWrites } from '@baaportal/s7comm';
 import type { BlockType, ConnectOptions, S7DateTime, S7WriteClient } from '@baaportal/s7comm';
 import { connectWriteTcp } from '@baaportal/s7comm/node';
 import type {
@@ -15,6 +15,9 @@ import type { ConfirmFn, WriteConfirmTexts } from './confirm';
 import { connectMessage, type PlcOwner, type PlcService } from './plcService';
 import { confirmLine, parseWriteItems, toWriteItem } from './watchOnline';
 
+/** PDU minima di una CPU S7-300: serve solo ad annunciare nella conferma quante richieste partiranno. */
+const NOTICE_PDU = 240;
+
 export const MAX_FILES = 2048;
 export const MAX_FILE_BYTES = 1024 * 1024;
 export const MAX_TOTAL_BYTES = 32 * 1024 * 1024;
@@ -23,8 +26,6 @@ const DEFAULT_PORT = 102;
 const CONNECTION_TYPES = { PG: 'pg', OP: 'op', S7_BASIC: 'basic' } as const;
 const DELETABLE = ['OB', 'FB', 'FC', 'DB'];
 const MAX_LIST_LINES = 20;
-/** Item per richiesta write var (proto §5.11). */
-const MAX_WRITE_GROUP = 20;
 const PROGRESS_MIN_MS = 100; // al massimo 10 eventi al secondo, più quello finale
 const OPS: readonly PlcControlOp[] = ['RUN', 'STOP', 'COPY_RAM_TO_ROM', 'COMPRESS'];
 
@@ -45,6 +46,7 @@ export type WriteClient = Pick<
   | 'compressMemory'
   | 'setClock'
   | 'writeItems'
+  | 'pduLength'
 >;
 export type PlcWriteConnectFn = (
   o: Omit<ConnectOptions, 'transport' | 'mode'>,
@@ -405,6 +407,11 @@ export class PlcWriteService {
     if (typeof parsed === 'string') return { ok: false, error: parsed };
     const items = parsed.map((x) => toWriteItem(x.target, x.data));
     const lines = parsed.map((x) => confirmLine(x.target, x.data));
+    const requests = planWrites(items, NOTICE_PDU).length;
+    const notice =
+      requests > 1
+        ? `\nLe scritture partono in ${requests} richieste: se una fallisce, quelle precedenti restano scritte.`
+        : '';
     return this.exclusive<PlcWriteVarsResult>(
       owner,
       (m) => ({ ok: false, error: m }),
@@ -413,19 +420,23 @@ export class PlcWriteService {
         const p = await this.prepare(owner, op, (target) => ({
           title: 'Comanda variabili',
           message: `Scrivere ${items.length} ${items.length === 1 ? 'valore' : 'valori'} nella CPU ${cpuName(target)}?`,
-          detail: `Operazione: Comanda variabili\n${listLines(lines)}`,
+          detail: `Operazione: Comanda variabili\n${listLines(lines)}${notice}`,
           confirmLabel: 'Comanda',
         }));
         if (!('c' in p)) return p.result;
         const results: ({ ok: true } | { ok: false; error: string })[] = [];
+        // Un gruppo per richiesta, come la PDU negoziata col collegamento aperto.
+        const groups = planWrites(items, p.c.pduLength);
+        let failed = false;
         try {
-          for (let i = 0; i < items.length; i += MAX_WRITE_GROUP) {
-            const group = items.slice(i, i + MAX_WRITE_GROUP);
-            if (owner.isDestroyed() || op.aborted) {
-              const why = op.aborted ? "Uscita dall'app" : 'Finestra chiusa';
-              for (let j = 0; j < group.length; j++) {
-                results.push({ ok: false, error: `${why}: non scritto` });
-              }
+          for (const group of groups) {
+            if (failed || owner.isDestroyed() || op.aborted) {
+              const why = failed
+                ? 'Non scritto: scrittura interrotta dopo un errore'
+                : op.aborted
+                  ? "Uscita dall'app: non scritto"
+                  : 'Finestra chiusa: non scritto';
+              for (let j = 0; j < group.length; j++) results.push({ ok: false, error: why });
               continue;
             }
             try {
@@ -433,12 +444,15 @@ export class PlcWriteService {
               for (const rc of rcs) {
                 results.push(rc.returnCode === 0xff ? { ok: true } : { ok: false, error: rc.name });
               }
-            } catch (err) {
-              // La connessione di scrittura è una per operazione: dopo un errore non si insiste.
+            } catch {
+              // La richiesta può essere arrivata alla CPU: l'esito non si conosce. Non si insiste.
               for (let j = 0; j < group.length; j++) {
-                results.push({ ok: false, error: errText(err) });
+                results.push({
+                  ok: false,
+                  error: 'Esito sconosciuto: la CPU potrebbe averlo scritto',
+                });
               }
-              op.aborted = true;
+              failed = true;
             }
           }
           return { ok: true, results };

@@ -1255,6 +1255,7 @@
       "S5_RESOLUTION": "Time not representable: minimum resolution 10 ms (100 ms above 9.99 s, 1 s above 99.9 s, 10 s above 999 s).",
       "TOO_MANY": "Too many rows to monitor: the simulator accepts at most 1000.",
       "ONLINE_UNSUPPORTED": "Not available online: the PQ area can be neither monitored nor modified on the connected PLC.",
+      "ONLINE_ADDRESS": "Address outside the limits accepted online (DB 1 to 65535, area within 2 MB).",
       "ONLINE_TOO_MANY": "Too many rows to monitor online: the CPU accepts at most 200.",
       "ONLINE_NO_COMMAND": "Online this row can only be monitored: PI, timers and counters cannot be modified."
     }

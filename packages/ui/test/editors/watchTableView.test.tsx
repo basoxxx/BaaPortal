@@ -97,6 +97,25 @@ describe('tabella di controllo online', () => {
     );
   });
 
+  it('riga con DB 0: errore sulla sola riga, le altre si leggono e si comandano', async () => {
+    const app = await openOnline([
+      ['%MW10', 'DEC', '1'],
+      ['DB0.DBW0', 'DEC', '2'],
+      ['%MW12', 'DEC', '3'],
+    ]);
+    expect(cell('r2', 'operand')).toHaveClass('is-error');
+    expect(cell('r1', 'operand')).not.toHaveClass('is-error');
+    expect(cell('r3', 'operand')).not.toHaveClass('is-error');
+    await click(app, 'Osserva tutto');
+    await waitFor(() => expect(app.bridge.plcReadWatchCalls.length).toBeGreaterThan(0));
+    expect(app.bridge.plcReadWatchCalls[0]).toHaveLength(2);
+    await click(app, 'Osserva tutto');
+    await click(app, 'Comanda');
+    await waitFor(() => expect(app.bridge.plcWriteVarsCalls).toHaveLength(1));
+    expect(app.bridge.plcWriteVarsCalls[0]!.map((w) => w.target.byte)).toEqual([10, 12]);
+    expect(cell('r2', 'modify')).toHaveClass('is-error');
+  });
+
   it('comando annullato → nessun messaggio, nessun errore', async () => {
     const app = await openOnline([['%MW10', 'DEC', '42']]);
     app.bridge.plcWriteVarsResults.push({ ok: false, cancelled: true });
