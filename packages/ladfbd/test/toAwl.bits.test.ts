@@ -197,8 +197,8 @@ describe('uscite (§2.8–§2.14)', () => {
     expect(awl(n)).toBe(fmt('A I 0.0', 'A(', 'A I 0.3', 'FP M 0.0', ')', 'A I 0.4', '= Q 4.0'));
   });
 
-  it('§2.14 SAVE', () => {
-    expect(awl(net([c('I 0.0')], [out({ k: 'save' })]))).toBe(fmt('A I 0.0', 'SAVE'));
+  it('§2.14 SAVE, seguito da CLR (scostamento voluto: /FC = 0 per la logica che segue)', () => {
+    expect(awl(net([c('I 0.0')], [out({ k: 'save' })]))).toBe(fmt('A I 0.0', 'SAVE', 'CLR'));
   });
 });
 
@@ -251,6 +251,7 @@ describe('salti, RET, MCR, OPN, CALL (§4.11–§4.14)', () => {
 
   it('§4.12 etichetta del segmento davanti alla prima istruzione', () => {
     expect(awl(net([c('I 0.0')], [coil('Q 4.0')], 'DEST'))).toBe(fmt('DEST: A I 0.0', '= Q 4.0'));
+    expect(awl(net([c('I 0.0')], [coil('Q 4.0')], ' DEST '))).toBe(fmt('DEST: A I 0.0', '= Q 4.0'));
   });
 
   it('§4.13 RET: SAVE; BEC', () => {
@@ -279,9 +280,42 @@ describe('salti, RET, MCR, OPN, CALL (§4.11–§4.14)', () => {
 });
 
 describe('nodi condivisi (bit L)', () => {
-  it('JMP non ultimo sul nodo: il nodo si salva in un bit L', () => {
+  it('JMP disegnato prima di una bobina: il salto va in fondo, forma consecutiva', () => {
     const n = net([c('I 0.0')], [out({ k: 'jmp', label: 'DEST' }), coil('Q 4.0')]);
-    expect(awl(n)).toBe(fmt('A I 0.0', '= L 20.0', 'A L 20.0', 'JC DEST', 'A L 20.0', '= Q 4.0'));
+    expect(awl(n)).toBe(fmt('A I 0.0', '= Q 4.0', 'JC DEST'));
+  });
+
+  it('più uscite che distruggono l’RLO: bit L, CALL prima e salti per ultimi', () => {
+    const n = net(
+      [c('I 0.0')],
+      [out({ k: 'jmp', label: 'DEST' }), out({ k: 'callCoil', block: 'FC 1' }), coil('Q 4.0')],
+    );
+    expect(awl(n)).toBe(
+      fmt(
+        'A I 0.0',
+        '= L 20.0',
+        'A L 20.0',
+        '= Q 4.0',
+        'A L 20.0',
+        'CC FC 1',
+        'A L 20.0',
+        'JC DEST',
+      ),
+    );
+  });
+
+  it('sulla barra JMP prima di una bobina non lascia codice irraggiungibile', () => {
+    expect(awl(net([], [out({ k: 'jmp', label: 'DEST' }), coil('Q 4.0')]))).toBe(
+      fmt('SET', '= Q 4.0', 'JU DEST'),
+    );
+  });
+
+  it('parallelo con O senza operando prima di un solo ramo a T: va in A( … )', () => {
+    const n = net(
+      [par([c('I 0.0'), c('I 0.3')], [c('I 0.1')])],
+      [node([c('I 0.2')], [coil('Q 4.0')])],
+    );
+    expect(awl(n)).toBe(fmt('A(', 'A I 0.0', 'A I 0.3', 'O', 'A I 0.1', ')', 'A I 0.2', '= Q 4.0'));
   });
 
   it('JMP ultimo dopo le bobine: forma consecutiva', () => {

@@ -12,6 +12,7 @@ export type LadDiagCode =
   | 'EDGE_ON_RAIL'
   | 'NOT_ON_RAIL'
   | 'FLOW_IN_BRANCH'
+  | 'MUST_BE_ALONE'
   | 'BOX_IN_PARALLEL'
   | 'BOX_IN_TBRANCH'
   | 'BAD_LABEL'
@@ -72,7 +73,11 @@ function checkSeries(list: LadElem[], inBranch: boolean, railInput: boolean, add
   }
 }
 
-function checkOut(o: LadOut, hasLogic: boolean, add: Add): void {
+/** OPN, )MCR, MCRA, MCRD sono incondizionati: stanno da soli sulla barra (unica uscita della rete). */
+const ALONE = new Set<LadOut['k']>(['opn', 'mcrClose', 'mcra', 'mcrd']);
+
+function checkOut(o: LadOut, hasLogic: boolean, alone: boolean, add: Add): void {
+  if (ALONE.has(o.k) && !alone) add(o.id, 'MUST_BE_ALONE');
   const need = (...ops: string[]) => {
     if (ops.some(blank)) add(o.id, 'EMPTY_OPERAND');
   };
@@ -106,13 +111,14 @@ function checkOut(o: LadOut, hasLogic: boolean, add: Add): void {
   }
 }
 
-function checkNode(node: LadNode, logicBefore: boolean, add: Add): void {
+function checkNode(node: LadNode, isRoot: boolean, logicBefore: boolean, add: Add): void {
   if (node.outs.length === 0) add(node.id, 'NO_OUTPUT');
   checkSeries(node.series, false, !logicBefore, add);
   const hasLogic = logicBefore || node.series.length > 0;
+  const alone = isRoot && !hasLogic && node.outs.length === 1;
   for (const o of node.outs) {
-    if (isNode(o)) checkNode(o, hasLogic, add);
-    else checkOut(o, hasLogic, add);
+    if (isNode(o)) checkNode(o, false, hasLogic, add);
+    else checkOut(o, hasLogic, alone, add);
   }
 }
 
@@ -121,7 +127,8 @@ export function validateNetwork(net: LadNetwork): LadDiag[] {
   const diags: LadDiag[] = [];
   const add: Add = (elemId, code, params) =>
     diags.push(params ? { elemId, code, params } : { elemId, code });
-  if (net.label && !LABEL_RE.test(net.label)) add(net.root.id, 'BAD_LABEL', { label: net.label });
-  checkNode(net.root, false, add);
+  const label = net.label?.trim();
+  if (label && !LABEL_RE.test(label)) add(net.root.id, 'BAD_LABEL', { label });
+  checkNode(net.root, true, false, add);
   return diags;
 }

@@ -99,12 +99,28 @@ describe('validateNetwork', () => {
     ]);
   });
 
+  it('MUST_BE_ALONE: OPN, )MCR, MCRA, MCRD solo come unica uscita sulla barra', () => {
+    const kinds = ['opn', 'mcrClose', 'mcra', 'mcrd'] as const;
+    for (const k of kinds) {
+      const o = (k === 'opn' ? { id: 'o', k, db: 'DB 1' } : { id: 'o', k }) as LadOut;
+      expect(validateNetwork(net([], [o]))).toEqual([]);
+      expect(validateNetwork(net([c('a')], [o]))).toEqual([{ elemId: 'o', code: 'MUST_BE_ALONE' }]);
+      expect(validateNetwork(net([], [o, coil('q')]))).toEqual([
+        { elemId: 'o', code: 'MUST_BE_ALONE' },
+      ]);
+      const t: LadNode = { id: 't', series: [], outs: [o] };
+      expect(validateNetwork(net([], [t, coil('q')]))).toEqual([
+        { elemId: 'o', code: 'MUST_BE_ALONE' },
+      ]);
+    }
+  });
+
   it('BAD_LABEL: etichetta del segmento o del salto non valida', () => {
     for (const label of ['1AB', 'ABCDE', '_001', 'A-B'])
       expect(validateNetwork(net([c('a')], [coil('q')], label))).toEqual([
         { elemId: 'root', code: 'BAD_LABEL', params: { label } },
       ]);
-    for (const label of ['M', 'm001', 'Ab9z'])
+    for (const label of ['M', 'm001', 'Ab9z', ' M1 ', ''])
       expect(validateNetwork(net([c('a')], [coil('q')], label))).toEqual([]);
     expect(validateNetwork(net([c('a')], [{ id: 'j', k: 'jmp', label: '_001' }]))).toEqual([
       { elemId: 'j', code: 'BAD_LABEL', params: { label: '_001' } },

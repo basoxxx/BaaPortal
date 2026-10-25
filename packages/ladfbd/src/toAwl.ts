@@ -20,9 +20,11 @@ export type NetworkAwl = {
 type Parallel = Extract<LadElem, { k: 'parallel' }>;
 type Contact = Extract<LadElem, { k: 'contact' }>;
 
-/** Uscite dopo le quali l'RLO del nodo non si può più usare: devono essere le ultime del nodo. */
-const DESTROYS_RLO = new Set<LadOut['k']>(['jmp', 'jmpn', 'ret', 'callCoil', 'mcrOpen']);
-/** Uscite che sulla barra non hanno bisogno di un RLO (salto, chiamata, OPN, MCR). */
+/** Uscite dopo le quali l'RLO del nodo non si può più usare (SAVE è seguito da CLR). */
+const DESTROYS_RLO = new Set<LadOut['k']>(['jmp', 'jmpn', 'ret', 'callCoil', 'mcrOpen', 'save']);
+/** Uscite che possono saltare il resto del segmento o del blocco. */
+const TRANSFERS = new Set<LadOut['k']>(['jmp', 'jmpn', 'ret']);
+/** Uscite che sulla barra non hanno bisogno di un RLO (salto, chiamata; OPN e MCR solo da sole). */
 const RAIL_UNCONDITIONAL = new Set<LadOut['k']>([
   'jmp',
   'callCoil',
@@ -33,6 +35,24 @@ const RAIL_UNCONDITIONAL = new Set<LadOut['k']>([
 ]);
 
 const isContact = (e: LadElem): e is Contact => e.k === 'contact';
+
+function hasTransfer(o: LadOut | LadNode): boolean {
+  return isNode(o) ? o.outs.some(hasTransfer) : TRANSFERS.has(o.k);
+}
+
+/**
+ * Ordine di emissione delle uscite di un nodo (ordine stabile): prima quelle che lasciano l'RLO
+ * com'è, poi i rami a T e le uscite che lo distruggono (CALL, MCR(, SAVE), per ultimi i salti,
+ * RET e i rami a T che li contengono, così un salto preso non salta altre uscite del nodo.
+ */
+function emitOrder(outs: (LadOut | LadNode)[]): (LadOut | LadNode)[] {
+  const rank = (o: LadOut | LadNode) =>
+    hasTransfer(o) ? 2 : isNode(o) || DESTROYS_RLO.has(o.k) ? 1 : 0;
+  return outs
+    .map((o, i) => ({ o, i, r: rank(o) }))
+    .sort((a, b) => a.r - b.r || a.i - b.i)
+    .map((x) => x.o);
+}
 const contactText = (e: Contact, or: boolean) =>
   `${or ? 'O' : 'A'}${e.neg ? 'N' : ''} ${e.op.trim()}`;
 
@@ -56,9 +76,12 @@ class Emitter {
 
   // ---- serie e paralleli ----
 
-  /** `fresh`: non c'è RLO davanti (barra o inizio di una parentesi). */
-  private series(items: LadElem[], fresh: boolean): void {
-    items.forEach((e, i) => this.item(e, fresh && i === 0, i === items.length - 1));
+  /**
+   * `fresh`: non c'è RLO davanti (barra o inizio di una parentesi); `continues`: la serie
+   * prosegue con altra logica (nodo con un solo ramo a T), quindi l'ultimo elemento non è l'ultimo.
+   */
+  private series(items: LadElem[], fresh: boolean, continues = false): void {
+    items.forEach((e, i) => this.item(e, fresh && i === 0, !continues && i === items.length - 1));
   }
 
   private item(e: LadElem, fresh: boolean, last: boolean): void {
@@ -132,14 +155,14 @@ class Emitter {
 
   /** `fresh`: il nodo riceve il flusso dalla barra, senza logica davanti. */
   node(node: LadNode, fresh: boolean): void {
-    this.series(node.series, fresh);
+    const only = node.outs.length === 1 ? node.outs[0] : undefined;
+    const inline = only && isNode(only) ? only : undefined;
+    this.series(node.series, fresh, inline !== undefined);
     if (fresh && node.series.length === 0) return this.railOuts(node.outs);
-    const outs = node.outs;
-    const only = outs[0];
-    if (outs.length === 1 && only && isNode(only)) return this.node(only, false);
+    if (inline) return this.node(inline, false);
+    const outs = emitOrder(node.outs);
     const shared =
-      outs.some(isNode) ||
-      outs.some((o, i) => !isNode(o) && DESTROYS_RLO.has(o.k) && i < outs.length - 1);
+      outs.some(isNode) || outs.filter((o) => !isNode(o) && DESTROYS_RLO.has(o.k)).length > 1;
     if (!shared) {
       // §2.8: le uscite che non cambiano l'RLO si scrivono una dopo l'altra
       for (const o of outs) this.output(o as LadOut, true);
@@ -158,7 +181,7 @@ class Emitter {
   /** Uscite collegate alla barra: ognuna riparte da capo; quelle che usano l'RLO hanno SET (H7). */
   private railOuts(outs: (LadOut | LadNode)[]): void {
     let rloSet = false;
-    for (const o of outs) {
+    for (const o of emitOrder(outs)) {
       if (isNode(o)) {
         this.node(o, true);
         rloSet = false;
@@ -193,10 +216,12 @@ class Emitter {
       case 'jmpn':
         return this.push(o.id, `JCN ${o.label.trim()}`);
       case 'ret': // §4.13
-        if (!cond) throw new Error('RET senza logica davanti');
+        if (!cond) throw new Error('invariante violata: RET senza logica davanti');
         return this.push(o.id, 'SAVE', 'BEC');
-      case 'save': // §2.14
-        return this.push(o.id, 'SAVE');
+      case 'save':
+        // §2.14 dà SAVE da solo; CLR in più (scostamento voluto) rimette /FC = 0, così la logica
+        // che segue, nel nodo o nel segmento dopo, non si combina con l'RLO del SAVE
+        return this.push(o.id, 'SAVE', 'CLR');
       case 'mcrOpen': // §4.14
         return this.push(o.id, 'MCR(');
       case 'mcrClose':
@@ -228,7 +253,8 @@ export function networkToAwl(
   const em = new Emitter(opts.tempEnd);
   em.node(net.root, true);
   const raw = em.out.map((l) => l.text);
-  if (net.label && raw.length > 0) raw[0] = `${net.label}: ${raw[0]}`;
+  const label = net.label?.trim();
+  if (label && raw.length > 0) raw[0] = `${label}: ${raw[0]}`;
   const plain = raw.join('\n');
   // forma canonica di formatNetwork; se un operando sbagliato cambia il numero di righe resta
   // il testo grezzo, così la mappa delle righe vale comunque
