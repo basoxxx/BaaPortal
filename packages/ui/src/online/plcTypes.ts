@@ -88,3 +88,31 @@ export interface OnlineBlock {
 
 /** Esito di `plcBlocks`: l'elenco dei blocchi OB, FB, FC e DB della CPU collegata. */
 export type PlcBlocksResult = { ok: true; blocks: OnlineBlock[] } | { ok: false; error: string };
+
+/** Un blocco caricato dalla CPU: i byte del file `.blk` come li dà la CPU. */
+export interface PlcUploadedFile {
+  type: 'OB' | 'FB' | 'FC' | 'DB';
+  number: number;
+  bytes: Uint8Array;
+}
+
+/** Avanzamento di «Carica dal dispositivo»: `current` è il blocco appena finito. */
+export interface PlcUploadProgress {
+  done: number;
+  total: number;
+  current: string;
+}
+
+/**
+ * Esito di `plcUploadAll`. `failed` elenca i blocchi che la CPU non ha dato (gli altri sono nei
+ * file); `cancelled`: interrotto dall'utente, nessun file.
+ */
+export type PlcUploadAllResult =
+  | {
+      ok: true;
+      files: PlcUploadedFile[];
+      identity: PlcIdentity;
+      failed: { type: PlcUploadedFile['type']; number: number; error: string }[];
+    }
+  | { ok: false; error: string }
+  | { ok: false; cancelled: true };

@@ -24,6 +24,8 @@ import type {
   PlcControlResult,
   PlcDownloadResult,
   PlcWriteProgress,
+  PlcUploadAllResult,
+  PlcUploadProgress,
 } from '../src/online/plcTypes';
 
 type Answer = 'save' | 'discard' | 'cancel';
@@ -289,6 +291,30 @@ export class FakeBridge implements BaaBridge {
     for (const cb of [...this.plcWriteCbs]) cb(p);
   }
   // Ricerca dei dispositivi accessibili.
+  plcUploadResults: PlcUploadAllResult[] = [];
+  plcUploadCalls: PlcAccess[] = [];
+  plcUploadCancelCalls = 0;
+  /** Se c'è, plcUploadAll attende questa promessa prima di rispondere. */
+  plcUploadGate: Promise<void> | null = null;
+  private plcUploadCbs = new Set<(p: PlcUploadProgress) => void>();
+  async plcUploadAll(access: PlcAccess): Promise<PlcUploadAllResult> {
+    this.plcUploadCalls.push(access);
+    if (this.plcUploadGate) await this.plcUploadGate;
+    return this.plcUploadResults.shift() ?? { ok: false, error: 'nessun risultato previsto' };
+  }
+  async plcUploadCancel() {
+    this.plcUploadCancelCalls++;
+  }
+  onPlcUploadProgress(cb: (p: PlcUploadProgress) => void) {
+    this.plcUploadCbs.add(cb);
+    return () => {
+      this.plcUploadCbs.delete(cb);
+    };
+  }
+  emitPlcUploadProgress(p: PlcUploadProgress): void {
+    for (const cb of [...this.plcUploadCbs]) cb(p);
+  }
+
   plcInterfacesValue: NetInterface[] = [];
   plcScanResults: PlcScanStartResult[] = [];
   plcScanStartCalls: string[] = [];

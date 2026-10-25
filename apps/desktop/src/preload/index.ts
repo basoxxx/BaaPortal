@@ -5,6 +5,7 @@ import type {
   PlcEvent,
   PlcScanEvent,
   PlcWriteProgress,
+  PlcUploadProgress,
 } from '@baaportal/ui';
 import type { RawBridge } from '../shared/rawBridge';
 
@@ -69,6 +70,9 @@ const bridge: RawBridge = {
   plcControl: (op) => ipcRenderer.invoke('plc:control', op),
   plcBlocks: () => ipcRenderer.invoke('plc:blocks'),
   onPlcWriteProgress: (cb) => subscribe<[PlcWriteProgress]>('plc:writeProgress', cb),
+  plcUploadAll: (access) => ipcRenderer.invoke('plc:uploadAll', access),
+  plcUploadCancel: () => ipcRenderer.invoke('plc:uploadCancel'),
+  onPlcUploadProgress: (cb) => subscribe<[PlcUploadProgress]>('plc:uploadProgress', cb),
   testOverrides: () => ipcRenderer.invoke('app:test-overrides'),
 };
 

@@ -6,12 +6,14 @@ import type {
   PlcControlResult,
   PlcDownloadResult,
   PlcScanStartResult,
+  PlcUploadAllResult,
 } from '@baaportal/ui';
 import type { ConfirmFn } from './confirm';
 import { PlcWriteService, isControlOp, parseDownloadRequest } from './plcWrite';
 import { listOnlineBlocks } from './onlineBlocks';
 import { PlcService } from './plcService';
 import { ScanService } from './scanService';
+import { UploadService } from './uploadAll';
 
 type Handle = (
   channel: string,
@@ -56,6 +58,7 @@ export function registerPlc(
   service = new PlcService(),
   scans = new ScanService(),
   writes = new PlcWriteService({ service, confirm }),
+  uploads = new UploadService(),
 ): { closeAll(): Promise<void>; writing(): boolean } {
   handle('plc:connect', async (e, raw): Promise<PlcConnectResult> => {
     const access = parsePlcAccess(raw);
@@ -83,9 +86,20 @@ export function registerPlc(
   });
   // Elenco dei blocchi della CPU: sola lettura, sul collegamento della finestra.
   handle('plc:blocks', (e): Promise<PlcBlocksResult> => listOnlineBlocks(service, e.sender));
+  // Caricamento dalla CPU: collegamento proprio, in sola lettura, dall'accesso dato dalla finestra.
+  handle('plc:uploadAll', async (e, raw): Promise<PlcUploadAllResult> => {
+    const access = parsePlcAccess(raw);
+    if (typeof access === 'string') return { ok: false, error: access };
+    return uploads.start(e.sender, access);
+  });
+  handle('plc:uploadCancel', (e) => uploads.cancel(e.sender));
   return {
     closeAll: async () => {
-      await Promise.all([scans.cancelAll(), writes.abortAll().then(() => service.closeAll())]);
+      await Promise.all([
+        scans.cancelAll(),
+        uploads.abortAll(),
+        writes.abortAll().then(() => service.closeAll()),
+      ]);
     },
     writing: () => writes.writing(),
   };

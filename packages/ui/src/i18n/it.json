@@ -125,7 +125,13 @@
     "plcRunFailed": "Avvio della CPU non riuscito: {{message}}",
     "plcCommandFailed": "Comando alla CPU non riuscito: {{message}}",
     "plcCopiedRamToRom": "Copia da RAM a ROM eseguita.",
-    "plcCompressed": "Memoria della CPU compressa."
+    "plcCompressed": "Memoria della CPU compressa.",
+    "uploadDone": "Caricati {{count}} blocchi dal dispositivo nel progetto «{{name}}», non ancora salvato.",
+    "uploadCancelled": "Caricamento dal dispositivo interrotto: nessun progetto creato.",
+    "uploadFailed": "Caricamento dal dispositivo non riuscito: {{message}}",
+    "uploadCpuUnknown": "La CPU {{order}} non è nel catalogo: il progetto usa una CPU generica della stessa famiglia ({{cpu}}).",
+    "uploadBlockFailed": "{{block}}: la CPU non l'ha dato ({{message}})",
+    "uploadBlockSkipped": "{{block}}: non importato ({{reason}})"
   },
   "commands": {
     "project.new": "Nuovo…",
@@ -1201,5 +1207,13 @@
       "ended": "Caricamento eseguito, ma il collegamento o il progetto sono cambiati."
     },
     "cpuStopped": "CPU lasciata in STOP."
+  },
+  "upload": {
+    "namePrefix": "Caricato da",
+    "dialogButton": "Carica dal dispositivo",
+    "progress": "Caricamento in corso: {{done}} di {{total}} ({{current}})",
+    "starting": "Collegamento alla CPU…",
+    "stop": "Interrompi",
+    "busy": "Caricamento dal dispositivo in corso."
   }
 }

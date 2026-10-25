@@ -125,7 +125,13 @@
     "plcRunFailed": "Starting the CPU failed: {{message}}",
     "plcCommandFailed": "CPU command failed: {{message}}",
     "plcCopiedRamToRom": "RAM copied to ROM.",
-    "plcCompressed": "CPU memory compressed."
+    "plcCompressed": "CPU memory compressed.",
+    "uploadDone": "Uploaded {{count}} blocks from the device into project \"{{name}}\", not saved yet.",
+    "uploadCancelled": "Upload from the device interrupted: no project created.",
+    "uploadFailed": "Upload from the device failed: {{message}}",
+    "uploadCpuUnknown": "CPU {{order}} is not in the catalog: the project uses a generic CPU of the same family ({{cpu}}).",
+    "uploadBlockFailed": "{{block}}: the CPU did not provide it ({{message}})",
+    "uploadBlockSkipped": "{{block}}: not imported ({{reason}})"
   },
   "commands": {
     "project.new": "New…",
@@ -1201,5 +1207,13 @@
       "ended": "Download done, but the connection or project changed."
     },
     "cpuStopped": "CPU left in STOP."
+  },
+  "upload": {
+    "namePrefix": "Uploaded from",
+    "dialogButton": "Upload from device",
+    "progress": "Uploading: {{done}} of {{total}} ({{current}})",
+    "starting": "Connecting to the CPU…",
+    "stop": "Stop",
+    "busy": "Upload from the device in progress."
   }
 }

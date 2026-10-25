@@ -11,6 +11,8 @@ import type {
   PlcScanEvent,
   PlcScanStartResult,
   PlcStatus,
+  PlcUploadAllResult,
+  PlcUploadProgress,
   PlcWriteProgress,
 } from './online/plcTypes';
 
@@ -146,5 +148,12 @@ export interface BaaBridge {
   /** Elenco dei blocchi della CPU collegata (sola lettura); mai eccezioni: l'esito dice tutto. */
   plcBlocks(): Promise<PlcBlocksResult>;
   onPlcWriteProgress(cb: (p: PlcWriteProgress) => void): () => void;
+  /**
+   * Carica OB, FB, FC e DB da una CPU in sola lettura, su un collegamento proprio (non serve essere
+   * online). Uno per finestra; mai eccezioni: l'esito dice tutto.
+   */
+  plcUploadAll(access: PlcAccess): Promise<PlcUploadAllResult>;
+  plcUploadCancel(): Promise<void>;
+  onPlcUploadProgress(cb: (p: PlcUploadProgress) => void): () => void;
   testOverrides(): Promise<{ recoveryIntervalMs?: number }>; // sempre {} nelle build pacchettizzate
 }

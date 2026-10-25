@@ -293,7 +293,13 @@ const list: Command[] = [
     isChecked: (s) => s.sim.monitor !== null,
     run: ({ store }) => simControllerFor(store).toggleMonitor(),
   }),
-  def('online.upload', { icon: 'upload' }),
+  // Come in TIA, si carica da un dispositivo anche senza progetto aperto: crea un progetto nuovo.
+  // Disponibile finché nessuna operazione lunga o comando della CPU è in corso.
+  def('online.upload', {
+    icon: 'upload',
+    isEnabled: (s) => !getProgress() && !s.online.downloading && !s.online.commanding,
+    run: ({ store }) => store.getState().openDialog({ kind: 'accessibleDevices' }),
+  }),
   def('online.accessibleDevices', {
     icon: 'accessibleDevices',
     isEnabled: hasDoc,
