@@ -267,6 +267,19 @@ describe('salti, RET, MCR, OPN, CALL (§4.11–§4.14)', () => {
     expect(awl(net([], [out({ k: 'mcrd' })]))).toBe(fmt('MCRD'));
   });
 
+  it('MCR( dopo i rami a T: le loro uscite non finiscono nella zona MCR che il segmento apre', () => {
+    const t = node([c('I 0.1')], [coil('Q 4.0')]);
+    expect(awl(net([c('I 0.0')], [out({ k: 'mcrOpen' }), t]))).toBe(
+      fmt('A I 0.0', '= L 20.0', 'A L 20.0', 'A I 0.1', '= Q 4.0', 'A L 20.0', 'MCR('),
+    );
+    // un ramo a T che contiene MCR( va dopo gli altri rami a T
+    const withMcr = node([c('I 0.1')], [out({ k: 'mcrOpen' })]);
+    const other = node([c('I 0.2')], [coil('Q 4.1')]);
+    expect(awl(net([c('I 0.0')], [withMcr, other]))).toBe(
+      fmt('A I 0.0', '= L 20.0', 'A L 20.0', 'A I 0.2', '= Q 4.1', 'A L 20.0', 'A I 0.1', 'MCR('),
+    );
+  });
+
   it('§4.11 bobina CALL sulla barra: UC (ipotesi H16); con logica: CC', () => {
     expect(awl(net([], [out({ k: 'callCoil', block: 'FC 11' })]))).toBe(fmt('UC FC 11'));
     expect(awl(net([c('I 0.1')], [out({ k: 'callCoil', block: 'SFC 46' })]))).toBe(

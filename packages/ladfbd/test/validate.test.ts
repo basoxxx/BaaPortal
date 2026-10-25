@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { networkToAwl, validateNetwork } from '../src/index.js';
-import type { LadElem, LadNetwork, LadNode, LadOut } from '../src/index.js';
+import type { BoxKind, LadBox, LadElem, LadNetwork, LadNode, LadOut } from '../src/index.js';
 
 const c = (id: string, op = 'I 0.0'): LadElem => ({ id, k: 'contact', neg: false, op });
 const coil = (id: string, op = 'Q 4.0'): LadOut => ({ id, k: 'coil', op });
@@ -125,6 +125,107 @@ describe('validateNetwork', () => {
     expect(validateNetwork(net([c('a')], [{ id: 'j', k: 'jmp', label: '_001' }]))).toEqual([
       { elemId: 'j', code: 'BAD_LABEL', params: { label: '_001' } },
     ]);
+  });
+});
+
+const box = (
+  id: string,
+  kind: BoxKind,
+  instance = '',
+  pins: Record<string, string> = {},
+  boolPins: Record<string, LadElem[]> = {},
+): LadBox => ({ id, k: 'box', box: kind, instance, pins, boolPins });
+const move = (id: string) => box(id, 'MOVE', '', { IN: 'MW 10', OUT: 'MW 12' });
+
+describe('validateNetwork: box', () => {
+  it('un box alla fine della serie basta come uscita', () => {
+    expect(validateNetwork(net([c('a'), move('m')], []))).toEqual([]);
+    const t: LadNode = { id: 't', series: [move('m')], outs: [] };
+    expect(validateNetwork(net([c('a')], [coil('q'), t]))).toEqual([]);
+    expect(validateNetwork(net([move('m'), c('a')], []))).toEqual([
+      { elemId: 'root', code: 'NO_OUTPUT' },
+    ]);
+  });
+
+  it('BOX_IN_PARALLEL: box in un ramo parallelo, anche annidato, o nella logica di un pin', () => {
+    const p: LadElem = { id: 'p', k: 'parallel', branches: [[c('a')], [move('m')]] };
+    expect(validateNetwork(net([p], [coil('q')]))).toEqual([
+      { elemId: 'm', code: 'BOX_IN_PARALLEL' },
+    ]);
+    const inner: LadElem = { id: 'p2', k: 'parallel', branches: [[move('m2')], [c('b')]] };
+    const outer: LadElem = { id: 'p1', k: 'parallel', branches: [[c('a'), inner], [c('d')]] };
+    expect(validateNetwork(net([outer], [coil('q')]))).toEqual([
+      { elemId: 'm2', code: 'BOX_IN_PARALLEL' },
+    ]);
+    const sr = box('s', 'SR', 'M 0.0', {}, { R: [c('a'), move('m3')] });
+    expect(validateNetwork(net([c('b'), sr], []))).toEqual([
+      { elemId: 'm3', code: 'BOX_IN_PARALLEL' },
+    ]);
+  });
+
+  it('BOX_IN_TBRANCH: in un ramo a T il box sta solo all’inizio della serie', () => {
+    const t: LadNode = { id: 't', series: [c('b'), move('m')], outs: [coil('q2')] };
+    expect(validateNetwork(net([c('a')], [coil('q'), t]))).toEqual([
+      { elemId: 'm', code: 'BOX_IN_TBRANCH' },
+    ]);
+    const ok: LadNode = { id: 't', series: [move('m'), c('b')], outs: [coil('q2')] };
+    expect(validateNetwork(net([c('a')], [coil('q'), ok]))).toEqual([]);
+  });
+
+  it('BAD_INSTANCE: istanza vuota o di forma sbagliata', () => {
+    const cases: [BoxKind, string, boolean][] = [
+      ['S_ODT', 'T 1', true],
+      ['S_ODT', 'T1', true],
+      ['S_ODT', '"Ritardo"', true],
+      ['S_ODT', '', false],
+      ['S_ODT', 'C 1', false],
+      ['S_CU', 'C 10', true],
+      ['S_CU', 'T 10', false],
+      ['SR', 'M 0.0', true],
+      ['SR', 'DB10.DBX 2.0', true],
+      ['SR', '#Bit', true],
+      ['SR', 'MW 0', false],
+      ['SR', 'M 0.8', false],
+      ['CALL', 'FC 1', true],
+      ['CALL', 'SFC 46', true],
+      ['CALL', 'FB 1, DB 1', true],
+      ['CALL', '"Nastro", "Nastro_DB"', true],
+      ['CALL', '#Motore', true],
+      ['CALL', 'FB 1', false],
+      ['CALL', 'DB 1', false],
+      ['CALL', '', false],
+    ];
+    for (const [kind, instance, ok] of cases) {
+      const b = box('b', kind, instance, { TV: 'S5T#1S' });
+      expect(validateNetwork(net([c('a'), b], []))).toEqual(
+        ok ? [] : [{ elemId: 'b', code: 'BAD_INSTANCE' }],
+      );
+    }
+    // i box che non hanno istanza non la guardano
+    const m = { ...move('m'), instance: 'xyz' };
+    expect(validateNetwork(net([c('a'), m], []))).toEqual([]);
+  });
+
+  it('EMPTY_OPERAND sui pin di dati obbligatori, con il nome del pin', () => {
+    const add = box('b', 'ADD_I', '', { IN1: 'MW 0', IN2: '', OUT: ' ' });
+    expect(validateNetwork(net([c('a'), add], []))).toEqual([
+      { elemId: 'b', code: 'EMPTY_OPERAND', params: { pin: 'IN2' } },
+      { elemId: 'b', code: 'EMPTY_OPERAND', params: { pin: 'OUT' } },
+    ]);
+    expect(validateNetwork(net([c('a'), box('t', 'S_ODT', 'T 1')], []))).toEqual([
+      { elemId: 't', code: 'EMPTY_OPERAND', params: { pin: 'TV' } },
+    ]);
+    // PV serve solo se il pin S ha logica; BI, BCD, CV e i pin di una CALL sono facoltativi
+    expect(validateNetwork(net([c('a'), box('z', 'S_CU', 'C 1')], []))).toEqual([]);
+    expect(
+      validateNetwork(net([c('a'), box('z', 'S_CU', 'C 1', {}, { S: [c('s')] })], [])),
+    ).toEqual([{ elemId: 'z', code: 'EMPTY_OPERAND', params: { pin: 'PV' } }]);
+    expect(validateNetwork(net([c('a'), box('k', 'CALL', 'FC 1', { IN1: '' })], []))).toEqual([]);
+  });
+
+  it('la logica dei pin BOOL parte dalla barra: NOT davanti è un errore', () => {
+    const sr = box('s', 'SR', 'M 0.0', {}, { R: [{ id: 'n', k: 'not' }, c('b')] });
+    expect(validateNetwork(net([c('a'), sr], []))).toEqual([{ elemId: 'n', code: 'NOT_ON_RAIL' }]);
   });
 });
 
