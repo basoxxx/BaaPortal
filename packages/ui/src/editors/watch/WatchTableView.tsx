@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { findCpu } from '@baaportal/catalog';
@@ -17,15 +17,21 @@ import {
   type GridColumn,
   type GridDiagnostic,
 } from '../../grid/DataGrid';
+import { WatchOnlineController } from '../../online/watchOnline';
+import { MAX_WATCH_ITEMS } from '../../sim/protocol';
 import { simControllerFor } from '../../sim/simController';
 import { useAppStore, useServices } from '../../state/AppContext';
 import type { EditorRef } from '../../state/workArea';
 import {
+  ONLINE_MAX_ITEMS,
   WATCH_FORMATS,
   addressText,
   parseCommand,
+  planCommand,
   resolveRows,
   statusOf,
+  watchPlan,
+  type WatchSource,
   type RowInfo,
   type WatchRowError,
 } from './watchRows';
@@ -51,15 +57,23 @@ function errorText(e: WatchRowError, t: TFunction): string {
 /** Tabella di controllo: operandi, valori di stato dal simulatore e valori di comando. */
 export function WatchTableView({ editor }: { editor: EditorRef }) {
   const { t } = useTranslation();
-  const { store } = useServices();
+  const { store, bridge } = useServices();
   const { deviceId, objectId: tableId } = editor;
   const device = useAppStore((s) => (s.doc ? findDevice(s.doc.project, deviceId) : undefined));
   const table = device && findWatchTable(device, tableId);
   const simOn = useAppStore((s) => s.sim.phase === 'on' && s.sim.deviceId === deviceId);
-  const watching = useAppStore(
+  const plcOn = useAppStore((s) => s.online.status === 'on' && s.online.deviceId === deviceId);
+  // La sorgente: il simulatore se è attivo, il PLC se si è online, altrimenti nessuna.
+  const source: WatchSource | null = simOn ? 'sim' : plcOn ? 'plc' : null;
+  const online = useMemo(() => new WatchOnlineController(store, bridge), [store, bridge]);
+  const onlineState = useSyncExternalStore(online.subscribe, online.getState);
+  const simWatching = useAppStore(
     (s) => s.sim.watch?.deviceId === deviceId && s.sim.watch.tableId === tableId,
   );
-  const values = useAppStore((s) => (watching ? s.sim.watchValues : null));
+  const watching = source === 'plc' ? onlineState.running : source === 'sim' && simWatching;
+  const simValues = useAppStore((s) => (simWatching ? s.sim.watchValues : null));
+  const values = source === 'plc' ? onlineState.values : source === 'sim' ? simValues : null;
+  const [busy, setBusy] = useState(false);
   // Errori dell'ultimo «Comanda», per riga; si azzerano quando il valore di comando cambia.
   const [commandErrors, setCommandErrors] = useState<Record<string, WatchRowError>>({});
   const [lastWritten, setLastWritten] = useState<number | null>(null);
@@ -67,8 +81,26 @@ export function WatchTableView({ editor }: { editor: EditorRef }) {
   const infos = useMemo(() => {
     if (!device || !table) return new Map<string, RowInfo>();
     const resolve = watchResolverFor(device, findCpu(device.cpu.typeId));
-    return resolveRows(resolve, table.rows);
-  }, [device, table]);
+    return source === 'plc'
+      ? resolveRows(resolve, table.rows, ONLINE_MAX_ITEMS, 'plc')
+      : resolveRows(resolve, table.rows, MAX_WATCH_ITEMS, 'sim');
+  }, [device, table, source]);
+
+  // Il piano di lettura sul PLC segue le righe; fuori dal PLC o a tabella chiusa l'osservazione si ferma.
+  useEffect(() => {
+    if (source !== 'plc' || !table) {
+      online.stop();
+      return;
+    }
+    const plan = watchPlan(table.rows, (row) => infos.get(row.id)!);
+    online.setPlan(plan.rowIds, plan.items);
+  }, [online, source, table, infos]);
+  useEffect(() => () => online.stop(), [online]);
+  // Cambiata la sorgente, i risultati dell'ultimo comando non valgono più.
+  useEffect(() => {
+    setCommandErrors({});
+    setLastWritten(null);
+  }, [source]);
 
   // Una riga nuova solo se qualcosa è cambiato: la griglia non ridisegna le righe uguali.
   const cache = useRef(new Map<string, ViewRow>());
@@ -78,7 +110,8 @@ export function WatchTableView({ editor }: { editor: EditorRef }) {
     const out = table.rows.map((row) => {
       const info = infos.get(row.id)!;
       const st = statusOf(info, values?.[row.id]);
-      const status = st && 'text' in st ? st.text : '';
+      const unavailable = source === 'plc' && !info.ok && info.error.key === 'ONLINE_UNSUPPORTED';
+      const status = unavailable ? t('watch.unavailable') : st && 'text' in st ? st.text : '';
       const statusError =
         info.ok && !info.formatError && st && 'error' in st ? st.error : undefined;
       let commandError = commandErrors[row.id];
@@ -105,7 +138,7 @@ export function WatchTableView({ editor }: { editor: EditorRef }) {
     });
     cache.current = next;
     return out;
-  }, [table, infos, values, commandErrors]);
+  }, [table, infos, values, commandErrors, source, t]);
 
   const edit = useCallback(
     (label: string, recipe: (dev: PlcDevice) => void) =>
@@ -257,6 +290,34 @@ export function WatchTableView({ editor }: { editor: EditorRef }) {
   if (!device || !table) return null;
   const controller = simControllerFor(store);
   const command = () => {
+    if (source === 'plc') {
+      const plan = planCommand(table.rows, (row) => infos.get(row.id)!, 'plc');
+      const writes = plan.writes.map(({ rowId, req }) => {
+        const { data, ...target } = req;
+        return { rowId, target, data };
+      });
+      if (writes.length === 0) {
+        setCommandErrors(plan.errors);
+        setLastWritten(0);
+        return;
+      }
+      setBusy(true);
+      void online.command(writes).then((res) => {
+        setBusy(false);
+        if (res.kind === 'cancelled') return; // l'utente ha detto «Annulla»: nessun messaggio
+        if (res.kind === 'error') {
+          const failed = Object.fromEntries(
+            writes.map((w) => [w.rowId, { key: 'HOST', params: { message: res.message } }]),
+          );
+          setCommandErrors({ ...plan.errors, ...failed });
+          setLastWritten(0);
+          return;
+        }
+        setCommandErrors({ ...plan.errors, ...res.errors });
+        setLastWritten(res.written);
+      });
+      return;
+    }
     void controller.commandWatch(deviceId, tableId).then((res) => {
       if (!res) return;
       setCommandErrors(res.errors);
@@ -267,13 +328,13 @@ export function WatchTableView({ editor }: { editor: EditorRef }) {
   return (
     <div className="baa-editor-body baa-watch-editor" data-testid={`editor-body-${editor.key}`}>
       <div
-        className={`baa-watch-bar${simOn ? '' : ' is-unavailable'}`}
-        role={simOn ? 'status' : 'alert'}
+        className={`baa-watch-bar${source ? '' : ' is-unavailable'}`}
+        role={source ? 'status' : 'alert'}
         data-testid="watch-bar"
       >
         <span className="baa-watch-msg">
-          {!simOn ? t('watch.simOff') : t(watching ? 'watch.on' : 'watch.off')}
-          {simOn && lastWritten !== null
+          {!source ? t('watch.plcOff') : t(watching ? 'watch.on' : 'watch.off')}
+          {source && lastWritten !== null
             ? ` ${t('watch.commanded', { count: lastWritten, failed })}`
             : ''}
         </span>
@@ -281,15 +342,23 @@ export function WatchTableView({ editor }: { editor: EditorRef }) {
           type="button"
           className="baa-panel-btn"
           aria-pressed={watching}
-          disabled={!simOn}
+          disabled={!source}
           onClick={() => {
             setLastWritten(null);
-            controller.toggleWatch(deviceId, tableId);
+            if (source === 'plc') {
+              if (onlineState.running) online.stop();
+              else online.start();
+            } else controller.toggleWatch(deviceId, tableId);
           }}
         >
           {t('watch.watchAll')}
         </button>
-        <button type="button" className="baa-panel-btn" disabled={!simOn} onClick={command}>
+        <button
+          type="button"
+          className="baa-panel-btn"
+          disabled={!source || busy}
+          onClick={command}
+        >
           {t('watch.command')}
         </button>
       </div>

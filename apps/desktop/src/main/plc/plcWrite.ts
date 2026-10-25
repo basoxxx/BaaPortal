@@ -9,9 +9,11 @@ import type {
   PlcControlResult,
   PlcDownloadResult,
   PlcWriteProgress,
+  PlcWriteVarsResult,
 } from '@baaportal/ui';
 import type { ConfirmFn, WriteConfirmTexts } from './confirm';
 import { connectMessage, type PlcOwner, type PlcService } from './plcService';
+import { confirmLine, parseWriteItems, toWriteItem } from './watchOnline';
 
 export const MAX_FILES = 2048;
 export const MAX_FILE_BYTES = 1024 * 1024;
@@ -21,6 +23,8 @@ const DEFAULT_PORT = 102;
 const CONNECTION_TYPES = { PG: 'pg', OP: 'op', S7_BASIC: 'basic' } as const;
 const DELETABLE = ['OB', 'FB', 'FC', 'DB'];
 const MAX_LIST_LINES = 20;
+/** Item per richiesta write var (proto §5.11). */
+const MAX_WRITE_GROUP = 20;
 const PROGRESS_MIN_MS = 100; // al massimo 10 eventi al secondo, più quello finale
 const OPS: readonly PlcControlOp[] = ['RUN', 'STOP', 'COPY_RAM_TO_ROM', 'COMPRESS'];
 
@@ -40,6 +44,7 @@ export type WriteClient = Pick<
   | 'copyRamToRom'
   | 'compressMemory'
   | 'setClock'
+  | 'writeItems'
 >;
 export type PlcWriteConnectFn = (
   o: Omit<ConnectOptions, 'transport' | 'mode'>,
@@ -381,6 +386,62 @@ export class PlcWriteService {
           }
           await p.c.setClock(t);
           return { ok: true, written: t };
+        } finally {
+          await p.c.close().catch(() => undefined);
+        }
+      },
+    );
+  }
+
+  /**
+   * Scrive valori negli operandi I, Q, M e DB (tabella di controllo). Il renderer manda gli
+   * operandi e i byte grezzi; qui si controlla tutto prima della conferma e le righe della
+   * conferma si costruiscono dai byte che verranno scritti. Poi un collegamento `online-write`,
+   * i gruppi da 20 item uno dopo l'altro (con la possibilità di interrompere fra l'uno e l'altro)
+   * e la chiusura. L'esito è per operando; nessuna ripetizione.
+   */
+  async writeVars(owner: PlcWriteOwner, raw: unknown): Promise<PlcWriteVarsResult> {
+    const parsed = parseWriteItems(raw);
+    if (typeof parsed === 'string') return { ok: false, error: parsed };
+    const items = parsed.map((x) => toWriteItem(x.target, x.data));
+    const lines = parsed.map((x) => confirmLine(x.target, x.data));
+    return this.exclusive<PlcWriteVarsResult>(
+      owner,
+      (m) => ({ ok: false, error: m }),
+      (err) => ({ ok: false, error: errText(err) }),
+      async (op) => {
+        const p = await this.prepare(owner, op, (target) => ({
+          title: 'Comanda variabili',
+          message: `Scrivere ${items.length} ${items.length === 1 ? 'valore' : 'valori'} nella CPU ${cpuName(target)}?`,
+          detail: `Operazione: Comanda variabili\n${listLines(lines)}`,
+          confirmLabel: 'Comanda',
+        }));
+        if (!('c' in p)) return p.result;
+        const results: ({ ok: true } | { ok: false; error: string })[] = [];
+        try {
+          for (let i = 0; i < items.length; i += MAX_WRITE_GROUP) {
+            const group = items.slice(i, i + MAX_WRITE_GROUP);
+            if (owner.isDestroyed() || op.aborted) {
+              const why = op.aborted ? "Uscita dall'app" : 'Finestra chiusa';
+              for (let j = 0; j < group.length; j++) {
+                results.push({ ok: false, error: `${why}: non scritto` });
+              }
+              continue;
+            }
+            try {
+              const rcs = await p.c.writeItems(group);
+              for (const rc of rcs) {
+                results.push(rc.returnCode === 0xff ? { ok: true } : { ok: false, error: rc.name });
+              }
+            } catch (err) {
+              // La connessione di scrittura è una per operazione: dopo un errore non si insiste.
+              for (let j = 0; j < group.length; j++) {
+                results.push({ ok: false, error: errText(err) });
+              }
+              op.aborted = true;
+            }
+          }
+          return { ok: true, results };
         } finally {
           await p.c.close().catch(() => undefined);
         }

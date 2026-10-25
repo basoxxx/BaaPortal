@@ -1228,7 +1228,8 @@
       "modify": "Valore di comando",
       "comment": "Commento"
     },
-    "simOff": "Avvia la simulazione dal PLC di questa tabella per osservare e comandare le variabili.",
+    "unavailable": "non disponibile online",
+    "plcOff": "Avvia la simulazione dal PLC di questa tabella, oppure collegati al PLC, per osservare e comandare le variabili.",
     "on": "Osservazione attiva: i valori di stato si aggiornano.",
     "off": "Osservazione spenta.",
     "commanded": "Comando eseguito: {{count}} righe scritte, {{failed}} con errore.",
@@ -1252,7 +1253,10 @@
       "SYNTAX": "Valore non valido per il formato.",
       "RANGE": "Valore fuori dai limiti ({{min}} … {{max}}).",
       "S5_RESOLUTION": "Tempo non rappresentabile: risoluzione minima 10 ms (100 ms oltre 9,99 s, 1 s oltre 99,9 s, 10 s oltre 999 s).",
-      "TOO_MANY": "Troppe righe da osservare: il simulatore ne accetta al più 1000."
+      "TOO_MANY": "Troppe righe da osservare: il simulatore ne accetta al più 1000.",
+      "ONLINE_UNSUPPORTED": "Non disponibile online: l'area PQ non si legge né si comanda sul PLC collegato.",
+      "ONLINE_TOO_MANY": "Troppe righe da osservare online: la CPU ne accetta al più 200.",
+      "ONLINE_NO_COMMAND": "Online questa riga si può solo osservare: PI, temporizzatori e contatori non si comandano."
     }
   },
   "accessDevices": {

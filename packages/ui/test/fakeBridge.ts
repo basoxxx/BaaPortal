@@ -30,6 +30,10 @@ import type {
   PlcClockRequest,
   PlcClockResult,
   PlcDiagResult,
+  PlcReadWatchResult,
+  PlcWatchTarget,
+  PlcWriteVarItem,
+  PlcWriteVarsResult,
 } from '../src/online/plcTypes';
 
 type Answer = 'save' | 'discard' | 'cancel';
@@ -275,6 +279,22 @@ export class FakeBridge implements BaaBridge {
         ok: true,
         written: { year: 2026, month: 1, day: 1, hour: 0, minute: 0, second: 0, ms: 0 },
       }
+    );
+  }
+  /** Tabelle di controllo online: `plcReadWatchImpl` risponde; le chiamate si registrano. */
+  plcReadWatchCalls: PlcWatchTarget[][] = [];
+  plcReadWatchImpl: (items: PlcWatchTarget[]) => Promise<PlcReadWatchResult> | PlcReadWatchResult =
+    (items) => ({ ok: true, values: items.map(() => ({ bytes: new Uint8Array(2) })) });
+  async plcReadWatch(items: PlcWatchTarget[]): Promise<PlcReadWatchResult> {
+    this.plcReadWatchCalls.push(items);
+    return this.plcReadWatchImpl(items);
+  }
+  plcWriteVarsCalls: PlcWriteVarItem[][] = [];
+  plcWriteVarsResults: PlcWriteVarsResult[] = [];
+  async plcWriteVars(items: PlcWriteVarItem[]): Promise<PlcWriteVarsResult> {
+    this.plcWriteVarsCalls.push(items);
+    return (
+      this.plcWriteVarsResults.shift() ?? { ok: true, results: items.map(() => ({ ok: true })) }
     );
   }
   plcBlocksResults: PlcBlocksResult[] = [{ ok: true, blocks: [] }];

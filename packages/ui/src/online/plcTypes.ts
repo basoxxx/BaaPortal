@@ -1,4 +1,4 @@
-import type { PlcAccess, PlcIdentity, PlcMode } from '@baaportal/project';
+import type { PlcAccess, PlcIdentity, PlcMode, WatchTarget } from '@baaportal/project';
 import type { CycleTime, Led, MemoryArea, ProtectionInfo, S7DateTime } from '@baaportal/s7comm';
 
 export type { PlcAccess, PlcIdentity, PlcMode };
@@ -183,3 +183,25 @@ export type PlcClockRequest =
 
 export type PlcClockResult =
   { ok: true; written: S7DateTime } | { ok: false; error: string } | { ok: false; cancelled: true };
+
+/** Operando di una tabella di controllo come lo manda il renderer: il processo principale lo ricontrolla. */
+export type PlcWatchTarget = WatchTarget;
+
+/** Valore grezzo (big-endian, per `X` un byte 0/1) oppure il motivo per cui la riga non si legge. */
+export type PlcWatchValue = { bytes: Uint8Array } | { error: string };
+
+/** Esito di `plcReadWatch`: un valore per operando, nell'ordine; errore solo per il giro intero. */
+export type PlcReadWatchResult =
+  { ok: true; values: PlcWatchValue[] } | { ok: false; error: string };
+
+/** Un valore da scrivere: l'operando e i byte grezzi (la dimensione dell'operando). */
+export interface PlcWriteVarItem {
+  target: PlcWatchTarget;
+  data: Uint8Array;
+}
+
+/** Esito di `plcWriteVars`: un esito per operando, nell'ordine. */
+export type PlcWriteVarsResult =
+  | { ok: true; results: ({ ok: true } | { ok: false; error: string })[] }
+  | { ok: false; error: string }
+  | { ok: false; cancelled: true };

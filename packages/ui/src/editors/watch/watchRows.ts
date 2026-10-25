@@ -315,21 +315,33 @@ export function resolveRow(resolve: (text: string) => WatchResolution, row: Watc
     : { ...base, formatError: err('FORMAT', { format: row.format }) };
 }
 
+/** Dove si osserva: il simulatore o il PLC collegato. */
+export type WatchSource = 'sim' | 'plc';
+
+/** Al più tante righe osservabili sul PLC collegato (il processo principale rifiuta oltre). */
+export const ONLINE_MAX_ITEMS = 200;
+
 /**
- * Risolve le righe. Oltre MAX_WATCH_ITEMS righe osservabili le successive hanno un errore
- * (`TOO_MANY`): la richiesta al simulatore non supera mai il suo limite, e non si ritenta.
+ * Risolve le righe. Oltre `limit` righe osservabili le successive hanno un errore (`TOO_MANY`, sul
+ * PLC `ONLINE_TOO_MANY`): la richiesta non supera mai il limite della sorgente, e non si ritenta.
+ * Sul PLC le righe PQ non sono disponibili (`ONLINE_UNSUPPORTED`) e non contano per il limite.
  */
 export function resolveRows(
   resolve: (text: string) => WatchResolution,
   rows: readonly WatchRow[],
+  limit: number = MAX_WATCH_ITEMS,
+  source: WatchSource = 'sim',
 ): Map<string, RowInfo> {
   const out = new Map<string, RowInfo>();
   let observable = 0;
   for (const row of rows) {
     let info = resolveRow(resolve, row);
-    if (info.ok && !info.formatError) {
-      if (observable >= MAX_WATCH_ITEMS) info = { ok: false, error: err('TOO_MANY') };
-      else observable++;
+    if (info.ok && source === 'plc' && info.target.area === 'PQ') {
+      info = { ok: false, error: err('ONLINE_UNSUPPORTED') };
+    } else if (info.ok && !info.formatError) {
+      if (observable >= limit) {
+        info = { ok: false, error: err(source === 'plc' ? 'ONLINE_TOO_MANY' : 'TOO_MANY') };
+      } else observable++;
     }
     out.set(row.id, info);
   }
@@ -372,6 +384,7 @@ export interface CommandPlan {
 export function planCommand(
   rows: readonly WatchRow[],
   infoOf: (row: WatchRow) => RowInfo,
+  source: WatchSource = 'sim',
 ): CommandPlan {
   const plan: CommandPlan = { writes: [], errors: {} };
   for (const row of rows) {
@@ -384,6 +397,10 @@ export function planCommand(
     }
     if (info.formatError) {
       plan.errors[row.id] = info.formatError;
+      continue;
+    }
+    if (source === 'plc' && ['PI', 'T', 'C'].includes(info.target.area)) {
+      plan.errors[row.id] = err('ONLINE_NO_COMMAND');
       continue;
     }
     if (info.target.area === 'T' || info.target.area === 'C') {

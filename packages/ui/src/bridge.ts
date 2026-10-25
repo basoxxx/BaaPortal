@@ -4,6 +4,10 @@ import type {
   PlcClockRequest,
   PlcClockResult,
   PlcDiagResult,
+  PlcReadWatchResult,
+  PlcWatchTarget,
+  PlcWriteVarItem,
+  PlcWriteVarsResult,
   PlcAccess,
   PlcBlockRef,
   PlcBlocksResult,
@@ -156,6 +160,10 @@ export interface BaaBridge {
   plcDiagnostics(parts: DiagPart[]): Promise<PlcDiagResult>;
   /** Imposta l'ora della CPU: conferma nativa nel processo principale. */
   plcSetClock(req: PlcClockRequest): Promise<PlcClockResult>;
+  /** Legge gli operandi di una tabella di controllo (sola lettura, al massimo 200); mai eccezioni. */
+  plcReadWatch(items: PlcWatchTarget[]): Promise<PlcReadWatchResult>;
+  /** Scrive valori negli operandi (I, Q, M, DB): conferma nativa nel processo principale. */
+  plcWriteVars(items: PlcWriteVarItem[]): Promise<PlcWriteVarsResult>;
   /** Elenco dei blocchi della CPU collegata (sola lettura); mai eccezioni: l'esito dice tutto. */
   plcBlocks(): Promise<PlcBlocksResult>;
   /** Carica un solo blocco OB, FB, FC o DB dalla CPU collegata (sola lettura); mai eccezioni. */

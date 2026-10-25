@@ -10,6 +10,8 @@ import type {
   PlcScanStartResult,
   PlcUploadAllResult,
   PlcUploadBlockResult,
+  PlcReadWatchResult,
+  PlcWriteVarsResult,
 } from '@baaportal/ui';
 import type { ConfirmFn } from './confirm';
 import { readDiagnostics } from './diagnostics';
@@ -18,6 +20,7 @@ import { isUploadableType, listOnlineBlocks, uploadOneBlock } from './onlineBloc
 import { PlcService } from './plcService';
 import { ScanService } from './scanService';
 import { UploadService } from './uploadAll';
+import { readWatch } from './watchOnline';
 
 type Handle = (
   channel: string,
@@ -93,6 +96,13 @@ export function registerPlc(
   handle('plc:diagnostics', (e, parts): Promise<PlcDiagResult> => {
     return readDiagnostics(service, e.sender, parts);
   });
+  // Tabelle di controllo online: lettura sul collegamento della finestra; scrittura con conferma nativa.
+  handle('plc:readWatch', (e, items): Promise<PlcReadWatchResult> =>
+    readWatch(service, e.sender, items),
+  );
+  handle('plc:writeVars', (e, items): Promise<PlcWriteVarsResult> =>
+    writes.writeVars(e.sender, items),
+  );
   // Elenco dei blocchi della CPU: sola lettura, sul collegamento della finestra.
   handle('plc:blocks', (e): Promise<PlcBlocksResult> => listOnlineBlocks(service, e.sender));
   // Un solo blocco della CPU collegata: sola lettura, solo OB, FB, FC e DB.

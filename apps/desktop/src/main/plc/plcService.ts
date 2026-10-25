@@ -32,11 +32,12 @@ type Client = Pick<
   | 'uploadWithInfo'
   | 'readSzl'
   | 'readClock'
+  | 'readItems'
 >;
 /** Il collegamento in sola lettura, come lo vedono le richieste di lettura (elenco blocchi). */
 export type ReadClient = Pick<
   Client,
-  'listBlocks' | 'blockInfo' | 'uploadWithInfo' | 'readSzl' | 'readClock'
+  'listBlocks' | 'blockInfo' | 'uploadWithInfo' | 'readSzl' | 'readClock' | 'readItems'
 >;
 export type PlcConnectFn = (o: Omit<ConnectOptions, 'transport'>) => Promise<Client>;
 

@@ -1228,7 +1228,8 @@
       "modify": "Modify value",
       "comment": "Comment"
     },
-    "simOff": "Start the simulation of this table's PLC to monitor and modify variables.",
+    "unavailable": "not available online",
+    "plcOff": "Start the simulation of this table's PLC, or go online with the PLC, to monitor and modify variables.",
     "on": "Monitoring on: the monitor values are refreshed.",
     "off": "Monitoring off.",
     "commanded": "Modify done: {{count}} rows written, {{failed}} with errors.",
@@ -1252,7 +1253,10 @@
       "SYNTAX": "Value not valid for the format.",
       "RANGE": "Value out of range ({{min}} … {{max}}).",
       "S5_RESOLUTION": "Time not representable: minimum resolution 10 ms (100 ms above 9.99 s, 1 s above 99.9 s, 10 s above 999 s).",
-      "TOO_MANY": "Too many rows to monitor: the simulator accepts at most 1000."
+      "TOO_MANY": "Too many rows to monitor: the simulator accepts at most 1000.",
+      "ONLINE_UNSUPPORTED": "Not available online: the PQ area can be neither monitored nor modified on the connected PLC.",
+      "ONLINE_TOO_MANY": "Too many rows to monitor online: the CPU accepts at most 200.",
+      "ONLINE_NO_COMMAND": "Online this row can only be monitored: PI, timers and counters cannot be modified."
     }
   },
   "accessDevices": {

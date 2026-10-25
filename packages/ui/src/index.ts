@@ -44,4 +44,9 @@ export type {
   PlcDiagResult,
   PlcClockRequest,
   PlcClockResult,
+  PlcWatchTarget,
+  PlcWatchValue,
+  PlcReadWatchResult,
+  PlcWriteVarItem,
+  PlcWriteVarsResult,
 } from './online/plcTypes';
