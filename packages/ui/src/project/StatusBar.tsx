@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '../state/AppContext';
+import { cancelDownload, useUpdateState } from '../update/updateController';
 import { useProgress } from './progress';
 
 /** Barra di stato: durante un'operazione lunga avanzamento e Interrompi, altrimenti l'ultimo messaggio. */
@@ -7,6 +8,7 @@ export function StatusBar() {
   const { t } = useTranslation();
   const status = useAppStore((s) => s.status);
   const progress = useProgress();
+  const { notice } = useUpdateState();
   const sim = useAppStore((s) => s.sim);
   const online = useAppStore((s) => s.online);
   return (
@@ -52,6 +54,20 @@ export function StatusBar() {
       ) : (
         ''
       )}
+      {notice?.kind === 'downloading' ? (
+        <span className="baa-status-update" data-testid="status-update">
+          <span>{t('status.downloadingUpdate', { version: notice.version })}</span>
+          <progress
+            aria-label={t('status.progress')}
+            value={notice.transferred}
+            max={Math.max(notice.total, 1)}
+          />
+          <span>{Math.floor((notice.transferred / Math.max(notice.total, 1)) * 100)}%</span>
+          <button type="button" className="baa-panel-btn" onClick={cancelDownload}>
+            {t('update.cancel')}
+          </button>
+        </span>
+      ) : null}
     </div>
   );
 }

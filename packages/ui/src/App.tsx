@@ -18,6 +18,7 @@ import { AddDeviceDialog } from './project/dialogs/AddDeviceDialog';
 import { ImportTagsReport } from './project/dialogs/ImportTagsReport';
 import { KitDialog } from './project/dialogs/KitDialog';
 import { DetachedWindows } from './project/workarea/DetachedWindow';
+import { UpdateNotice } from './update/UpdateNotice';
 import { PortalView } from './portal/PortalView';
 import { ProjectView } from './project/ProjectView';
 import { loadLayout, saveLayout } from './project/layoutStorage';
@@ -85,6 +86,7 @@ function Shell() {
         />
       ) : null}
       <DetachedWindows />
+      <UpdateNotice />
     </div>
   );
 }

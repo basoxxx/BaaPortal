@@ -4,6 +4,8 @@ import {
   clipboard,
   dialog,
   ipcMain,
+  net,
+  shell,
   type IpcMainEvent,
   type IpcMainInvokeEvent,
   type WebContents,
@@ -20,6 +22,11 @@ import { parseOpenOptions, parseSaveOptions } from './fileDialogOptions';
 import { registerKit } from './kit';
 import { createConfirm, e2eSavePath } from './plc/confirm';
 import { registerPlc } from './plc/plcIpc';
+import { loadUpdater } from './update/updaterPort';
+import { registerUpdate } from './update/updateIpc';
+import { downloadDmg, macArch, nodeMacFs, pickMacFile, sha512OfFile } from './update/macDownload';
+import { UpdateService } from './update/updateService';
+import type { UpdateInfoView } from '../shared/updateTypes';
 import { addRecent, removeRecent, type Platform, type StoredRecent } from './recentProjects';
 
 const platform = process.platform as Platform;
@@ -50,7 +57,17 @@ export function registerIpc(
   trust: TrustOptions,
   onCloseConfirmed: () => void,
   onRendererReady: () => void,
-): { closeOnline(): Promise<void>; writing(): boolean; interruptWrites(): void } {
+  prepareQuit: () => void,
+  cancelQuit: () => void,
+  onCloseCancelled: () => void = () => undefined,
+): {
+  closeOnline(): Promise<void>;
+  writing(): boolean;
+  busy(): boolean;
+  interruptWrites(): void;
+  resume(): void;
+  abortDownload(): void;
+} {
   // Ogni canale risponde solo al frame principale della pagina dell'app.
   const trusted = (e: IpcMainEvent | IpcMainInvokeEvent) =>
     isTrustedFrame(e.senderFrame as FrameLike | null, trust);
@@ -131,6 +148,7 @@ export function registerIpc(
 
   on('window:set-title', (_e, title: string) => getWindow()?.setTitle(title));
   on('window:close-confirmed', () => onCloseConfirmed());
+  on('window:close-cancelled', () => onCloseCancelled());
   // Anche "pronta" deve venire dalla pagina dell'app: un messaggio rimasto in coda da una pagina in
   // crash (senderFrame non più valido) non deve far credere al main che ci sia chi conferma la chiusura.
   on('app:renderer-ready', () => onRendererReady());
@@ -207,6 +225,66 @@ export function registerIpc(
     () => app.getVersion(),
   );
 
+  // Aggiornamenti: il servizio esiste solo nelle build pacchettizzate (electron-updater non si carica altrove).
+  const mode = platform === 'win32' ? 'install' : platform === 'darwin' ? 'dmg' : 'none';
+  const info: UpdateInfoView = {
+    enabled: app.isPackaged,
+    prereleaseBuild: __BAA_PRERELEASE_BUILD__,
+    current: app.getVersion(),
+    platform: process.platform as UpdateInfoView['platform'],
+    mode,
+  };
+  const updates = app.isPackaged
+    ? new UpdateService({
+        updater: loadUpdater,
+        newToken: async () => {
+          const m = await import('builder-util-runtime');
+          return new m.default.CancellationToken();
+        },
+        platform: info.platform,
+        arch: process.arch,
+        prereleaseBuild: info.prereleaseBuild,
+        current: info.current,
+        busy: () => plc.busy(),
+        closeOnline: () => plc.closeAll(),
+        prepareQuit,
+        cancelQuit: () => {
+          cancelQuit();
+          plc.resume();
+        },
+        send: (e) => {
+          const w = getWindow();
+          if (w && !w.isDestroyed()) w.webContents.send('update:event', e);
+        },
+        macDownload: async ({ version, files }, onProgress, signal) => {
+          const arch = macArch(process.arch, app.runningUnderARM64Translation);
+          if (!arch) throw new Error(`Architettura non supportata (${process.arch})`);
+          const file = pickMacFile(files, version, arch);
+          if (typeof file === 'string') throw new Error(file);
+          return downloadDmg(
+            {
+              fetch: (url, init) => net.fetch(url, init),
+              downloadsDir: app.getPath('downloads'),
+              fs: nodeMacFs,
+              sha512Of: sha512OfFile,
+            },
+            file,
+            version,
+            arch,
+            onProgress,
+            signal,
+          );
+        },
+        openPath: (p) => shell.openPath(p),
+        showInFolder: (p) => shell.showItemInFolder(p),
+        openExternal: (url) => shell.openExternal(url),
+        setTimeout: (fn, ms) => setTimeout(fn, ms),
+        clearTimeout: (t) => clearTimeout(t as NodeJS.Timeout),
+        now: () => Date.now(),
+      })
+    : null;
+  registerUpdate(handle, updates, info);
+
   // Valori solo per i test e2e: come BAA_USER_DATA, mai onorati nelle build pacchettizzate.
   handle('app:test-overrides', () => {
     const ms = Number(process.env['BAA_RECOVERY_MS']);
@@ -216,6 +294,9 @@ export function registerIpc(
   return {
     closeOnline: () => plc.closeAll(),
     writing: () => plc.writing(),
+    busy: () => plc.busy(),
     interruptWrites: () => plc.interruptWrites(),
+    resume: () => plc.resume(),
+    abortDownload: () => updates?.cancelDownload(),
   };
 }

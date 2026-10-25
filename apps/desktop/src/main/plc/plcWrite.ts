@@ -250,6 +250,11 @@ export class PlcWriteService {
     for (const op of this.ops.values()) op.aborted = true;
   }
 
+  /** Annulla `abortAll`: l'uscita o l'aggiornamento sono stati rinviati. */
+  resume(): void {
+    this.closing = false;
+  }
+
   async abortAll(): Promise<void> {
     this.closing = true;
     const running: Promise<void>[] = [];

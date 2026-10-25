@@ -70,7 +70,14 @@ export function registerPlc(
   uploads = new UploadService(),
   pickBackupPath: PickBackupPath = async () => null,
   appVersion: () => string = () => '',
-): { closeAll(): Promise<void>; writing(): boolean; interruptWrites(): void } {
+): {
+  closeAll(): Promise<void>;
+  writing(): boolean;
+  busy(): boolean;
+  /** Annulla `closeAll`: scritture, caricamenti e backup possono ripartire. */
+  resume(): void;
+  interruptWrites(): void;
+} {
   handle('plc:connect', async (e, raw): Promise<PlcConnectResult> => {
     const access = parsePlcAccess(raw);
     if (typeof access === 'string') return { ok: false, error: access };
@@ -143,6 +150,13 @@ export function registerPlc(
       ]);
     },
     writing: () => writes.writing(),
+    // Operazioni che un aggiornamento non deve interrompere: scrittura, caricamento dalla CPU, backup.
+    resume: () => {
+      writes.resume();
+      uploads.resume();
+      backups.resume();
+    },
+    busy: () => writes.writing() || uploads.active() || backups.active(),
     interruptWrites: () => writes.interruptAll(),
   };
 }

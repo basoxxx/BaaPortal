@@ -3,6 +3,7 @@ import type { BaaBridge } from '../bridge';
 import type { IconName } from '../icons';
 import type { ProjectService } from '../services/projectService';
 import type { AppState, EditAction, PanelName } from '../state/store';
+import { checkNow, getUpdateState } from '../update/updateController';
 import { getProgress } from '../project/progress';
 import { compileProgram } from '../project/compile/compileActions';
 import { openReference } from '../project/reference/referenceStore';
@@ -66,6 +67,7 @@ export type CommandId =
   | 'window.splitHorizontal'
   | 'window.closeAllEditors'
   | 'help.show'
+  | 'help.checkUpdates'
   | 'help.about';
 
 export interface CommandContext {
@@ -365,6 +367,10 @@ const list: Command[] = [
     run: ({ store }) => store.getState().closeAllEditors(),
   }),
   def('help.show'),
+  def('help.checkUpdates', {
+    isEnabled: () => getUpdateState().info?.enabled === true,
+    run: () => checkNow(),
+  }),
   def('help.about', {
     isEnabled: always,
     run: ({ store }) => {

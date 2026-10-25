@@ -32,6 +32,22 @@ beforeEach(() => {
   svc = createProjectService({ store, bridge, t, appVersion: '0.1.0', now: () => NOW });
 });
 
+describe('prepareForUpdate', () => {
+  it('senza modifiche: true, senza domanda e senza chiudere la finestra', async () => {
+    await openValid('/p.baap');
+    expect(await svc.prepareForUpdate()).toBe(true);
+    expect(bridge.confirmTexts).toHaveLength(0);
+    expect(bridge.closeConfirmed).toBe(false);
+  });
+  it('con modifiche e «Annulla»: false', async () => {
+    await openValid('/p.baap');
+    store.getState().edit('x', (p) => void (p.meta.comment = 'm'));
+    bridge.confirmAnswers = ['cancel'];
+    expect(await svc.prepareForUpdate()).toBe(false);
+    expect(bridge.confirmTexts).toHaveLength(1);
+  });
+});
+
 describe('projectService', () => {
   it('si registra sul bridge e chiama rendererReady', () => {
     expect(bridge.listenerCount).toBe(2);
@@ -203,6 +219,8 @@ describe('projectService', () => {
     bridge.confirmAnswers.push('cancel');
     await bridge.emitCloseRequest();
     expect(bridge.closeConfirmed).toBe(false);
+    // Il main viene avvisato, così riapre il collegamento online già chiuso.
+    expect(bridge.closeCancelled).toBe(true);
   });
 
   it('richiesta di apertura dal sistema con modifiche non salvate chiede prima di sostituire', async () => {

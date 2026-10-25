@@ -2,7 +2,8 @@ name: Release
 
 # Costruisce gli installatori (Windows .exe, macOS .dmg arm64 e x64) e li allega alla release
 # di GitHub del tag. Parte da sola quando si pubblica una release; a mano (workflow_dispatch) per
-# allegarli a una release già esistente.
+# allegarli a una release già esistente. Allega anche i file di aggiornamento (latest*.yml e
+# .blockmap) usati dall'aggiornamento automatico dell'app.
 on:
   release:
     types: [published]
@@ -33,6 +34,30 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Canale di build (prova o stabile)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            value="$EVENT_PRERELEASE"
+          else
+            value=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isPrerelease -q .isPrerelease)
+          fi
+          if [ "$value" != "true" ] && [ "$value" != "false" ]; then
+            echo "canale di build non valido: '$value'" >&2
+            exit 1
+          fi
+          echo "BAAPORTAL_PRERELEASE=$value" >> "$GITHUB_ENV"
+      - name: Il tag deve essere v + versione del pacchetto
+        shell: bash
+        run: |
+          version=$(node -p "require('./apps/desktop/package.json').version")
+          if [ "$TAG" != "v$version" ]; then
+            echo "il tag $TAG non corrisponde alla versione $version di apps/desktop/package.json" >&2
+            exit 1
+          fi
       - run: npm run dist
       - name: Allega gli installatori alla release
         shell: bash
@@ -40,6 +65,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           shopt -s nullglob
-          files=(apps/desktop/dist/*.exe apps/desktop/dist/*.dmg)
+          files=(apps/desktop/dist/*.exe apps/desktop/dist/*.dmg apps/desktop/dist/latest*.yml apps/desktop/dist/*.blockmap)
           if [ ${#files[@]} -eq 0 ]; then echo "nessun installatore" >&2; exit 1; fi
+          node apps/desktop/scripts/check-dist.mjs
           gh release upload "$TAG" "${files[@]}" --clobber
