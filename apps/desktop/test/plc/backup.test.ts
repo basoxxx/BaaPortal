@@ -203,6 +203,61 @@ describe('backup online contro il PLC di prova', () => {
     expect(await readdir(dir)).toEqual([]);
   });
 
+  it('Interrompi dopo la raccolta, prima di scrivere → nessun file', async () => {
+    const holder: { svc?: BackupService } = {};
+    const uploads = new UploadService({
+      connect: wrapping((c) => ({
+        // L'ultima cosa che succede nel giro di raccolta: il collegamento si chiude.
+        close: async () => {
+          holder.svc?.cancel(owner);
+          return c.close();
+        },
+      })),
+    });
+    const svc = make({ uploads });
+    holder.svc = svc;
+    expect(await svc.backup(owner)).toEqual({ ok: false, cancelled: true });
+    expect(await readdir(dir)).toEqual([]);
+  });
+
+  it('l\'interruzione del caricamento non ferma il backup', async () => {
+    const uploads = new UploadService({
+      connect: wrapping((c) => ({
+        uploadWithInfo: async (t: never, n: number) => {
+          uploads.cancel(owner); // plc:uploadCancel
+          return c.uploadWithInfo(t, n);
+        },
+      })),
+    });
+    expect(await make({ uploads }).backup(owner)).toMatchObject({ ok: true, count: 4 });
+  });
+
+  it('stessa CPU se numero d\'ordine e seriale concordano: nome del modulo e firmware non contano', async () => {
+    const real = await (async () => {
+      const c = await connectTcp({ host: '127.0.0.1', port: plc.port, timeoutMs: 2000 });
+      try {
+        return await c.identity();
+      } finally {
+        await c.close();
+      }
+    })();
+    const run = async (patch: object) => {
+      const uploads = new UploadService({
+        connect: wrapping((c) => ({
+          identity: async () => ({ ...(await c.identity()), ...patch }),
+        })),
+      });
+      return make({ uploads }).backup(owner);
+    };
+    // Modulo e firmware diversi: va bene.
+    expect(await run({ moduleName: 'ALTRO', firmware: 'V9.9.9' })).toMatchObject({ ok: true });
+    // Seriale mancante da una parte: si confronta solo l'ordine.
+    expect(await run({ serialNumber: undefined })).toMatchObject({ ok: true });
+    // Seriale diverso: no.
+    const r = await run({ serialNumber: `${real.serialNumber ?? 'S'}-X` });
+    expect(r.ok === false && 'error' in r && r.error).toMatch(/diversa/);
+  });
+
   it('CPU raggiunta diversa da quella online → annullato', async () => {
     const uploads = new UploadService({
       connect: wrapping((c) => ({

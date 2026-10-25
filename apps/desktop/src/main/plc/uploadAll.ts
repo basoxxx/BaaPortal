@@ -45,7 +45,12 @@ export type CollectResult =
   | { ok: false; error: string }
   | { ok: false; cancelled: true };
 
+/** Chi ha avviato l'esecuzione: `cancel` interrompe solo le proprie, un backup non è un caricamento. */
+export type RunKind = 'upload' | 'backup';
+
 export interface CollectOptions {
+  /** Il tipo di esecuzione (predefinito: `upload`). */
+  kind?: RunKind;
   /** I tipi da elencare e caricare (predefiniti: OB, FB, FC e DB). */
   types?: readonly BlockType[];
   /** Controlla l'identità appena letta: una stringa è il motivo per cui non si prosegue. */
@@ -65,6 +70,7 @@ export interface UploadServiceOptions {
 }
 
 interface Run {
+  kind: RunKind;
   ctl: AbortController;
   onGone: () => void;
   finished: Promise<unknown>;
@@ -113,12 +119,14 @@ export class UploadService {
       owner.removeListener('destroyed', onGone);
       if (this.runs.get(owner)?.ctl === ctl) this.runs.delete(owner);
     });
-    this.runs.set(owner, { ctl, onGone, finished });
+    this.runs.set(owner, { kind: opts.kind ?? 'upload', ctl, onGone, finished });
     return finished;
   }
 
-  cancel(owner: UploadOwner): void {
-    this.runs.get(owner)?.ctl.abort();
+  /** Interrompe l'esecuzione della finestra solo se è del tipo dato (predefinito: il caricamento). */
+  cancel(owner: UploadOwner, kind: RunKind = 'upload'): void {
+    const run = this.runs.get(owner);
+    if (run && run.kind === kind) run.ctl.abort();
   }
 
   /** Uscita dall'app: interrompe tutto e aspetta che i collegamenti siano chiusi. */

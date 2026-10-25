@@ -128,6 +128,23 @@ describe('UploadService contro il PLC di prova', () => {
     expect(await p).toEqual({ ok: false, cancelled: true });
   });
 
+  it('cancel interrompe solo l\'esecuzione del proprio tipo', async () => {
+    await put([rawBlock('OB', 1, 20)]);
+    const owner = new FakeOwner();
+    const svc = new UploadService();
+    // Un caricamento non si ferma con l'interruzione del backup...
+    const up = svc.start(owner, access());
+    svc.cancel(owner, 'backup');
+    expect((await up).ok).toBe(true);
+    // ...e un backup non si ferma con quella del caricamento (`plc:uploadCancel`).
+    const bk = svc.collect(owner, access(), { kind: 'backup' });
+    svc.cancel(owner);
+    expect((await bk).ok).toBe(true);
+    const bk2 = svc.collect(owner, access(), { kind: 'backup' });
+    svc.cancel(owner, 'backup');
+    expect(await bk2).toEqual({ ok: false, cancelled: true });
+  });
+
   it('un solo caricamento per finestra', async () => {
     const owner = new FakeOwner();
     const svc = new UploadService();
