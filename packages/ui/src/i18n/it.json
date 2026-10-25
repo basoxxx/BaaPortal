@@ -1645,6 +1645,7 @@
       "contactNo": "NA",
       "contactNc": "NC",
       "coil": "Bobina",
+      "tBranch": "Nuovo ramo a T",
       "openBranch": "Apri ramo",
       "closeBranch": "Chiudi ramo",
       "box": "Box vuoto"

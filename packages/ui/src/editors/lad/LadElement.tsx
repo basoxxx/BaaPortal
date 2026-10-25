@@ -17,7 +17,8 @@ type Props = {
   /** Messaggi di diagnostica dell'elemento (vuoto = nessuno). */
   messages: string[];
   onSelect: () => void;
-  onEdit: () => void;
+  /** Doppio clic; `pin` è il nome del pin se il clic cade sull'etichetta o sull'operando di un pin. */
+  onEdit: (pin?: string) => void;
 };
 
 /** Testo dentro il simbolo; le bobine con lettera usano le parentesi `( )`. */
@@ -155,7 +156,11 @@ export function LadElement({ elem, cell, selected, messages, onSelect, onEdit }:
       tabIndex={selected ? 0 : -1}
       data-lad-id={elem.id}
       onClick={onSelect}
-      onDoubleClick={onEdit}
+      onDoubleClick={(ev) =>
+        onEdit(
+          (ev.target as HTMLElement).closest('[data-pin]')?.getAttribute('data-pin') ?? undefined,
+        )
+      }
     >
       <svg
         className="baa-lad-svg"
@@ -184,13 +189,23 @@ function BoxLabels({ b, cell }: { b: LadBox; cell: LadCell }) {
     <>
       {b.instance && <span className="baa-lad-op baa-lad-op--top">{b.instance}</span>}
       {Object.entries(cell.pinRows ?? {}).map(([name, row]) => (
-        <span key={`i${name}`} className="baa-lad-pin baa-lad-pin--in" style={pinStyle(row)}>
+        <span
+          key={`i${name}`}
+          className="baa-lad-pin baa-lad-pin--in"
+          data-pin={name}
+          style={pinStyle(row)}
+        >
           {name}
           {b.pins[name] ? <b>{b.pins[name]}</b> : null}
         </span>
       ))}
       {outs.map(([name, row]) => (
-        <span key={`o${name}`} className="baa-lad-pin baa-lad-pin--out" style={pinStyle(row)}>
+        <span
+          key={`o${name}`}
+          className="baa-lad-pin baa-lad-pin--out"
+          data-pin={name}
+          style={pinStyle(row)}
+        >
           {b.pins[name] && name !== flow ? <b>{b.pins[name]}</b> : null}
           {name}
         </span>

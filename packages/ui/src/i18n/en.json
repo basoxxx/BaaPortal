@@ -1645,6 +1645,7 @@
       "contactNo": "NO",
       "contactNc": "NC",
       "coil": "Coil",
+      "tBranch": "New T branch",
       "openBranch": "Open branch",
       "closeBranch": "Close branch",
       "box": "Empty box"

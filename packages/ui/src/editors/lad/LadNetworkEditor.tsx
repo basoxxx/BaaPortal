@@ -26,7 +26,9 @@ import { LAD_TOOL_KEYS, ladAction } from './ladKeys';
 import type { LadAction } from './ladKeys';
 import { layoutNetwork } from './ladLayout';
 import type { LadCell } from './ladLayout';
+import type { CallParams } from './ladOps';
 import {
+  branchToClose,
   fieldPatch,
   fieldValue,
   fieldsOf,
@@ -42,7 +44,7 @@ const HISTORY_KEY = 'history.editLad';
 const PAD = 12;
 
 type Selection = { t: 'elem'; id: string } | { t: 'slot'; at: InsertPoint } | null;
-type Editing = { id: string; field: number; value: string };
+type Editing = { id: string; key: string; value: string };
 
 type Props = {
   net: LadNetwork;
@@ -50,6 +52,8 @@ type Props = {
   diagnostics: Map<string, string[]>;
   readOnly: boolean;
   onChange: (next: LadNetwork, labelKey: string) => void;
+  /** Parametri del blocco chiamato da un box CALL, per sapere quali pin ha; da `instance`. */
+  callParams?: CallParams;
   /** Generatore di id; di norma `crypto.randomUUID`. */
   newId?: () => string;
 };
@@ -89,6 +93,7 @@ export function LadNetworkEditor({
   diagnostics,
   readOnly,
   onChange,
+  callParams,
   newId = defaultId,
 }: Props) {
   const { t } = useTranslation();
@@ -98,7 +103,6 @@ export function LadNetworkEditor({
   const [status, setStatus] = useState('');
   const [menu, setMenu] = useState(false);
   const canvas = useRef<HTMLDivElement>(null);
-  const openBranchId = useRef<string | null>(null);
   const wantFocus = useRef(false);
   const finished = useRef(false);
 
@@ -142,12 +146,14 @@ export function LadNetworkEditor({
   }
 
   /** Esegue una modifica: una sola chiamata a `onChange`, oppure un messaggio se non è possibile. */
-  function apply(make: () => LadNetwork, next?: Selection) {
+  function apply(make: () => LadNetwork, next?: Selection, failKey = 'lad.cannotDo') {
     let result: LadNetwork;
     try {
       result = make();
-    } catch {
-      setStatus(t('lad.cannotDo'));
+    } catch (err) {
+      // Le operazioni di modifica segnalano le posizioni impossibili con un Error «Rete KOP: …».
+      if (!(err instanceof Error) || !err.message.startsWith('Rete KOP')) console.error(err);
+      setStatus(t(failKey));
       return false;
     }
     setStatus('');
@@ -179,34 +185,31 @@ export function LadNetworkEditor({
     const out: LadOut = { id: newId(), k: 'coil', op: '' };
     apply(() => addOutput(net, nodeId, out), { t: 'elem', id: out.id });
   }
+  function addTBranch() {
+    const { nodeId } = target();
+    const contact: LadElem = { id: newId(), k: 'contact', neg: false, op: '' };
+    const coil: LadOut = { id: newId(), k: 'coil', op: '' };
+    const node = { id: newId(), series: [contact], outs: [coil] };
+    apply(() => addOutput(net, nodeId, node), { t: 'elem', id: contact.id });
+  }
+
   function doOpenBranch() {
     if (sel?.t !== 'elem' || placeOf(net, sel.id)?.t !== 'elem') return;
     const id = sel.id;
     let last = '';
     const gen = () => (last = newId());
-    const ok = apply(() => openBranch(net, id, gen));
-    if (ok) {
-      openBranchId.current = last;
-      setSel({ t: 'elem', id: last });
-    }
+    if (apply(() => openBranch(net, id, gen))) setSel({ t: 'elem', id: last });
   }
 
+  /** F9: chiude l'ultimo ramo aperto prima dell'elemento selezionato, ricavato dal modello. */
   function doCloseBranch() {
-    const from = openBranchId.current;
-    if (sel?.t !== 'elem' || !from || !findElem(net, from)) {
+    const from = sel?.t === 'elem' ? branchToClose(net, sel.id) : undefined;
+    if (sel?.t !== 'elem' || !from) {
       setStatus(t('lad.cannotClose'));
       return;
     }
     const to = sel.id;
-    try {
-      const next = closeBranchAfter(net, from, to, newId);
-      setStatus('');
-      openBranchId.current = null;
-      onChange(next, HISTORY_KEY);
-      wantFocus.current = true;
-    } catch {
-      setStatus(t('lad.cannotClose'));
-    }
+    apply(() => closeBranchAfter(net, from, to, newId), undefined, 'lad.cannotClose');
   }
 
   function doDelete() {
@@ -215,38 +218,45 @@ export function LadNetworkEditor({
     apply(() => removeElem(net, id, newId), null);
   }
 
-  function startEdit(id: string, field = 0) {
+  const fields = (e: LadElem | LadOut) => fieldsOf(e, callParams);
+
+  function startEdit(id: string, key?: string) {
     if (readOnly) return;
     const e = elemOf(id);
     if (!e) return;
-    const fld = fieldsOf(e)[field];
+    const flds = fields(e);
+    const fld = key === undefined ? flds[0] : flds.find((f) => f.key === key);
     if (!fld) return;
     finished.current = false;
-    setEditing({ id, field, value: fieldValue(e, fld) });
+    setEditing({ id, key: fld.key, value: fieldValue(e, fld) });
   }
 
   function commitEdit(advance: boolean) {
     if (!editing || finished.current) return;
     finished.current = true;
     const e = elemOf(editing.id);
-    const flds = e ? fieldsOf(e) : [];
-    const fld = flds[editing.field];
+    const fld = e ? fields(e).find((f) => f.key === editing.key) : undefined;
     const value = editing.value.replace(/[\r\n]+/g, ' ');
-    const next = advance && editing.field + 1 < flds.length ? editing.field + 1 : -1;
     setEditing(null);
     wantFocus.current = true;
-    if (e && fld && value !== fieldValue(e, fld)) {
-      apply(() => updateElem(net, editing.id, fieldPatch(e, fld, value)));
+    if (!e || !fld) return;
+    const changed = value !== fieldValue(e, fld);
+    // Tab passa al campo successivo, calcolato sulla rete già modificata (un CALL può aver
+    // guadagnato pin).
+    let after: LadNetwork = net;
+    if (changed) {
+      let patched: LadNetwork | undefined;
+      apply(() => (patched = updateElem(net, editing.id, fieldPatch(e, fld, value, callParams))));
+      if (!patched) return;
+      after = patched;
     }
-    if (next >= 0) {
-      const id = editing.id;
-      // Il campo successivo si apre dopo che la rete aggiornata è arrivata.
-      queueMicrotask(() => {
-        finished.current = false;
-        const cur = elemOf(id);
-        const f2 = cur && fieldsOf(cur)[next];
-        if (cur && f2) setEditing({ id, field: next, value: fieldValue(cur, f2) });
-      });
+    if (!advance) return;
+    const cur = findElem(after, editing.id) as (LadElem | LadOut) | undefined;
+    const flds = cur ? fields(cur) : [];
+    const nxt = flds[flds.findIndex((f) => f.key === editing.key) + 1];
+    if (cur && nxt) {
+      finished.current = false;
+      setEditing({ id: editing.id, key: nxt.key, value: fieldValue(cur, nxt) });
     }
   }
 
@@ -273,6 +283,7 @@ export function LadNetworkEditor({
     if (a === 'contactNo') addContact(false);
     else if (a === 'contactNc') addContact(true);
     else if (a === 'coil') addCoil();
+    else if (a === 'tBranch') addTBranch();
     else if (a === 'openBranch') doOpenBranch();
     else if (a === 'closeBranch') doCloseBranch();
     else if (a === 'delete') doDelete();
@@ -328,28 +339,46 @@ export function LadNetworkEditor({
 
   const editCell = editing ? layout.cells.find((c) => c.elemId === editing.id) : undefined;
   const editElem = editing ? elemOf(editing.id) : undefined;
-  const editField = editElem ? fieldsOf(editElem)[editing!.field] : undefined;
+  const editField = editElem ? fields(editElem).find((f) => f.key === editing!.key) : undefined;
+  // Il campo di testo sta sulla riga del pin che si modifica (box) o sopra/sotto il simbolo.
+  const editRow =
+    editCell?.pinRows?.[editing?.key ?? ''] ?? editCell?.outRows?.[editing?.key ?? ''];
+  const editTop = editCell
+    ? editRow !== undefined && editField?.pin
+      ? (editCell.row + editRow) * CELL_H + 12
+      : editCell.row * CELL_H +
+        (editElem && fields(editElem).indexOf(editField!) > 0 && editElem.k !== 'box' ? 22 : 0)
+    : 0;
   const width = layout.cols * CELL_W;
   const height = layout.rows * CELL_H;
+  const toolTitle = (k: keyof typeof LAD_TOOL_KEYS) =>
+    k === 'contactNo' || k === 'contactNc' || k === 'coil'
+      ? t(`lad.palette.${k}`)
+      : t(`lad.tool.${k}`);
   const tools: { key: keyof typeof LAD_TOOL_KEYS; run: () => void }[] = [
     { key: 'contactNo', run: () => addContact(false) },
     { key: 'contactNc', run: () => addContact(true) },
     { key: 'coil', run: addCoil },
+    { key: 'tBranch', run: addTBranch },
     { key: 'openBranch', run: doOpenBranch },
     { key: 'closeBranch', run: doCloseBranch },
   ];
 
   return (
     <div className="baa-lad">
-      {index === 0 && (
+      {
         <div className="baa-lad-toolbar" role="toolbar" aria-label={t('lad.toolbar')}>
           {tools.map((tool) => (
             <button
               key={tool.key}
               type="button"
               disabled={readOnly}
-              title={`${t(`lad.tool.${tool.key}`)} (${LAD_TOOL_KEYS[tool.key]})`}
-              onClick={tool.run}
+              title={`${toolTitle(tool.key)} (${LAD_TOOL_KEYS[tool.key]})`}
+              onClick={() => {
+                tool.run();
+                wantFocus.current = true;
+                canvas.current?.focus();
+              }}
             >
               {t(`lad.tool.${tool.key}`)}
             </button>
@@ -388,7 +417,7 @@ export function LadNetworkEditor({
             )}
           </span>
         </div>
-      )}
+      }
       <div
         ref={canvas}
         className="baa-lad-canvas"
@@ -397,11 +426,7 @@ export function LadNetworkEditor({
         tabIndex={0}
         onKeyDown={onKeyDown}
         onClick={(e) => {
-          if (
-            e.target === e.currentTarget ||
-            (e.target as HTMLElement).closest('svg.baa-lad-wires')
-          )
-            setSel(null);
+          if (!(e.target as HTMLElement).closest('button, input')) setSel(null);
         }}
         onDragOver={(e) => {
           if (!readOnly && e.dataTransfer.types.includes(LAD_DRAG_TYPE)) e.preventDefault();
@@ -433,7 +458,7 @@ export function LadNetworkEditor({
                   selected={sel?.t === 'elem' && sel.id === cell.elemId}
                   messages={diagnostics.get(cell.elemId) ?? []}
                   onSelect={() => setSel({ t: 'elem', id: cell.elemId })}
-                  onEdit={() => startEdit(cell.elemId)}
+                  onEdit={(pin) => startEdit(cell.elemId, pin)}
                 />
               );
             })}
@@ -457,7 +482,7 @@ export function LadNetworkEditor({
                 className="baa-lad-input"
                 style={{
                   left: editCell.col * CELL_W,
-                  top: editCell.row * CELL_H + (editing.field > 0 ? 22 : 0),
+                  top: editTop,
                   width: Math.max(editCell.w * CELL_W, 72),
                 }}
                 aria-label={editField.pin ? editField.key : t(editField.label)}

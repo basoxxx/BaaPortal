@@ -3,6 +3,7 @@ export type LadAction =
   | 'contactNo'
   | 'contactNc'
   | 'coil'
+  | 'tBranch'
   | 'openBranch'
   | 'closeBranch'
   | 'delete'
@@ -31,14 +32,22 @@ export const LAD_TOOL_KEYS = {
   contactNo: 'F2',
   contactNc: 'F3',
   coil: 'F7',
+  tBranch: 'Shift+F7',
   openBranch: 'F8',
   closeBranch: 'F9',
 } as const;
 
-export type KeyLike = { key: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean };
+export type KeyLike = {
+  key: string;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  altKey: boolean;
+  shiftKey?: boolean;
+};
 
 /** Azione del tasto premuto; con Ctrl, Cmd o Alt premuti non c'è nessuna azione. */
 export function ladAction(e: KeyLike): LadAction | undefined {
   if (e.ctrlKey || e.metaKey || e.altKey) return undefined;
+  if (e.key === 'F7' && e.shiftKey) return 'tBranch';
   return KEYS[e.key];
 }

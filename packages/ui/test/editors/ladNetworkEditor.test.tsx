@@ -2,8 +2,10 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { I18nextProvider } from 'react-i18next';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { BOX_KINDS, PALETTE, emptyNetwork } from '@baaportal/ladfbd';
-import type { LadNetwork } from '@baaportal/ladfbd';
+import { BOX_KINDS, PALETTE, emptyNetwork, insertElem, openBranch } from '@baaportal/ladfbd';
+import type { CallParams } from '../../src/editors/lad/ladOps';
+import type { LadElem, LadNetwork } from '@baaportal/ladfbd';
+import { newBox } from '../../src/editors/lad/ladOps';
 import { LadNetworkEditor } from '../../src/editors/lad/LadNetworkEditor';
 import { i18next, initI18n } from '../../src/i18n';
 import it_ from '../../src/i18n/it.json';
@@ -19,7 +21,7 @@ const newId = () => `n${++n}`;
 /** Monta l'editor con uno stato locale che applica `onChange`, come farà la vista dei segmenti. */
 function setup(
   initial?: LadNetwork,
-  over: { readOnly?: boolean; diag?: Map<string, string[]> } = {},
+  over: { readOnly?: boolean; diag?: Map<string, string[]>; callParams?: CallParams } = {},
 ) {
   const calls: [LadNetwork, string][] = [];
   const onChange = vi.fn((next: LadNetwork, key: string) => {
@@ -34,6 +36,7 @@ function setup(
         diagnostics={over.diag ?? new Map()}
         readOnly={over.readOnly ?? false}
         onChange={onChange}
+        callParams={over.callParams}
         newId={newId}
       />
     </I18nextProvider>
@@ -85,7 +88,6 @@ describe('LadNetworkEditor', () => {
     await user.keyboard('{F8}');
     const cs = contacts();
     expect(cs).toHaveLength(2);
-    expect(cs[1]!.getBoundingClientRect).toBeTruthy();
     expect(parseInt(cs[1]!.style.top)).toBeGreaterThan(parseInt(cs[0]!.style.top));
     expect(onChange).toHaveBeenCalledTimes(2);
     await user.keyboard('{Delete}');
@@ -104,7 +106,13 @@ describe('LadNetworkEditor', () => {
     expect(onChange).toHaveBeenCalledTimes(before + 1);
     const root = onChange.mock.calls.at(-1)![0].root;
     expect(root.series).toHaveLength(1);
-    expect(root.series[0]!.k).toBe('parallel');
+    const par = root.series[0]!;
+    expect(par.k).toBe('parallel');
+    // c2 è passato nel percorso principale (primo ramo), il ramo nuovo lo scavalca.
+    if (par.k === 'parallel') {
+      expect(par.branches[0]!.map((e) => e.k)).toEqual(['contact', 'contact']);
+      expect(par.branches[1]).toHaveLength(1);
+    }
   });
 
   it('F7 aggiunge una bobina, la seconda volta seleziona quella vuota', async () => {
@@ -165,6 +173,131 @@ describe('LadNetworkEditor', () => {
     const sel = contacts().filter((b) => b.getAttribute('aria-pressed') === 'true');
     expect(sel).toHaveLength(1);
     expect(parseInt(sel[0]!.style.left)).toBe(0);
+  });
+});
+
+describe('LadNetworkEditor: ramo a T, barra, CALL, pin, F9, Tab', () => {
+  const contact = (id: string): LadElem => ({ id, k: 'contact', neg: false, op: '' });
+  const lines = (net: LadNetwork, at: { node: string; index: number }, e: LadElem) =>
+    insertElem(net, at, e);
+
+  it('Nuovo ramo a T (Maiusc+F7 e barra) costruisce un ramo a T da zero', async () => {
+    const { calls, user, canvas } = setup();
+    canvas.focus();
+    await user.keyboard('{F2}');
+    await user.keyboard('{Shift>}{F7}{/Shift}');
+    const root = calls.at(-1)![0].root;
+    expect(root.outs).toHaveLength(2);
+    const t = root.outs[1]!;
+    expect('series' in t && t.series.map((e) => e.k)).toEqual(['contact']);
+    expect('outs' in t && t.outs.map((o) => ('k' in o ? o.k : 'node'))).toEqual(['coil']);
+    await user.click(screen.getByRole('button', { name: 'Nuovo ramo a T' }));
+    // la selezione è nel ramo a T: il nuovo ramo si annida lì
+    const t2 = calls.at(-1)![0].root.outs[1]!;
+    expect('outs' in t2 && t2.outs).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Nuovo ramo a T' }).getAttribute('title')).toBe(
+      'Nuovo ramo a T (Shift+F7)',
+    );
+  });
+
+  it('ogni editor ha la sua barra, anche con index > 0', () => {
+    render(
+      <I18nextProvider i18n={i18next}>
+        <LadNetworkEditor
+          net={emptyNetwork(newId)}
+          index={2}
+          diagnostics={new Map()}
+          readOnly={false}
+          onChange={() => {}}
+        />
+      </I18nextProvider>,
+    );
+    expect(screen.getByRole('toolbar')).toBeTruthy();
+  });
+
+  it('un clic sullo sfondo deseleziona', async () => {
+    const { user, canvas } = setup();
+    await user.click(screen.getByRole('button', { name: /^Bobina / }));
+    fireEvent.click(canvas);
+    expect(screen.getByRole('button', { name: /^Bobina / }).getAttribute('aria-pressed')).toBe(
+      'false',
+    );
+  });
+
+  it('F9 si ricava dal modello e funziona dopo un nuovo montaggio', async () => {
+    let net = emptyNetwork(newId);
+    net = lines(net, { node: net.root.id, index: 0 }, contact('a'));
+    net = lines(net, { node: net.root.id, index: 1 }, contact('b'));
+    net = openBranch(net, 'a', newId);
+    const { calls, user } = setup(net);
+    await user.click(document.querySelector('[data-lad-id="b"]')!);
+    await user.keyboard('{F9}');
+    expect(calls).toHaveLength(1);
+    const par = calls[0]![0].root.series[0]!;
+    expect(par.k === 'parallel' && par.branches[0]!.map((e) => e.id)).toEqual(['a', 'b']);
+  });
+
+  it('senza ramo aperto prima, F9 mostra un messaggio e non cambia nulla', async () => {
+    const { onChange, user, canvas } = setup();
+    canvas.focus();
+    await user.keyboard('{F2}{F9}');
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('status').textContent).toContain('Impossibile chiudere il ramo');
+  });
+
+  it('Tab conferma e passa al campo successivo con una sola modifica', async () => {
+    let net = emptyNetwork(newId);
+    net = insertElem(
+      net,
+      { node: net.root.id, index: 0 },
+      { id: 'c', k: 'cmp', fn: '==I', in1: '', in2: '' },
+    );
+    const { onChange, user } = setup(net);
+    await user.click(screen.getByRole('button', { name: /^Confronto/ }));
+    await user.keyboard('{Enter}MW 0{Tab}');
+    expect(onChange).toHaveBeenCalledTimes(1);
+    const second = screen.getByRole('textbox', { name: 'Ingresso 2' });
+    expect((second as HTMLInputElement).value).toBe('');
+    await user.keyboard('MW 2{Enter}');
+    expect(onChange).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('button', { name: /^Confronto ==I MW 0 MW 2/ })).toBeTruthy();
+  });
+
+  it('il campo di un pin sta sulla riga del pin; il doppio clic sul pin lo apre', async () => {
+    let net = emptyNetwork(newId);
+    net = insertElem(net, { node: net.root.id, index: 0 }, newBox('ADD_I', 'bx'));
+    const { onChange, user } = setup(net);
+    const box = screen.getByRole('button', { name: 'Box ADD_I' });
+    await user.dblClick(box.querySelector('[data-pin="IN2"]')!);
+    const input = screen.getByRole('textbox', { name: 'IN2' });
+    expect((input as HTMLInputElement).style.top).toBe('92px'); // riga 2: 2*40 + 12
+    await user.keyboard('MW 4{Enter}');
+    expect(onChange).toHaveBeenCalledTimes(1);
+    const b = onChange.mock.calls[0]![0].root.series[0]!;
+    expect(b.k === 'box' && b.pins).toEqual({ IN2: 'MW 4' });
+  });
+
+  it('un CALL prende i pin dai parametri: operandi per i dati, logica di pin per gli ingressi BOOL', async () => {
+    const callParams: CallParams = (inst) =>
+      inst === 'FC 1'
+        ? [
+            { name: 'start', dir: 'in', type: 'BOOL' },
+            { name: 'speed', dir: 'in', type: 'INT' },
+            { name: 'done', dir: 'out', type: 'BOOL' },
+          ]
+        : undefined;
+    let net = emptyNetwork(newId);
+    net = insertElem(net, { node: net.root.id, index: 0 }, newBox('CALL', 'cl'));
+    const { onChange, user } = setup(net, { callParams });
+    await user.click(screen.getByRole('button', { name: 'Box CALL' }));
+    await user.keyboard('{Enter}FC 1{Tab}');
+    expect(onChange).toHaveBeenCalledTimes(1);
+    const b = onChange.mock.calls[0]![0].root.series[0]!;
+    expect(b.k === 'box' && b.instance).toBe('FC 1');
+    expect(b.k === 'box' && b.pins).toEqual({ speed: '', done: '' });
+    expect(b.k === 'box' && Object.keys(b.boolPins)).toEqual(['start']);
+    // il campo successivo è il primo dato (non l'ingresso BOOL)
+    expect(screen.getByRole('textbox', { name: 'speed' })).toBeTruthy();
   });
 });
 

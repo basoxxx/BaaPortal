@@ -78,13 +78,19 @@ export function nodeOfPoint(net: LadNetwork, at: InsertPoint): string | undefine
   return p?.nodeId;
 }
 
+export type CallParam = { name: string; dir: 'in' | 'out' | 'inout'; type: string };
+/** Parametri del blocco chiamato da un box CALL (dall'interfaccia del blocco), se l'istanza è nota. */
+export type CallParams = (instance: string) => CallParam[] | undefined;
+/** Gli ingressi BOOL prendono la logica del pin (slot), non un operando. */
+const isBoolInput = (p: CallParam) => p.dir === 'in' && p.type.toUpperCase() === 'BOOL';
+
 /** Campo modificabile di un elemento: chiave nel modello e chiave i18n dell'etichetta. */
 export type LadField = { key: string; label: string; pin?: boolean };
 
 const f = (key: string): LadField => ({ key, label: `lad.field.${key}` });
 
 /** Campi (operandi) di un elemento, nell'ordine in cui si scorrono con Tab. */
-export function fieldsOf(e: LadElem | LadOut): LadField[] {
+export function fieldsOf(e: LadElem | LadOut, callParams?: CallParams): LadField[] {
   switch (e.k) {
     case 'contact':
     case 'midline':
@@ -110,7 +116,7 @@ export function fieldsOf(e: LadElem | LadOut): LadField[] {
     case 'opn':
       return [f('db')];
     case 'box':
-      return boxFields(e);
+      return boxFields(e, callParams);
     default:
       return [];
   }
@@ -122,13 +128,16 @@ export function flowPin(kind: BoxKind): string {
   return def.en ? 'ENO' : (def.outputs.find((o) => o.name === 'Q')?.name ?? '');
 }
 
-function boxFields(b: LadBox): LadField[] {
+function boxFields(b: LadBox, callParams?: CallParams): LadField[] {
   const def = BOX_CATALOG[b.box];
   const out: LadField[] = [];
   if (['bistable', 'timer', 'counter', 'call'].includes(def.group) || b.instance !== '')
     out.push(f('instance'));
+  const params = def.dynamicPins ? callParams?.(b.instance) : undefined;
   const names = def.dynamicPins
-    ? Object.keys(b.pins)
+    ? params
+      ? params.filter((p) => !isBoolInput(p)).map((p) => p.name)
+      : Object.keys(b.pins)
     : [...def.dataInputs, ...def.outputs.filter((o) => o.name !== flowPin(b.box))].map(
         (p) => p.name,
       );
@@ -142,15 +151,79 @@ export function fieldValue(e: LadElem | LadOut, fld: LadField): string {
   return typeof v === 'string' ? v : '';
 }
 
-/** Patch per `updateElem` che cambia un campo. */
+/**
+ * Patch per `updateElem` che cambia un campo. Cambiando l'istanza di un CALL con `callParams`,
+ * i pin del blocco chiamato che mancano si aggiungono vuoti (gli ingressi BOOL come logica di pin).
+ */
 export function fieldPatch(
   e: LadElem | LadOut,
   fld: LadField,
   value: string,
+  callParams?: CallParams,
 ): Record<string, unknown> {
-  if (e.k === 'box')
-    return fld.pin ? { pins: { ...e.pins, [fld.key]: value } } : { instance: value };
-  return { [fld.key]: value };
+  if (e.k !== 'box') return { [fld.key]: value };
+  if (fld.pin) return { pins: { ...e.pins, [fld.key]: value } };
+  const patch: Record<string, unknown> = { instance: value };
+  const params = e.box === 'CALL' ? callParams?.(value) : undefined;
+  if (params) {
+    const pins = { ...e.pins };
+    const boolPins = { ...e.boolPins };
+    for (const p of params) {
+      if (isBoolInput(p)) boolPins[p.name] ??= [];
+      else pins[p.name] ??= '';
+    }
+    patch.pins = pins;
+    patch.boolPins = boolPins;
+  }
+  return patch;
+}
+
+/** Lista di elementi (serie, ramo o pin) che contiene l'elemento `id`. */
+function listOf(net: LadNetwork, id: string): LadElem[] | undefined {
+  const inList = (list: LadElem[]): LadElem[] | undefined => {
+    for (const e of list) {
+      if (e.id === id) return list;
+      if (e.k === 'parallel') {
+        for (const b of e.branches) {
+          const r = inList(b);
+          if (r) return r;
+        }
+      } else if (e.k === 'box') {
+        for (const l of Object.values(e.boolPins)) {
+          const r = inList(l);
+          if (r) return r;
+        }
+      }
+    }
+    return undefined;
+  };
+  const inNode = (n: LadNode): LadElem[] | undefined => {
+    const r = inList(n.series);
+    if (r) return r;
+    for (const o of n.outs) {
+      if (isNode(o)) {
+        const x = inNode(o);
+        if (x) return x;
+      }
+    }
+    return undefined;
+  };
+  return inNode(net.root);
+}
+
+/**
+ * Per chiudere un ramo dopo l'elemento `id` (F9): primo elemento dell'ultimo ramo del parallelo
+ * più vicino che lo precede nella stessa serie, cioè l'argomento `branchElemId` di
+ * `closeBranchAfter`. `undefined` se prima di `id` non c'è nessun parallelo.
+ */
+export function branchToClose(net: LadNetwork, id: string): string | undefined {
+  const list = listOf(net, id);
+  if (!list) return undefined;
+  for (let i = list.findIndex((e) => e.id === id) - 1; i >= 0; i--) {
+    const e = list[i]!;
+    if (e.k === 'parallel') return e.branches[e.branches.length - 1]?.[0]?.id;
+  }
+  return undefined;
 }
 
 /** Operando principale (il primo campo) o `undefined` se l'elemento non ne ha. */
