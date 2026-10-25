@@ -201,6 +201,8 @@ export interface BaaBridge {
   updateCanInstall(): Promise<UpdateCanInstall>;
   /** Con successo l'app esce; altrimenti dice perché non può. */
   updateInstall(): Promise<{ ok: false; reason: 'busy' | 'notReady' } | undefined>;
+  /** macOS: mostra nel Finder il DMG scaricato (il percorso lo tiene il main). */
+  updateShowInFolder(): Promise<void>;
   updateLater(version: string): Promise<void>;
   updateOpenNotes(version: string): Promise<void>;
   onUpdateEvent(cb: (e: UpdateEvent) => void): () => void;

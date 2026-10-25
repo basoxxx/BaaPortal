@@ -450,6 +450,9 @@ export class FakeBridge implements BaaBridge {
     this.updateCalls.push('install');
     return { ok: false, reason: 'notReady' };
   }
+  async updateShowInFolder() {
+    this.updateCalls.push('showInFolder');
+  }
   async updateLater(version: string) {
     this.updateCalls.push(`later:${version}`);
   }

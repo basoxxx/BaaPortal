@@ -89,6 +89,7 @@ const bridge: RawBridge = {
   updateCancelDownload: () => ipcRenderer.invoke('update:cancelDownload'),
   updateCanInstall: () => ipcRenderer.invoke('update:canInstall'),
   updateInstall: () => ipcRenderer.invoke('update:install'),
+  updateShowInFolder: () => ipcRenderer.invoke('update:showInFolder'),
   updateLater: (version) => ipcRenderer.invoke('update:later', version),
   updateOpenNotes: (version) => ipcRenderer.invoke('update:openNotes', version),
   onUpdateEvent: (cb) => subscribe<[UpdateEvent]>('update:event', cb),

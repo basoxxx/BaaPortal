@@ -33,6 +33,8 @@ export function registerUpdate(
   handle('update:install', async () =>
     service ? await service.install() : { ok: false, reason: 'notReady' },
   );
+  // Il percorso lo tiene il main: il renderer non ne manda.
+  handle('update:showInFolder', () => service?.showInFolder());
   handle('update:later', (_e, version) => {
     if (typeof version === 'string') service?.later(version);
   });

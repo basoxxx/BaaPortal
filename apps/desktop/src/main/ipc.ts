@@ -4,6 +4,7 @@ import {
   clipboard,
   dialog,
   ipcMain,
+  net,
   shell,
   type IpcMainEvent,
   type IpcMainInvokeEvent,
@@ -23,6 +24,7 @@ import { createConfirm, e2eSavePath } from './plc/confirm';
 import { registerPlc } from './plc/plcIpc';
 import { loadUpdater } from './update/updaterPort';
 import { registerUpdate } from './update/updateIpc';
+import { downloadDmg, macArch, nodeMacFs, pickMacFile, sha512OfFile } from './update/macDownload';
 import { UpdateService } from './update/updateService';
 import type { UpdateInfoView } from '../shared/updateTypes';
 import { addRecent, removeRecent, type Platform, type StoredRecent } from './recentProjects';
@@ -250,6 +252,27 @@ export function registerIpc(
           const w = getWindow();
           if (w && !w.isDestroyed()) w.webContents.send('update:event', e);
         },
+        macDownload: async ({ version, files }, onProgress, signal) => {
+          const arch = macArch(process.arch, app.runningUnderARM64Translation);
+          if (!arch) throw new Error(`Architettura non supportata (${process.arch})`);
+          const file = pickMacFile(files, version, arch);
+          if (typeof file === 'string') throw new Error(file);
+          return downloadDmg(
+            {
+              fetch: (url, init) => net.fetch(url, init),
+              downloadsDir: app.getPath('downloads'),
+              fs: nodeMacFs,
+              sha512Of: sha512OfFile,
+            },
+            file,
+            version,
+            arch,
+            onProgress,
+            signal,
+          );
+        },
+        openPath: (p) => shell.openPath(p),
+        showInFolder: (p) => shell.showItemInFolder(p),
         openExternal: (url) => shell.openExternal(url),
         setTimeout: (fn, ms) => setTimeout(fn, ms),
         clearTimeout: (t) => clearTimeout(t as NodeJS.Timeout),

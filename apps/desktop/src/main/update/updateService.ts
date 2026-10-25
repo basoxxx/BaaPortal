@@ -1,6 +1,7 @@
 import semver from 'semver';
 import type { UpdateCanInstall, UpdateEvent, UpdatePrefs } from '../../shared/updateTypes';
 import { effectivePrerelease, errorText, isNewer, shouldReport } from './updatePolicy';
+import { DownloadCancelled, type MacFile } from './macDownload';
 import type { UpdaterPort } from './updaterPort';
 
 const FIRST_CHECK_MS = 10_000;
@@ -29,8 +30,15 @@ export interface UpdateServiceDeps {
   setTimeout(fn: () => void, ms: number): unknown;
   clearTimeout(t: unknown): void;
   now(): number;
-  /** Solo macOS (Task 3): scarica il DMG; finché manca non succede nulla. */
-  macDownload?: (version: string) => Promise<void>;
+  /** Solo macOS: sceglie, scarica e verifica il DMG; lancia `DownloadCancelled` se annullato. */
+  macDownload?: (
+    a: { version: string; files: MacFile[] },
+    onProgress: (transferred: number, total: number) => void,
+    signal: AbortSignal,
+  ) => Promise<{ path: string; reused: boolean }>;
+  /** Solo macOS: apre il DMG (stringa vuota = riuscito, come `shell.openPath`). */
+  openPath?: (path: string) => Promise<string>;
+  showInFolder?: (path: string) => void;
 }
 
 /** Stato, pianificazione, controllo, scaricamento (Windows) e installazione degli aggiornamenti. */
@@ -45,6 +53,9 @@ export class UpdateService {
   private downloading = false;
   private installing = false;
   private token: { cancel(): void } | null = null;
+  private abort: AbortController | null = null;
+  private availableFiles: MacFile[] = [];
+  private macPath: string | null = null;
   private cancelling = false;
   private lastProgress = -Infinity;
   private readonly dismissed = new Set<string>();
@@ -96,7 +107,7 @@ export class UpdateService {
   async download(): Promise<void> {
     if (this.downloading || this.downloadedVersion || !this.availableVersion) return;
     if (this.d.platform === 'darwin') {
-      await this.d.macDownload?.(this.availableVersion);
+      await this.macDownload(this.availableVersion);
       return;
     }
     if (this.d.platform !== 'win32') return;
@@ -123,12 +134,54 @@ export class UpdateService {
     }
   }
 
+  private async macDownload(version: string): Promise<void> {
+    if (!this.d.macDownload) return;
+    this.downloading = true;
+    this.cancelling = false;
+    this.lastProgress = -Infinity;
+    const ac = new AbortController();
+    this.abort = ac;
+    try {
+      const r = await this.d.macDownload(
+        { version, files: this.availableFiles },
+        (transferred, total) => this.progress(transferred, total),
+        ac.signal,
+      );
+      this.macPath = r.path;
+      // Se non si apre da solo, l'avviso offre «Mostra nel Finder»: l'evento porta comunque il percorso.
+      await this.d.openPath?.(r.path).catch(() => undefined);
+      this.send({ type: 'macReady', version, path: r.path, reused: r.reused });
+    } catch (err) {
+      if (err instanceof DownloadCancelled) this.send({ type: 'cancelled' });
+      else this.send({ type: 'error', phase: 'download', message: errorText(err), manual: false });
+    } finally {
+      this.downloading = false;
+      this.abort = null;
+    }
+  }
+
+  /** Mostra nel Finder il file scaricato: il percorso è quello tenuto qui, mai del renderer. */
+  showInFolder(): void {
+    if (this.macPath) this.d.showInFolder?.(this.macPath);
+  }
+
+  private progress(transferred: number, total: number): void {
+    const t = this.d.now();
+    if (t - this.lastProgress < PROGRESS_MIN_MS) return;
+    this.lastProgress = t;
+    this.send({ type: 'progress', transferred, total });
+  }
+
   private downloadFailed(err: unknown): void {
     if (this.cancelling) this.send({ type: 'cancelled' });
     else this.send({ type: 'error', phase: 'download', message: errorText(err), manual: false });
   }
 
   cancelDownload(): void {
+    if (this.downloading && this.abort) {
+      this.abort.abort();
+      return;
+    }
     if (!this.downloading || !this.token) return;
     this.cancelling = true;
     this.token.cancel();
@@ -215,10 +268,7 @@ export class UpdateService {
         else console.warn('[aggiornamenti]', e);
       });
       u.on('download-progress', (p) => {
-        const t = this.d.now();
-        if (t - this.lastProgress < PROGRESS_MIN_MS) return;
-        this.lastProgress = t;
-        this.send({ type: 'progress', transferred: p.transferred, total: p.total });
+        this.progress(p.transferred, p.total);
       });
       u.on('update-downloaded', (i) => {
         if (!isNewer(i.version, this.d.current)) return;
@@ -245,8 +295,9 @@ export class UpdateService {
       const r = await u.checkForUpdates();
       const version = r?.updateInfo.version;
       // Con uno scaricamento in corso o già fatto lo stato non si tocca: prima si installa o si scarta.
-      if (this.downloading || this.downloadedVersion) {
-        if (run.manual && this.last?.type === 'downloaded') this.d.send(this.last);
+      if (this.downloading || this.downloadedVersion || this.last?.type === 'macReady') {
+        if (run.manual && this.last?.type === 'macReady') this.d.send(this.last);
+        else if (run.manual && this.last?.type === 'downloaded') this.d.send(this.last);
         return;
       }
       // Si decide con le nostre regole, anche se electron-updater dice altro.
@@ -257,6 +308,7 @@ export class UpdateService {
         return;
       }
       this.availableVersion = version;
+      this.availableFiles = r?.updateInfo.files ?? [];
       if (!run.manual && this.dismissed.has(version)) return;
       this.send({ type: 'available', version, manual: run.manual });
     } catch (err) {

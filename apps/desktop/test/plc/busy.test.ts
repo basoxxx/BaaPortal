@@ -100,11 +100,11 @@ describe('busy di registerPlc', () => {
     await plc.closeAll();
     expect(await handlers.get('plc:uploadAll')!(e, access)).toMatchObject({
       ok: false,
-      error: 'Aggiornamento in corso',
+      error: 'Chiusura in corso',
     });
     expect(await handlers.get('plc:backup')!(e)).toMatchObject({
       ok: false,
-      error: 'Aggiornamento in corso',
+      error: 'Chiusura in corso',
     });
     expect(await handlers.get('plc:control')!(e, 'STOP')).toMatchObject({ ok: false });
     plc.resume();

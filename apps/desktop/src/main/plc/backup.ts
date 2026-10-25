@@ -73,7 +73,7 @@ export class BackupService {
   }
 
   async backup(owner: BackupOwner): Promise<PlcBackupResult> {
-    if (this.closing) return { ok: false, error: 'Aggiornamento in corso' };
+    if (this.closing) return { ok: false, error: 'Chiusura in corso' };
     if (this.running.has(owner)) return { ok: false, error: 'Un backup è già in corso' };
     const state = { cancelled: false };
     this.running.set(owner, state);

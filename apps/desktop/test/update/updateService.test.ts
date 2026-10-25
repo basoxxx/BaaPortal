@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { UpdateService, type UpdateServiceDeps } from '../../src/main/update/updateService';
+import { DownloadCancelled } from '../../src/main/update/macDownload';
 import type { UpdaterPort } from '../../src/main/update/updaterPort';
 import type { UpdateEvent } from '../../src/shared/updateTypes';
 
@@ -468,6 +469,74 @@ describe('installazione', () => {
     expect(await b).toEqual({ ok: false, reason: 'busy' });
     await a;
     expect(m.updater.quitAndInstall).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('macOS: scaricamento', () => {
+  it('Scarica usa macDownload, poi openPath e macReady; showInFolder usa il percorso del main', async () => {
+    const calls: string[] = [];
+    const macDownload = vi.fn(
+      async (a: { version: string }, onProgress: (t: number, n: number) => void) => {
+        calls.push('dl');
+        onProgress(5, 10);
+        return { path: `/Download/BaaPortal-${a.version}-arm64.dmg`, reused: false };
+      },
+    );
+    const openPath = vi.fn(async (p: string) => {
+      calls.push(`open:${p}`);
+      return '';
+    });
+    const showInFolder = vi.fn();
+    const m = make({ platform: 'darwin', macDownload, openPath, showInFolder });
+    await m.svc.check();
+    await m.svc.download();
+    expect(calls).toEqual(['dl', 'open:/Download/BaaPortal-0.12.1-arm64.dmg']);
+    expect(m.events.at(-1)).toEqual({
+      type: 'macReady',
+      version: '0.12.1',
+      path: '/Download/BaaPortal-0.12.1-arm64.dmg',
+      reused: false,
+    });
+    expect(m.events).toContainEqual({ type: 'progress', transferred: 5, total: 10 });
+    m.svc.showInFolder();
+    expect(showInFolder).toHaveBeenCalledWith('/Download/BaaPortal-0.12.1-arm64.dmg');
+    expect(m.updater.downloadUpdate).not.toHaveBeenCalled();
+  });
+
+  it('openPath che fallisce: macReady comunque', async () => {
+    const m = make({
+      platform: 'darwin',
+      macDownload: async () => ({ path: '/d/x.dmg', reused: true }),
+      openPath: async () => 'errore',
+    });
+    await m.svc.check();
+    await m.svc.download();
+    expect(m.events.at(-1)).toMatchObject({ type: 'macReady', path: '/d/x.dmg', reused: true });
+  });
+
+  it('errore e annullamento', async () => {
+    const m = make({
+      platform: 'darwin',
+      macDownload: async () => {
+        throw new Error('Il file scaricato non corrisponde: non è stato aperto');
+      },
+    });
+    await m.svc.check();
+    await m.svc.download();
+    expect(m.events.at(-1)).toMatchObject({ type: 'error', phase: 'download' });
+    const c = make({
+      platform: 'darwin',
+      macDownload: async (_a, _p, signal) =>
+        new Promise((_, rej) =>
+          signal.addEventListener('abort', () => rej(new DownloadCancelled())),
+        ),
+    });
+    await c.svc.check();
+    const p = c.svc.download();
+    await flush();
+    c.svc.cancelDownload();
+    await p;
+    expect(c.events.at(-1)).toEqual({ type: 'cancelled' });
   });
 });
 

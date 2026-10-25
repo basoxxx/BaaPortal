@@ -112,7 +112,7 @@ export class UploadService {
     access: PlcAccess,
     opts: CollectOptions = {},
   ): Promise<CollectResult> {
-    if (this.closing) return { ok: false, error: 'Aggiornamento in corso' };
+    if (this.closing) return { ok: false, error: 'Chiusura in corso' };
     if (this.runs.has(owner)) return { ok: false, error: 'Un caricamento è già in corso' };
     if (owner.isDestroyed()) return { ok: false, error: 'Finestra chiusa' };
     const ctl = new AbortController();
