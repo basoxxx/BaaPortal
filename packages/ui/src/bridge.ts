@@ -1,11 +1,16 @@
 import type {
   NetInterface,
   PlcAccess,
+  PlcBlockRef,
   PlcConnectResult,
+  PlcControlOp,
+  PlcControlResult,
+  PlcDownloadResult,
   PlcEvent,
   PlcScanEvent,
   PlcScanStartResult,
   PlcStatus,
+  PlcWriteProgress,
 } from './online/plcTypes';
 
 export interface RecentEntry {
@@ -130,5 +135,13 @@ export interface BaaBridge {
   plcScanStart(address: string): Promise<PlcScanStartResult>;
   plcScanCancel(): Promise<void>;
   onPlcScanEvent(cb: (e: PlcScanEvent) => void): () => void;
+  // Scritture nella CPU del collegamento online di questa finestra: l'indirizzo lo decide il processo
+  // principale e ogni operazione passa da una conferma nativa. Mai eccezioni: l'esito dice tutto.
+  plcDownload(
+    files: Uint8Array[],
+    opts?: { deleteBlocks?: PlcBlockRef[] },
+  ): Promise<PlcDownloadResult>;
+  plcControl(op: PlcControlOp): Promise<PlcControlResult>;
+  onPlcWriteProgress(cb: (p: PlcWriteProgress) => void): () => void;
   testOverrides(): Promise<{ recoveryIntervalMs?: number }>; // sempre {} nelle build pacchettizzate
 }

@@ -39,6 +39,7 @@ const CONNECTION_TYPES = { PG: 'pg', OP: 'op', S7_BASIC: 'basic' } as const;
 
 interface Link {
   access: PlcAccess;
+  identity: PlcIdentity;
   client: Client;
   mode: PlcMode;
   timer: NodeJS.Timeout;
@@ -48,7 +49,7 @@ interface Link {
   done: boolean;
 }
 
-function connectMessage(err: unknown, access: PlcAccess): string {
+export function connectMessage(err: unknown, access: PlcAccess): string {
   const port = access.port ?? DEFAULT_PORT;
   if (err instanceof S7Error) {
     if (err.code === 'COTP_REJECTED')
@@ -142,6 +143,7 @@ export class PlcService {
     }
     const link: Link = {
       access,
+      identity,
       client,
       mode,
       timer: setInterval(() => void this.tick(owner, link), this.intervalMs),
@@ -171,6 +173,15 @@ export class PlcService {
   status(owner: PlcOwner): PlcStatus {
     const link = this.links.get(owner);
     return link ? { connected: true, access: link.access } : { connected: false };
+  }
+
+  /**
+   * Bersaglio delle scritture: indirizzo e identità del collegamento attivo della stessa finestra.
+   * Il renderer non passa mai un indirizzo, lo decide solo questo.
+   */
+  target(owner: PlcOwner): { access: PlcAccess; identity: PlcIdentity } | undefined {
+    const link = this.links.get(owner);
+    return link ? { access: link.access, identity: link.identity } : undefined;
   }
 
   /** Chiude tutto (uscita dall'app). */

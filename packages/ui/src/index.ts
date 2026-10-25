@@ -26,4 +26,9 @@ export type {
   FoundDevice,
   PlcScanEvent,
   PlcScanStartResult,
+  PlcBlockRef,
+  PlcWriteProgress,
+  PlcDownloadResult,
+  PlcControlOp,
+  PlcControlResult,
 } from './online/plcTypes';

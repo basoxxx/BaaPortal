@@ -1,5 +1,13 @@
 import type { IpcMainInvokeEvent } from 'electron';
-import type { PlcAccess, PlcConnectResult, PlcScanStartResult } from '@baaportal/ui';
+import type {
+  PlcAccess,
+  PlcConnectResult,
+  PlcControlResult,
+  PlcDownloadResult,
+  PlcScanStartResult,
+} from '@baaportal/ui';
+import type { ConfirmFn } from './confirm';
+import { PlcWriteService, isControlOp, parseDownloadRequest } from './plcWrite';
 import { PlcService } from './plcService';
 import { ScanService } from './scanService';
 
@@ -42,8 +50,10 @@ export function parsePlcAccess(raw: unknown): PlcAccess | string {
 /** Canali del collegamento online; il servizio tiene un collegamento per finestra (`e.sender`). */
 export function registerPlc(
   handle: Handle,
+  confirm: ConfirmFn,
   service = new PlcService(),
   scans = new ScanService(),
+  writes = new PlcWriteService({ service, confirm }),
 ): { closeAll(): Promise<void> } {
   handle('plc:connect', async (e, raw): Promise<PlcConnectResult> => {
     const access = parsePlcAccess(raw);
@@ -59,6 +69,16 @@ export function registerPlc(
     return scans.start(e.sender, address);
   });
   handle('plc:scanCancel', (e) => scans.cancel(e.sender));
+  // Scritture: la conferma nativa la chiede il servizio, qualunque cosa faccia il renderer.
+  handle('plc:download', async (e, files, opts): Promise<PlcDownloadResult> => {
+    const req = parseDownloadRequest(files, opts);
+    if (typeof req === 'string') return { ok: false, loaded: [], error: req };
+    return writes.download(e.sender, req.files, { deleteBlocks: req.deleteBlocks });
+  });
+  handle('plc:control', async (e, op): Promise<PlcControlResult> => {
+    if (!isControlOp(op)) return { ok: false, error: 'Comando non valido' };
+    return writes.control(e.sender, op);
+  });
   return {
     closeAll: async () => {
       await Promise.all([scans.cancelAll(), service.closeAll()]);
