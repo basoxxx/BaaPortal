@@ -5,6 +5,10 @@ import type {
   PlcClockResult,
   PlcDiagResult,
   PlcReadWatchResult,
+  PlcStatusRequest,
+  PlcStatusStartResult,
+  PlcStatusWindowResult,
+  PlcStatusReadResult,
   PlcWatchTarget,
   PlcWriteVarItem,
   PlcWriteVarsResult,
@@ -169,6 +173,11 @@ export interface BaaBridge {
   plcBlocks(): Promise<PlcBlocksResult>;
   /** Carica un solo blocco OB, FB, FC o DB dalla CPU collegata (sola lettura); mai eccezioni. */
   plcUploadBlock(type: PlcBlockRef['type'], number: number): Promise<PlcUploadBlockResult>;
+  /** Osservazione di un blocco (stato del blocco v2): una sola per CPU; mai eccezioni. */
+  plcStatusStart(req: PlcStatusRequest): Promise<PlcStatusStartResult>;
+  plcStatusWindow(req: PlcStatusRequest): Promise<PlcStatusWindowResult>;
+  plcStatusRead(): Promise<PlcStatusReadResult>;
+  plcStatusStop(): Promise<void>;
   onPlcWriteProgress(cb: (p: PlcWriteProgress) => void): () => void;
   /**
    * Carica OB, FB, FC e DB da una CPU in sola lettura, su un collegamento proprio (non serve essere

@@ -20,6 +20,7 @@ import { parseOpenOptions, parseSaveOptions } from './fileDialogOptions';
 import { registerKit } from './kit';
 import { createConfirm, e2eSavePath } from './plc/confirm';
 import { registerPlc } from './plc/plcIpc';
+import { fileJobStore } from './plc/tisJobs';
 import { addRecent, removeRecent, type Platform, type StoredRecent } from './recentProjects';
 
 const platform = process.platform as Platform;
@@ -205,6 +206,7 @@ export function registerIpc(
       return r.canceled || !r.filePath ? null : r.filePath;
     },
     () => app.getVersion(),
+    fileJobStore(join(app.getPath('userData'), 'tis-jobs.json')),
   );
 
   // Valori solo per i test e2e: come BAA_USER_DATA, mai onorati nelle build pacchettizzate.

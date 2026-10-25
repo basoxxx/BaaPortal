@@ -48,6 +48,11 @@ export type {
   PlcWatchTarget,
   PlcWatchValue,
   PlcReadWatchResult,
+  PlcRegs,
+  PlcStatusRequest,
+  PlcStatusStartResult,
+  PlcStatusWindowResult,
+  PlcStatusReadResult,
   PlcWriteVarItem,
   PlcWriteVarsResult,
 } from './online/plcTypes';

@@ -102,6 +102,9 @@ export class PlcService {
   private readonly readTimeoutMs: number;
   private readonly connectTimeoutMs: number;
   private readonly connectFn: PlcConnectFn;
+  /** Chi vuole sapere quando finisce il collegamento di una finestra (offline, perso). */
+  private readonly linkEnds = new Map<PlcOwner, Set<() => void>>();
+  private readonly connectListeners = new Set<(owner: PlcOwner) => void>();
 
   constructor(o: PlcServiceOptions = {}) {
     this.intervalMs = o.intervalMs ?? 1000;
@@ -180,6 +183,13 @@ export class PlcService {
     };
     owner.once('destroyed', link.onGone);
     this.links.set(owner, link);
+    for (const cb of [...this.connectListeners]) {
+      try {
+        cb(owner);
+      } catch {
+        // un ascoltatore che sbaglia non deve far fallire il collegamento
+      }
+    }
     return protection === undefined
       ? { ok: true, identity, mode }
       : { ok: true, identity, mode, protection };
@@ -210,6 +220,43 @@ export class PlcService {
   ): { access: PlcAccess; identity: PlcIdentity; linkId: number } | undefined {
     const link = this.links.get(owner);
     return link ? { access: link.access, identity: link.identity, linkId: link.id } : undefined;
+  }
+
+  /**
+   * `cb` viene chiamata una volta quando finisce il collegamento attuale della finestra (offline,
+   * perso, finestra chiusa). Senza collegamento, subito. Restituisce come annullare la richiesta.
+   */
+  onLinkEnd(owner: PlcOwner, cb: () => void): () => void {
+    if (!this.links.has(owner)) {
+      queueMicrotask(cb);
+      return () => undefined;
+    }
+    let set = this.linkEnds.get(owner);
+    if (!set) this.linkEnds.set(owner, (set = new Set()));
+    set.add(cb);
+    return () => {
+      const cur = this.linkEnds.get(owner);
+      cur?.delete(cb);
+      if (cur?.size === 0) this.linkEnds.delete(owner);
+    };
+  }
+
+  /** `cb` viene chiamata a ogni nuovo collegamento riuscito (serve alla pulizia dei job orfani). */
+  onConnect(cb: (owner: PlcOwner) => void): () => void {
+    this.connectListeners.add(cb);
+    return () => void this.connectListeners.delete(cb);
+  }
+
+  private fireLinkEnd(owner: PlcOwner): void {
+    const set = this.linkEnds.get(owner);
+    this.linkEnds.delete(owner);
+    for (const cb of set ?? []) {
+      try {
+        cb();
+      } catch {
+        // idem
+      }
+    }
   }
 
   /** Il modo noto della CPU collegata alla finestra (l'ultimo letto dalla sorveglianza). */
@@ -270,6 +317,7 @@ export class PlcService {
     if (!link) return;
     this.links.delete(owner);
     this.finish(owner, link);
+    this.fireLinkEnd(owner);
     await link.client.close().catch(() => undefined);
   }
 
@@ -287,6 +335,7 @@ export class PlcService {
     if (link.done) return;
     this.links.delete(owner);
     this.finish(owner, link);
+    this.fireLinkEnd(owner);
     void link.client.close().catch(() => undefined);
     this.emit(owner, { kind: 'lost', reason });
   }

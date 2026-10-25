@@ -13,7 +13,12 @@ import type {
   PlcUploadBlockResult,
   PlcReadWatchResult,
   PlcWriteVarsResult,
+  PlcStatusStartResult,
+  PlcStatusWindowResult,
+  PlcStatusReadResult,
 } from '@baaportal/ui';
+import { BlockStatusService } from './blockStatus';
+import { memoryJobStore, type TisJobStore } from './tisJobs';
 import { BackupService, type PickBackupPath } from './backup';
 import type { ConfirmFn } from './confirm';
 import { readDiagnostics } from './diagnostics';
@@ -70,12 +75,16 @@ export function registerPlc(
   uploads = new UploadService(),
   pickBackupPath: PickBackupPath = async () => null,
   appVersion: () => string = () => '',
+  jobs: TisJobStore = memoryJobStore(),
 ): { closeAll(): Promise<void>; writing(): boolean; interruptWrites(): void } {
+  const status = new BlockStatusService({ service, jobs });
   handle('plc:connect', async (e, raw): Promise<PlcConnectResult> => {
     const access = parsePlcAccess(raw);
     if (typeof access === 'string') return { ok: false, error: access };
     return service.connect(e.sender, access);
   });
+  // Pulizia dei job di test nostri rimasti sulla CPU dopo una chiusura anomala.
+  service.onConnect((owner) => void status.cleanup(owner));
   handle('plc:disconnect', (e) => service.disconnect(e.sender));
   handle('plc:status', (e) => service.status(e.sender));
   // Ricerca: parte solo da questo canale, su richiesta; l'indirizzo deve essere di un'interfaccia reale.
@@ -107,6 +116,11 @@ export function registerPlc(
   handle('plc:writeVars', (e, items): Promise<PlcWriteVarsResult> =>
     writes.writeVars(e.sender, items),
   );
+  // Osservazione del blocco: bersaglio e CPU li decide il servizio; qui solo la forma della richiesta.
+  handle('plc:statusStart', (e, raw): Promise<PlcStatusStartResult> => status.start(e.sender, raw));
+  handle('plc:statusWindow', (e, raw): PlcStatusWindowResult => status.window(e.sender, raw));
+  handle('plc:statusRead', (e): Promise<PlcStatusReadResult> => status.read(e.sender));
+  handle('plc:statusStop', (e) => status.stop(e.sender));
   // Elenco dei blocchi della CPU: sola lettura, sul collegamento della finestra.
   handle('plc:blocks', (e): Promise<PlcBlocksResult> => listOnlineBlocks(service, e.sender));
   // Un solo blocco della CPU collegata: sola lettura, solo OB, FB, FC e DB.
@@ -136,6 +150,7 @@ export function registerPlc(
   return {
     closeAll: async () => {
       await Promise.all([
+        status.stopAll(),
         scans.cancelAll(),
         (async () => backups.abortAll())(),
         uploads.abortAll(),

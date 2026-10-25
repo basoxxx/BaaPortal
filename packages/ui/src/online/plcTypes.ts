@@ -219,3 +219,46 @@ export type PlcWriteVarsResult =
   | { ok: true; results: ({ ok: true } | { ok: false; error: string })[] }
   | { ok: false; error: string }
   | { ok: false; cancelled: true };
+
+/** Registri di una riga osservata (solo quelli chiesti con la maschera). */
+export interface PlcRegs {
+  stw?: number;
+  accu1?: number;
+  accu2?: number;
+  ar1?: number;
+}
+
+/** Richiesta di osservazione di un blocco: il processo principale la ricontrolla del tutto. */
+export interface PlcStatusRequest {
+  type: 'OB' | 'FB' | 'FC';
+  number: number;
+  /** Firma del blocco compilato: la CPU deve avere lo stesso blocco. */
+  expect: { checksum: number; mc7Length: number };
+  /** Offset MC7 delle righe, pari e crescenti. */
+  offsets: number[];
+  /** Fine esclusiva della finestra (offset dell'istruzione dopo l'ultima, o lunghezza MC7). */
+  saz: number;
+  /** Registri chiesti: 0x01 STW, 0x02 ACCU1, 0x04 ACCU2, 0x08 AR1. */
+  mask: number;
+}
+
+export type PlcStatusStartResult =
+  | { ok: true; maxLines: number; pduLength: number }
+  | {
+      ok: false;
+      reason: 'offline' | 'different' | 'missing' | 'unsupported' | 'busy' | 'protection' | 'error';
+      error: string;
+    };
+
+export type PlcStatusWindowResult = { ok: true } | { ok: false; error: string };
+
+export type PlcStatusReadResult =
+  | {
+      ok: true;
+      state: 'values';
+      lines: { offset: number; regs: PlcRegs | null }[];
+      partial?: boolean;
+    }
+  | { ok: true; state: 'stop' }
+  | { ok: true; state: 'waiting' }
+  | { ok: false; ended: true; error: string };
