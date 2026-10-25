@@ -71,11 +71,12 @@ La ditta per ora non ha una CPU S7-300; un amico che userà BaaPortal ce l'ha. I
 
 ## Tappa 3 — Collegamento a S7-300 reali
 
-| Piano                            | Contenuto                                                                                                                                                                                                                            |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **3A Online**                    | Dispositivi accessibili (scansione sottorete e IP manuale), collegamento online/interruzione, CPU PN, CP 343-1, gateway RFC 1006, modalità online arancione **Stato: fatto** (v0.9.0), in sola lettura. Mai provato su una CPU reale |
-| **3B Caricamento e confronto**   | Carica nel dispositivo con conferma, carica dal dispositivo in un progetto nuovo, confronto online/offline ed editor di confronto, RUN/STOP/MRES, copia RAM→ROM, compressione **Stato: fatto** (v0.10.0). Mai provato su una CPU reale |
-| **3C Diagnostica e test online** | Info CPU, buffer di diagnostica, tempo di ciclo, memoria, ora; osservazione online; tabelle di controllo e forzamento; stack di chiamata; backup online con SDB e ripristino                                                         |
+| Piano                           | Contenuto                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **3A Online**                   | Dispositivi accessibili (scansione sottorete e IP manuale), collegamento online/interruzione, CPU PN, CP 343-1, gateway RFC 1006, modalità online arancione **Stato: fatto** (v0.9.0), in sola lettura. Mai provato su una CPU reale                                                                                                                                                                                                     |
+| **3B Caricamento e confronto**  | Carica nel dispositivo con conferma, carica dal dispositivo in un progetto nuovo, confronto online/offline ed editor di confronto, RUN/STOP/MRES, copia RAM→ROM, compressione **Stato: fatto** (v0.10.0). Mai provato su una CPU reale                                                                                                                                                                                                   |
+| **3C Diagnostica online**       | Correzione del filesystem di `_DELE`; Online e diagnostica (generale, LED, protezione e selettore, ultimo cambio di modo, buffer di diagnostica con testi degli eventi, tempo di ciclo, memoria, ora con impostazione); tabelle di controllo online (osservazione con read var, comando con conferma); backup online in sola esportazione con SDB (`.baapbak`). Piano: `docs/superpowers/plans/2026-10-25-tappa3c-diagnostica-online.md` |
+| **3D Test online e ripristino** | Osservazione del programma online (stato del blocco, TIS), tabelle di forzamento, stack di chiamata, ripristino del backup con SDB. Parte solo dopo catture e verifiche su una CPU reale (proto §18, §19.3)                                                                                                                                                                                                                              |
 
 ## Tappa 4 — KOP e FUP
 
@@ -119,7 +120,7 @@ La ditta per ora non ha una CPU S7-300; un amico che userà BaaPortal ce l'ha. I
 
 ```
 1A → 1B → 1C ────────┐
-1A → 1D → 1D-bis ────┴→ 1E → [decisione] → 1F → 2A → 2B → 2C → 3A → 3B → 3C → 4A → 4B → 4C → 5A → 5B → 5C → 6A → 6B → 6C → 7A…7D
+1A → 1D → 1D-bis ────┴→ 1E → [decisione] → 1F → 2A → 2B → 2C → 3A → 3B → 3C → 3D → 4A → 4B → 4C → 5A → 5B → 5C → 6A → 6B → 6C → 7A…7D
 ```
 
 Alla fine di tutte le tappe si riguardano con l'utente, punto per punto, i limiti noti raccolti in `docs/limiti-noti.md`, per decidere che cosa sistemare.
