@@ -29,6 +29,7 @@ const PARTS: readonly DiagPart[] = [
 ];
 /** Tempo massimo di tutta la lettura (ms). */
 const DEADLINE_MS = 5000;
+const TOO_LONG = 'Lettura troppo lunga';
 
 /** Controlla ciò che arriva dal renderer: parti note, distinte, al massimo nove. */
 export function parseDiagParts(raw: unknown): DiagPart[] | string {
@@ -62,12 +63,14 @@ function view(r: DiagRecord): DiagEventView {
   return out;
 }
 
-/** Errori che fanno perdere il collegamento (o chiudono la lettura): non sono errori di una parte. */
+/** Errori che fanno perdere il collegamento: non sono errori di una parte. */
 function isTransport(err: unknown): boolean {
-  return (
-    err instanceof S7Error &&
-    (err.code === 'CLOSED' || err.code === 'TIMEOUT' || err.code === 'ABORTED')
-  );
+  return err instanceof S7Error && (err.code === 'CLOSED' || err.code === 'TIMEOUT');
+}
+
+/** La scadenza della lettura: i passi successivi non partono, il collegamento resta. */
+function isDeadline(err: unknown): boolean {
+  return err instanceof S7Error && err.code === 'ABORTED';
 }
 
 type Run = <R>(fn: (c: ReadClient) => Promise<R>) => Promise<R>;
@@ -108,12 +111,14 @@ const READERS: {
  * Diagnostica in sola lettura sul collegamento della finestra. Ogni SZL è un posto a sé in coda,
  * così la sorveglianza passa fra l'una e l'altra. Una lista che la CPU non ha è `unavailable`;
  * un altro errore della CPU resta di quella sola parte; un errore di collegamento (chiuso, senza
- * risposta) fa perdere il collegamento e il risultato è `{ ok: false }`.
+ * risposta) fa perdere il collegamento e il risultato è `{ ok: false }`. Oltre la scadenza le parti
+ * già lette restano e le altre dicono «Lettura troppo lunga»; il collegamento resta.
  */
 export async function readDiagnostics(
   service: Pick<PlcService, 'read'>,
   owner: PlcOwner,
   rawParts: unknown,
+  deadlineMs = DEADLINE_MS,
 ): Promise<PlcDiagResult> {
   const parts = parseDiagParts(rawParts);
   if (typeof parts === 'string') return { ok: false, error: parts };
@@ -121,11 +126,21 @@ export async function readDiagnostics(
     owner,
     async (run) => {
       const data: Record<string, DiagValue<unknown>> = {};
+      let late = false;
       for (const part of parts) {
+        if (late) {
+          data[part] = { ok: false, error: TOO_LONG };
+          continue;
+        }
         try {
           data[part] = { ok: true, value: await READERS[part](run) };
         } catch (err) {
           if (isTransport(err)) throw err;
+          if (isDeadline(err)) {
+            late = true;
+            data[part] = { ok: false, error: TOO_LONG };
+            continue;
+          }
           data[part] = isUnavailable(err)
             ? { ok: false, unavailable: true }
             : { ok: false, error: err instanceof Error ? err.message : String(err) };
@@ -133,7 +148,7 @@ export async function readDiagnostics(
       }
       return data as Partial<PlcDiagData>;
     },
-    DEADLINE_MS,
+    deadlineMs,
   );
   return r.ok ? { ok: true, data: r.value } : { ok: false, error: r.error };
 }

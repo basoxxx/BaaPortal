@@ -86,13 +86,95 @@ describe('setClock con collegamento finto', () => {
     expect(written).toEqual([want]);
   });
 
-  it('pc alle 23:59:59.999 del 31/12 → data e ora dello stesso istante', async () => {
-    nowMs = new Date(2026, 11, 31, 23, 59, 59, 999).getTime();
+  it('pc alle 23:59:59.999 del 31/12 → data e ora dello stesso istante, un solo now dopo la conferma', async () => {
+    const seq = [
+      new Date(2026, 11, 31, 23, 59, 58, 0).getTime(), // anteprima per la conferma
+      new Date(2026, 11, 31, 23, 59, 59, 999).getTime(), // dopo la conferma
+    ];
+    let calls = 0;
+    let callsAtConfirm = -1;
+    nowMs = 0;
+    writes = new PlcWriteService({
+      service: { target: () => target },
+      confirm: async () => {
+        callsAtConfirm = calls;
+        return true;
+      },
+      now: () => seq[calls++] ?? new Date(2027, 0, 1, 0, 0, 0, 0).getTime(),
+      connect: async () =>
+        ({
+          close: async () => undefined,
+          identity: async () => ID as never,
+          setClock: async (t: unknown) => void written.push(t),
+        }) as unknown as WriteClient,
+    });
+    const r = await writes.setClock(owner, { source: 'pc' });
+    const want = { year: 2026, month: 12, day: 31, hour: 23, minute: 59, second: 59, ms: 999 };
+    expect(r).toEqual({ ok: true, written: want });
+    expect(written).toEqual([want]);
+    expect(calls - callsAtConfirm).toBe(1);
+  });
+
+  it("pc con l'anno del PC a 2095 → errore prima della conferma, nessun collegamento", async () => {
+    nowMs = new Date(2095, 0, 1, 0, 0, 0).getTime();
     const r = await writes.setClock(owner, { source: 'pc' });
     expect(r).toMatchObject({
-      ok: true,
-      written: { year: 2026, month: 12, day: 31, hour: 23, minute: 59, second: 59 },
+      ok: false,
+      error: expect.stringContaining("L'ora del PC non è impostabile"),
     });
+    expect(confirm).not.toHaveBeenCalled();
+    expect(opened).toBe(0);
+  });
+
+  it('linkId cambiato durante la conferma → errore, nessun collegamento', async () => {
+    let id = 1;
+    const w = new PlcWriteService({
+      service: { target: () => ({ ...target, linkId: id }) },
+      confirm: async () => {
+        id = 2;
+        return true;
+      },
+      connect: async () => {
+        opened++;
+        return {} as never;
+      },
+    });
+    expect(await w.setClock(owner, { source: 'pc' })).toMatchObject({ ok: false });
+    expect(opened).toBe(0);
+  });
+
+  it('numero di serie diverso → setClock non chiamato, collegamento chiuso', async () => {
+    const setClock = vi.fn();
+    const close = vi.fn(async () => undefined);
+    const w = new PlcWriteService({
+      service: { target: () => target },
+      confirm,
+      connect: async () =>
+        ({
+          close,
+          setClock,
+          identity: async () => ({ ...ID, serialNumber: 'S C-ALTRO' }) as never,
+        }) as unknown as WriteClient,
+    });
+    const r = await w.setClock(owner, { source: 'pc' });
+    expect(r).toMatchObject({
+      ok: false,
+      error: expect.stringContaining('non è quella confermata'),
+    });
+    expect(setClock).not.toHaveBeenCalled();
+    expect(close).toHaveBeenCalled();
+  });
+
+  it('interruptAll durante la conferma → annullato, nessun collegamento', async () => {
+    let release!: (v: boolean) => void;
+    confirm.mockImplementationOnce(() => new Promise<boolean>((r) => (release = r)));
+    const p = writes.setClock(owner, { source: 'pc' });
+    await vi.waitFor(() => expect(confirm).toHaveBeenCalledTimes(1));
+    writes.interruptAll();
+    release(true);
+    expect(await p).toEqual({ ok: false, cancelled: true });
+    expect(opened).toBe(0);
+    expect(written).toEqual([]);
   });
 
   it("manuale 2026-03-29 02:30:00 → scritta così com'è", async () => {

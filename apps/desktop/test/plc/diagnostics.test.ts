@@ -221,4 +221,35 @@ describe('readDiagnostics con collegamento finto', () => {
     expect(owner.events).toEqual([{ kind: 'lost', reason: 'closed' }]);
     expect(service.status(owner).connected).toBe(false);
   });
+
+  it('TIMEOUT durante la lettura → { ok:false }, lost per timeout, collegamento chiuso', async () => {
+    const service = fakeService(async (id) => {
+      if (id === 0x0019) throw new S7Error('TIMEOUT', 'nessuna risposta');
+      return SZL(id);
+    });
+    const owner = new FakeOwner();
+    await service.connect(owner, access);
+    const r = await readDiagnostics(service, owner, ['mode', 'leds']);
+    expect(r.ok).toBe(false);
+    expect(owner.events).toEqual([{ kind: 'lost', reason: 'timeout' }]);
+    expect(service.status(owner).connected).toBe(false);
+  });
+
+  it('oltre la scadenza: parti già lette restano, le altre «Lettura troppo lunga», collegamento vivo', async () => {
+    const service = fakeService(async (id) => {
+      await new Promise((r) => setTimeout(r, 40));
+      return SZL(id);
+    });
+    const owner = new FakeOwner();
+    await service.connect(owner, access);
+    const r = await readDiagnostics(service, owner, ['mode', 'leds', 'buffer', 'memory'], 50);
+    if (!r.ok) throw new Error(r.error);
+    expect(r.data.mode).toMatchObject({ ok: true });
+    expect(r.data.leds).toMatchObject({ ok: true });
+    expect(r.data.buffer).toEqual({ ok: false, error: 'Lettura troppo lunga' });
+    expect(r.data.memory).toEqual({ ok: false, error: 'Lettura troppo lunga' });
+    expect(service.status(owner).connected).toBe(true);
+    expect(owner.events).toEqual([]);
+    await service.closeAll();
+  });
 });

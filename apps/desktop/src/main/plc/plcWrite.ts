@@ -147,6 +147,7 @@ function checkTime(t: Record<string, unknown>): string | undefined {
   }
   const year = t['year'] as number;
   const month = t['month'] as number;
+  // Il solo `% 4` basta nel 1990-2089 (il 2000 è bisestile): fuori da quel campo sarebbe sbagliato.
   const days = [31, year % 4 === 0 ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1]!;
   if ((t['day'] as number) > days) return 'Ora non valida: il giorno non esiste in quel mese';
   return undefined;
@@ -343,19 +344,26 @@ export class PlcWriteService {
   async setClock(owner: PlcWriteOwner, raw: unknown): Promise<PlcClockResult> {
     const spec = parseClockRequest(raw);
     if (typeof spec === 'string') return { ok: false, error: spec };
+    // Solo un'indicazione per la conferma; l'ora scritta si prende dopo. Se la CPU non può averla,
+    // non si chiede nemmeno la conferma.
+    const preview = spec.pc ? fromDate(new Date(this.now())) : undefined;
+    if (preview) {
+      const bad = checkTime(preview as unknown as Record<string, unknown>);
+      if (bad) return { ok: false, error: `L'ora del PC non è impostabile: ${bad}` };
+    }
+    const shown = spec.pc
+      ? `Ora del PC al momento della conferma (adesso: ${formatTime(preview!)})`
+      : `Nuova ora: ${formatTime(spec.time)}`;
     return this.exclusive<PlcClockResult>(
       owner,
       (m) => ({ ok: false, error: m }),
       (err) => ({ ok: false, error: errText(err) }),
       async (op) => {
         const p = await this.prepare(owner, op, (target) => {
-          const what = spec.pc
-            ? `Ora del PC al momento della conferma (adesso: ${formatTime(fromDate(new Date(this.now())))})`
-            : `Nuova ora: ${formatTime(spec.time)}`;
           return {
             title: 'Imposta ora',
             message: `Impostare l'ora della CPU ${cpuName(target)}?`,
-            detail: `${what}\nGli interrupt dall'orologio (OB10) possono saltare`,
+            detail: `${shown}\nGli interrupt dall'orologio (OB10) possono saltare`,
             confirmLabel: 'Imposta ora',
           };
         });
