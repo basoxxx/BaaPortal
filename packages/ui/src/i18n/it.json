@@ -73,8 +73,7 @@
     "sourceExported": "Sorgente \"{{name}}\" esportata in \"{{path}}\".",
     "sourceExportFailed": "Impossibile esportare la sorgente \"{{name}}\": {{message}}",
     "sourceStartValuesSkipped": "\"{{name}}\": i valori iniziali di {{members}} non sono scritti nella sorgente (la sorgente non ha una forma per i membri composti). Restano nel progetto quando la sorgente sostituisce l'oggetto.",
-    "sourceKopSkipped": "\"{{name}}\" non esportato: il blocco KOP ha errori e il suo AWL sarebbe incompleto.",
-    "sourceLanguageSkipped": "\"{{name}}\" non esportato: lingua {{language}}.",
+    "sourceKopSkipped": "\"{{name}}\" non esportato: il blocco ha errori e il suo AWL sarebbe incompleto.",
     "fileDialogFailed": "Impossibile aprire la finestra di scelta dei file: {{message}}",
     "sourceReplaceChanged": "Sorgente \"{{name}}\": mentre si confermava il progetto è cambiato e gli oggetti da sostituire non sono più quelli elencati. Nessuna modifica: ripetere \"Genera blocchi dalla sorgente\".",
     "actionFailed": "Operazione non riuscita: {{message}}",
@@ -894,7 +893,9 @@
     "rawHint": "Questa rete contiene istruzioni MC7 grezze: si può modificare solo togliendole o ripristinandola.",
     "showAwl": "Mostra AWL",
     "hideAwl": "Nascondi AWL",
-    "kopAwlOnly": "Segmento in AWL: la conversione arriva con il piano 4C"
+    "kopAwlOnly": "Segmento in AWL: la conversione arriva con il piano 4C",
+    "toFup": "Passa a FUP",
+    "toKop": "Passa a KOP"
   },
   "props": {
     "banner": "Queste proprietà servono al simulatore e ai controlli offline. Fino alla tappa 6 non vengono caricate nel PLC.",
@@ -1663,6 +1664,8 @@
     "slot": "Punto d'inserimento",
     "operand": "Operando",
     "boxMenu": "Box",
+    "fupView": "Vista FUP del segmento",
+    "fupHint": "Per aggiungere elementi passa a KOP",
     "boxEl": "Box {{kind}}",
     "cannotClose": "Impossibile chiudere il ramo qui: scegli un elemento che segue il ramo aperto, nella stessa serie.",
     "cannotDo": "Operazione non possibile in questo punto.",

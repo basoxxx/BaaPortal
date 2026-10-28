@@ -564,7 +564,7 @@ describe('Genera sorgente dai blocchi ed Esporta', () => {
       const warnings = app.store.getState().messages.filter((m) => m.severity === 'warning');
       expect(warnings.map((m) => [m.textKey, m.params])).toEqual([
         ['messages.sourceStartValuesSkipped', { name: 'Misura', members: 'T1, Lista' }],
-        ['messages.sourceLanguageSkipped', { name: 'Calcolo', language: 'FUP' }],
+        ['messages.sourceKopSkipped', { name: 'Calcolo' }],
       ]);
       expect(app.store.getState().inspectorTab).toBe('info');
     },

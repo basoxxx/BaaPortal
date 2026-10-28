@@ -1,0 +1,81 @@
+.baa-fup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px;
+  overflow: auto;
+  font-size: 12px;
+}
+.baa-fup-row,
+.baa-fup-in,
+.baa-fup-leaf {
+  display: flex;
+  align-items: center;
+}
+.baa-fup-wire {
+  width: 16px;
+  border-top: 1px solid var(--baa-border);
+}
+.baa-fup-gate {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--baa-border);
+  min-height: 28px;
+}
+.baa-fup-pins {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  gap: 4px;
+  padding: 2px 6px;
+}
+.baa-fup-title {
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  font-weight: 600;
+}
+.baa-fup-title--out {
+  justify-content: center;
+  min-height: 28px;
+  border: 1px solid var(--baa-border);
+}
+.baa-fup-boxel {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+.baa-fup-el {
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.baa-fup-el--selected {
+  background: var(--baa-selection);
+  border-color: var(--baa-accent);
+}
+.baa-fup-el--error {
+  border-color: var(--baa-error);
+}
+.baa-fup-neg {
+  width: 8px;
+  height: 8px;
+  margin-left: 2px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+}
+.baa-fup-op {
+  padding: 0 4px;
+  white-space: nowrap;
+}
+.baa-fup-op--empty {
+  color: var(--baa-error);
+}
+.baa-fup-pin {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.baa-fup-input {
+  width: 8em;
+  font: inherit;
+}

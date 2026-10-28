@@ -23,6 +23,7 @@ import { displayText } from '../awl/awlExtensions';
 import { monitorLinesByNetwork, monitorLinesFromPlc } from '../awl/monitorExtension';
 import { plcMonitorFor } from '../../online/plcMonitor';
 import { offsetOfLineCol } from '../../project/navigation/sourceActions';
+import { FupNetworkView } from '../fbd/FupNetworkView';
 import { LadNetworkEditor } from '../lad/LadNetworkEditor';
 import { setLadActive } from '../lad/ladActive';
 import { callInstanceOf } from './callInstance';
@@ -61,6 +62,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
   const isAwl = block?.language === 'AWL';
   const isKop = block ? isGraphic(block.language) : false;
   const isScl = block?.language === 'SCL';
+  const isFup = block?.language === 'FUP';
   // Il contesto del controllo si rifà a ogni revisione del dispositivo, non a ogni tasto.
   const awlCtx = useMemo(
     () =>
@@ -191,6 +193,11 @@ export function NetworksView({ deviceId, blockId }: Props) {
       if (!n) return;
       n.lad = next;
       refreshKopSources(b, d);
+    });
+  // Stesso cambio del comando block.switchLanguage, ma sul blocco di questa vista (non del riquadro con il fuoco).
+  const switchLanguage = () =>
+    edit('history.switchLanguage', (b) => {
+      b.language = b.language === 'KOP' ? 'FUP' : 'KOP';
     });
   const insert = () =>
     edit('history.addNetwork', (b, d) => {
@@ -344,6 +351,11 @@ export function NetworksView({ deviceId, blockId }: Props) {
         </label>
       </div>
       <h4 className="baa-block-networks-title">{t('block.networks')}</h4>
+      {isKop ? (
+        <button type="button" className="baa-panel-btn" disabled={locked} onClick={switchLanguage}>
+          {t(isFup ? 'block.toKop' : 'block.toFup')}
+        </button>
+      ) : null}
       {block.networks.map((n, i) => (
         <section
           key={n.id}
@@ -388,16 +400,28 @@ export function NetworksView({ deviceId, blockId }: Props) {
           {isKop ? (
             n.lad || n.source === '' ? (
               <>
-                <LadNetworkEditor
-                  net={n.lad ?? placeholder(n.id)}
-                  index={i}
-                  diagnostics={kopMessages[i]?.byElem ?? NO_MESSAGES}
-                  readOnly={locked}
-                  onChange={(next, key) => editLad(n.id, next, key)}
-                  callParams={callParams}
-                  onActive={(api, on) => setLadActive(api, on, { deviceId, blockId })}
-                  callOfDrop={(raw) => callInstanceOf(dev, raw)}
-                />
+                {isFup ? (
+                  <>
+                    <FupNetworkView
+                      net={n.lad ?? placeholder(n.id)}
+                      diagnostics={kopMessages[i]?.byElem ?? NO_MESSAGES}
+                      readOnly={locked}
+                      onChange={(next) => editLad(n.id, next, 'history.editLad')}
+                    />
+                    <p className="baa-raw-hint">{t('lad.fupHint')}</p>
+                  </>
+                ) : (
+                  <LadNetworkEditor
+                    net={n.lad ?? placeholder(n.id)}
+                    index={i}
+                    diagnostics={kopMessages[i]?.byElem ?? NO_MESSAGES}
+                    readOnly={locked}
+                    onChange={(next, key) => editLad(n.id, next, key)}
+                    callParams={callParams}
+                    onActive={(api, on) => setLadActive(api, on, { deviceId, blockId })}
+                    callOfDrop={(raw) => callInstanceOf(dev, raw)}
+                  />
+                )}
                 <button
                   type="button"
                   className="baa-panel-btn"
