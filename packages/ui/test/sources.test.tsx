@@ -552,7 +552,7 @@ describe('Genera sorgente dai blocchi ed Esporta', () => {
               overrides: { '[1]': '7' },
             },
           );
-          const scl = createCodeBlock({ kind: 'FC', number: 5, name: 'Calcolo', language: 'SCL' });
+          const scl = createCodeBlock({ kind: 'FC', number: 5, name: 'Calcolo', language: 'FUP' });
           findDevice(p, PLC)!.blocks.push(fb, scl);
         });
       });
@@ -564,7 +564,7 @@ describe('Genera sorgente dai blocchi ed Esporta', () => {
       const warnings = app.store.getState().messages.filter((m) => m.severity === 'warning');
       expect(warnings.map((m) => [m.textKey, m.params])).toEqual([
         ['messages.sourceStartValuesSkipped', { name: 'Misura', members: 'T1, Lista' }],
-        ['messages.sourceLanguageSkipped', { name: 'Calcolo', language: 'SCL' }],
+        ['messages.sourceLanguageSkipped', { name: 'Calcolo', language: 'FUP' }],
       ]);
       expect(app.store.getState().inspectorTab).toBe('info');
     },

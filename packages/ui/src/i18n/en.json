@@ -886,6 +886,8 @@
     "mnemonicGerman": "German",
     "awlProblems": "Problems",
     "awlProblemRow": "Network {{n}}, line {{line}}: {{message}}",
+    "sclProblems": "SCL problems",
+    "sclProblemRow": "Line {{line}}: {{message}}",
     "awlNoProblems": "No problems",
     "readOnlyBanner": "Imported block that cannot be re-encoded identically: read-only.",
     "knowHowBanner": "Know-how protected block: only the interface is shown.",

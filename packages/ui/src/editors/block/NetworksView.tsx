@@ -17,6 +17,8 @@ import {
 import { CommitInput, CommitTextarea } from '../../components/CommitField';
 import { ContextMenu } from '../../components/ContextMenu';
 import { AwlEditor, type AwlEditorHandle } from '../awl/AwlEditor';
+import { CommittedEditor } from '../awl/CommittedEditor';
+import { sourceCodec } from '../source/sourceExtensions';
 import { displayText } from '../awl/awlExtensions';
 import { monitorLinesByNetwork, monitorLinesFromPlc } from '../awl/monitorExtension';
 import { plcMonitorFor } from '../../online/plcMonitor';
@@ -58,6 +60,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
   const [mnemonic] = useMnemonic();
   const isAwl = block?.language === 'AWL';
   const isKop = block ? isGraphic(block.language) : false;
+  const isScl = block?.language === 'SCL';
   // Il contesto del controllo si rifà a ogni revisione del dispositivo, non a ogni tasto.
   const awlCtx = useMemo(
     () =>
@@ -66,8 +69,8 @@ export function NetworksView({ deviceId, blockId }: Props) {
   );
   // Segmenti KOP: la sorgente generata di ognuno, con le righe per elemento e le diagnostiche.
   const kop = useMemo(
-    () => (block && dev && isKop ? kopSources(block, dev) : null),
-    [block, dev, isKop],
+    () => (block && dev && (isKop || isScl) ? kopSources(block, dev) : null),
+    [block, dev, isKop, isScl],
   );
   const callParams = useMemo(
     () => (block && dev && isKop ? kopCallParams(block, dev) : undefined),
@@ -454,13 +457,20 @@ export function NetworksView({ deviceId, blockId }: Props) {
             </div>
           ) : isKop ? null : (
             <div className="baa-network-source" title={t('block.sourceHint')}>
-              <CommitTextarea
+              <CommittedEditor
                 value={n.source}
+                codec={sourceCodec}
                 readOnly={locked}
-                rows={6}
                 aria-label={`${t('block.source')} ${i + 1}`}
                 onCommit={(v) => editNetwork(n.id, 'source', v)}
               />
+              <ul className="baa-awl-problems" aria-label={t('block.sclProblems')}>
+                {(kop?.[i]?.scl?.diagnostics ?? []).map((d, k) => (
+                  <li key={k} className="is-error">
+                    {t('block.sclProblemRow', { line: d.line, message: d.message })}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </section>
@@ -511,9 +521,11 @@ export function NetworksView({ deviceId, blockId }: Props) {
           </ul>
         </section>
       ) : null}
-      <button type="button" className="baa-block-insert" onClick={insert} disabled={locked}>
-        {t('block.insertNetwork')}
-      </button>
+      {isScl ? null : (
+        <button type="button" className="baa-block-insert" onClick={insert} disabled={locked}>
+          {t('block.insertNetwork')}
+        </button>
+      )}
       {menu ? (
         <ContextMenu
           x={menu.x}

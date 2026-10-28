@@ -886,6 +886,8 @@
     "mnemonicGerman": "Tedesco",
     "awlProblems": "Problemi",
     "awlProblemRow": "Segmento {{n}}, riga {{line}}: {{message}}",
+    "sclProblems": "Problemi SCL",
+    "sclProblemRow": "Riga {{line}}: {{message}}",
     "awlNoProblems": "Nessun problema",
     "readOnlyBanner": "Blocco importato che non si può ricodificare identico: in sola lettura.",
     "knowHowBanner": "Blocco protetto know-how: si mostra solo l'interfaccia.",
