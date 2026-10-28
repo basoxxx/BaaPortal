@@ -24,6 +24,9 @@ describe('isNewer', () => {
     expect(isNewer('0.12.0', '0.12.0')).toBe(false);
     expect(isNewer('0.11.0', '0.12.0')).toBe(false);
     expect(isNewer('v0.13', '0.12.0')).toBe(false);
+    expect(isNewer('1.0.0-rc.1', '0.14.0')).toBe(true);
+    expect(isNewer('1.0.0', '1.0.0-rc.1')).toBe(true);
+    expect(isNewer('0.14.0', '1.0.0-rc.1')).toBe(false);
   });
 });
 
