@@ -2,6 +2,7 @@ import { act, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { createCodeBlock, findDevice } from '@baaportal/project';
 import { initI18n } from '../src/i18n';
+import { updateSettings } from '../src/settings/settings';
 import { renderApp, type RenderedApp } from './renderApp';
 
 const PLC = 'id1';
@@ -41,16 +42,21 @@ describe('Aggiungi nuovo blocco', () => {
     expect(within(dlg).getByLabelText('Numero')).toHaveValue(2);
   });
 
-  it('KOP è attivo; FUP e SCL sono visibili ma disattivati', async () => {
-    const app = await renderApp({ view: 'project', withProject: true, withPlc: true });
-    const dlg = await openBlockDialog(app);
-    const lang = within(dlg).getByLabelText('Linguaggio') as HTMLSelectElement;
-    expect([...lang.options].map((o) => [o.value, o.disabled])).toEqual([
-      ['AWL', false],
-      ['KOP', false],
-      ['FUP', true],
-      ['SCL', true],
-    ]);
+  it.each([false, true])('FUP e SCL sono abilitati solo con experimental (%s)', async (exp) => {
+    try {
+      const app = await renderApp({ view: 'project', withProject: true, withPlc: true });
+      act(() => updateSettings({ online: { experimental: exp } }));
+      const dlg = await openBlockDialog(app);
+      const lang = within(dlg).getByLabelText('Linguaggio') as HTMLSelectElement;
+      expect([...lang.options].map((o) => [o.value, o.disabled])).toEqual([
+        ['AWL', false],
+        ['KOP', false],
+        ['FUP', !exp],
+        ['SCL', !exp],
+      ]);
+    } finally {
+      updateSettings({ online: { experimental: false } });
+    }
   });
 
   it("OB: elenco senza OB1 già presente e solo OB della CPU; il nome viene dall'evento", async () => {

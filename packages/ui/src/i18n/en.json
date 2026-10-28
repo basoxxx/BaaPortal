@@ -173,6 +173,7 @@
     "view.portal": "Portal view",
     "insert.device": "New device…",
     "insert.block": "New block…",
+    "block.switchLanguage": "Switch language LAD/FBD",
     "online.goOnline": "Go online",
     "online.compare": "Compare with CPU",
     "online.goOffline": "Go offline",
@@ -503,6 +504,7 @@
     "comment": "Project comment",
     "addDevice": "Add device",
     "addBlock": "Add block",
+    "switchLanguage": "Switch language",
     "addTagTable": "Add tag table",
     "addUdt": "Add data type",
     "paste": "Paste objects",
@@ -642,7 +644,7 @@
     "reset": "Restore defaults",
     "online": {
       "title": "Online",
-      "experimental": "Experimental features (not tried on a real CPU)",
+      "experimental": "Experimental features: FUP, SCL and online functions not tried on a real CPU",
       "note": "Enables features based on documentation and not verified: for now the call stacks. They are only used with the CPU in STOP."
     },
     "updates": "Updates",

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { findDevice } from '@baaportal/project';
+import { findDevice, isGraphic } from '@baaportal/project';
 import { LadPalette } from '../../editors/lad/LadPalette';
 import { useAppStore, useServices } from '../../state/AppContext';
 import type { TaskCardId } from '../../state/store';
@@ -26,7 +26,7 @@ function useKopActive(enabled: boolean): boolean {
     const e = wa.editors.find((x) => x.key === key);
     if (!e || e.kind !== 'block' || !s.doc) return false;
     const b = findDevice(s.doc.project, e.deviceId)?.blocks.find((x) => x.id === e.objectId);
-    return b !== undefined && b.kind !== 'DB' && b.kind !== 'IDB' && b.language === 'KOP';
+    return b !== undefined && b.kind !== 'DB' && b.kind !== 'IDB' && isGraphic(b.language);
   });
 }
 

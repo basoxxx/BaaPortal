@@ -7,6 +7,7 @@ import { emptyNetwork, type LadNetwork } from '@baaportal/ladfbd';
 import {
   createAwlContext,
   findDevice,
+  isGraphic,
   kopCallParams,
   kopSources,
   type CodeBlock,
@@ -56,7 +57,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
   const dev = useAppStore((s) => (s.doc ? findDevice(s.doc.project, deviceId) : undefined));
   const [mnemonic] = useMnemonic();
   const isAwl = block?.language === 'AWL';
-  const isKop = block?.language === 'KOP';
+  const isKop = block ? isGraphic(block.language) : false;
   // Il contesto del controllo si rifà a ogni revisione del dispositivo, non a ogni tasto.
   const awlCtx = useMemo(
     () =>
@@ -191,16 +192,16 @@ export function NetworksView({ deviceId, blockId }: Props) {
   const insert = () =>
     edit('history.addNetwork', (b, d) => {
       const fresh: Network = { id: newId(), title: '', comment: '', source: '' };
-      if (b.language === 'KOP') fresh.lad = emptyNetwork(newId);
+      if (isGraphic(b.language)) fresh.lad = emptyNetwork(newId);
       const at = b.networks.findIndex((x) => x.id === focusedId);
       b.networks.splice(at < 0 ? b.networks.length : at + 1, 0, fresh);
-      if (b.language === 'KOP') refreshKopSources(b, d);
+      if (isGraphic(b.language)) refreshKopSources(b, d);
     });
   const remove = (id: string) =>
     edit('history.deleteNetwork', (b, d) => {
       if (b.networks.length <= 1) return;
       b.networks = b.networks.filter((x) => x.id !== id);
-      if (b.language === 'KOP') refreshKopSources(b, d);
+      if (isGraphic(b.language)) refreshKopSources(b, d);
     });
 
   const networks = block?.networks;

@@ -201,7 +201,7 @@ describe("segmenti AWL con l'editor CodeMirror", () => {
   it(
     "i blocchi non AWL tengono l'area di testo del piano 1B",
     async () => {
-      const k = createCodeBlock({ kind: 'FC', number: 5, name: 'Fup', language: 'FUP' });
+      const k = createCodeBlock({ kind: 'FC', number: 5, name: 'Fup', language: 'SCL' });
       await openEditor('block', k.id, (d) => void d.blocks.push(k));
       expect(textbox().tagName).toBe('TEXTAREA');
       expect(textbox().parentElement).toHaveAttribute(

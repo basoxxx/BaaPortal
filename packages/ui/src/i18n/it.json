@@ -173,6 +173,7 @@
     "view.portal": "Vista portale",
     "insert.device": "Nuovo dispositivo…",
     "insert.block": "Nuovo blocco…",
+    "block.switchLanguage": "Cambia linguaggio KOP/FUP",
     "online.goOnline": "Collegamento online",
     "online.compare": "Confronta con la CPU",
     "online.goOffline": "Interrompi collegamento online",
@@ -503,6 +504,7 @@
     "comment": "Commento del progetto",
     "addDevice": "Aggiungi dispositivo",
     "addBlock": "Aggiungi blocco",
+    "switchLanguage": "Cambia linguaggio",
     "addTagTable": "Aggiungi tabella delle variabili",
     "addUdt": "Aggiungi tipo di dati",
     "paste": "Incolla oggetti",
@@ -642,7 +644,7 @@
     "reset": "Ripristina predefiniti",
     "online": {
       "title": "Online",
-      "experimental": "Funzioni sperimentali (non provate su una CPU reale)",
+      "experimental": "Funzioni sperimentali: FUP, SCL e funzioni online non provate su una CPU reale",
       "note": "Attiva funzioni basate su documentazione e non verificate: per ora gli stack di chiamata. Si usano solo con la CPU in STOP."
     },
     "updates": "Aggiornamenti",
