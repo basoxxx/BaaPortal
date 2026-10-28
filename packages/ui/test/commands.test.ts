@@ -198,3 +198,50 @@ describe('comandi Inserisci', () => {
     expect(store.getState().dialog).toBeNull();
   });
 });
+
+describe('scorciatoie online', () => {
+  it('Ctrl+K collega, Ctrl+M interrompe, Ctrl+L carica', () => {
+    expect(commands['online.goOnline'].shortcut).toBe('Mod+K');
+    expect(commands['online.goOffline'].shortcut).toBe('Mod+M');
+    expect(commands['online.download'].shortcut).toBe('Mod+L');
+  });
+
+  it('nessuna scorciatoia è ripetuta fra i comandi', () => {
+    const all = Object.values(commands).flatMap((c) => [c.shortcut, ...(c.altShortcuts ?? [])]);
+    const used = all.filter((s): s is string => !!s);
+    expect(new Set(used).size).toBe(used.length);
+  });
+
+  it("Ctrl+L dentro l'editor AWL raggiunge il comando di carica (la conferma)", () => {
+    const store = createAppStore();
+    const ctx = {
+      store,
+      service: {} as never,
+      bridge: { platform: 'win32' } as never,
+    } as CommandContext;
+    const cmd = commands['online.download'];
+    const orig = { isEnabled: cmd.isEnabled, run: cmd.run };
+    let runs = 0;
+    cmd.isEnabled = () => true;
+    cmd.run = () => {
+      runs++;
+    };
+    const editable = document.createElement('div');
+    editable.setAttribute('contenteditable', 'true');
+    const e = new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      ctrlKey: true,
+      key: 'l',
+    });
+    Object.defineProperty(e, 'target', { value: editable });
+    try {
+      expect(handleShortcutKeydown(e, ctx)).toBe(true);
+      expect(e.defaultPrevented).toBe(true);
+      expect(runs).toBe(1);
+    } finally {
+      cmd.isEnabled = orig.isEnabled;
+      cmd.run = orig.run;
+    }
+  });
+});

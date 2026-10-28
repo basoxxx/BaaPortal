@@ -257,12 +257,14 @@ const list: Command[] = [
     },
   }),
   def('online.goOnline', {
+    shortcut: 'Mod+K',
     icon: 'goOnline',
     isEnabled: (s) => hasPlc(s) && s.sim.phase === 'off' && s.online.status === 'off',
     isChecked: (s) => s.online.status !== 'off',
     run: ({ store, bridge }) => plcControllerFor(store, bridge).goOnline(),
   }),
   def('online.goOffline', {
+    shortcut: 'Mod+M',
     icon: 'goOffline',
     isEnabled: (s) => s.online.status !== 'off',
     run: ({ store, bridge }) => plcControllerFor(store, bridge).goOffline(),
@@ -278,6 +280,7 @@ const list: Command[] = [
     run: ({ store }) => simControllerFor(store).toggle(),
   }),
   def('online.download', {
+    shortcut: 'Mod+L',
     icon: 'download',
     // Le due strade sono esclusive: col PLC online si carica nella CPU, con la simulazione nel simulatore.
     isEnabled: (s) =>
