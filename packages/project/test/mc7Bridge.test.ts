@@ -302,7 +302,7 @@ describe('compileDevice', () => {
   const ok = (r: { diagnostics: { severity: string }[] }): boolean =>
     !r.diagnostics.some((d) => d.severity === 'error');
 
-  it('un blocco con errori non impedisce agli altri di compilare; SCL dà l errore di linguaggio e FUP compila', () => {
+  it('un blocco con errori non impedisce agli altri di compilare; SCL e FUP compilano', () => {
     const newId = seq('c');
     const d = bareDevice(newId);
     const good = createCodeBlock({ kind: 'OB', number: 1, name: 'Main', language: 'AWL', newId });
@@ -319,8 +319,8 @@ describe('compileDevice', () => {
     expect(ok(by(good.id)) && by(good.id).file).toBeTruthy();
     expect(by(bad.id).file).toBeUndefined();
     expect(by(bad.id).diagnostics.some((x) => x.severity === 'error')).toBe(true);
-    expect(by(scl.id).file).toBeUndefined();
-    expect(by(scl.id).diagnostics.map((x) => x.code)).toContain('LINGUAGGIO_NON_COMPILABILE');
+    expect(by(scl.id).file).toBeTruthy();
+    expect(by(scl.id).diagnostics.map((x) => x.code)).not.toContain('LINGUAGGIO_NON_COMPILABILE');
     expect(by(db.id).file).toBeTruthy();
     const f = readBlockFile(by(db.id).file!);
     expect(f.mc7[0]).toBe(0);
@@ -333,7 +333,7 @@ describe('compileDevice', () => {
     const d = makeDevice(seq('m'));
     const { results } = compileDevice(d, cpu315pn, undefined, now);
     const byName = (n: string) => results[d.blocks.findIndex((b) => b.name === n)]!;
-    expect(byName('Nastro').diagnostics.map((x) => x.code)).toContain('LINGUAGGIO_NON_COMPILABILE');
+    expect(byName('Nastro').diagnostics.filter((x) => x.severity === 'error')).toEqual([]);
     expect(byName('Linea').diagnostics.filter((x) => x.severity === 'error')).toEqual([]);
     expect(byName('Linea').file).toBeTruthy();
     expect(byName('Dati').diagnostics.filter((x) => x.severity === 'error')).toEqual([]);

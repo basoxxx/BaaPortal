@@ -263,14 +263,13 @@ export function generateAwlSource(
   for (const b of blocks) {
     if (b.kind === 'DB' || b.kind === 'IDB') continue;
     const ref: ObjectRef = { kind: 'block', deviceId: device.id, id: b.id };
-    // SCL e FUP non sono AWL: scritti come reti AWL non si potrebbero rileggere. Un blocco KOP
-    // si esporta con l'AWL generato.
-    if (b.language !== 'AWL' && b.language !== 'KOP') {
+    // FUP non è ancora esportabile; un blocco KOP o SCL si esporta con l'AWL generato.
+    if (b.language === 'FUP') {
       warnings.push({ kind: 'language', ref, name: b.name, language: b.language });
       continue;
     }
     // Un segmento KOP con errori darebbe una rete vuota: AWL parziale, quindi il blocco si salta.
-    if (kopSources(b, device).some((r) => r.diagnostics.length > 0)) {
+    if (kopSources(b, device).some((r) => r.diagnostics.length > 0 || r.scl?.diagnostics.length)) {
       warnings.push({ kind: 'kop', ref, name: b.name });
       continue;
     }

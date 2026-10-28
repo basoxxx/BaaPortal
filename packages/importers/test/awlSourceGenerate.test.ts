@@ -84,7 +84,7 @@ describe('generateAwlSource', () => {
     const d = emptyDevice();
     const newId = seq('g');
     const scl = createCodeBlock({ kind: 'FB', number: 1, name: 'Calc', language: 'SCL', newId });
-    scl.networks[0]!.source = 'x := 1;';
+    scl.networks[0]!.source = '#nonesiste := 1;';
     const fup = createCodeBlock({ kind: 'FC', number: 2, name: 'Fu', language: 'FUP', newId });
     const awl = createCodeBlock({ kind: 'FC', number: 3, name: 'Aw', language: 'AWL', newId });
     const kop = createCodeBlock({ kind: 'FC', number: 4, name: 'Ko', language: 'KOP', newId });
@@ -105,12 +105,7 @@ describe('generateAwlSource', () => {
     expect(text).toContain('A %I0.0;');
     expect(text).toContain('= %Q4.0;');
     expect(warnings).toEqual([
-      {
-        kind: 'language',
-        ref: { kind: 'block', deviceId: d.id, id: scl.id },
-        name: 'Calc',
-        language: 'SCL',
-      },
+      { kind: 'kop', ref: { kind: 'block', deviceId: d.id, id: scl.id }, name: 'Calc' },
       {
         kind: 'language',
         ref: { kind: 'block', deviceId: d.id, id: fup.id },

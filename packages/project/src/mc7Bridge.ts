@@ -95,13 +95,19 @@ export const MC7_BRIDGE_DIAG_CODES = [
 
 /** Le diagnostiche KOP come errori del ponte: `KOP_<CODICE>`, rete da 1; bloccano la compilazione. */
 function kopDiagnostics(nets: KopNetworkResult[]): Mc7Diagnostic[] {
-  return nets.flatMap((r, k) =>
-    r.diagnostics.map((d) => ({
+  return nets.flatMap((r, k) => [
+    // SCL: il messaggio del traduttore e la riga SCL.
+    ...(r.scl?.diagnostics ?? []).map((d) => ({
+      ...err('SCL_ERRORE', d.message),
+      network: k + 1,
+      line: d.line,
+    })),
+    ...r.diagnostics.map((d) => ({
       ...err(`KOP_${d.code}`, `Rete ${k + 1}: ${d.code}`),
       network: k + 1,
       params: { network: String(k + 1), elemId: d.elemId, ...d.params },
     })),
-  );
+  ]);
 }
 
 const defaultNewId: NewId = () => globalThis.crypto.randomUUID();
@@ -767,6 +773,7 @@ function compileModel(
   // Valori iniziali delle statiche reali degli SFB (campioni): si dicono, non si azzerano.
   let samples = new Set<string>();
   let input: CompileInput;
+  let sclLines: { line: number; sclLine: number }[] | undefined;
   try {
     if (block.kind === 'DB') {
       collectInitials(device, block.members, '', initials);
@@ -814,6 +821,7 @@ function compileModel(
       const kop = kopSources(block, device);
       const kopErrors = kopDiagnostics(kop);
       if (kopErrors.length > 0) return { diagnostics: kopErrors };
+      sclLines = kop[0]?.scl?.lines;
       input = codeInput(
         block,
         base,
@@ -831,7 +839,12 @@ function compileModel(
   // Layout (SSB, istanze, offset) con le strutture reali degli SFB; il controllo AWL usa ctx.
   input.layoutResolve = layoutResolverFor(block, device, base.ctx);
   const r = compileBlock(input);
-  const diagnostics = [...r.diagnostics];
+  // SCL: gli errori dell'AWL generato tornano alla riga SCL che ha prodotto la riga AWL.
+  const diagnostics = r.diagnostics.map((d) => {
+    if (!sclLines || d.network !== 1 || d.line < 1) return d;
+    const owner = sclLines.filter((l) => l.line <= d.line - 1).at(-1);
+    return owner ? { ...d, line: owner.sclLine } : { ...d, line: 0 };
+  });
   samples.delete(block.name);
   if (r.file && samples.size > 0) {
     diagnostics.push({
@@ -871,7 +884,7 @@ function codeInput(
     sections: sectionsOf(block),
     initials,
     networks: sources,
-    ...(isGraphic(block.language) ? { language: block.language } : {}),
+    ...(block.language !== 'AWL' ? { language: block.language } : {}),
     ...keep,
   };
 }
@@ -1780,6 +1793,7 @@ export function blockToMc7File(
       block.kind !== 'DB' &&
       block.kind !== 'IDB' &&
       block.language !== 'AWL' &&
+      block.language !== 'SCL' &&
       !isGraphic(block.language)
     ) {
       return {
