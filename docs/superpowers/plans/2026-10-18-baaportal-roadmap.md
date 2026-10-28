@@ -84,16 +84,16 @@ La ditta per ora non ha una CPU S7-300; un amico che userà BaaPortal ce l'ha. I
 | Piano                             | Contenuto                                                                                                                                                                                                                                               |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **4A Editor KOP**                 | Modello di rete, editor grafico, tutte le istruzioni di base, traduzione in AWL secondo gli schemi STEP 7. **Stato: fatto** (v0.14.0). Mai provato su una CPU reale; nessun BLD, STEP 7 potrebbe riaprire i blocchi in AWL (vedi `docs/limiti-noti.md`) |
-| **4B Editor FUP**                 | Come 4A, per FUP                                                                                                                                                                                                                                        |
+| **4B Editor FUP**                 | Come 4A, per FUP. **Stato: in prova** (v1.0.0-rc.1): vista FUP dello stesso modello KOP, senza inserimento in FUP (vedi `docs/limiti-noti.md`)                                                                                                          |
 | **4C Conversione e osservazione** | Cambio linguaggio KOP ↔ FUP ↔ AWL, AWL → KOP/FUP per i blocchi caricati, osservazione grafica                                                                                                                                                           |
 
 ## Tappa 5 — SCL
 
-| Piano                                      | Contenuto                                                                     |
-| ------------------------------------------ | ----------------------------------------------------------------------------- |
-| **5A Parser e controllo SCL**              | Grammatica completa SCL S7-300, controllo dei tipi                            |
-| **5B Compilatore SCL → AWL**               | Istruzioni di controllo, espressioni, richiami, accesso a DB/UDT/ARRAY/STRUCT |
-| **5C Editor, sorgenti e osservazione SCL** | —                                                                             |
+| Piano                                      | Contenuto                                                                                                                    |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| **5A Parser e controllo SCL**              | Grammatica completa SCL S7-300, controllo dei tipi. **Stato: in prova** (v1.0.0-rc.1), sottoinsieme in `docs/limiti-noti.md` |
+| **5B Compilatore SCL → AWL**               | Istruzioni di controllo, espressioni, richiami, accesso a DB/UDT/ARRAY/STRUCT                                                |
+| **5C Editor, sorgenti e osservazione SCL** | —                                                                                                                            |
 
 ## Tappa 6 — Configurazione dispositivi e reti
 

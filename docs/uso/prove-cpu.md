@@ -5,6 +5,7 @@ Questa è la lista di prove per la versione 1.0.0-rc.1. BaaPortal non è mai sta
 **Regola fissa:** le prove della parte B scrivono nella CPU. Si fanno **solo su una CPU non in produzione**: una CPU di scorta o una comprata allo scopo, mai su quella di una macchina che lavora. La parte A legge soltanto.
 
 Per ogni prova, annota l'esito:
+
 - **ok**;
 - **ko**, con che cosa è successo, il messaggio esatto e uno screenshot;
 - **non provata**.
