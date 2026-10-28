@@ -13,14 +13,14 @@ import { tempEndByte } from '@baaportal/mc7';
 import { formatType, sameName, type TypedMember } from '@baaportal/s7-types';
 import { createAwlContext } from './awlContext';
 import { toTypedMembers } from './members';
-import type { CodeBlock, PlcDevice } from './model';
+import { isGraphic, type CodeBlock, type PlcDevice } from './model';
 
 /** Un parametro del blocco chiamato: direzione dall'interfaccia (RET_VAL è un'uscita). */
 export type KopCallParam = { name: string; dir: 'in' | 'out' | 'inout'; type: string };
 export type KopNetworkResult = { source: string; lines: LineOwner[]; diagnostics: LadDiag[] };
 
 const isKop = (block: CodeBlock, i: number): LadNetwork | undefined =>
-  block.language === 'KOP' ? block.networks[i]?.lad : undefined;
+  isGraphic(block.language) ? block.networks[i]?.lad : undefined;
 
 /** Primo byte L libero dopo i TEMP dichiarati: stesso calcolo del compilatore (`codeEnvironment`). */
 export function tempEnd(block: CodeBlock, dev: PlcDevice): number {

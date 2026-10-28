@@ -42,6 +42,7 @@ import {
 import { createAwlContext } from './awlContext';
 import { findSystemFb, toTypedMembers } from './members';
 import { blockSources, kopSources, type KopNetworkResult } from './kopSources';
+import { isGraphic } from './model';
 import type {
   Block,
   BlockHeader,
@@ -165,7 +166,7 @@ export function sourceHashOf(b: Block): string {
   const nets =
     b.kind === 'DB' || b.kind === 'IDB'
       ? []
-      : b.networks.map((n) => (b.language === 'KOP' && n.lad ? [n.lad] : n.source));
+      : b.networks.map((n) => (isGraphic(b.language) && n.lad ? [n.lad] : n.source));
   return fnv(JSON.stringify([interfaceKey(b), nets]));
 }
 
@@ -870,7 +871,7 @@ function codeInput(
     sections: sectionsOf(block),
     initials,
     networks: sources,
-    ...(block.language === 'KOP' ? { language: 'KOP' as const } : {}),
+    ...(isGraphic(block.language) ? { language: block.language } : {}),
     ...keep,
   };
 }
@@ -1779,7 +1780,7 @@ export function blockToMc7File(
       block.kind !== 'DB' &&
       block.kind !== 'IDB' &&
       block.language !== 'AWL' &&
-      block.language !== 'KOP'
+      !isGraphic(block.language)
     ) {
       return {
         diagnostics: [

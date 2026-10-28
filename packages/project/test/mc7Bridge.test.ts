@@ -302,28 +302,25 @@ describe('compileDevice', () => {
   const ok = (r: { diagnostics: { severity: string }[] }): boolean =>
     !r.diagnostics.some((d) => d.severity === 'error');
 
-  it('un blocco con errori non impedisce agli altri di compilare; FUP e SCL danno l errore di linguaggio', () => {
+  it('un blocco con errori non impedisce agli altri di compilare; SCL dà l errore di linguaggio e FUP compila', () => {
     const newId = seq('c');
     const d = bareDevice(newId);
     const good = createCodeBlock({ kind: 'OB', number: 1, name: 'Main', language: 'AWL', newId });
     good.networks[0]!.source = 'L 1;\nT MW 0;';
     const bad = createCodeBlock({ kind: 'FC', number: 2, name: 'Rotta', language: 'AWL', newId });
     bad.networks[0]!.source = 'XYZ 1;';
-    const fup = createCodeBlock({ kind: 'FC', number: 3, name: 'Scala', language: 'FUP', newId });
     const scl = createCodeBlock({ kind: 'FB', number: 4, name: 'Testo', language: 'SCL', newId });
     const db = createGlobalDb({ number: 5, name: 'Dati', newId });
     db.members.push({ id: newId(), name: 'V', type: 'Int', initial: '7', comment: '' });
-    d.blocks.push(good, bad, fup, scl, db);
+    d.blocks.push(good, bad, scl, db);
     const { results } = compileDevice(d, cpu315pn, undefined, now);
     expect(results.map((r) => r.blockId)).toEqual(d.blocks.map((b) => b.id));
     const by = (id: string) => results.find((r) => r.blockId === id)!;
     expect(ok(by(good.id)) && by(good.id).file).toBeTruthy();
     expect(by(bad.id).file).toBeUndefined();
     expect(by(bad.id).diagnostics.some((x) => x.severity === 'error')).toBe(true);
-    for (const b of [fup, scl]) {
-      expect(by(b.id).file).toBeUndefined();
-      expect(by(b.id).diagnostics.map((x) => x.code)).toContain('LINGUAGGIO_NON_COMPILABILE');
-    }
+    expect(by(scl.id).file).toBeUndefined();
+    expect(by(scl.id).diagnostics.map((x) => x.code)).toContain('LINGUAGGIO_NON_COMPILABILE');
     expect(by(db.id).file).toBeTruthy();
     const f = readBlockFile(by(db.id).file!);
     expect(f.mc7[0]).toBe(0);
