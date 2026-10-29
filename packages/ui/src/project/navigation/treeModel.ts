@@ -285,7 +285,7 @@ function deviceNode(dev: PlcDevice, compare?: OnlineCompare): TreeNode {
         ...watchNodes,
       ]),
       folderNode(dev, 'backup', 'tree.plc.backup', 'treeBackup', false),
-      folderNode(dev, 'prog-info', 'tree.plc.progInfo', 'treeProgInfo', false),
+      folderNode(dev, 'prog-info', 'tree.plc.progInfo', 'treeProgInfo', true),
     ],
   };
 }

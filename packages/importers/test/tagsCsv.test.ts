@@ -19,6 +19,31 @@ const table = (tags: Tag[]): TagTable => ({
 });
 
 describe('tabelle variabili csv', () => {
+  it('formule: =, +, -, @, tab e CR iniziali si esportano con un apice e si rileggono identici', () => {
+    const comments = [
+      '=1+1',
+      '+SUM(A1)',
+      '-2',
+      '@cmd',
+      '\tx',
+      '\rx',
+      "'=già",
+      "''-x",
+      "'ciao",
+      'a=b',
+    ];
+    const tags = comments.map((c, i) => tag(`V${i}`, 'Int', `%MW${i * 2}`, c));
+    const csv = tagsToCsv(table(tags));
+    const lines = csv.slice(1).split('\r\n');
+    expect(lines[1]).toBe("V0;Tabella 1;Int;%MW0;'=1+1;True;True;True");
+    expect(lines[7]).toBe("V6;Tabella 1;Int;%MW12;''=già;True;True;True");
+    expect(lines[9]).toBe("V8;Tabella 1;Int;%MW16;'ciao;True;True;True");
+    expect(lines[10]).toBe('V9;Tabella 1;Int;%MW18;a=b;True;True;True');
+    const parsed = parseTagsCsv(csv);
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.tags.map((t) => t.comment)).toEqual(comments);
+  });
+
   it('tagsToCsv: BOM, intestazione TAG_COLUMNS, separatore ";", CRLF, indirizzo %MW10', () => {
     const csv = tagsToCsv(table([tag('Contatore', 'Int', '%MW10', 'ciao')]));
     expect(csv.charCodeAt(0)).toBe(0xfeff);

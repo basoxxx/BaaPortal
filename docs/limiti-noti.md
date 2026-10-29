@@ -43,7 +43,6 @@ Per ogni voce si indica che cosa succede oggi. "Errore chiaro" vuol dire che Baa
 - **L'avviso RUN è un'euristica.** Non vede un cambio di interfaccia di un FC; tratta «diverso» come «interfaccia cambiata».
 - **Nessuna gestione di password o livelli di protezione.** Una CPU protetta in scrittura rifiuta le scritture e BaaPortal non può inserire la password.
 - **Conferme native solo in italiano.** Le finestre di conferma del processo principale non sono tradotte.
-- **«Avviare la CPU?» anche se era già in STOP.** Dopo un caricamento BaaPortal fa la domanda anche quando la CPU era già in STOP prima.
 - **Cerca/Sostituisci nella scheda di confronto.** Agisce sul blocco sorgente del progetto, non sul testo mostrato (il compilato decodificato).
 - **Firmware del progetto nuovo.** Un progetto creato dalla CPU usa il firmware letto dalla CPU solo se è nel catalogo; altrimenti usa il più recente e mostra un avviso.
 - **DB creati con SFC 22 (CREAT_DB).** Vengono cancellati da un nuovo caricamento (vedi «Simulatore (piano 2A)», «Blocchi cancellati»). Su una CPU reale non è provato.
@@ -171,7 +170,7 @@ Si crea solo con _Funzioni sperimentali_ attive; un blocco FUP già esistente si
 - **Osservazione della vista FUP** con gli stessi dati del KOP: il bordo inferiore di ogni elemento è verde (1), blu tratteggiato (0) o grigio punteggiato (non elaborato), senza bordo se fuori dalla finestra o in attesa; un'entrata mostra il segnale del suo operando, gli altri elementi la loro uscita. I riquadri `&` comuni e i fili non hanno colore; un elemento ripetuto (ramo a T) ha lo stesso stato in ogni copia.
 - **Aspetto chiaro/scuro** non controllato a mano.
 
-## SCL in prova (1.0.0, esteso in 1.1 e 1.3)
+## SCL in prova (1.0.0, esteso in 1.1, 1.3 e 1.4)
 
 Si crea solo con _Funzioni sperimentali_ attive. Il testo SCL si traduce in AWL (pacchetto `scl`), che si compila come gli altri blocchi.
 
@@ -187,8 +186,9 @@ Si crea solo con _Funzioni sperimentali_ attive. Il testo SCL si traduce in AWL 
 - **Fuori:** membri o elementi di un parametro di FC o di un IN_OUT di FB (sono puntatori, anche con indici variabili), ARRAY o STRUCT interi come operando o parametro, STRING, TIME, CHAR, `**`, chiamata di un FB senza DB di istanza, parametri per posizione, PI/PQ, mnemonici tedeschi negli indirizzi. Nessun confronto fra BOOL (si usa XOR/NOT); con BYTE/WORD/DWORD solo `=` e `<>`.
 - **FOR.** Il valore finale si calcola una volta sola. Al limite del tipo il ciclo esce e la variabile resta all'ultimo valore eseguito. Modificare la variabile dentro il ciclo non è controllato. EXIT esce dal ciclo più interno; CONTINUE passa all'incremento (FOR), alla condizione (WHILE, REPEAT).
 - **Parentesi più del minimo.** Un AND dentro un OR va sempre fra parentesi, quindi il limite di 7 parentesi aperte di AWL («Espressione troppo annidata») può arrivare prima che in STEP 7.
-- **Errori.** Si riporta solo il primo errore; un `;` mancante si segnala sulla riga dopo. Gli errori del controllo AWL sul codice generato si riportano alla riga SCL solo nei messaggi di compilazione, non nell'editor.
-- **Editor semplice.** Niente evidenziazione, completamento né osservazione. La rinomina dei simboli non aggiorna il testo SCL. La scrittura negli ingressi di una FC non è controllata.
+- **Errori (1.4).** Si riportano fino a 50 errori: dopo un errore il parser riparte dal `;` dell'istruzione o dalla fine del costrutto (`END_…`), e un errore nell'intestazione di IF, CASE, FOR, WHILE o UNTIL salta il resto di quella riga e legge comunque il corpo. Un `;` mancante alla fine della riga si segnala sulla riga dove manca. Dopo un errore di sintassi qualche errore successivo può esserne la conseguenza (per esempio un nome nel corpo di un FOR con l'intestazione sbagliata). Sulla riga di un errore del lexer (carattere non valido, costante sbagliata, simbolo senza la virgoletta di chiusura) non si riportano altri errori di sintassi. Gli errori del controllo AWL sul codice generato compaiono nell'editor alla riga SCL (colonna 1) solo se il traduttore non ne ha trovati; quelli della compilazione MC7 restano nei messaggi di compilazione.
+- **Editor (1.4).** Evidenziazione, completamento (variabili, tag, DB e loro membri, chiamate con i parametri, parole chiave) ed errori sottolineati mentre si scrive. Niente osservazione. Il completamento non propone i parametri dentro le parentesi di una chiamata già scritta, né i membri dopo un indice variabile. La scrittura negli ingressi di una FC non è controllata.
+- **Rinomina (1.4).** Tag, costanti, blocchi, DB, membri di DB e UDT, variabili e parametri dell'interfaccia si aggiornano anche nel testo SCL, sui token: commenti e stringhe restano come sono. Un parametro si rinomina solo nelle chiamate di quel blocco (`"Fc"(…)`, `Fc(…)`, `"Inst_DB"(…)`, `#multi(…)`). Nel codice di una FC il suo nome usato come valore di ritorno (`Fc := …`) non si rinomina col blocco. `Nome(…)` senza `#` è sempre la chiamata di un blocco: rinominare una variabile `Nome` non la tocca. Una variabile o un parametro rinominati con un nome che non è un identificatore SCL (spazi, accenti: `Motor Speed`, `Velocità`) non si aggiornano nel testo SCL, che resterebbe sbagliato fra virgolette (un simbolo globale): il nome vecchio resta, dà errore di compilazione e un avviso nei messaggi elenca i blocchi da correggere a mano. I membri si scrivono fra virgolette (`#s."Motor Speed"`).
 
 ## Adattatore MPI (piano 3M)
 
@@ -292,7 +292,7 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
   - Si osserva una sola tabella alla volta: quella su cui si è attivato «Osserva tutto», finché è visibile in un riquadro qualsiasi; una tabella in una finestra staccata smette di essere osservata.
   - Gli operandi si risolvono sul **progetto offline**, non sul programma caricato: se si modifica il layout di un DB senza caricarlo, letture e scritture usano i nuovi offset della modifica e non c'è confronto online/offline.
   - Le modifiche alle proprietà della CPU (tempo di ciclo, merker di clock, intervallo di OB35) valgono solo dopo aver riavviato la simulazione.
-  - La rinomina di un tag, di una costante o di un blocco/DB aggiorna le righe che usano `"Nome"` o `"Nome".membro`; la rinomina di un **membro** di un DB o di un UDT non aggiorna le tabelle di controllo (la riga mostra un errore di risoluzione finché non si corregge).
+  - La rinomina di un tag, di una costante o di un blocco/DB aggiorna le righe che usano `"Nome"` o `"Nome".membro`; anche la rinomina di un **membro** di un DB, di un UDT o di un FB (DB di istanza) aggiorna le righe, nello stesso passo annullabile.
   - Non c'è un forzamento permanente né un «trigger»: c'è solo «Comanda», una scrittura una tantum.
   - Le tabelle non si copiano, tagliano, incollano né trascinano nell'albero; non ci sono gruppi né importazione o esportazione.
   - Al più 1000 righe osservate per richiesta; le righe oltre il limite danno un errore di riga.
@@ -305,13 +305,13 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
 - **Costanti in csv.** Il csv ha un solo foglio, quindi le costanti non si esportano: per averle si usa xlsx.
 - **xlsx scritto in forma minima.** Nessuna formattazione (larghezze, colori, stili); il file si apre ma è spartano.
 - **csv, virgolette non chiuse.** Una virgoletta aperta e mai chiusa inghiotte il resto del file in un solo errore `RIGA_ILLEGGIBILE`.
-- **csv, formule.** In esportazione le celle che iniziano con `=`, `+`, `-` o `@` non sono protette: Excel può leggerle come formule.
+- **csv, formule.** In esportazione una cella che inizia con `=`, `+`, `-`, `@`, tab o a capo (dopo eventuali apici) riceve un apice davanti (`'=1+1`), così Excel non la legge come formula. In importazione, a una cella che inizia con uno o più apici seguiti da uno di quei caratteri se ne toglie uno; `'ciao` resta com'è. Un file di altra origine con una cella `'=x` volutamente con l'apice la perde.
 - **xlsx, limite di dimensione.** Il file compresso può arrivare a 50 MB. Si gonfiano solo le voci che servono (cartella di lavoro, relazioni, stringhe condivise, tipi di contenuto e i fogli referenziati); ogni voce e il totale non possono superare 200 MB, altrimenti errore chiaro «troppo grande». Il limite per voce si fida della dimensione dichiarata nell'intestazione dello zip, e la misura reale viene ricontrollata dopo l'estrazione.
 - **Valori delle costanti importate.** Non vengono controllati rispetto al loro tipo, come nell'editor a griglia.
 - **xlsx, DOCTYPE.** Un DOCTYPE con sottoinsieme interno non si legge (errore chiaro).
 - **xlsx, ritorni a capo.** Un `\r` dentro un testo non torna identico dopo l'esportazione e la rilettura.
-- **Nomi unici per CPU solo nell'importazione** (`NOME_IN_ALTRA_TABELLA`). Nomi doppi creati a mano in tabelle diverse non vengono segnalati.
-- **Nome file.** Un nome digitato come `x.txt` in esportazione diventa `x.txt.xlsx`.
+- **Nomi unici per CPU.** L'importazione scarta un nome già presente in un'altra tabella (`NOME_IN_ALTRA_TABELLA`); un doppione creato a mano fra tabelle (variabili, costanti, blocchi, UDT) è segnalato dal controllo del progetto come `NAME_DUPLICATE` su ogni occorrenza.
+- **Nome file.** In esportazione un'estensione digitata che non è `csv` né `xlsx` (fino a 4 caratteri con almeno una lettera, come `x.txt`) è sostituita: `x.xlsx`. Un punto nel nome (`v1.2`) resta e si aggiunge l'estensione.
 
 ### Archivio (.baapz)
 
@@ -363,7 +363,7 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
 - **Statici interni non documentati.** I manuali pubblici non riportano i dati statici interni di TON, TOF, TP e degli altri SFB. Il layout di un'istanza si ricava solo da un blocco reale importato che usa quell'SFB, per esempio dal kit del PLC.
 - **Senza un blocco reale, errore chiaro** (`LAYOUT_SFB_SCONOSCIUTO`). Valgono per esempio per un FB scritto a mano con un TON in multi-istanza, un DB d'istanza di un SFB, o un blocco che li richiama.
 - **Valori iniziali presi dal campione.** Un nuovo DB d'istanza di un SFB prende i valori iniziali degli statici dal blocco reale usato come campione, con una nota che lo dice.
-- **Numeri di timer e contatori** non vengono confrontati con i limiti della CPU.
+- **Numeri di timer e contatori** oltre i limiti della CPU del catalogo (`T 256` su una CPU da 256) sono un errore `ADDRESS_OUT_OF_RANGE` nel controllo AWL e nella compilazione, come le aree I/Q/M; nelle tabelle delle variabili lo stesso codice segnala l'indirizzo.
 
 ### Blocchi importati
 
@@ -411,6 +411,18 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
 - **macOS, DMG pronto:** finché l'app non viene riavviata, i controlli automatici non ripartono.
 - **Installazione fallita dopo «Non salvare»:** la copia di recupero era già stata cancellata (`beforeWindowClose`).
 - **Installazione fallita:** se l'installatore non parte, l'app riabilita le operazioni online e mostra l'errore; la finestra di salvataggio e l'offline erano già stati eseguiti.
+
+## Informazioni sul programma (piano 7A)
+
+- **Indirizzamento indiretto non risolto.** `L MW [MD 20]` registra la lettura del puntatore `MD20`, non l'indirizzo puntato; gli accessi tramite registro (`[AR1, P#…]`) e i puntatori `P#…` non compaiono.
+- **DB aperto.** `L DBW 4` dopo un `OPN` è la voce `%DBW4` senza numero di DB: non si segue quale DB è aperto. Gli accessi `DI…` restano a sé, senza il DB di istanza.
+- **Fuori dai riferimenti incrociati:** variabili locali (`#x`, area L, anche i bit di appoggio del KOP), costanti scritte, salti ed etichette, `STW` e i registri, le sorgenti AWL esterne, i valori iniziali dei DB, i blocchi know-how. Le tabelle di controllo non contano come uso.
+- **Dati complessi interi** (STRUCT, ARRAY, UDT passati a una CALL) non hanno un indirizzo elementare: restano col testo scritto e non si confrontano per sovrapposizione.
+- **Simboli sconosciuti** restano col testo scritto, senza indirizzo.
+- **Parametro sconosciuto** di una CALL (blocco mancante o parametro non dichiarato): l'accesso è «lettura e scrittura».
+- **KOP e FUP:** il punto d'uso è l'elemento che ha prodotto la riga dell'AWL generato; il primo operando dell'elemento per Maiusc+F11. **SCL:** la parola sotto il cursore, senza il parser SCL; la riga è quella del testo SCL da cui viene l'istruzione AWL.
+- **Struttura di richiamo:** solo le chiamate scritte (CALL, UC, CC, multi-istanze); un `UC` con puntatore o un richiamo calcolato non compare. Gli OB non chiamati non sono «non usati»: sono le radici. Un albero con molte chiamate ripetute si apre un livello alla volta.
+- **Ricalcolo:** tutto si ricalcola a ogni modifica del progetto mentre la scheda è aperta; su programmi molto grandi può essere lento.
 
 ## Fuori dal codice, in sospeso per l'utente
 

@@ -1,7 +1,16 @@
 import { ids, parseNodeId } from '../project/navigation/treeIds';
 
 export type EditorKind =
-  'tagTable' | 'allTags' | 'block' | 'udt' | 'source' | 'watchTable' | 'compare' | 'onlineDiag';
+  | 'tagTable'
+  | 'allTags'
+  | 'block'
+  | 'udt'
+  | 'source'
+  | 'watchTable'
+  | 'compare'
+  | 'onlineDiag'
+  | 'crossRef'
+  | 'callStructure';
 export interface EditorRef {
   /** `${kind}:${deviceId}:${objectId}`; "Mostra tutte le variabili" ha objectId ''. */
   key: string;
@@ -63,6 +72,9 @@ export function nodeIdOfEditor(e: EditorTarget): string {
       return ids.folder(e.deviceId, 'tags-all');
     case 'onlineDiag':
       return ids.folder(e.deviceId, 'online-diag');
+    case 'crossRef':
+    case 'callStructure':
+      return ids.folder(e.deviceId, 'prog-info');
   }
 }
 
@@ -83,6 +95,9 @@ export function editorOfNode(nodeId: string): EditorTarget | null {
   }
   if (p.kind === 'folder' && p.folder === 'online-diag') {
     return { kind: 'onlineDiag', deviceId: p.dev, objectId: '' };
+  }
+  if (p.kind === 'folder' && p.folder === 'prog-info') {
+    return { kind: 'callStructure', deviceId: p.dev, objectId: '' };
   }
   return null;
 }

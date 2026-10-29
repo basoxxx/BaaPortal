@@ -60,8 +60,28 @@ const ADD = ['+', '-'];
 const MUL = ['*', '/', 'MOD'];
 const ARROWS = [':=', '=>'];
 
-export function parse(text: string): Stmt[] {
-  const toks = lex(text);
+/** Errori riportati al massimo; oltre, il parser si ferma. */
+export const MAX_ERRORS = 50;
+const BLOCK_ENDS = new Set(['ELSIF', 'ELSE', 'UNTIL']);
+/** Fermata del parser al raggiungimento di MAX_ERRORS. */
+class TooMany extends Error {}
+
+/**
+ * Le istruzioni e tutti gli errori di sintassi (fino a MAX_ERRORS): dopo un errore il parser
+ * riparte dopo il `;` dell'istruzione, oppure dalla fine del costrutto che la contiene (END_…).
+ * Un errore nell'intestazione di IF, CASE, FOR, WHILE o UNTIL salta il resto della riga e
+ * prosegue col corpo. Con errori, le istruzioni sbagliate mancano dal risultato.
+ */
+export function parse(text: string): { stmts: Stmt[]; errors: SclError[] } {
+  const errors: SclError[] = [];
+  const toks = lex(text, { errors });
+  // Su una riga con un errore del lexer, quelli del parser ne sono di solito la conseguenza.
+  const lexLines = new Set(errors.map((e) => e.line));
+  const record = (e: unknown) => {
+    if (!(e instanceof SclError)) throw e;
+    if (!lexLines.has(e.line)) errors.push(e);
+    if (errors.length >= MAX_ERRORS) throw new TooMany();
+  };
   let p = 0;
   const peek = () => toks[p]!;
   const up = (t: Tok) => t.text.toUpperCase();
@@ -83,9 +103,61 @@ export function parse(text: string): Stmt[] {
 
   function statements(...ends: string[]): Stmt[] {
     const out: Stmt[] = [];
-    while (!is(...ends) && peek().kind !== 'eof') out.push(statement());
+    while (!is(...ends) && peek().kind !== 'eof') guarded(out, ends);
     return out;
   }
+
+  /** Fine di un costrutto (END_…, ELSIF, ELSE, UNTIL): dopo un errore si riparte da lì. */
+  const atBlockEnd = () =>
+    peek().kind === 'kw' && (up(peek()).startsWith('END_') || BLOCK_ENDS.has(up(peek())));
+
+  /** Un'istruzione in `out`; con un errore lo registra e salta al `;` o alla fine del costrutto. */
+  function guarded(out: Stmt[], ends: string[]): void {
+    const start = p;
+    try {
+      out.push(statement());
+    } catch (e) {
+      record(e);
+      while (peek().kind !== 'eof' && !is(';', ...ends) && !atBlockEnd()) p++;
+      // un END_… fuori posto: lo si salta, se no il ciclo non avanza
+      if (p === start) p++;
+      if (is(';')) p++;
+    }
+  }
+
+  /**
+   * Il `;` alla fine di un'istruzione. Se manca e dopo c'è un'altra riga, l'errore va sulla riga
+   * dove manca e il parser prosegue; sulla stessa riga è un errore come gli altri.
+   */
+  function semi(): void {
+    if (is(';')) {
+      p++;
+      return;
+    }
+    const prev = toks[p - 1]!;
+    if (peek().kind !== 'eof' && peek().line === prev.line) expect(';');
+    record(new SclError(prev.line, prev.col + prev.text.length, `Manca «;» dopo ${shown(prev)}`));
+  }
+
+  /**
+   * L'intestazione `head` di un costrutto e la parola `stop` che la chiude (THEN, DO, OF…). Con un
+   * errore lo registra, salta fino a `stop` sulla stessa riga e torna `fallback`: il corpo si
+   * legge comunque.
+   */
+  function header<T>(head: () => T, stop: string, fallback: T): T {
+    const line = peek().line;
+    try {
+      const v = head();
+      expect(stop);
+      return v;
+    } catch (e) {
+      record(e);
+      while (peek().kind !== 'eof' && !is(stop) && peek().line <= line) p++;
+      if (is(stop)) p++;
+      return fallback;
+    }
+  }
+  const truth = (t: Pos): Expr => ({ k: 'bool', value: true, ...pos(t) });
 
   /** Corpo di un costrutto che finisce con `end`: se manca, l'errore cade sulla riga di `open`. */
   function block(open: Tok, end: string, ...stops: string[]): Stmt[] {
@@ -102,49 +174,46 @@ export function parse(text: string): Stmt[] {
     if (kw === 'FOR') return forStmt();
     if (kw === 'WHILE') {
       p++;
-      const cond = expr();
-      expect('DO');
+      const cond = header(() => expr(), 'DO', truth(t));
       const body = block(t, 'END_WHILE');
       expect('END_WHILE');
-      expect(';');
+      semi();
       return { k: 'while', cond, body, ...pos(t) };
     }
     if (kw === 'REPEAT') {
       p++;
       const body = block(t, 'END_REPEAT', 'UNTIL');
-      expect('UNTIL');
-      const cond = expr();
-      expect('END_REPEAT');
-      expect(';');
+      const until = expect('UNTIL');
+      const cond = header(() => expr(), 'END_REPEAT', truth(until));
+      semi();
       return { k: 'repeat', body, cond, ...pos(t) };
     }
     if (kw === 'RETURN' || kw === 'EXIT' || kw === 'CONTINUE') {
       p++;
-      expect(';');
+      semi();
       return { k: kw === 'RETURN' ? 'return' : kw === 'EXIT' ? 'exit' : 'continue', ...pos(t) };
     }
     const dst = operand();
     if (is('(')) {
       const c = call(dst);
-      expect(';');
+      semi();
       return { k: 'call', c, ...pos(t) };
     }
     expect(':=');
     const e = expr();
-    expect(';');
+    semi();
     return { k: 'assign', dst, e, ...pos(t) };
   }
 
   function ifStmt(): Stmt {
     const open = toks[p++]!;
     const arms: { cond: Expr; body: Stmt[] }[] = [];
-    let cond = expr();
+    let cond = header(() => expr(), 'THEN', truth(open));
     for (;;) {
-      expect('THEN');
       arms.push({ cond, body: block(open, 'END_IF', 'ELSIF', 'ELSE') });
       if (!is('ELSIF')) break;
-      p++;
-      cond = expr();
+      const at = toks[p++]!;
+      cond = header(() => expr(), 'THEN', truth(at));
     }
     let otherwise: Stmt[] | undefined;
     if (is('ELSE')) {
@@ -152,7 +221,7 @@ export function parse(text: string): Stmt[] {
       otherwise = block(open, 'END_IF');
     }
     expect('END_IF');
-    expect(';');
+    semi();
     return { k: 'if', arms, ...(otherwise ? { else: otherwise } : {}), ...pos(open) };
   }
 
@@ -176,21 +245,26 @@ export function parse(text: string): Stmt[] {
 
   function caseStmt(): Stmt {
     const open = toks[p++]!;
-    const sel = expr();
-    expect('OF');
+    const sel = header(() => expr(), 'OF', { k: 'int', text: '0', ...pos(open) } as Expr);
     const arms: { values: CaseValue[]; body: Stmt[] }[] = [];
     while (!is('ELSE', 'END_CASE') && peek().kind !== 'eof') {
-      const values = [caseValue()];
-      while (is(',')) {
-        p++;
-        values.push(caseValue());
-      }
-      expect(':');
+      const values = header(
+        () => {
+          const vs = [caseValue()];
+          while (is(',')) {
+            p++;
+            vs.push(caseValue());
+          }
+          return vs;
+        },
+        ':',
+        [],
+      );
       // il ramo finisce dove inizia il valore del ramo dopo (`n:`, `n,` o `n..`)
       const body: Stmt[] = [];
       while (!is('ELSE', 'END_CASE') && peek().kind !== 'eof' && !atCaseValue())
-        body.push(statement());
-      arms.push({ values, body });
+        guarded(body, ['ELSE', 'END_CASE']);
+      if (values.length) arms.push({ values, body });
     }
     let otherwise: Stmt[] | undefined;
     if (is('ELSE')) {
@@ -200,7 +274,7 @@ export function parse(text: string): Stmt[] {
     }
     if (peek().kind === 'eof') fail(open, `Manca END_CASE per CASE della riga ${open.line}`);
     expect('END_CASE');
-    expect(';');
+    semi();
     return { k: 'case', sel, arms, ...(otherwise ? { else: otherwise } : {}), ...pos(open) };
   }
 
@@ -213,25 +287,33 @@ export function parse(text: string): Stmt[] {
 
   function forStmt(): Stmt {
     const open = toks[p++]!;
-    const v = operand();
-    expect(':=');
-    const from = expr();
-    expect('TO');
-    const to = expr();
-    let by: (Pos & { text: string }) | undefined;
-    if (is('BY')) {
-      p++;
-      const t = peek();
-      const neg = is('-');
-      if (neg) p++;
-      if (peek().kind !== 'int') fail(t, 'In prova BY accetta solo un numero intero costante');
-      by = { text: (neg ? '-' : '') + toks[p++]!.text, ...pos(t) };
-    }
-    expect('DO');
+    const head = header(
+      () => {
+        const v = operand();
+        expect(':=');
+        const from = expr();
+        expect('TO');
+        const to = expr();
+        let by: (Pos & { text: string }) | undefined;
+        if (is('BY')) {
+          p++;
+          const t = peek();
+          const neg = is('-');
+          if (neg) p++;
+          if (peek().kind !== 'int') fail(t, 'In prova BY accetta solo un numero intero costante');
+          by = { text: (neg ? '-' : '') + toks[p++]!.text, ...pos(t) };
+        }
+        return { v, from, to, ...(by ? { by } : {}) };
+      },
+      'DO',
+      undefined,
+    );
     const body = block(open, 'END_FOR');
     expect('END_FOR');
-    expect(';');
-    return { k: 'for', v, from, to, ...(by ? { by } : {}), body, ...pos(open) };
+    semi();
+    // intestazione sbagliata: il corpo resta un ciclo, per EXIT e CONTINUE
+    if (!head) return { k: 'while', cond: truth(open), body, ...pos(open) };
+    return { k: 'for', ...head, body, ...pos(open) };
   }
 
   function operand(): Operand {
@@ -403,7 +485,11 @@ export function parse(text: string): Stmt[] {
     return is('(') ? call(o) : o;
   }
 
-  const out = statements();
-  if (peek().kind !== 'eof') fail(peek(), `Inatteso ${shown(peek())}`);
-  return out;
+  const stmts: Stmt[] = [];
+  try {
+    while (peek().kind !== 'eof') guarded(stmts, []);
+  } catch (e) {
+    if (!(e instanceof TooMany)) throw e;
+  }
+  return { stmts, errors };
 }

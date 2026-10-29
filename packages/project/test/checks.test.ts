@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseType, type DataType } from '@baaportal/s7-types';
 import {
+  type TagTable,
   checkDevice,
   createCodeBlock,
   createGlobalDb,
@@ -74,6 +75,25 @@ describe('checkDevice: casi base', () => {
     const ds = checkDevice(d, cpu);
     expect(codes(ds)).toEqual(['NAME_DUPLICATE', 'NAME_DUPLICATE', 'NAME_DUPLICATE']);
     expect(ds.map((x) => x.ref.kind)).toEqual(['tag', 'constant', 'block']);
+  });
+
+  it('lo stesso nome in due tabelle di variabili: errore su entrambi', () => {
+    const d = fresh();
+    const t2: TagTable = {
+      ...d.tagTables[0]!,
+      id: newId(),
+      name: 'Altra',
+      tags: [],
+      constants: [],
+    };
+    d.tagTables.push(t2);
+    d.tagTables[0]!.tags.push(tag('Pompa', 'Bool', '%M0.0'));
+    t2.tags.push(tag('POMPA', 'Bool', '%M0.1'));
+    const ds = checkDevice(d, cpu);
+    expect(ds.map((x) => [x.code, x.ref.kind, 'tableId' in x.ref ? x.ref.tableId : ''])).toEqual([
+      ['NAME_DUPLICATE', 'tag', d.tagTables[0]!.id],
+      ['NAME_DUPLICATE', 'tag', t2.id],
+    ]);
   });
 
   it('nome non valido e nome doppio fra tabelle', () => {

@@ -242,7 +242,6 @@ export async function executePlcDownload(
     .filter(isCpuOnly)
     .map((r) => ({ type: r.type, number: r.number }));
   const files = loadRows.map((r) => r.file!);
-  const wasMode = store.getState().online.mode;
   let stopped = false;
   if (choice.stop) {
     let stop: Awaited<ReturnType<BaaBridge['plcControl']>>;
@@ -301,8 +300,8 @@ export async function executePlcDownload(
       failedAt: res.failedAt ?? '-',
     });
   }
-  // Se la CPU gira ancora (nessun arresto), non c'è nulla da avviare.
-  if (res.ok && something && (stopped || wasMode !== 'RUN')) {
+  // Si chiede solo se l'abbiamo arrestata noi: una CPU già in STOP resta com'è (c'è «Avvia CPU»).
+  if (res.ok && something && stopped) {
     let yes = false;
     try {
       yes = await bridge.askQuestion({

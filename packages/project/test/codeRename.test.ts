@@ -382,22 +382,3 @@ describe('sorgenti esterne', () => {
     expect(b.name).toBe('motori_1.AWL');
   });
 });
-
-describe('rinomina nel codice: solo blocchi AWL', () => {
-  it('un blocco SCL non si tocca, uno AWL dello stesso dispositivo si', () => {
-    const d = makeDevice();
-    const scl = 'IF "Start" THEN "Start".x := 1; END_IF;\nA "Start"\nL "Start".x';
-    // Nastro e SCL nella fixture
-    setCode(code(d, 'Nastro'), scl);
-    code(d, 'Nastro').language = 'SCL';
-    setCode(code(d, 'Linea'), 'A "Start"');
-    const tag = d.tagTables[0]!.tags[0]!;
-    renameWithReferences(
-      d,
-      { kind: 'tag', deviceId: d.id, tableId: d.tagTables[0]!.id, id: tag.id },
-      'Avvio',
-    );
-    expect(net(code(d, 'Nastro'))).toBe(scl);
-    expect(net(code(d, 'Linea'))).toBe('A "Avvio"');
-  });
-});

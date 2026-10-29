@@ -18,6 +18,7 @@ import { targetPlcId } from '../project/navigation/treeIds';
 import { isLockedImport } from '../editors/block/readOnlyImport';
 import { canConvertAwl, convertAwl } from '../editors/block/convertAwl';
 import { findDevice, isGraphic } from '@baaportal/project';
+import { openCallStructure, openCrossRef, operandUnderCursor } from '../editors/xref/xrefActions';
 
 export type CommandId =
   | 'project.new'
@@ -427,8 +428,24 @@ const list: Command[] = [
     isEnabled: always,
     run: ({ store }) => store.getState().openDialog({ kind: 'settings' }),
   }),
-  def('tools.crossReferences'),
-  def('tools.callStructure'),
+  def('tools.crossReferences', {
+    shortcut: 'Shift+F11',
+    isEnabled: hasPlc,
+    run: ({ store }) => {
+      const s = store.getState();
+      // Dall'editor di un blocco: l'operando sotto il cursore; altrimenti tutto il programma.
+      const b = focusedBlock(s);
+      const id = b?.deviceId ?? targetPlcId(s);
+      if (id) openCrossRef(store, id, b ? operandUnderCursor(s, b) : '');
+    },
+  }),
+  def('tools.callStructure', {
+    isEnabled: hasPlc,
+    run: ({ store }) => {
+      const id = targetPlcId(store.getState());
+      if (id) openCallStructure(store, id);
+    },
+  }),
   def('tools.collectCpuData', {
     isEnabled: always,
     run: ({ store }) => store.getState().openDialog({ kind: 'collectKit' }),

@@ -1,7 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { EditorView } from '@codemirror/view';
 import { describe, expect, it, vi } from 'vitest';
-import { setDiagnostics } from '@codemirror/lint';
+import { forEachDiagnostic, setDiagnostics } from '@codemirror/lint';
 import { createCodeBlock, kopSources, readBaap, type CodeBlock } from '@baaportal/project';
 import type { LadNetwork } from '@baaportal/ladfbd';
 import { updateSettings } from '../src/settings/settings';
@@ -360,13 +360,43 @@ describe('blocchi SCL in prova', () => {
       const app = await openEditor('block', s.id, (d) => void d.blocks.push(s));
       expect(screen.getAllByRole('textbox', { name: /Codice del segmento/ })).toHaveLength(1);
       expect(screen.queryByRole('button', { name: 'Inserisci segmento' })).toBeNull();
-      expect(screen.getByRole('list', { name: 'Problemi SCL' }).textContent).toMatch(/^Riga 1: /);
+      await waitFor(() =>
+        expect(screen.getByRole('list', { name: 'Problemi SCL' }).textContent).toMatch(/^Riga 1: /),
+      );
       // La modifica si conferma all uscita dal focus, come per AWL.
       const v = viewOf();
       focus(v);
       set(v, '#x := #a;');
       act(() => v.contentDOM.blur());
       expect(block(app, s.id).networks[0]!.source).toBe('#x := #a;');
+    },
+    T,
+  );
+
+  it(
+    'tutti gli errori mentre si scrive: sottolineati, nel margine e nell elenco; evidenziazione',
+    async () => {
+      const s = createCodeBlock({ kind: 'FC', number: 23, name: 'S2', language: 'SCL' });
+      s.id = 'fc-S2';
+      s.interface.temp.push({ id: 't', name: 'i', type: 'Int', comment: '' });
+      const app = await openEditor('block', s.id, (d) => void d.blocks.push(s));
+      const v = viewOf();
+      focus(v);
+      set(v, 'IF #i > 1 THEN\n  #i := #zz;\nEND_IF;\n#i := 2\n#i := 3;');
+      const list = () => within(screen.getByRole('list', { name: 'Problemi SCL' }));
+      await waitFor(() => expect(list().getAllByRole('listitem')).toHaveLength(2));
+      expect(list().getAllByRole('button')[0]!.textContent).toMatch(/^Riga 2: .*zz/);
+      expect(list().getAllByRole('button')[1]!.textContent).toMatch(/^Riga 4: Manca «;»/);
+      const ranges: string[] = [];
+      forEachDiagnostic(v.state, (_d, from, to) => ranges.push(v.state.sliceDoc(from, to)));
+      expect(ranges[0]).toBe('#zz');
+      expect(v.dom.querySelectorAll('.cm-lint-marker-error').length).toBeGreaterThan(0);
+      expect(v.dom.querySelector('.baa-awl-keyword')?.textContent).toBe('IF');
+      expect(v.dom.querySelector('.baa-awl-local')?.textContent).toBe('#i');
+      // Un clic sull'errore porta il cursore alla sua riga; il testo non si conferma da solo.
+      fireEvent.click(list().getAllByRole('button')[1]!);
+      expect(v.state.doc.lineAt(v.state.selection.main.head).number).toBe(4);
+      expect(block(app, s.id).networks[0]!.source).toBe('');
     },
     T,
   );

@@ -19,6 +19,9 @@ vi.mock('@baaportal/project', async (importOriginal) => {
 });
 
 const T = 30_000;
+// La compilazione di 5 blocchi con la barra che si aggiorna supera il secondo di waitFor quando la
+// macchina è carica (tutta la suite in parallelo): stesso esito su main, non è una regressione.
+const W = { timeout: 10_000 };
 const PLC = 'id1';
 
 function fc(n: number): CodeBlock {
@@ -56,11 +59,11 @@ describe('statusBar', () => {
         if (s.compile.summary && !atEnd) atEnd = `${getProgress()?.done}/${getProgress()?.total}`;
       });
       act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', ctrlKey: true })));
-      await waitFor(() => expect(app.store.getState().compile.summary).not.toBeNull());
+      await waitFor(() => expect(app.store.getState().compile.summary).not.toBeNull(), W);
       expect(seen).toEqual(['0/5', '1/5', '2/5', '3/5', '4/5']);
       expect(atEnd).toBe('5/5');
       expect(buttonSeen).toBe(true);
-      await waitFor(() => expect(getProgress()).toBeNull());
+      await waitFor(() => expect(getProgress()).toBeNull(), W);
       expect(screen.queryByRole('button', { name: 'Interrompi' })).toBeNull();
       expect(screen.getByTestId('status-bar')).not.toHaveTextContent('Compilazione in corso');
     },
@@ -75,20 +78,20 @@ describe('statusBar', () => {
         if (n === 2) act(() => getProgress()!.cancel!());
       };
       act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', ctrlKey: true })));
-      await waitFor(() => expect(screen.getByTestId('compile-interrupted')).toBeVisible());
+      await waitFor(() => expect(screen.getByTestId('compile-interrupted')).toBeVisible(), W);
       expect(screen.getByTestId('compile-interrupted')).toHaveTextContent(
         'Compilazione interrotta',
       );
       expect(Object.keys(app.store.getState().compile.hashes)).toHaveLength(2);
       expect(screen.getAllByTestId('compile-row')).toHaveLength(2);
-      await waitFor(() => expect(getProgress()).toBeNull());
+      await waitFor(() => expect(getProgress()).toBeNull(), W);
       expect(screen.getByTestId('status-bar')).toHaveTextContent('Compilazione interrotta');
 
       // Gli altri 3 sono ancora "da compilare": una compilazione "solo modifiche" li compila.
       hook.n = 0;
       hook.onBlock = () => undefined;
       act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', ctrlKey: true })));
-      await waitFor(() => expect(app.store.getState().compile.summary?.blocks).toBe(3));
+      await waitFor(() => expect(app.store.getState().compile.summary?.blocks).toBe(3), W);
       expect(Object.keys(app.store.getState().compile.hashes)).toHaveLength(5);
     },
     T,
@@ -99,7 +102,7 @@ describe('statusBar', () => {
     async () => {
       const app = await setup();
       await app.user.keyboard('{Control>}b{/Control}');
-      await waitFor(() => expect(app.store.getState().compile.summary?.blocks).toBe(5));
+      await waitFor(() => expect(app.store.getState().compile.summary?.blocks).toBe(5), W);
     },
     T,
   );
@@ -123,11 +126,11 @@ describe('statusBar', () => {
         }
       };
       act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', ctrlKey: true })));
-      await waitFor(() => expect(app.store.getState().compile.summary).not.toBeNull());
+      await waitFor(() => expect(app.store.getState().compile.summary).not.toBeNull(), W);
       expect(enabled).toEqual([false, false]);
       expect(starts).toBe(0);
       expect(app.store.getState().compile.summary?.blocks).toBe(5);
-      await waitFor(() => expect(getProgress()).toBeNull());
+      await waitFor(() => expect(getProgress()).toBeNull(), W);
       expect(commands['edit.compile'].isEnabled(app.store.getState())).toBe(true);
     },
     T,
@@ -141,7 +144,7 @@ describe('statusBar', () => {
         if (n === 2) act(() => app.store.getState().setDoc(null));
       };
       act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', ctrlKey: true })));
-      await waitFor(() => expect(getProgress()).toBeNull());
+      await waitFor(() => expect(getProgress()).toBeNull(), W);
       const c = app.store.getState().compile;
       expect(c.summary).toBeNull();
       expect(c.rows).toEqual([]);
@@ -158,7 +161,7 @@ describe('statusBar', () => {
         if (n === 3) throw new Error('boom');
       };
       act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', ctrlKey: true })));
-      await waitFor(() => expect(getProgress()).toBeNull());
+      await waitFor(() => expect(getProgress()).toBeNull(), W);
       const st = app.store.getState();
       expect(st.compile.rows).toHaveLength(2);
       expect(Object.keys(st.compile.hashes)).toHaveLength(2);
@@ -178,7 +181,7 @@ describe('statusBar', () => {
         t += 10; // 10 ms per blocco: si cede ogni due blocchi
       };
       act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', ctrlKey: true })));
-      await waitFor(() => expect(app.store.getState().compile.summary).not.toBeNull());
+      await waitFor(() => expect(app.store.getState().compile.summary).not.toBeNull(), W);
       const yields = timeouts.mock.calls.filter((c) => c[1] === 0).length;
       vi.restoreAllMocks();
       expect(yields).toBeGreaterThanOrEqual(2);

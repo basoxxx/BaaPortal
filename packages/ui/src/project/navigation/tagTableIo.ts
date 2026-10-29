@@ -165,7 +165,11 @@ export async function exportTagTable(
     });
     if (!path) return;
     const chosen: Format = extOf(path) === 'csv' ? 'csv' : extOf(path) === 'xlsx' ? 'xlsx' : format;
-    if (extOf(path) !== chosen) path = `${path}.${chosen}`;
+    if (extOf(path) !== chosen) {
+      // Un'estensione di testo (x.txt) è sostituita; un punto nel nome (v1.2) no.
+      const ext = extOf(path);
+      path = `${/^[a-z0-9]{1,4}$/.test(ext) && /[a-z]/.test(ext) ? path.slice(0, -ext.length - 1) : path}.${chosen}`;
+    }
     // La tabella si rilegge dopo la finestra: è quella di adesso.
     const table = find() ?? first;
     const bytes = chosen === 'csv' ? new TextEncoder().encode(tagsToCsv(table)) : tagsToXlsx(table);

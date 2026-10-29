@@ -269,6 +269,7 @@ export function InterfaceTable({ deviceId, target, label, valueHeaderKey }: Prop
       if (!row || typeof value !== 'string') return;
       const field = columnId === 'value' ? 'initial' : (columnId as 'name' | 'type' | 'comment');
       if (!row.editable[field]) return;
+      let sclSkipped: string[] = [];
       edit('history.editCell', (dev, o) => {
         if (key === 'return') {
           if (o.kind === 'FC') o.block.interface.returnType = normalizeType(value);
@@ -287,13 +288,24 @@ export function InterfaceTable({ deviceId, target, label, valueHeaderKey }: Prop
         if (!m) return;
         // I valori sostituiti altrove (DB di istanza, membri di questo tipo) seguono il nome.
         if (field === 'name')
-          renameMemberWithOverrides(dev, { kind: target.kind, id: target.id }, m.id, value);
+          sclSkipped = renameMemberWithOverrides(
+            dev,
+            { kind: target.kind, id: target.id },
+            m.id,
+            value,
+          );
         else if (field === 'comment') m.comment = value;
         else applyType(m, value);
       });
+      if (sclSkipped.length > 0)
+        store.getState().pushMessage({
+          severity: 'warning',
+          textKey: 'messages.sclRenameSkipped',
+          params: { name: value, blocks: sclSkipped.join(', ') },
+        });
       if (field === 'type' && isStructType(normalizeType(value))) expand(key);
     },
-    [byKey, edit, expand, target.kind, target.id],
+    [byKey, edit, expand, store, target.kind, target.id],
   );
 
   const removeOrphan = useCallback(

@@ -77,6 +77,7 @@
     "fileDialogFailed": "Impossibile aprire la finestra di scelta dei file: {{message}}",
     "sourceReplaceChanged": "Sorgente \"{{name}}\": mentre si confermava il progetto è cambiato e gli oggetti da sostituire non sono più quelli elencati. Nessuna modifica: ripetere \"Genera blocchi dalla sorgente\".",
     "actionFailed": "Operazione non riuscita: {{message}}",
+    "sclRenameSkipped": "Il testo SCL di {{blocks}} non è stato aggiornato: \"{{name}}\" non è un identificatore SCL (solo lettere, cifre e _). Il nome vecchio vi resta e dà errore di compilazione: correggerlo a mano o scegliere un nome senza spazi né accenti.",
     "compileInterrupted": "Compilazione interrotta: i blocchi già compilati restano compilati.",
     "compileFailed": "Compilazione non riuscita: {{message}}",
     "simStarted": "Simulazione avviata per {{name}} (CPU in STOP).",
@@ -1759,5 +1760,45 @@
       "program": "Controllo del programma",
       "noTarget": "Seleziona un punto in un segmento KOP o FUP"
     }
+  },
+  "xref": {
+    "title": "Riferimenti incrociati",
+    "filter": "Filtro",
+    "filterHint": "Operando, simbolo o blocco",
+    "withOverlaps": "Mostra gli accessi sovrapposti",
+    "count": "{{operands}} operandi, {{uses}} punti d’uso",
+    "empty": "Il programma non usa operandi.",
+    "noMatch": "Nessun operando corrisponde al filtro.",
+    "operand": "Operando",
+    "symbol": "Simbolo",
+    "type": "Tipo",
+    "location": "Punto d’uso",
+    "access": "Accesso",
+    "overlapped": "sovrapposto",
+    "overlapsWith": "Sovrapposto a",
+    "goTo": "Vai al punto d’uso",
+    "atAwl": "{{block}} NW {{network}} riga {{line}}",
+    "atGraphic": "{{block}} NW {{network}}",
+    "atScl": "{{block}} riga {{line}}",
+    "accessKind": {
+      "read": "Lettura",
+      "write": "Scrittura",
+      "readWrite": "Lettura e scrittura",
+      "call": "Richiamo",
+      "open": "Apertura"
+    }
+  },
+  "callTree": {
+    "title": "Struttura di richiamo",
+    "mode": "Vista",
+    "calls": "Struttura di richiamo",
+    "dependencies": "Dipendenze",
+    "noOb": "Nessun OB nel programma.",
+    "empty": "Nessun blocco nel programma.",
+    "unreferenced": "Blocchi non usati",
+    "recursion": "ricorsione",
+    "open": "Apri il blocco",
+    "expand": "Espandi {{name}}",
+    "collapse": "Comprimi {{name}}"
   }
 }

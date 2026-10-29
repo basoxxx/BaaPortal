@@ -10,6 +10,8 @@ import { OnlineDiagView } from './diag/OnlineDiagView';
 import { DbEditor } from './db/DbEditor';
 import { SourceEditor } from './source/SourceEditor';
 import { WatchTableView } from './watch/WatchTableView';
+import { CallStructureView } from './xref/CallStructureView';
+import { CrossRefView } from './xref/CrossRefView';
 import { UdtEditor } from './udt/UdtEditor';
 import { AllTagsEditor } from './tags/AllTagsEditor';
 import { TagTableEditor } from './tags/TagTableEditor';
@@ -105,6 +107,20 @@ export const EDITORS: Record<EditorKind, EditorDef> = {
     title: (_r, _d, t) => t('onlineDiag.title'),
     exists: (r, d) => device(r, d) !== undefined,
     Component: OnlineDiagView,
+  },
+  crossRef: {
+    kind: 'crossRef',
+    icon: () => 'treeProgInfo',
+    title: (_r, _d, t) => t('xref.title'),
+    exists: (r, d) => device(r, d) !== undefined,
+    Component: CrossRefView,
+  },
+  callStructure: {
+    kind: 'callStructure',
+    icon: () => 'treeProgInfo',
+    title: (_r, _d, t) => t('callTree.title'),
+    exists: (r, d) => device(r, d) !== undefined,
+    Component: CallStructureView,
   },
   allTags: {
     kind: 'allTags',

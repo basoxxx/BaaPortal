@@ -21,6 +21,7 @@ import { commands } from '../../commands/commands';
 import { areaOfItem, isStandardTable } from '../objectActions';
 import { useMnemonic } from '../../editors/awl/mnemonicPreference';
 import { editorOfNode } from '../../state/workArea';
+import { blockFilter, openCallStructure, openCrossRef } from '../../editors/xref/xrefActions';
 import {
   blockNodesOf,
   compileProgram,
@@ -515,6 +516,21 @@ export function ProjectTree() {
       ...generateItems,
       ...tagIoItems,
       ...compileItems,
+      ...(parsed.kind === 'block' || parsed.kind === 'plc'
+        ? [
+            {
+              id: 'crossRef',
+              label: t('commands.tools.crossReferences'),
+              separator: true,
+              run: () => openCrossRef(store, parsed.dev, blockFilter(doc, parsed)),
+            },
+            {
+              id: 'callStructure',
+              label: t('commands.tools.callStructure'),
+              run: () => openCallStructure(store, parsed.dev),
+            },
+          ]
+        : []),
       {
         id: 'properties',
         label: t('objects.properties'),

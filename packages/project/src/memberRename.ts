@@ -1,6 +1,7 @@
 import { parseType, type DataType } from '@baaportal/s7-types';
 import { renameMemberInCode } from './codeRename';
 import type { Block, CodeBlock, Member, PlcDevice, Udt } from './model';
+import { createCodeBlock } from './plc';
 
 // Stessa chiave di sameName.
 const nameKey = (name: string): string => name.normalize('NFC').toLowerCase();
@@ -118,26 +119,60 @@ function eachMember(list: Member[], visit: (m: Member) => void): void {
 const pathSafe = (name: string): boolean => name !== '' && !/[.[\]]/.test(name);
 
 /**
+ * Gli operandi delle tabelle di controllo seguono la rinomina di un membro con le stesse regole
+ * del codice: ogni operando diventa la riga `L <operando>` di una rete di un blocco AWL temporaneo,
+ * che `renameMemberInCode` aggiorna insieme agli altri blocchi.
+ */
+function renameMemberInWatchRows(
+  device: PlcDevice,
+  owner: { kind: 'block' | 'udt'; id: string },
+  memberId: string,
+  oldName: string,
+  newName: string,
+): void {
+  const rows = device.watchTables.flatMap((w) => w.rows).filter((r) => !/[\r\n]/.test(r.operand));
+  if (rows.length === 0) return;
+  const tmp = createCodeBlock({ kind: 'FC', number: 0, name: '', language: 'AWL' });
+  tmp.networks = rows.map((r) => ({
+    id: r.id,
+    title: '',
+    comment: '',
+    source: `L ${r.operand}`,
+  }));
+  device.blocks.push(tmp);
+  try {
+    renameMemberInCode(device, owner, memberId, oldName, newName);
+  } finally {
+    device.blocks.pop();
+  }
+  rows.forEach((r, i) => {
+    r.operand = tmp.networks[i]!.source.slice(2);
+  });
+}
+
+/**
  * Rinomina un membro di un blocco o di un UDT (da usare dentro `edit`) e sposta sul nome nuovo le
  * chiavi dei valori sostituiti che passano da lui: nei DB di istanza (anche attraverso multi-istanze)
- * e nei membri di tipo UDT o FB, diretti, in array o annidati.
+ * e nei membri di tipo UDT o FB, diretti, in array o annidati. Restituisce i blocchi SCL il cui
+ * testo non è stato aggiornato perché il nome nuovo non è un identificatore SCL.
  */
 export function renameMemberWithOverrides(
   device: PlcDevice,
   owner: { kind: 'block' | 'udt'; id: string },
   memberId: string,
   newName: string,
-): void {
+): string[] {
   const lists =
     owner.kind === 'udt'
       ? device.udts.filter((u) => u.id === owner.id).map((u) => u.members)
       : device.blocks.filter((b) => b.id === owner.id).flatMap(blockLists);
   let target: Member | undefined;
   for (const l of lists) target ??= findIn(l, memberId);
-  if (!target) return;
-  if (target.name === newName) return;
+  if (!target) return [];
+  if (target.name === newName) return [];
   // Il codice si aggiorna con i tipi com'erano; il nome del membro cambia dopo.
-  renameMemberInCode(device, owner, memberId, target.name, newName);
+  const sclSkipped = renameMemberInCode(device, owner, memberId, target.name, newName);
+  renameMemberInWatchRows(device, owner, memberId, target.name, newName);
 
   if (pathSafe(newName)) {
     const types: Types = { udts: new Map(), fbs: new Map() };
@@ -172,4 +207,5 @@ export function renameMemberWithOverrides(
     for (const [rec, renames] of pending) applyRenames(rec, renames);
   }
   target.name = newName;
+  return sclSkipped;
 }

@@ -5,6 +5,7 @@ import {
   createGlobalDb,
   createInstanceDb,
   createPlcDevice,
+  addWatchTable,
   createUdt,
   renameMemberWithOverrides,
   renameWithReferences,
@@ -176,5 +177,37 @@ describe('renameMemberWithOverrides', () => {
       'Z',
     );
     expect(idb.overrides).toEqual({ Z: '1' });
+  });
+
+  it('le righe delle tabelle di controllo seguono membri di DB, di UDT e di FB', () => {
+    const d = fresh();
+    const vel = m('Velocita', 'Int');
+    const db = dbOf(d, 'Dati', [vel, m('Asse', '"Asse"')]);
+    const x = m('Pos', 'Real');
+    const asse = udtOf(d, 'Asse', [x]);
+    const st = m('Giri', 'Int');
+    const fb = fbOf(d, 'Motore', { static: [st] });
+    idbOf(d, 'Motore_DB', 'Motore', {});
+    const w = addWatchTable(d, 'W', newId);
+    w.rows = [
+      '"Dati".Velocita',
+      '"Dati".Asse.Pos',
+      '"Motore_DB".Giri',
+      '"Dati".Velocita2',
+      'MW 0',
+    ].map((operand) => ({ id: newId(), operand, format: 'DEC' as const }));
+
+    renameMemberWithOverrides(d, { kind: 'block', id: db.id }, vel.id, 'Rpm');
+    renameMemberWithOverrides(d, { kind: 'udt', id: asse.id }, x.id, 'Quota');
+    renameMemberWithOverrides(d, { kind: 'block', id: fb.id }, st.id, 'Cicli');
+
+    expect(w.rows.map((r) => r.operand)).toEqual([
+      '"Dati".Rpm',
+      '"Dati".Asse.Quota',
+      '"Motore_DB".Cicli',
+      '"Dati".Velocita2',
+      'MW 0',
+    ]);
+    expect(d.blocks.map((b) => b.name)).toEqual(['Main', 'Dati', 'Motore', 'Motore_DB']);
   });
 });

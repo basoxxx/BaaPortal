@@ -316,6 +316,21 @@ describe('tagTableIo', () => {
   );
 
   it(
+    'esporta: un nome con altra estensione (x.txt) la sostituisce, un punto nel nome no',
+    async () => {
+      const app = await setup([tag('A', 'Int', '%MW2')]);
+      app.bridge.saveFileResults.push('/out/x.txt');
+      await menu(app, 'Esporta variabili…');
+      await waitFor(() => expect(app.bridge.files.has('/out/x.xlsx')).toBe(true));
+      app.bridge.saveFileResults.push('/out/v1.2');
+      await menu(app, 'Esporta variabili…');
+      await waitFor(() => expect(app.bridge.files.has('/out/v1.2.xlsx')).toBe(true));
+      expect(app.bridge.files.has('/out/x.txt.xlsx')).toBe(false);
+    },
+    T,
+  );
+
+  it(
     'reimportare un file identico: nessun passo di annullamento, progetto non modificato, 0 aggiornate',
     async () => {
       const app = await setup([tag('A', 'Int', '%MW2', 'c')]);

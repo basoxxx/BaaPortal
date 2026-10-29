@@ -15,6 +15,7 @@ import { NO_RANGE, ownOperandResolver, type ResolvedOperand } from '@baaportal/m
 import { formatType, sameName, type DataType, type TypedMember } from '@baaportal/s7-types';
 import { intLiteral, parseAddress, SclError } from './lexer.js';
 import {
+  MAX_ERRORS,
   parse,
   type Call,
   type Expr,
@@ -152,6 +153,7 @@ type Loop = { at: Pos; exit?: string; cont?: string };
 
 class Gen {
   readonly out: { text: string; sclLine: number }[] = [];
+  readonly errors: SclError[] = [];
   private sclLine = 1;
   private labelNo = 1;
   private tempTop: number;
@@ -805,8 +807,18 @@ class Gen {
 
   // ---- istruzioni ----
 
+  /** Ogni istruzione da sola: un errore si registra e si passa alla successiva. */
   stmts(list: Stmt[]): void {
-    for (const s of list) this.stmt(s);
+    for (const s of list) {
+      const depth = this.depth;
+      try {
+        this.stmt(s);
+      } catch (e) {
+        if (!(e instanceof SclError)) throw e;
+        this.depth = depth;
+        this.errors.push(e);
+      }
+    }
   }
 
   /** Il ciclo più interno, per EXIT e CONTINUE. */
@@ -1029,15 +1041,17 @@ const tail = (o: Operand): string => {
 
 export function sclToAwl(text: string, ctx: AwlContext, tempEnd: number): SclAwl {
   const gen = new Gen(ctx, tempEnd);
-  try {
-    gen.stmts(parse(text));
-  } catch (e) {
-    if (!(e instanceof SclError)) throw e;
-    return {
-      source: '',
-      lines: [],
-      diagnostics: [{ line: e.line, col: e.col, message: e.message }],
-    };
+  const { stmts, errors } = parse(text);
+  gen.stmts(stmts);
+  if (errors.length || gen.errors.length) {
+    // Uno per posizione (un carattere sbagliato non dà anche l'errore del parser), in ordine.
+    const seen = new Set<string>();
+    const diagnostics = [...errors, ...gen.errors]
+      .filter((e) => !seen.has(`${e.line}:${e.col}`) && !!seen.add(`${e.line}:${e.col}`))
+      .sort((a, b) => a.line - b.line || a.col - b.col)
+      .slice(0, MAX_ERRORS)
+      .map((e) => ({ line: e.line, col: e.col, message: e.message }));
+    return { source: '', lines: [], diagnostics };
   }
   const plain = gen.out.map((l) => l.text).join('\n');
   // forma canonica come nel KOP; se cambia il numero di righe resta il testo grezzo
