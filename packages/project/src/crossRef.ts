@@ -277,8 +277,71 @@ function hitsOf(ctx: AwlContext, block: CodeBlock, st: Statement, src: string): 
   return hits;
 }
 
+/** La riga `i` (da 0) di una mappa di righe densa (`lines[k].line === k`), o l'ultima. */
+const lineAt = <T>(lines: readonly T[], i: number): T | undefined =>
+  lines[Math.min(i, lines.length - 1)];
+
+/** I punti d'uso di un blocco, ognuno con la voce del suo operando. */
+function blockUses(dev: PlcDevice, block: CodeBlock): [Entry, XrefUse][] {
+  const out: [Entry, XrefUse][] = [];
+  const ctx = createAwlContext(dev, block.id, undefined);
+  const label = blockLabel(block.kind, block.number);
+  kopSources(block, dev).forEach((net, n) => {
+    const { statements } = parseNetwork(net.source, 'international' satisfies Mnemonic);
+    for (const st of statements) {
+      for (const h of hitsOf(ctx, block, st, net.source)) {
+        const e = entryOf(ctx, h.op, textOf(net.source, h.op));
+        if (!e) continue;
+        let line = h.line;
+        let elemId: string | undefined;
+        if (net.scl) line = lineAt(net.scl.lines, h.line - 1)?.sclLine ?? 1;
+        else elemId = lineAt(net.lines, h.line - 1)?.elemId;
+        out.push([
+          e,
+          {
+            blockId: block.id,
+            block: label,
+            language: block.language,
+            network: n + 1,
+            line,
+            instruction: h.instr,
+            access: h.access,
+            ...(elemId ? { elemId } : {}),
+            ...(h.instance ? { instance: h.instance } : {}),
+          },
+        ]);
+      }
+    }
+  });
+  return out;
+}
+
+/**
+ * Ciò che `createAwlContext` legge del dispositivo: tag, UDT e di ogni blocco nome, tipo, numero,
+ * interfaccia, membri o FB di istanza. Il progetto è immutabile (immer): una modifica cambia questi oggetti.
+ */
+const contextParts = (dev: PlcDevice): unknown[] => [
+  dev.tagTables,
+  dev.udts,
+  ...dev.blocks.flatMap((b) => [
+    b.id,
+    b.kind,
+    b.name,
+    b.number,
+    b.kind === 'DB' ? b.members : b.kind === 'IDB' ? b.instanceOf : b.interface,
+  ]),
+];
+// shortcut: un solo contesto ricordato, con due dispositivi alternati si ricalcola tutto; se serve, uno per dispositivo.
+let lastContext: { parts: unknown[] } = { parts: [] };
+/** Punti d'uso per blocco: si ricalcolano solo per i blocchi cambiati o se cambia il contesto. */
+const usesCache = new WeakMap<CodeBlock, { context: object; uses: [Entry, XrefUse][] }>();
+
 /** Tutti gli operandi del programma del dispositivo, ordinati per indirizzo, con i punti d'uso. */
 export function crossReferences(dev: PlcDevice): XrefOperand[] {
+  const parts = contextParts(dev);
+  if (parts.length !== lastContext.parts.length || parts.some((x, i) => x !== lastContext.parts[i]))
+    lastContext = { parts };
+  const context = lastContext;
   const all = new Map<string, XrefOperand & { span?: Entry['span'] }>();
   // Indirizzo → tag, per dare simbolo e tipo agli accessi assoluti.
   const tagOf = new Map<string, Entry>();
@@ -294,46 +357,25 @@ export function crossReferences(dev: PlcDevice): XrefOperand[] {
   }
   for (const block of dev.blocks) {
     if (block.kind === 'DB' || block.kind === 'IDB' || block.mc7?.knowHowLocked) continue;
-    const ctx = createAwlContext(dev, block.id, undefined);
-    const label = blockLabel(block.kind, block.number);
-    kopSources(block, dev).forEach((net, n) => {
-      const { statements } = parseNetwork(net.source, 'international' satisfies Mnemonic);
-      for (const st of statements) {
-        for (const h of hitsOf(ctx, block, st, net.source)) {
-          const e = entryOf(ctx, h.op, textOf(net.source, h.op));
-          if (!e) continue;
-          let line = h.line;
-          let elemId: string | undefined;
-          if (net.scl)
-            line = net.scl.lines.filter((l) => l.line <= h.line - 1).at(-1)?.sclLine ?? 1;
-          else if (net.lines.length)
-            elemId = net.lines.filter((l) => l.line <= h.line - 1).at(-1)?.elemId;
-          const use: XrefUse = {
-            blockId: block.id,
-            block: label,
-            language: block.language,
-            network: n + 1,
-            line,
-            instruction: h.instr,
-            access: h.access,
-            ...(elemId ? { elemId } : {}),
-            ...(h.instance ? { instance: h.instance } : {}),
-          };
-          let cur = all.get(e.key);
-          if (!cur) {
-            const tag = tagOf.get(e.key);
-            cur = {
-              ...e,
-              ...(tag ? { symbol: tag.symbol!, type: tag.type! } : {}),
-              uses: [],
-              overlaps: [],
-            };
-            all.set(e.key, cur);
-          } else if (!cur.symbol && e.symbol) cur.symbol = e.symbol;
-          cur.uses.push(use);
-        }
-      }
-    });
+    let cached = usesCache.get(block);
+    if (cached?.context !== context) {
+      cached = { context, uses: blockUses(dev, block) };
+      usesCache.set(block, cached);
+    }
+    for (const [e, use] of cached.uses) {
+      let cur = all.get(e.key);
+      if (!cur) {
+        const tag = tagOf.get(e.key);
+        cur = {
+          ...e,
+          ...(tag ? { symbol: tag.symbol!, type: tag.type! } : {}),
+          uses: [],
+          overlaps: [],
+        };
+        all.set(e.key, cur);
+      } else if (!cur.symbol && e.symbol) cur.symbol = e.symbol;
+      cur.uses.push(use);
+    }
   }
   const list = [...all.values()].sort((a, b) =>
     a.address.localeCompare(b.address, 'en', { numeric: true }),

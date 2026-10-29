@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useDeferredValue, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { callGraph, findDevice, type CallEdge, type CallGraph } from '@baaportal/project';
 import { useAppStore, useServices } from '../../state/AppContext';
@@ -14,7 +14,10 @@ const byNumber = (a: string, b: string) => a.localeCompare(b, 'en', { numeric: t
 /** Editor «Struttura di richiamo»: dagli OB in giù, o le dipendenze (chi chiama ogni blocco). */
 export function CallStructureView({ editor }: { editor: EditorRef }) {
   const { t } = useTranslation();
-  const dev = useAppStore((s) => (s.doc ? findDevice(s.doc.project, editor.deviceId) : undefined));
+  // Il calcolo segue le modifiche senza bloccare la scrittura negli altri editor.
+  const dev = useDeferredValue(
+    useAppStore((s) => (s.doc ? findDevice(s.doc.project, editor.deviceId) : undefined)),
+  );
   const g = useMemo(() => (dev ? callGraph(dev) : undefined), [dev]);
   const [mode, setMode] = useState<Mode>('calls');
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());

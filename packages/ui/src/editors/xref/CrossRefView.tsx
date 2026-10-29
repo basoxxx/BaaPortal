@@ -1,4 +1,4 @@
-import { useMemo, useState, useSyncExternalStore } from 'react';
+import { useDeferredValue, useMemo, useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { crossReferences, findDevice, type XrefOperand, type XrefUse } from '@baaportal/project';
@@ -24,7 +24,10 @@ export function locationText(t: TFunction) {
 export function CrossRefView({ editor }: { editor: EditorRef }) {
   const { t } = useTranslation();
   const { store } = useServices();
-  const dev = useAppStore((s) => (s.doc ? findDevice(s.doc.project, editor.deviceId) : undefined));
+  // Il calcolo segue le modifiche senza bloccare la scrittura negli altri editor.
+  const dev = useDeferredValue(
+    useAppStore((s) => (s.doc ? findDevice(s.doc.project, editor.deviceId) : undefined)),
+  );
   const all = useMemo(() => (dev ? crossReferences(dev) : []), [dev]);
   const req = useSyncExternalStore(subscribeXrefRequest, xrefRequest);
   // Il filtro scritto vale finché non arriva una richiesta nuova per questo dispositivo.
