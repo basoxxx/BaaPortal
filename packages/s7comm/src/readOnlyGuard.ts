@@ -516,9 +516,33 @@ export function assertOnlineTest(pdu: S7Pdu, pduLength = 240): void {
 }
 
 /**
+ * Controllo della PDU S7 che sta per uscire, su qualunque link (ISO-on-TCP, MPI...): la PDU
+ * intera dall'intestazione 0x32, senza byte in più, con intestazione canonica e accettata dal
+ * filtro del modo: `assertReadOnly` (default), `assertOnlineWrite`, `assertOnlineTest` o
+ * `assertOnlineRestore`. Ogni altra cosa dà FORBIDDEN.
+ */
+export function assertOutgoingPdu(
+  s7: Uint8Array,
+  mode: ConnectionMode = 'read-only',
+  pduLength = 240,
+): void {
+  try {
+    const pdu = decodeS7(s7);
+    if (!sameBytes(s7, encodeS7(pdu))) refuse('intestazione S7 non canonica');
+    if (mode === 'online-write') assertOnlineWrite(pdu);
+    else if (mode === 'online-test') assertOnlineTest(pdu, pduLength);
+    else if (mode === 'online-restore') assertOnlineRestore(pdu);
+    else if (mode === 'read-only') assertReadOnly(pdu);
+    else refuse(`modo "${String(mode)}" sconosciuto`);
+  } catch (e) {
+    if (e instanceof S7Error && e.code === 'FORBIDDEN') throw e;
+    refuse(`PDU in uscita non decodificabile (${e instanceof Error ? e.message : String(e)})`);
+  }
+}
+
+/**
  * Controllo sui byte che stanno per uscire (TPKT, COTP, S7). Ammette solo: COTP CR, COTP DR
- * e COTP DT con EOT che porta una PDU S7 accettata da `assertReadOnly` (default) o, solo in
- * modo `online-write`, da `assertOnlineWrite`. Un frame che non si
+ * e COTP DT con EOT che porta una PDU S7 accettata da `assertOutgoingPdu`. Un frame che non si
  * decodifica, con byte in più, con più frame o di un altro tipo (CC, ER...) dà FORBIDDEN.
  */
 export function assertOutgoingFrame(
@@ -547,14 +571,7 @@ export function assertOutgoingFrame(
         if (payload[0] !== 2 || payload[1] !== 0xf0 || payload[2] !== 0x80) {
           refuse('intestazione COTP DT non canonica');
         }
-        const raw = payload.subarray(3);
-        const pdu = decodeS7(raw);
-        if (!sameBytes(raw, encodeS7(pdu))) refuse('intestazione S7 non canonica');
-        if (mode === 'online-write') assertOnlineWrite(pdu);
-        else if (mode === 'online-test') assertOnlineTest(pdu, pduLength);
-        else if (mode === 'online-restore') assertOnlineRestore(pdu);
-        else if (mode === 'read-only') assertReadOnly(pdu);
-        else refuse(`modo "${String(mode)}" sconosciuto`);
+        assertOutgoingPdu(payload.subarray(3), mode, pduLength);
         return;
       }
       default:

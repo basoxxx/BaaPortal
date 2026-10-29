@@ -3,6 +3,8 @@ import {
   MAX_ITEMS_PER_REQUEST,
   S7Connection,
   assertOnlineWrite,
+  assertOutgoingFrame,
+  assertOutgoingPdu,
   assertReadOnly,
   encodeCompressMemory,
   encodeCopyRamToRom,
@@ -522,6 +524,40 @@ describe('guardedSender e modo', () => {
       'online-write',
     )(frame);
     expect(sends).toHaveLength(1);
+  });
+});
+
+describe('assertOutgoingPdu: la PDU S7 nuda, per ogni link', () => {
+  const w = encodeWriteRequest([
+    { area: 'M', db: 0, start: 0, size: 'BYTE', count: 1, data: Uint8Array.of(1) },
+  ]);
+  const write = encodeS7(job(w.param, w.data));
+  const read = encodeS7(
+    job(encodeReadRequest([{ area: 'M', db: 0, start: 0, size: 'BYTE', count: 1 }])),
+  );
+
+  it('la write var 0x05 in read-only si rifiuta con lo stesso errore del frame TPKT', () => {
+    let fromFrame: unknown;
+    try {
+      assertOutgoingFrame(dt(write), 'read-only');
+    } catch (e) {
+      fromFrame = e;
+    }
+    expect(fromFrame).toMatchObject({ code: 'FORBIDDEN' });
+    expect(() => assertOutgoingPdu(write, 'read-only', 240)).toThrowError(
+      expect.objectContaining({ code: 'FORBIDDEN', message: (fromFrame as Error).message }),
+    );
+    expect(() => assertOutgoingPdu(write, 'online-write', 240)).not.toThrow();
+  });
+
+  it('una lettura passa; byte in coda o intestazione non canonica no', () => {
+    expect(() => assertOutgoingPdu(read, 'read-only', 240)).not.toThrow();
+    expect(() => assertOutgoingPdu(Uint8Array.from([...read, 0]), 'read-only', 240)).toThrowError(
+      expect.objectContaining({ code: 'FORBIDDEN' }),
+    );
+    expect(() => assertOutgoingPdu(dt(read), 'read-only', 240)).toThrowError(
+      expect.objectContaining({ code: 'FORBIDDEN' }),
+    );
   });
 });
 

@@ -29,6 +29,7 @@ export * from './capture/pcap';
 export * from './capture/tcpStreams';
 export * from './transport';
 export * from './readOnlyGuard';
+export * from './link';
 export * from './connection';
 
 export * from './client';

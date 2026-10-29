@@ -2,7 +2,7 @@ import { S7Error } from './errors';
 
 /**
  * Trasporto di byte, indipendente dalla piattaforma. `send` è usato solo dal punto di controllo
- * `S7Connection.sendFrame`, dopo il filtro di sola lettura. I callback si registrano una volta.
+ * `guardedSender` (`link.ts`), dopo il filtro di sola lettura. I callback si registrano una volta.
  */
 export interface Transport {
   send(bytes: Uint8Array): void;
