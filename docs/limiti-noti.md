@@ -309,7 +309,7 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
 - **Valori delle costanti importate.** Non vengono controllati rispetto al loro tipo, come nell'editor a griglia.
 - **xlsx, DOCTYPE.** Un DOCTYPE con sottoinsieme interno non si legge (errore chiaro).
 - **xlsx, ritorni a capo.** Un `\r` dentro un testo non torna identico dopo l'esportazione e la rilettura.
-- **Nomi unici per CPU solo nell'importazione** (`NOME_IN_ALTRA_TABELLA`). Nomi doppi creati a mano in tabelle diverse non vengono segnalati.
+- **Nomi unici per CPU.** L'importazione scarta un nome già presente in un'altra tabella (`NOME_IN_ALTRA_TABELLA`); un doppione creato a mano fra tabelle (variabili, costanti, blocchi, UDT) è segnalato dal controllo del progetto come `NAME_DUPLICATE` su ogni occorrenza.
 - **Nome file.** In esportazione un'estensione digitata che non è `csv` né `xlsx` (fino a 4 caratteri con almeno una lettera, come `x.txt`) è sostituita: `x.xlsx`. Un punto nel nome (`v1.2`) resta e si aggiunge l'estensione.
 
 ### Archivio (.baapz)
