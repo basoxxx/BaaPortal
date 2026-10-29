@@ -30,6 +30,7 @@ export * from './capture/tcpStreams';
 export * from './transport';
 export * from './readOnlyGuard';
 export * from './link';
+export * from './mpi';
 export * from './connection';
 
 export * from './client';

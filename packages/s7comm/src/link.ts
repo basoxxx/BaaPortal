@@ -51,7 +51,7 @@ export function guardedSender(
     // Copia per il registratore presa PRIMA dell'invio: un trasporto che modificasse i byte
     // ricevuti non può alterare ciò che la cattura mostra (sempre i byte approvati).
     const recorded = recorder ? out.slice(4) : undefined;
-    transport.send(out);
+    deliver(transport, out);
     if (recorder && recorded) {
       try {
         recorder.record('tx', recorded);
@@ -60,6 +60,19 @@ export function guardedSender(
       }
     }
   };
+}
+
+/**
+ * Byte di linea per i link che non portano TPKT (adattatore MPI): STX, DLE e frame. Le PDU S7
+ * dentro i frame sono già passate da `assertOutgoingPdu` in `S7Connection`, unico chiamante
+ * di `PduLink.sendPdu`; il resto sono comandi dell'adattatore, senza PDU.
+ */
+export function lineWriter(transport: Transport): (bytes: Uint8Array) => void {
+  return (bytes) => deliver(transport, bytes.slice());
+}
+
+function deliver(transport: Pick<Transport, 'send'>, bytes: Uint8Array): void {
+  transport.send(bytes);
 }
 // END CHOKE POINT
 
