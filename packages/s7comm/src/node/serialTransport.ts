@@ -68,8 +68,14 @@ async function serialPortClass(): Promise<typeof SerialPortClass> {
  */
 export function openSerial(o: SerialSettings): SerialOpener {
   return async (timeoutMs = 5000) => {
-    const SerialPort = await serialPortClass();
     const release = await lease(o.path, timeoutMs);
+    let SerialPort: typeof SerialPortClass;
+    try {
+      SerialPort = await serialPortClass();
+    } catch (e) {
+      release();
+      throw e;
+    }
     return new Promise<Transport>((resolve, reject) => {
       const port = new SerialPort({
         path: o.path,
