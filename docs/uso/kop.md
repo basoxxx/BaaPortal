@@ -19,7 +19,7 @@ Guida breve all'editor a contatti (KOP, piano 4A). Un blocco KOP si disegna; Baa
 ## Che cosa non si può ancora fare
 
 - Nessun box dentro un ramo parallelo né nella logica di un pin: un box va in serie sulla linea principale, o all'inizio di un ramo a T.
-- Cerca/Sostituisci e rinomina dei simboli non modificano i blocchi KOP: _Trova_ li trova nel codice generato ma non si sostituiscono.
+- La rinomina dei simboli aggiorna anche gli operandi del grafico (KOP e FUP). _Trova_ cerca nel codice generato: un risultato dentro un solo operando si può sostituire (cambia l'operando nel grafico); quello che tocca testo solo generato (come `L`, `==I`, `:=`) resta non modificabile.
 - Non si converte un segmento AWL in KOP (né il contrario): arriva nel piano 4C. Un segmento con solo AWL si vede in AWL, sola lettura. Il passaggio KOP ↔ FUP c'è, in prova (`docs/uso/fup-scl.md`).
 - Un blocco KOP con errori non entra nella sorgente AWL esportata.
 

@@ -5,3 +5,4 @@ export * from './catalog.js';
 export * from './validate.js';
 export * from './toAwl.js';
 export * from './block.js';
+export * from './operands.js';

@@ -1,19 +1,47 @@
-// Rinomina nel codice AWL salvato: aggiorna i `source` delle reti di tutti i blocchi di codice.
-// Il testo salvato usa i mnemonici internazionali. Le sorgenti esterne non si toccano (sono file indipendenti).
+// Rinomina nel codice salvato: aggiorna i `source` delle reti AWL e gli operandi del grafico (`lad`)
+// di quelle KOP/FUP. Il testo salvato usa i mnemonici internazionali. Le sorgenti esterne non si
+// toccano (sono file indipendenti).
 import { renameInSource, type RenameTarget } from '@baaportal/awl';
+import { mapOperands, type OperandRole } from '@baaportal/ladfbd';
 import { parseType, sameName, validateS7Name, type DataType } from '@baaportal/s7-types';
-import type { CodeBlock, Member, PlcDevice, Udt } from './model';
+import { kopSources } from './kopSources';
+import { isGraphic, type CodeBlock, type Member, type PlcDevice, type Udt } from './model';
 
 // Stessa chiave di sameName.
 const nameKey = (name: string): string => name.normalize('NFC').toLowerCase();
 const MAX_DEPTH = 24;
 
-// Solo i blocchi AWL: il testo di SCL, KOP e FUP non e AWL e non va analizzato come tale.
-// Le altre lingue avranno la loro rinomina nelle tappe che le introducono.
+// AWL, KOP e FUP: il testo di SCL non e AWL e non va analizzato come tale.
 const codeBlocks = (device: PlcDevice): CodeBlock[] =>
   device.blocks.filter(
-    (b): b is CodeBlock => b.kind !== 'DB' && b.kind !== 'IDB' && b.language === 'AWL',
+    (b): b is CodeBlock =>
+      b.kind !== 'DB' && b.kind !== 'IDB' && (b.language === 'AWL' || isGraphic(b.language)),
   );
+
+// Un operando del grafico si riscrive come operando di un'istruzione AWL, cosi valgono le stesse
+// regole sui token (`"Motore"` non e `"Motore2"`, `#a` non e un simbolo).
+const PREFIX: Record<OperandRole, string> = { op: 'L ', call: 'CALL ', db: 'OPN ' };
+
+function renameOperand(
+  value: string,
+  role: OperandRole,
+  target: RenameTarget,
+  newName: string,
+): string {
+  const out = renameInSource(PREFIX[role] + value, target, newName, 'international');
+  return out.slice(PREFIX[role].length);
+}
+
+/** Nome di un parametro di CALL dopo la rinomina: lo stesso test di `renameInSource` sulla chiamata. */
+function renamePin(instance: string, name: string, target: RenameTarget, newName: string): string {
+  const out = renameInSource(
+    `CALL ${instance}\n(\n${name} := 0\n);`,
+    target,
+    newName,
+    'international',
+  );
+  return /\(\n([\s\S]*) := 0\n\);$/.exec(out)?.[1] ?? name;
+}
 
 type Section = 'input' | 'output' | 'inOut' | 'static' | 'temp';
 const SECTIONS: Section[] = ['input', 'output', 'inOut', 'static', 'temp'];
@@ -33,13 +61,40 @@ function namedTypeOf(m: Member): string | undefined {
 }
 
 /** Applica `target` alle reti dei blocchi indicati. */
-function rewrite(blocks: CodeBlock[], target: RenameTarget, newName: string): void {
+function rewrite(
+  device: PlcDevice,
+  blocks: CodeBlock[],
+  target: RenameTarget,
+  newName: string,
+): void {
   const key = nameKey(target.oldName);
   for (const b of blocks) {
+    let lad = false;
     for (const n of b.networks) {
+      if (n.lad && isGraphic(b.language)) {
+        // Scorciatoia: se il nome vecchio non compare nel grafico non c'e niente da fare.
+        if (!nameKey(JSON.stringify(n.lad)).includes(key)) continue;
+        n.lad = mapOperands(
+          n.lad,
+          (v, role) => renameOperand(v, role, target, newName),
+          target.kind === 'callParam'
+            ? (box, name) =>
+                box.box === 'CALL' ? renamePin(box.instance, name, target, newName) : name
+            : undefined,
+        );
+        lad = true;
+        continue;
+      }
       // Scorciatoia: se il nome vecchio non compare nel testo non c'e niente da fare.
       if (!nameKey(n.source).includes(key)) continue;
       n.source = renameInSource(n.source, target, newName, 'international');
+    }
+    // La sorgente generata segue il grafico (come dopo ogni modifica dell'editor).
+    if (lad) {
+      const sources = kopSources(b, device);
+      b.networks.forEach((n, i) => {
+        n.source = sources[i]?.source ?? n.source;
+      });
     }
   }
 }
@@ -50,7 +105,7 @@ const usable = (oldName: string, newName: string): boolean =>
 /** Tag, costante, blocco o DB: i riferimenti simbolici `"Nome"`. */
 export function renameSymbolInCode(device: PlcDevice, oldName: string, newName: string): void {
   if (!usable(oldName, newName)) return;
-  rewrite(codeBlocks(device), { kind: 'symbol', oldName }, newName);
+  rewrite(device, codeBlocks(device), { kind: 'symbol', oldName }, newName);
 }
 
 /**
@@ -105,6 +160,7 @@ export function renameMemberInCode(
     if (!chain) return;
     const path = chain.slice(0, -1).map((m) => m.name);
     rewrite(
+      device,
       codeBlocks(device),
       { kind: 'member', root: 'symbol', rootName: block.name, path, oldName },
       newName,
@@ -133,6 +189,7 @@ function renameInterfaceMember(
   const parents = chain.slice(0, -1).map((m) => m.name);
   // Dentro il blocco stesso: locale (o percorso con radice locale se e annidato).
   rewrite(
+    device,
     [block],
     parents.length === 0
       ? { kind: 'local', oldName }
@@ -162,6 +219,7 @@ function renameInterfaceMember(
               .map((m) => m.name)
           : [];
       rewrite(
+        device,
         [caller],
         {
           kind: 'callParam',
@@ -223,6 +281,7 @@ function renameNestedMember(
 
   const emit = (root: Root, prefix: string[], scope: CodeBlock[]) => {
     rewrite(
+      device,
       scope,
       {
         kind: 'member',
