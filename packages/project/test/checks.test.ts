@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseType, type DataType } from '@baaportal/s7-types';
 import {
+  type TagTable,
   checkDevice,
   createCodeBlock,
   createGlobalDb,
@@ -78,7 +79,13 @@ describe('checkDevice: casi base', () => {
 
   it('lo stesso nome in due tabelle di variabili: errore su entrambi', () => {
     const d = fresh();
-    const t2 = { ...d.tagTables[0]!, id: newId(), name: 'Altra', tags: [], constants: [] };
+    const t2: TagTable = {
+      ...d.tagTables[0]!,
+      id: newId(),
+      name: 'Altra',
+      tags: [],
+      constants: [],
+    };
     d.tagTables.push(t2);
     d.tagTables[0]!.tags.push(tag('Pompa', 'Bool', '%M0.0'));
     t2.tags.push(tag('POMPA', 'Bool', '%M0.1'));
