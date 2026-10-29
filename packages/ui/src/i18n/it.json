@@ -210,6 +210,8 @@
     "options.settings": "Impostazioni",
     "tools.crossReferences": "Riferimenti incrociati",
     "tools.callStructure": "Struttura di richiamo",
+    "tools.assignmentList": "Elenco di assegnazione",
+    "tools.resources": "Risorse",
     "window.splitVertical": "Dividi area di lavoro in verticale",
     "window.splitHorizontal": "Dividi area di lavoro in orizzontale",
     "window.closeAllEditors": "Chiudi tutti gli editor",
@@ -1808,6 +1810,41 @@
       "call": "Richiamo",
       "open": "Apertura"
     }
+  },
+  "assign": {
+    "title": "Elenco di assegnazione",
+    "area": "Area",
+    "areas": {
+      "I": "Ingressi (I)",
+      "Q": "Uscite (Q)",
+      "M": "Merker (M)",
+      "T": "Temporizzatori (T)",
+      "C": "Contatori (C)"
+    },
+    "usedBytes": "{{used}} byte usati su {{limit}}",
+    "usedElements": "{{used}} usati su {{limit}}",
+    "legend": "R lettura, W scrittura, RW entrambe; • tag nella tabella dei simboli; contorno rosso: operandi sovrapposti. Clic su un bit: riferimenti incrociati.",
+    "byte": "Byte",
+    "group": "Elementi",
+    "tag": "tag {{names}}",
+    "overlap": "sovrapposto",
+    "beyond": "oltre la CPU",
+    "empty": "Nessun indirizzo usato in quest’area."
+  },
+  "resources": {
+    "title": "Risorse",
+    "estimate": "Valori stimati dai blocchi compilati: la memoria di caricamento è la dimensione del blocco, quella di lavoro la sua sezione MC7. STEP 7 può dare numeri diversi.",
+    "block": "Blocco",
+    "load": "Memoria di caricamento (byte)",
+    "work": "Memoria di lavoro (byte)",
+    "local": "Dati locali (byte)",
+    "total": "Totale",
+    "uncompiled": "da compilare",
+    "paths": "Dati locali lungo i percorsi di chiamata",
+    "path": "Percorso più costoso",
+    "partial": "parziale: blocchi da compilare",
+    "overLimit": "oltre il limite della CPU",
+    "areas": "Aree usate"
   },
   "callTree": {
     "title": "Struttura di richiamo",

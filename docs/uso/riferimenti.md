@@ -39,4 +39,18 @@ Guida breve alle informazioni sul programma (tappa 7A): dove si usa ogni operand
 4. **Dipendenze.** La seconda vista mostra ogni blocco con, sotto, chi lo chiama.
 5. **Clic.** Sul nome apre il blocco; sul punto della chiamata apre il blocco che chiama, alla chiamata.
 
+## Elenco di assegnazione
+
+1. **Aprirlo.** _Strumenti → Elenco di assegnazione_ o il menu dell'albero (su un PLC o un blocco).
+2. **Area.** Scegli Ingressi, Uscite, Merker, Temporizzatori o Contatori. In alto: quanti byte (o elementi per T e C) il programma usa su quelli della CPU.
+3. **La griglia.** Una riga per ogni byte usato o con un tag, otto celle per i bit. Una cella dice se il bit è letto (R), scritto (W) o entrambe (RW); il punto `•` indica un tag della tabella dei simboli; il contorno rosso, operandi che si sovrappongono (`%MW10` con `%M10.3`). A destra, le colonne B, W e D mostrano l'accesso con operandi a byte, parola e doppia parola che coprono il byte. Un byte oltre il limite della CPU è segnato «oltre la CPU».
+4. **Clic su una cella.** Apre i riferimenti incrociati filtrati su quell'indirizzo.
+
+## Risorse
+
+1. **Aprirle.** _Strumenti → Risorse_ o il menu dell'albero.
+2. **Blocchi.** Per ogni blocco la memoria di caricamento, quella di lavoro e i dati locali (TEMP), con il totale e il limite di memoria di lavoro della CPU. Un blocco che non si compila è «da compilare». I valori sono stime dai blocchi compilati.
+3. **Dati locali per percorso.** Per ogni OB, il percorso di chiamata che somma più dati locali, col limite della CPU; se lo supera compare l'avviso «oltre il limite della CPU».
+4. **Aree usate.** I, Q, M, T e C usati contro i limiti della CPU.
+
 I limiti sono in [limiti noti](../limiti-noti.md#informazioni-sul-programma-piano-7a).

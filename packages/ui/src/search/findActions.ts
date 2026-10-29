@@ -15,7 +15,14 @@ export function activeObjectRef(s: AppState): ObjectRef | null {
   const key = s.workArea.panes[s.workArea.focusedPane];
   const e = s.workArea.editors.find((x) => x.key === key);
   if (!e) return null;
-  if (e.kind === 'onlineDiag' || e.kind === 'crossRef' || e.kind === 'callStructure') return null;
+  if (
+    e.kind === 'onlineDiag' ||
+    e.kind === 'crossRef' ||
+    e.kind === 'callStructure' ||
+    e.kind === 'assignment' ||
+    e.kind === 'resources'
+  )
+    return null;
   if (e.kind === 'allTags') return { kind: 'device', deviceId: e.deviceId };
   return { kind: e.kind === 'compare' ? 'block' : e.kind, deviceId: e.deviceId, id: e.objectId };
 }

@@ -21,7 +21,13 @@ import { commands } from '../../commands/commands';
 import { areaOfItem, isStandardTable } from '../objectActions';
 import { useMnemonic } from '../../editors/awl/mnemonicPreference';
 import { editorOfNode } from '../../state/workArea';
-import { blockFilter, openCallStructure, openCrossRef } from '../../editors/xref/xrefActions';
+import {
+  blockFilter,
+  openAssignment,
+  openCallStructure,
+  openCrossRef,
+  openResources,
+} from '../../editors/xref/xrefActions';
 import {
   blockNodesOf,
   compileProgram,
@@ -566,6 +572,16 @@ export function ProjectTree() {
               id: 'callStructure',
               label: t('commands.tools.callStructure'),
               run: () => openCallStructure(store, parsed.dev),
+            },
+            {
+              id: 'assignmentList',
+              label: t('commands.tools.assignmentList'),
+              run: () => openAssignment(store, parsed.dev),
+            },
+            {
+              id: 'resources',
+              label: t('commands.tools.resources'),
+              run: () => openResources(store, parsed.dev),
             },
           ]
         : []),

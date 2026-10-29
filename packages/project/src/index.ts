@@ -17,3 +17,5 @@ export * from './awlToGraphic';
 export * from './graphicToAwl';
 export * from './crossRef';
 export * from './callGraph';
+export * from './assignment';
+export * from './resources';

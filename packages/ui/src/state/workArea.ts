@@ -10,7 +10,9 @@ export type EditorKind =
   | 'compare'
   | 'onlineDiag'
   | 'crossRef'
-  | 'callStructure';
+  | 'callStructure'
+  | 'assignment'
+  | 'resources';
 export interface EditorRef {
   /** `${kind}:${deviceId}:${objectId}`; "Mostra tutte le variabili" ha objectId ''. */
   key: string;
@@ -74,6 +76,8 @@ export function nodeIdOfEditor(e: EditorTarget): string {
       return ids.folder(e.deviceId, 'online-diag');
     case 'crossRef':
     case 'callStructure':
+    case 'assignment':
+    case 'resources':
       return ids.folder(e.deviceId, 'prog-info');
   }
 }
