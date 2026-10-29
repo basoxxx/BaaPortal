@@ -136,7 +136,8 @@ describe('sclToAwl: diagnostiche', () => {
     expect(diag('a := (1 + ;').line).toBe(1);
     expect(diag('x := y\na := 1;').line).toBe(2);
     expect(diag('a := a MOD 2;').message).toContain('INT_TO_DINT');
-    expect(diag('CASE a OF 1..3: b := 1; END_CASE;').message).toContain('intervalli');
+    expect(diag('CASE a OF 1..3: b := 1; 3: b := 2; END_CASE;').message).toContain('ripetuto');
+    expect(diag('CASE a OF 5..3: b := 1; END_CASE;').message).toContain('vuoto');
     expect(diag('CASE a OF 1: b := 1; 1: b := 2; END_CASE;').message).toContain('ripetuto');
     expect(diag('a := 1.5;').line).toBe(1);
     expect(diag('a := 40000;').message).toMatch(/DINT|tipi diversi/i);

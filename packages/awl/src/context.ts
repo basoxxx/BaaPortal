@@ -35,7 +35,8 @@ export interface AwlSymbolInfo {
 }
 
 export interface AwlContext {
-  owner: { kind: 'OB' | 'FB' | 'FC'; iface: AwlInterface };
+  /** `name`: nome del blocco, se noto (in SCL il nome di una FC è il suo valore di ritorno). */
+  owner: { kind: 'OB' | 'FB' | 'FC'; iface: AwlInterface; name?: string };
   /** Tag o costante globale (il confronto dei nomi e' `sameName`). */
   symbol(
     name: string,

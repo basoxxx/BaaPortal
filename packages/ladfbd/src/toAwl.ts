@@ -109,6 +109,20 @@ export function normalizeInstance(instance: string): string {
   return m[2] === undefined ? part(m[1]!) : `${part(m[1]!)}, ${part(m[2])}`;
 }
 
+/**
+ * Righe AWL di una CALL con i parametri `nome := operando` già in ordine, uno per riga (§4.11);
+ * senza parametri resta la sola `CALL`. La usa anche la traduzione SCL.
+ */
+export function callLines(instance: string, params: string[]): string[] {
+  if (params.length === 0) return [`CALL ${instance}`];
+  return [
+    `CALL ${instance}`,
+    '(',
+    ...params.map((p, i) => (i < params.length - 1 ? `${p},` : p)),
+    ');',
+  ];
+}
+
 /** Pin di un box CALL nell'ordine dell'interfaccia (se nota), poi gli altri nell'ordine del box. */
 function callPinOrder(b: LadBox, iface: string[] | undefined): string[] {
   const own = [...new Set([...Object.keys(b.pins), ...Object.keys(b.boolPins)])];
@@ -239,9 +253,7 @@ class Emitter {
       const value = bits?.get(name) ?? (b.pins[name] ?? '').trim();
       if (value) params.push(`${name} := ${value}`);
     }
-    this.push(b.id, `CALL ${instance}`);
-    if (params.length === 0) return;
-    this.push(b.id, '(', ...params.map((p, i) => (i < params.length - 1 ? `${p},` : p)), ');');
+    this.push(b.id, ...callLines(instance, params));
   }
 
   /**
