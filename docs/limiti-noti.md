@@ -363,7 +363,7 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
 - **Statici interni non documentati.** I manuali pubblici non riportano i dati statici interni di TON, TOF, TP e degli altri SFB. Il layout di un'istanza si ricava solo da un blocco reale importato che usa quell'SFB, per esempio dal kit del PLC.
 - **Senza un blocco reale, errore chiaro** (`LAYOUT_SFB_SCONOSCIUTO`). Valgono per esempio per un FB scritto a mano con un TON in multi-istanza, un DB d'istanza di un SFB, o un blocco che li richiama.
 - **Valori iniziali presi dal campione.** Un nuovo DB d'istanza di un SFB prende i valori iniziali degli statici dal blocco reale usato come campione, con una nota che lo dice.
-- **Numeri di timer e contatori** non vengono confrontati con i limiti della CPU.
+- **Numeri di timer e contatori** oltre i limiti della CPU del catalogo (`T 256` su una CPU da 256) sono un errore `ADDRESS_OUT_OF_RANGE` nel controllo AWL e nella compilazione, come le aree I/Q/M; nelle tabelle delle variabili lo stesso codice segnala l'indirizzo.
 
 ### Blocchi importati
 
