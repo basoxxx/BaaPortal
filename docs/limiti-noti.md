@@ -183,6 +183,16 @@ Si crea solo con _Funzioni sperimentali_ attive. Il testo SCL si traduce in AWL 
 - **Errori.** Si riporta solo il primo errore; un `;` mancante si segnala sulla riga dopo. Gli errori del controllo AWL sul codice generato si riportano alla riga SCL solo nei messaggi di compilazione, non nell'editor.
 - **Editor semplice.** Niente evidenziazione, completamento né osservazione. La rinomina dei simboli non aggiorna il testo SCL. La scrittura negli ingressi di una FC non è controllata.
 
+## Adattatore MPI (piano 3M)
+
+- **Mai provato su un adattatore reale.** Il protocollo del PC Adapter (varianti v1 e v2) è scritto dalla documentazione e dai commenti pubblici di libnodave, senza catture né prove. I test girano contro un adattatore finto (`packages/s7-server/src/mpiAdapter.ts`) scritto dalle stesse fonti, quindi non trovano un errore di lettura delle fonti.
+- **Punti non confermati dalle fonti:** tempi e ripetizioni del framing, chi vince se PC e adattatore trasmettono insieme, reazione a un BCC sbagliato, significato di vari byte del blocco di configurazione (velocità del bus e HSA sono le posizioni più probabili), risposta esatta all'inizializzazione v2, contenuto delle risposte alla chiusura.
+- **HSA nella variante v2.** Si scrive il valore scelto (31 di serie); libnodave usa sempre 15. Se un adattatore v2 non si inizializza, provare HSA 15.
+- **Variante v3** (quella di STEP 7, frame `7E` con CRC16): non fatta. Un adattatore che parla solo v3 non risponde.
+- **Cloni USB-COM** non verificati: funzionano solo se parlano lo stesso protocollo del PC Adapter seriale.
+- **Una connessione alla volta** per adattatore. La PDU proposta è di 240 byte.
+- **Non supportati:** PC Adapter USB Siemens, CP 5611/5711, PPI (S7-200).
+
 ## Simulatore (piano 2A)
 
 Le scelte sono descritte in `docs/protocollo/sim.md` (§4.1 per la semantica). Tutte restano **non confermate** da una CPU reale.

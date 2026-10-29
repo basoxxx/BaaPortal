@@ -14,9 +14,21 @@ In caso di problemi, salva anche il progetto (`.baap`) e, se è possibile, il fi
 
 ## Prima di iniziare
 
-- [ ] Annota il modello della CPU (numero d'ordine e firmware) e come è collegata: Ethernet integrata, CP 343-1 o gateway RFC 1006.
+- [ ] Annota il modello della CPU (numero d'ordine e firmware) e come è collegata: Ethernet integrata, CP 343-1, gateway RFC 1006 o adattatore MPI seriale/USB-COM (con marca e modello dell'adattatore).
 - [ ] Fai un backup del programma della CPU con lo strumento che usi di solito, prima di qualsiasi prova della parte B.
 - [ ] Installa BaaPortal 1.0.0 da _Releases_ su GitHub. Al primo avvio vanno autorizzati Windows («Esegui comunque») e macOS (vedi le note di rilascio).
+
+## M. Adattatore MPI (solo se colleghi la CPU con l'adattatore seriale o USB-COM)
+
+Prima della parte A, con la CPU ferma o non critica:
+
+1. [ ] **Porta.** In _Dispositivi accessibili_, tipo _Adattatore MPI_: la porta dell'adattatore compare nell'elenco. Annota il nome (COMx o /dev/…).
+2. [ ] **Adattatore.** _Cerca_ con i valori predefiniti (38400, dispari, bus 187,5 kbit/s, variante automatica): compare l'elenco degli indirizzi del bus, con quello della CPU. Se l'adattatore non risponde, riprova con la variante v1 e poi v2, e annota quale funziona.
+3. [ ] **Collegamento.** _Collega_ all'indirizzo della CPU: la barra di stato mostra modulo e modo.
+4. [ ] **Stacco.** Durante il collegamento stacca il cavo dalla CPU: compare un messaggio chiaro e l'app torna offline, senza bloccarsi.
+5. [ ] Poi fai le parti A e B con questo collegamento.
+
+Se qualcosa non va, annota il messaggio esatto, la variante e le impostazioni usate: il protocollo dell'adattatore è scritto dalla documentazione pubblica e non è mai stato provato su un adattatore vero.
 
 ## A. Sola lettura (va bene anche su una CPU in produzione, a macchina ferma o non critica)
 
