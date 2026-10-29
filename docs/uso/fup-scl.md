@@ -29,7 +29,7 @@ _Impostazioni → Funzioni sperimentali_. Da quel momento, in _Inserisci → Nuo
    ```
 
 3. **Operandi.** Le variabili dell'interfaccia si scrivono con o senza `#`, i simboli globali tra virgolette (`"Motore"`) e gli indirizzi come `M0.0`, `MW10` o `MD20`. Elementi e membri si scrivono con indici costanti: `#valori[3]`, `#asse.pos`, `"Dati".ricetta[2].tempo`.
-4. **Tipi e costanti.** BOOL, BYTE, WORD, DWORD, INT, DINT e REAL. Le costanti si scrivono anche in esadecimale o binario (`16#FF`, `2#1010`) o col tipo (`INT#5`, `W#16#00FF`, `L#100000`). Fra tipi diversi si converte con le funzioni `…_TO_…` (per esempio `DINT_TO_INT`, `INT_TO_WORD`).
+4. **Tipi e costanti.** BOOL, BYTE, WORD, DWORD, INT, DINT e REAL. Le costanti si scrivono anche in esadecimale o binario (`16#FF`, `2#1010`) o col tipo (`INT#5`, `W#16#00FF`, `L#100000`). Fra tipi diversi si converte con le funzioni `…_TO_…` (per esempio `DINT_TO_INT`, `INT_TO_WORD`). `MD` non è mai REAL da solo: per leggerlo come REAL usa `DWORD_TO_REAL`.
 5. **Chiamate.** Una FC si chiama col suo nome e i parametri per nome, `:=` per gli ingressi e `=>` per le uscite: `"Scala"(ingresso := #grezzo, fuori => #valore);`. Se la FC restituisce un valore si usa in un'espressione: `#v := "Somma"(a := 1, b := 2) * 2;`. Un FB si chiama col suo DB di istanza, `"Nastro_DB"(avvio := TRUE);`, o come multi-istanza, `#nastro(avvio := TRUE);`.
 6. **Cicli.** Dentro FOR, WHILE e REPEAT, `EXIT;` esce dal ciclo e `CONTINUE;` passa al giro dopo. Nel CASE un ramo può avere un intervallo: `1..5:`.
 7. **Errori.** Il primo errore compare sotto il testo come «Riga N: …» e blocca la compilazione.

@@ -69,6 +69,47 @@ describe('blocchi SCL compilati in AWL', () => {
   });
 });
 
+describe('SCL: BYTE calcolati e restituiti passano a parametri BYTE', () => {
+  it('FC con ingresso e ritorno BYTE nel simulatore', () => {
+    const dev = makeDevice(seq('b'));
+    dev.blocks.length = 0;
+    const f = createCodeBlock({ kind: 'FC', number: 32, name: 'FByte', language: 'SCL' });
+    f.interface.input.push(member('B', 'Byte'), member('X', 'Bool'));
+    f.interface.returnType = 'Byte';
+    f.networks[0]!.source = 'FByte := B OR 1;';
+    const ob = createCodeBlock({ kind: 'OB', number: 1, name: 'Main', language: 'SCL' });
+    ob.networks[0]!.source = [
+      'MB0 := "FByte"(B := MB10 AND 16#0F, X := TRUE);',
+      'MB1 := "FByte"(B := NOT MB0, X := TRUE);',
+      'M2.0 := "FByte"(B := MB0, X := TRUE) = 16#07;',
+    ].join('\n');
+    dev.blocks.push(f, ob);
+    const cpu = new SimCpu({
+      cpuTypeId: 'cpu-315-2-pn-dp',
+      props: {
+        maxCycleMs: 150,
+        minCycleMs: 0,
+        clockMemory: { enabled: false, byte: 0 },
+        retentivity: { mBytes: 16, timers: 2, counters: 2 },
+        cyclicInterruptMs: 100,
+      },
+    });
+    for (const b of dev.blocks) {
+      const r = blockToMc7File(b, dev, cpu315pn, now);
+      expect(
+        r.diagnostics.filter((d) => d.severity === 'error'),
+        b.name,
+      ).toEqual([]);
+      cpu.loadBlock(r.file!);
+    }
+    cpu.memory.M[10] = 0xa6;
+    cpu.run();
+    expect(cpu.cycle().ok).toBe(true);
+    expect([cpu.memory.M[0], cpu.memory.M[1]]).toEqual([0x07, 0xf9]);
+    expect(cpu.memory.M[2]! & 1).toBe(1);
+  });
+});
+
 describe('SCL 1.1 nel simulatore: chiamate, valore di ritorno, ARRAY e STRUCT', () => {
   const struct = (name: string, members: ReturnType<typeof member>[]) => ({
     ...member(name, 'Struct'),

@@ -108,6 +108,58 @@ describe('sclToAwl 1.1: AWL generato', () => {
   });
 });
 
+describe('sclToAwl 1.1: temporanei BYTE e MD', () => {
+  const byteFc = {
+    name: 'FByte',
+    kind: 'FC' as const,
+    number: 20,
+    iface: emptyIface({
+      input: [m('B', el('Byte')), m('X', el('Bool'))],
+      returnType: el('Byte'),
+    }),
+  };
+  const byteFb = {
+    name: 'FBy',
+    kind: 'FB' as const,
+    number: 21,
+    iface: emptyIface({ input: [m('B', el('Byte'))], output: [m('O', el('Byte'))] }),
+  };
+  const byteIdb = { name: 'FBy_DB', kind: 'IDB' as const, number: 21, instanceOf: 'FBy' };
+  const bctx = {
+    ...ctx,
+    block: (ref: Parameters<typeof ctx.block>[0]) =>
+      [byteFc, byteFb, byteIdb].find((b) =>
+        'name' in ref ? b.name === ref.name : b.kind === ref.kind && b.number === ref.number,
+      ) ?? ctx.block(ref),
+  };
+  const bok = (text: string) => {
+    const out = sclToAwl(text, bctx, TEMP_END);
+    expect(out.diagnostics).toEqual([]);
+    expect(checkBlockCode([out.source], bctx, 'international')).toEqual([]);
+    return out.source;
+  };
+
+  it('un BYTE calcolato o restituito passa come LB a un parametro BYTE', () => {
+    const s = bok(
+      'bt := "FByte"(B := bt AND 16#0F, X := x); "FBy_DB"(B := NOT bt, O => bt); x := "FByte"(B := bt, X := TRUE) = 16#FF;',
+    );
+    has(s, 'B := %LB2', 'RET_VAL := %LB', 'T %LB2');
+  });
+
+  it('i temporanei a parola dopo un BYTE restano su indirizzi pari', () => {
+    const s = bok('a := WORD_TO_INT(BYTE_TO_WORD("FByte"(B := bt, X := x))) + ConRet(X := r);');
+    has(s, 'RET_VAL := %LB2', 'RET_VAL := %LW4');
+    expect(s).not.toMatch(/L[WD] [0-9]*[13579]\b/);
+  });
+
+  it('MD non diventa REAL dal contesto; la conversione è esplicita', () => {
+    expect(diag('r := MD0;').message).toMatch(/DINT_TO_REAL.*DWORD_TO_REAL/);
+    expect(diag('r := MD0 * 2;').message).toContain('Tipi diversi');
+    ok('MD0 := r;');
+    ok('r := DWORD_TO_REAL(MD0); MD4 := REAL_TO_DWORD(r);');
+  });
+});
+
 describe('sclToAwl 1.1: diagnostiche', () => {
   it('stringhe di bit, costanti, cicli', () => {
     expect(diag('w := w + 1;').message).toContain('WORD');
@@ -203,7 +255,7 @@ describe('sclToAwl 1.1: risultati nel simulatore', () => {
 
   it('REAL verso INT con ROUND e TRUNC, anche oltre INT', () => {
     const v = run(
-      'MW0 := DINT_TO_INT(ROUND(MD4)); MW2 := DINT_TO_INT(TRUNC(MD4)); MW8 := DINT_TO_INT(ROUND(MD12));',
+      'MW0 := DINT_TO_INT(ROUND(DWORD_TO_REAL(MD4))); MW2 := DINT_TO_INT(TRUNC(DWORD_TO_REAL(MD4))); MW8 := DINT_TO_INT(ROUND(DWORD_TO_REAL(MD12)));',
       (v) => {
         v.setFloat32(4, -2.6);
         v.setFloat32(12, 40000.4);

@@ -51,7 +51,7 @@ const SUFFIX: Record<Num, string> = {
   DINT: 'D',
   REAL: 'R',
 };
-const SIZE: Record<Num, number> = { BYTE: 2, WORD: 2, DWORD: 4, INT: 2, DINT: 4, REAL: 4 };
+const SIZE: Record<Num, number> = { BYTE: 1, WORD: 2, DWORD: 4, INT: 2, DINT: 4, REAL: 4 };
 /** Intervallo dei valori interi di ogni tipo. */
 const RANGE: Partial<Record<Ty, [bigint, bigint]>> = {
   INT: [-32768n, 32767n],
@@ -92,6 +92,8 @@ const CONV: Record<string, [Num, Num, string[]]> = {
   INT_TO_WORD: ['INT', 'WORD', []],
   WORD_TO_INT: ['WORD', 'INT', []],
   DINT_TO_DWORD: ['DINT', 'DWORD', []],
+  DWORD_TO_REAL: ['DWORD', 'REAL', []],
+  REAL_TO_DWORD: ['REAL', 'DWORD', []],
   DWORD_TO_DINT: ['DWORD', 'DINT', []],
   DWORD_TO_WORD: ['DWORD', 'WORD', []],
   WORD_TO_BYTE: ['WORD', 'BYTE', ['AW W#16#FF']],
@@ -100,6 +102,7 @@ const CONV: Record<string, [Num, Num, string[]]> = {
   BYTE_TO_DWORD: ['BYTE', 'DWORD', ['AD DW#16#FF']],
 };
 const HINT: Partial<Record<string, string>> = {
+  'DINT→REAL': 'DINT_TO_REAL (valore) o DWORD_TO_REAL (bit)',
   'REAL→DINT': 'ROUND o TRUNC',
   'REAL→INT': 'DINT_TO_INT(ROUND(…)) o DINT_TO_INT(TRUNC(…))',
 };
@@ -182,8 +185,14 @@ class Gen {
       this.tempTop += 1;
       return `L ${at}.0`;
     }
-    this.tempTop += SIZE[ty];
-    return `${SIZE[ty] === 2 ? 'LW' : 'LD'} ${at}`;
+    if (ty === 'BYTE') {
+      this.tempTop += 1;
+      return `LB ${at}`;
+    }
+    // parole e doppie parole stanno su indirizzi pari
+    const even = at + (at % 2);
+    this.tempTop = even + SIZE[ty];
+    return `${SIZE[ty] === 2 ? 'LW' : 'LD'} ${even}`;
   }
 
   private withTemp<T>(ty: Num, use: (addr: string) => T): T {
@@ -193,7 +202,7 @@ class Gen {
   // ---- operandi e tipi ----
 
   /** `hint` sceglie il tipo di un indirizzo che ne ammette più d'uno (MW: INT o WORD). */
-  private resolve(o: Operand, hint?: Ty): { awl: string; ty: Ty; constant: boolean } {
+  private resolve(o: Operand, hint?: Ty, dest = false): { awl: string; ty: Ty; constant: boolean } {
     if (o.k === 'temp') return { awl: o.text, ty: o.ty as Ty, constant: false };
     if (o.k === 'addr') {
       const a = parseAddress(o.text);
@@ -206,7 +215,7 @@ class Gen {
               ? hint === 'WORD'
                 ? 'WORD'
                 : 'INT'
-              : hint === 'DWORD' || hint === 'REAL'
+              : hint === 'DWORD' || (dest && hint === 'REAL')
                 ? hint
                 : 'DINT';
       return { awl: a.awl, ty, constant: false };
@@ -615,7 +624,7 @@ class Gen {
   /** Il parametro attuale di un'uscita o di un ingresso/uscita: una variabile del tipo giusto. */
   private variable(e: Expr, ty: Ty, formal: string): string {
     if (!isOperand(e) || e.k === 'temp') return fail(e, `Per ${formal} serve una variabile`);
-    const r = this.resolve(e, ty);
+    const r = this.resolve(e, ty, true);
     if (r.constant) fail(e, `Non si può scrivere in una costante: ${e.text}`);
     if (r.ty !== ty) mismatch(e, ty, r.ty);
     return r.awl;
@@ -671,7 +680,7 @@ class Gen {
     switch (s.k) {
       case 'assign': {
         // un indirizzo prende il tipo dell'espressione se ci sta (MW10 := una WORD)
-        const dst = this.resolve(s.dst, s.dst.k === 'addr' ? this.typeOf(s.e) : undefined);
+        const dst = this.resolve(s.dst, s.dst.k === 'addr' ? this.typeOf(s.e) : undefined, true);
         if (dst.constant) fail(s.dst, `Non si può scrivere in una costante: ${s.dst.text}`);
         this.want(s.e, dst.ty);
         return this.scoped(() => {
