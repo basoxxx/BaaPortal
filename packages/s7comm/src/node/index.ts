@@ -5,3 +5,4 @@ export { collectTcp } from './collectTcp';
 export { connectWriteTcp } from './connectWrite';
 export { connectTestTcp } from './connectTest';
 export { probePort } from './probePort';
+export { openSerial, listSerialPorts } from './serialTransport';

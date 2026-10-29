@@ -1,4 +1,5 @@
 import type { IpcMainInvokeEvent } from 'electron';
+import { listSerialPorts } from '@baaportal/s7comm/node';
 import type {
   PlcAccess,
   PlcClockResult,
@@ -104,6 +105,7 @@ export function registerPlc(
   handle('plc:status', (e) => service.status(e.sender));
   // Ricerca: parte solo da questo canale, su richiesta; l'indirizzo deve essere di un'interfaccia reale.
   handle('plc:interfaces', () => scans.listInterfaces());
+  handle('plc:serialPorts', () => listSerialPorts());
   handle('plc:scanStart', (e, address): PlcScanStartResult => {
     if (typeof address !== 'string') return { ok: false, error: 'Indirizzo non valido' };
     return scans.start(e.sender, address);

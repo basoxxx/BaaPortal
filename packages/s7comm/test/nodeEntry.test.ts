@@ -9,6 +9,8 @@ describe('punti di ingresso', () => {
       'connectTcp',
       'connectTestTcp',
       'connectWriteTcp',
+      'listSerialPorts',
+      'openSerial',
       'openTcp',
       'probePort',
     ]);

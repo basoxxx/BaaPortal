@@ -7,6 +7,7 @@ import type {
 import type {
   DiagPart,
   NetInterface,
+  SerialPortInfo,
   PlcClockRequest,
   PlcClockResult,
   PlcDiagResult,
@@ -161,6 +162,8 @@ export interface BaaBridge {
   onPlcEvent(cb: (e: PlcEvent) => void): () => void;
   // Ricerca dei dispositivi accessibili: solo su richiesta, una per finestra, interrompibile.
   plcInterfaces(): Promise<NetInterface[]>;
+  /** Porte seriali del PC, per l'adattatore MPI. */
+  plcSerialPorts(): Promise<SerialPortInfo[]>;
   /** `address` è l'indirizzo di una delle interfacce restituite da `plcInterfaces`. */
   plcScanStart(address: string): Promise<PlcScanStartResult>;
   plcScanCancel(): Promise<void>;

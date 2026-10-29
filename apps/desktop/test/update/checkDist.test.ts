@@ -19,7 +19,14 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
-async function makeAsar(resources: string, withUpdater = true, withUpdateYml = true) {
+const PREBUILD = '/app.asar.unpacked/node_modules/@serialport/bindings-cpp/prebuilds/';
+
+async function makeAsar(
+  resources: string,
+  withUpdater = true,
+  withUpdateYml = true,
+  prebuild: string | null = resources.includes('win-unpacked') ? 'win32-x64' : 'darwin-x64+arm64',
+) {
   const src = join(root, 'src-' + Math.random().toString(36).slice(2));
   mkdirSync(join(src, 'node_modules', 'builder-util-runtime'), { recursive: true });
   writeFileSync(join(src, 'node_modules', 'builder-util-runtime', 'package.json'), '{}');
@@ -27,7 +34,13 @@ async function makeAsar(resources: string, withUpdater = true, withUpdateYml = t
     mkdirSync(join(src, 'node_modules', 'electron-updater'), { recursive: true });
     writeFileSync(join(src, 'node_modules', 'electron-updater', 'package.json'), '{}');
   }
+  mkdirSync(join(src, 'node_modules', 'serialport'), { recursive: true });
+  writeFileSync(join(src, 'node_modules', 'serialport', 'package.json'), '{}');
   mkdirSync(resources, { recursive: true });
+  if (prebuild) {
+    mkdirSync(join(resources, PREBUILD, prebuild), { recursive: true });
+    writeFileSync(join(resources, PREBUILD, prebuild, '@serialport+bindings-cpp.node'), 'x');
+  }
   await asar.createPackage(src, join(resources, 'app.asar'));
   if (withUpdateYml) {
     writeFileSync(
@@ -100,6 +113,23 @@ describe('checkDist', () => {
     await fakeWin({ updateYml: false });
     const errs: string[] = checkDist(dist, 'win32', V);
     expect(errs.some((e) => /app-update\.yml/.test(e))).toBe(true);
+  });
+});
+
+describe('binario nativo di serialport', () => {
+  it('manca il .node in Windows: errore', async () => {
+    await fakeWin();
+    rmSync(join(dist, 'win-unpacked', 'resources', PREBUILD), { recursive: true });
+    const errs: string[] = checkDist(dist, 'win32', V);
+    expect(errs.some((e) => /serialport/.test(e) && /win32-x64/.test(e))).toBe(true);
+  });
+  it('manca il .node in una delle due app Mac: errore', async () => {
+    await fakeMac();
+    rmSync(join(dist, 'mac', 'BaaPortal.app', 'Contents', 'Resources', PREBUILD), {
+      recursive: true,
+    });
+    const errs: string[] = checkDist(dist, 'darwin', V);
+    expect(errs.filter((e) => /serialport/.test(e))).toHaveLength(1);
   });
 });
 

@@ -13,7 +13,11 @@ export type S7ErrorCode =
   /** L'adattatore MPI non risponde (porta, velocità, parità o cavo). */
   | 'MPI_NO_ADAPTER'
   /** L'adattatore risponde ma la CPU all'indirizzo MPI scelto no. */
-  | 'MPI_NO_CPU';
+  | 'MPI_NO_CPU'
+  /** Porta seriale occupata da un altro programma. */
+  | 'SERIAL_BUSY'
+  /** Porta seriale che non si apre per altri motivi. */
+  | 'SERIAL_OPEN';
 
 export interface S7ErrorDetail {
   errorClass?: number;

@@ -31,6 +31,7 @@ export type {
   PlcConnectResult,
   PlcStatus,
   NetInterface,
+  SerialPortInfo,
   FoundDevice,
   PlcScanEvent,
   PlcScanStartResult,

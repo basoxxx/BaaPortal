@@ -6,6 +6,11 @@ directories:
 files:
   - out/**
   - package.json
+  - '!**/@serialport/bindings-cpp/prebuilds/{android,linux}-*/**'
+# serialport usa binari N-API precompilati (prebuilds/): niente ricompilazione, e i .node stanno fuori dall'asar.
+npmRebuild: false
+asarUnpack:
+  - '**/*.node'
 publish:
   provider: github
   owner: basoxxx
@@ -15,6 +20,8 @@ fileAssociations:
     name: Progetto BaaPortal
     role: Editor
 win:
+  files:
+    - '!**/@serialport/bindings-cpp/prebuilds/darwin-*/**'
   target:
     - target: nsis
       arch: x64
@@ -23,6 +30,8 @@ nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
 mac:
+  files:
+    - '!**/@serialport/bindings-cpp/prebuilds/win32-*/**'
   target:
     - target: dmg
       arch: [arm64, x64]

@@ -38,6 +38,14 @@ export interface NetInterface {
   netmask: string;
 }
 
+/** Porta seriale del PC (adattatore MPI/USB). */
+export interface SerialPortInfo {
+  path: string;
+  manufacturer?: string;
+  vendorId?: string;
+  productId?: string;
+}
+
 /** Esito della ricerca su un indirizzo: una CPU riconosciuta, o un host che apre la 102 e basta. */
 export type FoundDevice =
   | { host: string; status: 'cpu'; identity: PlcIdentity; mode: PlcMode }

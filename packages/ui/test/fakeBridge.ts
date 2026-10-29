@@ -463,6 +463,10 @@ export class FakeBridge implements BaaBridge {
   plcScanStartCalls: string[] = [];
   plcScanCancelCalls = 0;
   private plcScanCbs = new Set<(e: PlcScanEvent) => void>();
+  plcSerialPortsValue: { path: string }[] = [];
+  async plcSerialPorts() {
+    return this.plcSerialPortsValue;
+  }
   async plcInterfaces() {
     return this.plcInterfacesValue;
   }
