@@ -90,6 +90,55 @@ describe('FupNetworkView', () => {
   });
 });
 
+describe('FupNetworkView: elementi che lavorano sulla logica davanti', () => {
+  const show = (series: LadNetwork['root']['series']) =>
+    render(
+      <I18nextProvider i18n={i18next}>
+        <FupNetworkView
+          net={{ root: { id: 'r', series, outs: [{ id: 'o', k: 'coil', op: 'Q 0.0' }] } }}
+          diagnostics={new Map()}
+          readOnly={false}
+          onChange={vi.fn()}
+        />
+      </I18nextProvider>,
+    ).container;
+  const c = (id: string, op: string) => ({ id, k: 'contact', neg: false, op }) as const;
+  const el = (root: HTMLElement, id: string) => root.querySelector(`[data-fup-id="${id}"]`)!;
+
+  it.each([
+    ['(P)', { id: 'e', k: 'edge', dir: 'P', mem: 'M 0.0' } as const],
+    ['#', { id: 'e', k: 'midline', op: 'M 0.0' } as const],
+    [
+      'MOVE',
+      {
+        id: 'e',
+        k: 'box',
+        box: 'MOVE',
+        instance: '',
+        pins: { IN: 'MW 0', OUT: 'MW 2' },
+        boolPins: {},
+      } as const,
+    ],
+  ])('%s prende come entrata ciò che lo precede, non è un’entrata del &', (_n, e) => {
+    const root = show([c('a', 'I 0.0'), c('b', 'I 0.1'), e, c('d', 'I 0.2')]);
+    const box = el(root, 'e');
+    expect(box.contains(el(root, 'a'))).toBe(true);
+    expect(box.contains(el(root, 'b'))).toBe(true);
+    expect(box.contains(el(root, 'd'))).toBe(false);
+    // Un & dentro il riquadro (A AND B) e uno fuori (… AND I 0.2).
+    expect(within(box as HTMLElement).getAllByText('&')).toHaveLength(1);
+    expect(screen.getAllByText('&')).toHaveLength(2);
+  });
+
+  it('il POS resta un’entrata del & (legge il suo bit, non la logica davanti)', () => {
+    const root = show([
+      c('a', 'I 0.0'),
+      { id: 'e', k: 'posneg', dir: 'P', bit: 'I 1.0', mem: 'M 0.0' },
+    ]);
+    expect(el(root, 'e').contains(el(root, 'a'))).toBe(false);
+  });
+});
+
 describe('NetworksView di un blocco FUP', () => {
   it('mostra la vista FUP, inserisce da tavolozza e albero, il pulsante cambia il linguaggio', async () => {
     const f = createCodeBlock({ kind: 'FC', number: 31, name: 'Fup', language: 'FUP' });

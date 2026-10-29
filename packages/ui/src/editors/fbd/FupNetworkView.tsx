@@ -147,7 +147,8 @@ function Gate({ title, ins, outs }: { title: ReactNode; ins: ReactNode[]; outs?:
   );
 }
 
-function BoxView({ b }: { b: LadBox }) {
+/** `input`: la logica che entra nel primo pin (EN o S/CU…), se il box non è il primo della serie. */
+function BoxView({ b, input }: { b: LadBox; input?: ReactNode }) {
   const def = BOX_CATALOG[b.box];
   const flow = flowPin(b.box);
   const flds = fieldsOf(b);
@@ -161,7 +162,13 @@ function BoxView({ b }: { b: LadBox }) {
   );
   const ins: ReactNode[] = [];
   const first = def.firstPin || (def.en ? 'EN' : '');
-  if (first) ins.push(<span className="baa-fup-pin">{first}</span>);
+  if (first)
+    ins.push(
+      <span className="baa-fup-pin">
+        {first}
+        {input}
+      </span>,
+    );
   for (const n of def.boolInputs)
     ins.push(
       <span className="baa-fup-pin">
@@ -234,26 +241,46 @@ function Input({ e }: { e: LadElem }) {
   }
 }
 
+type Chain = Extract<LadElem, { k: 'edge' | 'midline' | 'box' }>;
+/** Elementi che in AWL lavorano sull'RLO di ciò che li precede (FP/FN, `= op`, EN o primo pin). */
+const isChain = (e: LadElem): e is Chain => e.k === 'edge' || e.k === 'midline' || e.k === 'box';
+
+/** Un elemento a catena con la logica che lo precede come entrata. */
+function Chained({ e, before }: { e: Chain; before: LadElem[] }) {
+  const input = <Logic elems={before} />;
+  if (e.k === 'box') return <BoxView b={e} input={input} />;
+  return (
+    <Sel item={e} className="baa-fup-boxel">
+      <Operand item={e} fld={fieldsOf(e)[0]!} />
+      <Gate title={e.k === 'midline' ? '#' : e.dir} ins={[input]} />
+    </Sel>
+  );
+}
+
 /**
  * La logica di una serie: vuota = sempre vera, una voce sola = l'entrata, più voci = riquadro `&`.
  * Un `NOT` nega tutto ciò che lo precede nella serie: è il cerchietto sull'uscita di quella
- * logica, cioè sul pin con cui entra, negata, nel resto della serie.
+ * logica, cioè sul pin con cui entra, negata, nel resto della serie. Allo stesso modo un fronte
+ * (P)/(N), un `#` o un box dopo la prima voce prendono come entrata tutto ciò che li precede.
  */
 function Logic({ elems }: { elems: LadElem[] }) {
   let k = elems.length - 1;
-  while (k >= 0 && elems[k]!.k !== 'not') k--;
+  while (k >= 0 && elems[k]!.k !== 'not' && !(k > 0 && isChain(elems[k]!))) k--;
   if (k >= 0) {
-    const negated = (
+    const e = elems[k]!;
+    const head = isChain(e) ? (
+      <Chained e={e} before={elems.slice(0, k)} />
+    ) : (
       <div className="baa-fup-in">
         <Logic elems={elems.slice(0, k)} />
-        <Sel item={elems[k]!} className="baa-fup-leaf">
+        <Sel item={e} className="baa-fup-leaf">
           <Neg />
         </Sel>
       </div>
     );
     const rest = elems.slice(k + 1);
-    if (rest.length === 0) return negated;
-    return <Gate title="&" ins={[negated, ...rest.map((e) => <Input key={e.id} e={e} />)]} />;
+    if (rest.length === 0) return head;
+    return <Gate title="&" ins={[head, ...rest.map((x) => <Input key={x.id} e={x} />)]} />;
   }
   if (elems.length === 0) return <span className="baa-fup-op">1</span>;
   if (elems.length === 1) return <Input e={elems[0]!} />;
@@ -303,6 +330,16 @@ function NodeView({ node, inherited }: { node: LadNode; inherited: LadElem[] }) 
       )}
     </>
   );
+}
+
+/** Quante voci la serie del nodo `id` eredita dai nodi sopra di lui (come in `NodeView`). */
+function inheritedLen(n: LadNode, id: string, acc = 0): number | undefined {
+  if (n.id === id) return acc;
+  for (const o of n.outs) {
+    const r = isNode(o) ? inheritedLen(o, id, acc + n.series.length) : undefined;
+    if (r !== undefined) return r;
+  }
+  return undefined;
 }
 
 const defaultId = () => globalThis.crypto.randomUUID();
@@ -358,8 +395,9 @@ export function FupNetworkView({
   };
 
   /**
-   * N: nega l'entrata selezionata. Un contatto cambia NA/NC; la prima entrata di una serie riceve
-   * un `NOT` subito dopo (nega solo lei); un `NOT` selezionato si toglie.
+   * N: nega l'entrata selezionata. Un contatto cambia NA/NC; la prima entrata di una serie che
+   * parte da capo riceve un `NOT` subito dopo (nega solo lei); un `NOT` selezionato si toglie. In
+   * un ramo a T che eredita logica il `NOT` negherebbe anche quella: si rifiuta.
    */
   function negate() {
     const e = sel ? itemOf(sel) : undefined;
@@ -369,7 +407,8 @@ export function FupNetworkView({
     const el = e as LadElem;
     if (el.k === 'contact') ed.apply(() => updateElem(net, id, { neg: !el.neg }));
     else if (el.k === 'not') ed.run('delete');
-    else if (p.index === 0) ed.apply(() => insertElem(net, p.at(1), { id: newId(), k: 'not' }));
+    else if (p.index === 0 && !('node' in p.at(0) && inheritedLen(net.root, p.nodeId)))
+      ed.apply(() => insertElem(net, p.at(1), { id: newId(), k: 'not' }));
     else ed.setStatus(t('lad.cannotNegate'));
   }
 

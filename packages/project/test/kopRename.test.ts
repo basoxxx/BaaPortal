@@ -68,4 +68,29 @@ describe('rinomina negli operandi KOP e FUP', () => {
     expect(ops(fb)).toEqual(['#Velocita', '"Vel"']);
     expect(ops(code(d, 'Linea'))).toEqual([{ Velocita: '"Vel"', Altro: '1' }]);
   });
+
+  it('un ingresso BOOL della CALL rinomina anche la chiave del pin con logica', () => {
+    const d = makeDevice();
+    const fb = code(d, 'Nastro');
+    fb.interface.input.push({ id: 'p-run', name: 'Run', type: 'Bool', comment: '' });
+    const call: LadElem = {
+      id: 'call',
+      k: 'box',
+      box: 'CALL',
+      instance: 'FB 1, DB 2',
+      pins: {},
+      boolPins: { Run: [contact('I 0.0')] },
+    };
+    setLad(code(d, 'Linea'), 'KOP', [call]);
+    renameWithReferences(
+      d,
+      { kind: 'member', deviceId: d.id, ownerKind: 'block', ownerId: fb.id, memberId: 'p-run' },
+      'Avvia',
+    );
+    const box = lad(code(d, 'Linea')).series[0] as Extract<LadElem, { k: 'box' }>;
+    expect(Object.keys(box.boolPins)).toEqual(['Avvia']);
+    const src = code(d, 'Linea').networks[0]!.source;
+    expect(src).toContain('Avvia');
+    expect(src).not.toMatch(/\bRun\b/);
+  });
 });

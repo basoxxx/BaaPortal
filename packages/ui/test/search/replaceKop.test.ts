@@ -85,4 +85,72 @@ describe('Sostituisci negli operandi KOP e FUP', () => {
     expect(bad.replaced).toBe(0);
     expect(bad.skipped).toBeGreaterThan(0);
   });
+
+  // Un operando scritto su più righe generate (SD/R/L/A %T1, `= "Fl"` e `A "Fl"`) si sostituisce una volta.
+  const one = (series: LadNetwork['root']['series']): Project => {
+    const p = withBlocks([
+      kopBlock('K', 'KOP', {
+        root: { id: 'r', series, outs: [{ id: 'o', k: 'coil', op: 'Q 0.0' }] },
+      }),
+    ]);
+    const d = p.devices[0]!;
+    const b = d.blocks.find((x) => x.name === 'K') as CodeBlock;
+    blockSources(b, d).forEach((s, i) => (b.networks[i]!.source = s));
+    return p;
+  };
+  const c0 = { id: 'c1', k: 'contact', neg: false, op: '%I0.0' } as const;
+  const box = (
+    kind: 'S_ODT' | 'SR' | 'S_CU',
+    instance: string,
+    pins: Record<string, string>,
+    bools: string[],
+  ) =>
+    ({
+      id: 'b',
+      k: 'box',
+      box: kind,
+      instance,
+      pins,
+      boolPins: Object.fromEntries(
+        bools.map((n, i) => [n, [{ id: `p${i}`, k: 'contact', neg: false, op: `%I1.${i}` }]]),
+      ),
+    }) as const;
+  it.each([
+    ['timer', box('S_ODT', '%T1', { TV: 'S5T#2S', BI: 'MW 2', BCD: '' }, ['R']), '%T1', '%T12'],
+    [
+      'timer, più corto',
+      box('S_ODT', '%T12', { TV: 'S5T#2S', BI: 'MW 2', BCD: '' }, ['R']),
+      '%T12',
+      '%T1',
+    ],
+    ['SR', box('SR', '%M0.0', {}, ['R']), '%M0.0', '%M10.0'],
+    ['contatore', box('S_CU', '%C3', { PV: 'C#5', CV: '', CV_BCD: '' }, ['S', 'R']), '%C3', '%C33'],
+    [
+      'contatore, più corto',
+      box('S_CU', '%C33', { PV: 'C#5', CV: '', CV_BCD: '' }, ['S', 'R']),
+      '%C33',
+      '%C3',
+    ],
+  ])("%s: l'istanza su più righe si sostituisce una volta", (_n, b, from, to) => {
+    const p = one([c0, b as never]);
+    const hits = findInProject(p, opts(from)) as { editable: boolean }[];
+    expect(hits).toHaveLength(1);
+    const r = replaceInProject(p, opts(from), to);
+    expect(lad(r.project, 'K').root.series[1]).toMatchObject({ instance: to });
+    expect(r.replaced).toBe(1);
+  });
+
+  it('(#) scritto su due righe si sostituisce una volta, anche più corto', () => {
+    const p = one([
+      c0,
+      { id: 'm', k: 'midline', op: '"Fl"' },
+      { id: 'c2', k: 'contact', neg: false, op: '%I0.1' },
+    ]);
+    expect(findInProject(p, opts('Fl'))).toHaveLength(1);
+    const r = replaceInProject(p, opts('Fl'), 'Flag');
+    expect(lad(r.project, 'K').root.series[1]).toMatchObject({ op: '"Flag"' });
+    expect(r.replaced).toBe(1);
+    const s = replaceInProject(p, opts('"Fl"'), '"F"');
+    expect(lad(s.project, 'K').root.series[1]).toMatchObject({ op: '"F"' });
+  });
 });

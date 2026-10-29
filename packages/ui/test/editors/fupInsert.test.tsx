@@ -127,6 +127,36 @@ describe('FupNetworkView: inserimento', () => {
     expect(net().root.series).toHaveLength(2);
   });
 
+  it('N sulla prima entrata di un ramo a T che eredita logica: il contatto sì, il NOT no', async () => {
+    const { user, group, net } = setup(() => ({
+      root: {
+        id: 'r',
+        series: [{ id: 'a', k: 'contact', neg: false, op: 'I 0.0' }],
+        outs: [
+          {
+            id: 't',
+            series: [
+              { id: 'b', k: 'cmp', fn: '==I', in1: 'MW 0', in2: 'MW 2' },
+              { id: 'x', k: 'contact', neg: false, op: 'I 0.1' },
+            ],
+            outs: [{ id: 'o', k: 'coil', op: 'Q 0.0' }],
+          },
+          { id: 'o2', k: 'coil', op: 'Q 0.1' },
+        ],
+      },
+    }));
+    group.focus();
+    // Un NOT dopo il confronto negherebbe anche I 0.0 (A L0.0, A(…), NOT): si rifiuta.
+    await user.click(screen.getByRole('button', { name: /^Confronto/ }));
+    await user.keyboard('n');
+    expect(screen.getByRole('status')).toHaveTextContent('Qui non si nega');
+    expect(awl(net())).not.toContain('NOT');
+    await user.click(screen.getByRole('button', { name: 'Contatto NA I 0.1' }));
+    await user.keyboard('n');
+    expect(awl(net())).toContain('AN %I0.1');
+    expect(awl(net())).not.toContain('NOT');
+  });
+
   it('F7 seleziona la bobina vuota; la tavolozza aggiunge un’uscita S', async () => {
     const { user, group, net, api } = setup();
     group.focus();

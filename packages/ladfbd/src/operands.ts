@@ -24,7 +24,8 @@ export function mapOperands(
     for (const [k, v] of Object.entries(b.pins))
       pins[pinName ? pinName(b, k) : k] = fn(v, 'op', { id: b.id, field: `pin:${k}` });
     const boolPins: Record<string, LadElem[]> = {};
-    for (const [k, v] of Object.entries(b.boolPins)) boolPins[k] = v.map(elem);
+    for (const [k, v] of Object.entries(b.boolPins))
+      boolPins[pinName ? pinName(b, k) : k] = v.map(elem);
     return {
       ...b,
       instance:

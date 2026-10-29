@@ -79,6 +79,8 @@ function scanText(
   operandAt?: (from: number, to: number) => KopOperandRef | undefined,
 ): void {
   re.lastIndex = 0;
+  // Un operando del grafico scritto su più righe generate (timer, `#`, SR) è un risultato solo.
+  const seen = new Set<string>();
   let m: RegExpExecArray | null;
   while ((m = re.exec(text))) {
     if (m[0] === '') {
@@ -90,6 +92,11 @@ function scanText(
     const from = m.index;
     const to = from + m[0].length;
     const kop = operandAt?.(from, to);
+    if (kop) {
+      const k = `${kop.elemId}|${kop.field}|${kop.from}|${kop.to}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+    }
     const hit: Hit = {
       loc: locate(from, to),
       match: m[0],
