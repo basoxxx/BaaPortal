@@ -159,7 +159,7 @@ Per ogni voce si indica che cosa succede oggi. "Errore chiaro" vuol dire che Baa
 - **Blocchi caricati con lingua `02`.** Un blocco letto dalla CPU con il byte di linguaggio KOP si importa come AWL, senza grafico.
 - **Conversione solo KOP ↔ FUP.** La conversione AWL → KOP/FUP arriva nel piano 4C; fino ad allora un segmento AWL in un blocco KOP si vede in sola lettura.
 
-## FUP in prova (1.0.0-rc.1)
+## FUP in prova (1.0.0)
 
 Si crea solo con _Funzioni sperimentali_ attive; un blocco FUP già esistente si apre sempre.
 
@@ -170,7 +170,7 @@ Si crea solo con _Funzioni sperimentali_ attive; un blocco FUP già esistente si
 - **Niente osservazione** della vista FUP, né nel simulatore né online.
 - **Aspetto chiaro/scuro** non controllato a mano.
 
-## SCL in prova (1.0.0-rc.1)
+## SCL in prova (1.0.0)
 
 Si crea solo con _Funzioni sperimentali_ attive. Il testo SCL si traduce in AWL (pacchetto `scl`), che si compila come gli altri blocchi.
 
