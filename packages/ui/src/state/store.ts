@@ -208,6 +208,11 @@ export interface OnlineUiState {
   monitor?: PlcMonitorUiState | null;
   /** Ultime righe osservate (offset e registri); `null` finché non arrivano e se non ci sono valori. */
   monitorLines?: { offset: number; regs: PlcRegs | null }[] | null;
+  /**
+   * Le righe `null` di `monitorLines` non dicono «non elaborata»: segnaposto della finestra in
+   * attesa di risposta, o risposta parziale della CPU.
+   */
+  monitorLinesUnsure?: boolean;
   /** Registri facoltativi chiesti oltre a STW e ACCU1. */
   monitorRegs?: { accu2: boolean; ar1: boolean };
 }

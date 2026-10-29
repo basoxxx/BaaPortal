@@ -1703,6 +1703,12 @@
     "boxMenu": "Box",
     "fupView": "FBD view of the network",
     "boxEl": "Box {{kind}}",
+    "mon": {
+      "state": "state",
+      "operand": "operand",
+      "none": "not processed",
+      "outside": "outside the monitoring window or waiting"
+    },
     "cannotClose": "Cannot close the branch here: pick an element that follows the open branch in the same series.",
     "cannotDo": "This operation is not possible here.",
     "cannotNegate": "Cannot negate here: pick a contact, the first input of a box or a negation circle.",

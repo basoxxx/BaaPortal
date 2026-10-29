@@ -11,6 +11,7 @@ import type { LadAction } from './ladKeys';
 import { layoutNetwork } from './ladLayout';
 import type { LadCell } from './ladLayout';
 import type { CallParams } from './ladOps';
+import { monAttr, type LadMonitor } from './ladMonitor';
 import { fieldPatch, fieldValue, fieldsOf } from './ladOps';
 import { useLadEdit } from './useLadEdit';
 import type { LadInsertApi } from './useLadEdit';
@@ -39,6 +40,8 @@ type Props = {
    * l'istanza del box CALL da creare, o `undefined` se non è un blocco chiamabile.
    */
   callOfDrop?: (raw: string) => string | undefined;
+  /** Osservazione del programma: stato degli elementi, solo da mostrare. */
+  monitor?: LadMonitor;
 };
 
 const defaultId = () => globalThis.crypto.randomUUID();
@@ -77,6 +80,7 @@ export function LadNetworkEditor({
   newId = defaultId,
   onActive,
   callOfDrop,
+  monitor,
 }: Props) {
   const { t } = useTranslation();
   const layout = useMemo(() => layoutNetwork(net), [net]);
@@ -266,6 +270,7 @@ export function LadNetworkEditor({
                   y1={w.from[1] * CELL_H + CELL_H / 2}
                   x2={w.to[0] * CELL_W}
                   y2={w.to[1] * CELL_H + CELL_H / 2}
+                  data-mon={w.flow && monAttr(monitor, w.flow.id, w.flow.side)}
                 />
               ))}
             </svg>
@@ -281,6 +286,7 @@ export function LadNetworkEditor({
                   messages={diagnostics.get(cell.elemId) ?? []}
                   onSelect={() => setSel({ t: 'elem', id: cell.elemId })}
                   onEdit={(pin) => startEdit(cell.elemId, pin)}
+                  monitor={monitor}
                 />
               );
             })}

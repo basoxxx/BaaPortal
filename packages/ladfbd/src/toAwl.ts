@@ -10,8 +10,11 @@ import type { LadBox, LadElem, LadNetwork, LadNode, LadOut } from './model.js';
 import { validateNetwork } from './validate.js';
 import type { LadDiag } from './validate.js';
 
-/** Riga 0-based della sorgente generata e id dell'elemento che l'ha prodotta. */
-export type LineOwner = { line: number; elemId: string };
+/**
+ * Riga 0-based della sorgente generata e id dell'elemento che l'ha prodotta; `pin` è il pin (o il
+ * campo) il cui valore passa da ACCU1 in quella riga (`L` di un ingresso, `T` di un'uscita).
+ */
+export type LineOwner = { line: number; elemId: string; pin?: string };
 export type NetworkAwl = {
   source: string;
   lines: LineOwner[];
@@ -131,7 +134,7 @@ function callPinOrder(b: LadBox, iface: string[] | undefined): string[] {
 }
 
 class Emitter {
-  readonly out: { text: string; elemId: string }[] = [];
+  readonly out: { text: string; elemId: string; pin?: string }[] = [];
   readonly diagnostics: LadDiag[] = [];
   private nextBit: number;
   /** Numero della prossima etichetta automatica. */
@@ -146,6 +149,11 @@ class Emitter {
 
   private push(elemId: string, ...texts: string[]): void {
     for (const text of texts) this.out.push({ text, elemId });
+  }
+
+  /** Riga che carica o trasferisce il valore del pin `pin` (per l'osservazione). */
+  private pushPin(elemId: string, pin: string, text: string): void {
+    this.out.push({ text, elemId, pin });
   }
 
   /** Prossimo bit L libero dopo i TEMP dichiarati (ipotesi H4: riparte in ogni segmento). */
@@ -184,8 +192,12 @@ class Emitter {
         return this.push(e.id, 'NOT');
       case 'cmp': {
         // §3.5: il confronto scrive l'RLO, quindi con logica davanti va in A( … )
-        const body = [`L ${e.in1.trim()}`, `L ${e.in2.trim()}`, e.fn];
-        return this.push(e.id, ...(fresh ? body : ['A(', ...body, ')']));
+        if (!fresh) this.push(e.id, 'A(');
+        this.pushPin(e.id, 'in1', `L ${e.in1.trim()}`);
+        this.pushPin(e.id, 'in2', `L ${e.in2.trim()}`);
+        this.push(e.id, e.fn);
+        if (!fresh) this.push(e.id, ')');
+        return;
       }
       case 'edge':
         return this.push(e.id, `F${e.dir} ${e.mem.trim()}`);
@@ -239,9 +251,9 @@ class Emitter {
     if (def.kind === 'CALL') return this.callBody(b);
     // §4.8, ipotesi H14: N va in ACCU2, quindi si carica per primo
     const loads = def.group === 'shift' ? ['N', 'IN'] : def.dataInputs.map((p) => p.name);
-    this.push(b.id, ...loads.map((n) => `L ${pin(n)}`));
+    for (const n of loads) this.pushPin(b.id, n, `L ${pin(n)}`);
     if (def.awl) this.push(b.id, def.awl);
-    this.push(b.id, ...def.outputs.map((p) => `T ${pin(p.name)}`));
+    for (const p of def.outputs) this.pushPin(b.id, p.name, `T ${pin(p.name)}`);
   }
 
   /** §4.11: CALL con i parametri `nome := operando`, uno per riga; i pin vuoti si omettono. */
@@ -286,24 +298,28 @@ class Emitter {
   private flowBox(b: LadBox, def: BoxDef, fresh: boolean, connected: boolean): void {
     const inst = b.instance.trim();
     const pin = (name: string) => (b.pins[name] ?? '').trim();
-    const action = (name: string): string[] => {
-      if (def.group === 'timer' && name === 'S') return [`L ${pin('TV')}`, `${def.awl} ${inst}`];
-      if (def.group === 'counter' && name === 'S') return [`L ${pin('PV')}`, `S ${inst}`];
-      return [`${name} ${inst}`]; // S, R del flip-flop; R; CU, CD
+    const action = (name: string): void => {
+      const load = def.group === 'timer' ? 'TV' : 'PV';
+      if ((def.group === 'timer' || def.group === 'counter') && name === 'S') {
+        this.pushPin(b.id, load, `L ${pin(load)}`);
+        return this.push(b.id, def.group === 'timer' ? `${def.awl} ${inst}` : `S ${inst}`);
+      }
+      this.push(b.id, `${name} ${inst}`); // S, R del flip-flop; R; CU, CD
     };
     // primo pin direttamente sulla barra: serve un RLO = 1 (come le bobine, ipotesi H7)
     if (fresh) this.push(b.id, 'SET');
-    this.push(b.id, ...action(def.firstPin));
+    action(def.firstPin);
     for (const name of def.boolInputs) {
       const list = b.boolPins[name] ?? [];
       if (list.length === 0) continue;
       this.series(list, true);
-      this.push(b.id, ...action(name));
+      action(name);
     }
     for (const o of def.outputs) {
       if (o.type === 'BOOL' || !pin(o.name)) continue;
       // §3.2/§3.4: valore binario con L, valore BCD con LC
-      this.push(b.id, `${o.name.includes('BCD') ? 'LC' : 'L'} ${inst}`, `T ${pin(o.name)}`);
+      this.push(b.id, `${o.name.includes('BCD') ? 'LC' : 'L'} ${inst}`);
+      this.pushPin(b.id, o.name, `T ${pin(o.name)}`);
     }
     if (connected) this.push(b.id, `A ${inst}`);
   }
@@ -404,11 +420,12 @@ class Emitter {
       case 'reset':
         return this.push(o.id, `R ${o.op.trim()}`);
       case 'tcoil': // §3.1
-        return this.push(o.id, `L ${o.value.trim()}`, `${o.fn} ${o.timer.trim()}`);
+        this.pushPin(o.id, 'value', `L ${o.value.trim()}`);
+        return this.push(o.id, `${o.fn} ${o.timer.trim()}`);
       case 'ccoil': // §3.3
-        return o.fn === 'SC'
-          ? this.push(o.id, `L ${o.value.trim()}`, `S ${o.counter.trim()}`)
-          : this.push(o.id, `${o.fn} ${o.counter.trim()}`);
+        if (o.fn !== 'SC') return this.push(o.id, `${o.fn} ${o.counter.trim()}`);
+        this.pushPin(o.id, 'value', `L ${o.value.trim()}`);
+        return this.push(o.id, `S ${o.counter.trim()}`);
       case 'jmp': // §4.12
         return this.push(o.id, `${cond ? 'JC' : 'JU'} ${o.label.trim()}`);
       case 'jmpn':
@@ -463,7 +480,9 @@ export function networkToAwl(net: LadNetwork, opts: NetworkAwlOpts): NetworkAwl 
   const source = formatted.split('\n').length === raw.length ? formatted : plain;
   return {
     source,
-    lines: em.out.map((l, line) => ({ line, elemId: l.elemId })),
+    lines: em.out.map((l, line) =>
+      l.pin === undefined ? { line, elemId: l.elemId } : { line, elemId: l.elemId, pin: l.pin },
+    ),
     diagnostics: [],
     nextLabel: em.labelNo,
   };

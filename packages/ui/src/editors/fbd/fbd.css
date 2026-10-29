@@ -79,3 +79,14 @@
   width: 8em;
   font: inherit;
 }
+
+/* Osservazione: il segnale dell'elemento sul bordo inferiore (stessi colori del KOP) */
+.baa-fup-el[data-mon='1'] {
+  border-bottom: 2px solid var(--baa-mon-on);
+}
+.baa-fup-el[data-mon='0'] {
+  border-bottom: 2px dashed var(--baa-mon-off);
+}
+.baa-fup-el[data-mon='off'] {
+  border-bottom: 2px dotted var(--baa-mon-none);
+}

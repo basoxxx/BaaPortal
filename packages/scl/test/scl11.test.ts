@@ -179,7 +179,7 @@ describe('sclToAwl 1.1: diagnostiche', () => {
   });
 
   it('ARRAY e STRUCT', () => {
-    expect(diag('a := v[a];').message).toContain('Indice variabile non supportato');
+    expect(diag('a := v[x];').message).toContain('INT o DINT');
     expect(diag('a := v[6];').message).toContain('fuori da [1..5]');
     expect(diag('a := v;').message).toContain('non supportato');
     expect(diag('a := s.nessuno;').message).toContain('Membro sconosciuto');

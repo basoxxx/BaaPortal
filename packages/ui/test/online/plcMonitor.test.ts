@@ -236,6 +236,7 @@ describe('PlcMonitorController', () => {
     expect(online().monitor?.reason).toBe('waiting');
     expect(online().monitorLines?.every((l) => l.regs === null)).toBe(true);
     expect(online().monitorLines).toHaveLength(12);
+    expect(online().monitorLinesUnsure).toBe(true);
   });
 
   it('values → righe e motivo ok', async () => {
@@ -250,6 +251,7 @@ describe('PlcMonitorController', () => {
     await flush();
     expect(online().monitor?.reason).toBe('ok');
     expect(online().monitorLines).toEqual([{ offset: 0, regs: { stw: 0x106, accu1: 5 } }]);
+    expect(online().monitorLinesUnsure).toBe(false);
   });
 
   it('editor chiuso, cambio di blocco, offline → plcStatusStop', async () => {
@@ -344,6 +346,8 @@ describe('PlcMonitorController', () => {
     ctrl.setVisible('b1', [1]);
     await flush();
     expect(online().monitorLines?.every((l) => l.regs === null)).toBe(true);
+    // segnaposto: le righe null non dicono «non elaborata»
+    expect(online().monitorLinesUnsure).toBe(true);
   });
 
   it('different → si riprova quando cambia il confronto con la CPU', async () => {

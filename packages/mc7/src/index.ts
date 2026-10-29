@@ -18,7 +18,7 @@ export {
   type ResolveCallee,
 } from './callRebuild';
 export { localDataLength } from './localData';
-export { toolsOf, tempEndByte, resolveGlobalOperand } from './codeEnv';
+export { toolsOf, tempEndByte, resolveGlobalOperand, ownOperandResolver } from './codeEnv';
 export { SymbolError, type Value as ResolvedOperand } from './resolveSymbols';
 export { initialLiteral } from './initialLiteral';
 export { MC7_DIAG_CODES } from './diagCodes';

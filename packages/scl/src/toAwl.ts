@@ -3,8 +3,15 @@
 // `/I` fanno ACCU2 op ACCU1), logica nell'RLO con al massimo 7 parentesi aperte, TEMP di appoggio
 // dopo `tempEnd` allocate a pila, etichette `_001`… su `NOP 0`. Nessun AWL se c'è anche un solo
 // errore.
-import { formatNetwork, type AwlContext, type AwlInterface } from '@baaportal/awl';
+import {
+  formatNetwork,
+  type AwlContext,
+  type AwlInterface,
+  type Operand as AwlOperand,
+  type PathSegment,
+} from '@baaportal/awl';
 import { callLines } from '@baaportal/ladfbd';
+import { NO_RANGE, ownOperandResolver, type ResolvedOperand } from '@baaportal/mc7';
 import { formatType, sameName, type DataType, type TypedMember } from '@baaportal/s7-types';
 import { intLiteral, parseAddress, SclError } from './lexer.js';
 import {
@@ -29,6 +36,7 @@ type Ty = 'BOOL' | 'BYTE' | 'WORD' | 'DWORD' | 'INT' | 'DINT' | 'REAL';
 type Num = Exclude<Ty, 'BOOL'>;
 type Bits = 'BYTE' | 'WORD' | 'DWORD';
 type Conn = 'A' | 'O' | 'X';
+type Dim = { lo: number; hi: number };
 
 const MAX_BRACKETS = 7;
 const MAX_LABEL = 999;
@@ -135,6 +143,9 @@ const isSimple = (e: Expr) =>
   e.k === 'addr' ||
   e.k === 'temp';
 const isOperand = (e: Expr): e is Operand => isSimple(e) && !isLiteral(e);
+/** Un elemento di ARRAY con indici variabili: si legge e si scrive passando da AR1. */
+type Indexed = Exclude<Operand, { k: 'temp' }> & { vindex: Expr[] };
+const isIndexed = (e: Expr): e is Indexed => isOperand(e) && e.k !== 'temp' && !!e.vindex;
 
 /** Un ciclo aperto: le etichette di EXIT e CONTINUE nascono solo se servono. */
 type Loop = { at: Pos; exit?: string; cont?: string };
@@ -146,6 +157,7 @@ class Gen {
   private tempTop: number;
   private depth = 0;
   private readonly loops: Loop[] = [];
+  private resolver?: ReturnType<typeof ownOperandResolver>;
 
   constructor(
     private readonly ctx: AwlContext,
@@ -202,7 +214,11 @@ class Gen {
   // ---- operandi e tipi ----
 
   /** `hint` sceglie il tipo di un indirizzo che ne ammette più d'uno (MW: INT o WORD). */
-  private resolve(o: Operand, hint?: Ty, dest = false): { awl: string; ty: Ty; constant: boolean } {
+  private resolve(
+    o: Operand,
+    hint?: Ty,
+    dest = false,
+  ): { awl: string; ty: Ty; constant: boolean; dims?: Dim[] } {
     if (o.k === 'temp') return { awl: o.text, ty: o.ty as Ty, constant: false };
     if (o.k === 'addr') {
       const a = parseAddress(o.text);
@@ -222,9 +238,19 @@ class Gen {
     }
     const shown = o.k === 'local' ? o.text.slice(1) : o.text;
     const elem = (t: DataType | null, awl: string, constant: boolean) => {
+      // indici variabili: tipo e limiti dell'elemento (l'indirizzo lo fa `address`)
+      let dims: Dim[] | undefined;
+      if (o.vindex) {
+        if (t?.kind !== 'array')
+          return fail(o, `${o.text}${tail(o)} non è un ARRAY: niente indici [ ]`);
+        if (t.dims.length !== o.vindex.length)
+          fail(o, `L'ARRAY ha ${t.dims.length} dimensioni, gli indici sono ${o.vindex.length}`);
+        dims = t.dims;
+        t = t.element;
+      }
       const ty = typed(t);
       if (!ty) fail(o, `Tipo di ${shown}${tail(o)} non supportato in SCL in prova (${SUPPORTED})`);
-      return { awl, ty: ty!, constant };
+      return { awl, ty: ty!, constant, ...(dims ? { dims } : {}) };
     };
     if (o.k === 'symbol') {
       const name = unquote(o.text);
@@ -252,7 +278,7 @@ class Gen {
         ? { name: 'RET_VAL', type: i.returnType }
         : undefined);
     if (!m || !m.type) fail(o, `Operando sconosciuto: ${name}`);
-    const deep = o.index || o.path;
+    const deep = o.index || o.path || o.vindex;
     if (deep && formal && (own.kind === 'FC' || i.inOut.includes(formal)))
       fail(
         o,
@@ -521,7 +547,7 @@ class Gen {
     ret?: Ty;
   } {
     const o = c.callee;
-    if (o.k === 'temp' || o.k === 'addr' || o.index || o.path)
+    if (o.k === 'temp' || o.k === 'addr' || o.index || o.path || o.vindex)
       return fail(o, `Si chiama un blocco per nome: "Fc"(…), "DB_di_istanza"(…) o #multi(…)`);
     const shown = o.text;
     const done = (info: ReturnType<AwlContext['block']>, instance: string, fc: boolean) => {
@@ -624,6 +650,8 @@ class Gen {
   /** Il parametro attuale di un'uscita o di un ingresso/uscita: una variabile del tipo giusto. */
   private variable(e: Expr, ty: Ty, formal: string): string {
     if (!isOperand(e) || e.k === 'temp') return fail(e, `Per ${formal} serve una variabile`);
+    if (e.vindex)
+      fail(e, `Per ${formal} serve una variabile senza indici variabili (usa una TEMP e copiala)`);
     const r = this.resolve(e, ty, true);
     if (r.constant) fail(e, `Non si può scrivere in una costante: ${e.text}`);
     if (r.ty !== ty) mismatch(e, ty, r.ty);
@@ -650,8 +678,129 @@ class Gen {
       case 'call':
         return { ...e, arg: this.hoist(e.arg) };
       default:
-        return e;
+        return isIndexed(e) ? this.readIndexed(e) : e;
     }
+  }
+
+  // ---- ARRAY con indici variabili ----
+
+  /** Un elemento con indici variabili letto in una TEMP (anche questo prima del resto). */
+  private readIndexed(o: Indexed): Expr {
+    const ty = this.resolve(o).ty;
+    const text = this.temp(ty);
+    const [bad, end] = [this.label(o), this.label(o)];
+    const op = this.address(o, bad);
+    this.emit(...(ty === 'BOOL' ? [`A ${op}`, `= ${text}`] : [`L ${op}`, `T ${text}`]));
+    this.emit(`JU ${end}`);
+    this.place(bad);
+    this.emit(...(ty === 'BOOL' ? ['CLR', `= ${text}`] : ['L 0', `T ${text}`, 'CLR']), 'SAVE');
+    this.place(end);
+    return { k: 'temp', text, ty, line: o.line, col: o.col };
+  }
+
+  /** `#a[#i] := e`: il valore in una TEMP (o un letterale), poi l'indirizzo e la scrittura. */
+  private writeIndexed(dst: Indexed, ty: Ty, e0: Expr, at: Pos): void {
+    const e = this.hoist(e0);
+    let value: string;
+    if (ty === 'BOOL' && e.k === 'bool') value = e.value ? 'SET' : 'CLR';
+    else if (isLiteral(e)) value = `L ${this.load(e, ty)}`;
+    else {
+      const t = this.temp(ty);
+      if (ty === 'BOOL') this.cond(e, at);
+      else this.num(e, ty as Num);
+      this.emit(`${ty === 'BOOL' ? '=' : 'T'} ${t}`);
+      value = `${ty === 'BOOL' ? 'A' : 'L'} ${t}`;
+    }
+    const [bad, end] = [this.label(at), this.label(at)];
+    const op = this.address(dst, bad);
+    this.emit(value, `${ty === 'BOOL' ? '=' : 'T'} ${op}`, `JU ${end}`);
+    this.place(bad);
+    this.emit('CLR', 'SAVE');
+    this.place(end);
+  }
+
+  /** L'elemento `index` dell'ARRAY di `o`, risolto come nel compilatore (area, bit, DB). */
+  private located(o: Indexed, index: number[]): { area: string; bit: number; db?: number } {
+    const seg = (name: string, i?: number[]): PathSegment => ({
+      name: unquote(name),
+      quoted: name.startsWith('"'),
+      ...(i ? { index: i } : {}),
+      range: NO_RANGE,
+    });
+    const path = [
+      seg(o.k === 'local' ? o.text.slice(1) : o.text, o.index),
+      ...(o.path ?? []).map((s) => seg(s.name, s.index)),
+    ];
+    path[path.length - 1]!.index = index;
+    const op: AwlOperand = { kind: o.k === 'symbol' ? 'symbol' : 'local', path, range: NO_RANGE };
+    const shown = `${o.text}${tail(o)}[${index.join(',')}]`;
+    let v: ResolvedOperand;
+    try {
+      this.resolver ??= ownOperandResolver(this.ctx);
+      v = this.resolver(op);
+    } catch (e) {
+      // Anche gli errori di layout dell'interfaccia (tipo mancante): diagnostica, non eccezione.
+      if (e instanceof Error) return fail(o, e.message);
+      throw e;
+    }
+    if (v.k === 'inst') return { area: 'DI', bit: v.bit };
+    if (v.k === 'area' && ['L', 'M', 'I', 'Q', 'DB'].includes(v.area))
+      return { area: v.area, bit: v.bit, ...(v.db !== undefined ? { db: v.db } : {}) };
+    return fail(o, `${shown}: ARRAY non raggiungibile con un indice variabile`);
+  }
+
+  /**
+   * Indirizzo di un elemento con indici variabili, come STEP 7 SCL: AR1 = indice lineare (riga per
+   * riga) · passo, più AR2 nei dati d'istanza di un FB (così vale anche in multi-istanza), e
+   * l'accesso interno all'area `[AR1,P#inizio]`. Inizio e passo vengono dal layout del compilatore
+   * (primo e secondo elemento). Un indice fuori dai limiti salta a `bad` (STEP 7 senza il controllo
+   * dei limiti scriverebbe fuori dall'ARRAY). Il risultato va usato subito: AR1 non dura.
+   */
+  private address(o: Indexed, bad: string): string {
+    const r = this.resolve(o);
+    const dims = r.dims!;
+    const lows = dims.map((d) => d.lo);
+    const first = this.located(o, lows);
+    // il secondo elemento: +1 nell'ultima dimensione con più di un elemento
+    const next = [...lows];
+    let j = dims.length - 1;
+    while (j >= 0 && dims[j]!.hi === dims[j]!.lo) j--;
+    if (j >= 0) next[j]! += 1;
+    const stride = j >= 0 ? this.located(o, next).bit - first.bit : 0;
+    if (first.bit > 0xffff)
+      fail(o, `${o.text}: l'ARRAY inizia oltre il byte 8191, non raggiungibile con [AR1,P#…]`);
+    this.scoped(() => {
+      const k = dims.length > 1 ? this.temp('DINT') : '';
+      dims.forEach((d, n) => {
+        const e = this.dint(o.vindex[n]!);
+        if (e.k === 'int') {
+          const v = Number(intLiteral(e.text).value);
+          if (v < d.lo || v > d.hi) fail(e, `Indice ${v} fuori da [${d.lo}..${d.hi}]`);
+        }
+        if (n > 0) this.emit(`L ${k}`, `L L#${d.hi - d.lo + 1}`, '*D', `T ${k}`);
+        this.num(this.hoist(e), 'DINT');
+        // ACCU2 = indice: oltre hi o sotto lo si salta, poi indice - lo
+        this.emit(`L L#${d.hi}`, '>D', `JC ${bad}`, 'TAK', `L L#${d.lo}`, '<D', `JC ${bad}`, '-D');
+        if (n > 0) this.emit(`L ${k}`, '+D');
+        if (n < dims.length - 1) this.emit(`T ${k}`);
+      });
+    });
+    if (stride !== 1) this.emit(`L L#${stride}`, '*D');
+    if (first.area === 'DI') this.emit('TAR2', '+D');
+    this.emit('LAR1');
+    if (first.area === 'DB') this.emit(`OPN DB ${first.db}`);
+    const size =
+      r.ty === 'BOOL' ? 'X' : r.ty === 'BYTE' ? 'B' : SIZE[r.ty as Num] === 2 ? 'W' : 'D';
+    const mnem = first.area + (size === 'X' && first.area.length === 1 ? '' : size);
+    return `${mnem} [AR1,P#${first.bit >> 3}.${first.bit & 7}]`;
+  }
+
+  /** Un indice come DINT: un INT si allarga con ITD. */
+  private dint(e: Expr): Expr {
+    const t = this.typeOf(e, 'DINT');
+    if (t === 'INT') return { k: 'call', name: 'INT_TO_DINT', arg: e, line: e.line, col: e.col };
+    if (t !== 'DINT') fail(e, `Un indice dev'essere INT o DINT, c'è ${t}`);
+    return e;
   }
 
   // ---- istruzioni ----
@@ -683,6 +832,8 @@ class Gen {
         const dst = this.resolve(s.dst, s.dst.k === 'addr' ? this.typeOf(s.e) : undefined, true);
         if (dst.constant) fail(s.dst, `Non si può scrivere in una costante: ${s.dst.text}`);
         this.want(s.e, dst.ty);
+        const to = s.dst;
+        if (isIndexed(to)) return this.scoped(() => this.writeIndexed(to, dst.ty, s.e, s));
         return this.scoped(() => {
           const e = this.hoist(s.e);
           if (dst.ty === 'BOOL') {
@@ -830,6 +981,8 @@ class Gen {
    * variabile vale l'ultimo valore eseguito. CONTINUE salta all'incremento.
    */
   private forStmt(s: Extract<Stmt, { k: 'for' }>): void {
+    if (s.v.k !== 'temp' && s.v.vindex)
+      fail(s.v, 'La variabile del FOR non può avere indici variabili');
     const v = this.resolve(s.v);
     if (v.ty !== 'INT' && v.ty !== 'DINT')
       fail(s.v, `La variabile del FOR dev'essere INT o DINT, c'è ${v.ty}`);
