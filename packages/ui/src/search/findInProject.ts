@@ -1,4 +1,12 @@
-import type { Block, Network, PlcDevice, Project } from '@baaportal/project';
+import {
+  kopOperandResolver,
+  type CodeBlock,
+  type Block,
+  type KopOperandRef,
+  type Network,
+  type PlcDevice,
+  type Project,
+} from '@baaportal/project';
 import { displayText } from '../editors/awl/awlExtensions';
 import { hasRawLines, isKnowHowLocked, isLockedImport } from '../editors/block/readOnlyImport';
 import type { FindError, FindOptions, Hit, HitLocation } from './types';
@@ -8,6 +16,8 @@ export interface Match {
   hit: Hit;
   /** Testo in cui sono stati calcolati from/to (il testo mostrato per le reti). */
   text: string;
+  /** Risultato nel codice generato di un segmento KOP/FUP, dentro un solo operando del grafico. */
+  kop?: KopOperandRef;
   replacement: (replacement: string) => string;
 }
 
@@ -65,8 +75,12 @@ function scanText(
   locate: (from: number, to: number) => HitLocation,
   meta: Meta,
   out: Match[],
+  /** Per un segmento KOP: l'operando del grafico che contiene per intero il risultato. */
+  operandAt?: (from: number, to: number) => KopOperandRef | undefined,
 ): void {
   re.lastIndex = 0;
+  // Un operando del grafico scritto su più righe generate (timer, `#`, SR) è un risultato solo.
+  const seen = new Set<string>();
   let m: RegExpExecArray | null;
   while ((m = re.exec(text))) {
     if (m[0] === '') {
@@ -77,15 +91,22 @@ function scanText(
     const match = m;
     const from = m.index;
     const to = from + m[0].length;
+    const kop = operandAt?.(from, to);
+    if (kop) {
+      const k = `${kop.elemId}|${kop.field}|${kop.from}|${kop.to}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+    }
     const hit: Hit = {
       loc: locate(from, to),
       match: m[0],
       preview: previewOf(text, from, to),
-      ...meta,
+      ...(kop ? { editable: true } : meta),
     };
     out.push({
       hit,
       text,
+      ...(kop ? { kop } : {}),
       replacement: (r) => (o.regex ? expand(r, match, text) : r),
     });
   }
@@ -125,6 +146,26 @@ function scanBlock(re: RegExp, o: FindOptions, d: PlcDevice, b: Block, out: Matc
         ? { editable: false, reason: 'MC7_GREZZO' }
         : ok;
     const shown = displayText(n.source, o.mnemonic === 'de' ? 'german' : 'international');
+    // Un risultato dentro un solo operando del grafico si sostituisce nel grafico.
+    let resolve: ReturnType<typeof kopOperandResolver> | undefined;
+    const operandAt =
+      n.lad && !protectedBlock && !unwritable
+        ? (from: number, to: number): KopOperandRef | undefined => {
+            const start = shown.lastIndexOf('\n', from - 1) + 1;
+            const line = shown.slice(0, from).split('\n').length;
+            const end = shown.indexOf('\n', start);
+            // Il risultato su più righe non sta in un operando.
+            if (to > (end < 0 ? shown.length : end)) return undefined;
+            resolve ??= kopOperandResolver(b as CodeBlock, d);
+            return resolve(
+              i,
+              line,
+              shown.slice(start, end < 0 ? undefined : end),
+              from - start,
+              to - from,
+            );
+          }
+        : undefined;
     scanText(
       re,
       shown,
@@ -139,6 +180,7 @@ function scanBlock(re: RegExp, o: FindOptions, d: PlcDevice, b: Block, out: Matc
       }),
       meta,
       out,
+      operandAt,
     );
   });
 }

@@ -10,8 +10,22 @@ _Impostazioni → Funzioni sperimentali_. Da quel momento, in _Inserisci → Nuo
 
 1. **Stesso disegno del KOP.** Un blocco FUP ha le stesse reti di un blocco KOP, disegnate a riquadri: `&` per una serie di contatti, `>=1` per un parallelo, un cerchietto per una negazione, le uscite (`=`, `S`, `R`, temporizzatori, contatori, salti) a destra con l'operando sopra.
 2. **Cambiare linguaggio.** _Passa a KOP/FUP_ sopra i segmenti (o _Modifica → Cambia linguaggio KOP/FUP_) cambia il linguaggio del blocco senza perdere nulla. Si può annullare.
-3. **Modificare.** Un clic seleziona un elemento. Doppio clic o Invio modificano l'operando (Invio conferma, Esc annulla) e Canc elimina l'elemento.
-4. **Aggiungere elementi.** In FUP non si inserisce: si passa a KOP, si aggiunge e si torna a FUP.
+3. **Modificare.** Un clic (o Tab) seleziona un elemento; le frecce passano al precedente (← ↑) o al successivo (→ ↓). Doppio clic o Invio modificano l'operando (Invio conferma, Esc annulla) e Canc elimina l'elemento.
+4. **Aggiungere elementi.** Come in KOP, senza cambiare linguaggio. Un elemento nuovo va dopo quello selezionato; senza selezione, in fondo alla serie principale.
+   - **Tavolozza delle istruzioni:** un clic inserisce nella selezione; trascinando su un elemento si inserisce dopo di lui. Un FC o un FB trascinato dall'albero del progetto diventa un box CALL.
+   - **Tasti e barra sopra il segmento:**
+
+     | Tasto    | Azione                                                                                                            |
+     | -------- | ----------------------------------------------------------------------------------------------------------------- |
+     | F2       | Entrata `&`: un contatto dopo l'entrata selezionata, nello stesso riquadro                                        |
+     | F3       | Entrata `&` negata                                                                                                |
+     | F8       | Entrata `>=1`: un'entrata in parallelo a quella selezionata                                                       |
+     | F9       | Chiude il `>=1` dopo l'entrata selezionata (le entrate fra i due ci entrano)                                      |
+     | N        | Nega: un contatto passa NA ↔ NC; la prima entrata di un riquadro riceve il cerchietto; su un cerchietto lo toglie |
+     | F7       | Uscita `=` (seleziona quella vuota, se c'è)                                                                       |
+     | Shift+F7 | Nuova uscita con una sua entrata (ramo a T)                                                                       |
+
+     Le uscite `S`, `R`, temporizzatori, contatori e salti si aggiungono dalla tavolozza; i box (MOVE, ADD_I…) dalla tavolozza o da _Box vuoto_ nella barra.
 5. **Compilare.** Come un blocco KOP: stesso AWL generato, stessi errori.
 
 ## SCL

@@ -41,6 +41,7 @@ import {
 } from '@baaportal/s7-types';
 import { createAwlContext } from './awlContext';
 import { findSystemFb, toTypedMembers } from './members';
+import { convertBlockToGraphic } from './awlToGraphic';
 import { blockSources, kopSources, type KopNetworkResult } from './kopSources';
 import { isGraphic } from './model';
 import type {
@@ -62,6 +63,7 @@ export type { Mc7Diagnostic };
 /** Codici delle diagnostiche che questo ponte emette (oltre a quelli di `MC7_DIAG_CODES`). */
 export const MC7_BRIDGE_DIAG_CODES = [
   'ACCESSO_ASSOLUTO_ISTANZA',
+  'AWL_NON_CONVERTITO',
   'BLOCCO_IMPORTATO_NON_RICODIFICABILE',
   'DB_GENERE_NON_GESTITO',
   'DB_NON_CONVERTITO',
@@ -1927,6 +1929,7 @@ interface BuildCtx {
 export interface ImportNote {
   block: string;
   code:
+    | 'AWL_NON_CONVERTITO'
     | 'BLOCCO_PROTETTO_KNOW_HOW'
     | 'CALL_RICOSTRUITA_CON_PROGETTO'
     | 'DB_GENERE_NON_GESTITO'
@@ -2153,6 +2156,30 @@ function decodedToBlock(
   return { block, warnings: c.warnings, notes: c.notes };
 }
 
+/**
+ * Un blocco KOP o FUP sulla CPU (byte del linguaggio 0x02/0x03) torna grafico se ogni segmento si
+ * converte con lo stesso AWL (`convertBlockToGraphic`, nel dispositivo come sarà dopo
+ * l'importazione); altrimenti resta AWL con la nota `AWL_NON_CONVERTITO`. Un blocco di sola
+ * lettura resta AWL. Le impronte si rifanno sul blocco convertito.
+ */
+function graphicFromCpu(
+  b: Block,
+  language: number,
+  future: PlcDevice,
+  newId: NewId,
+): Omit<ImportNote, 'block'> | undefined {
+  const lang = language === 0x02 ? 'KOP' : language === 0x03 ? 'FUP' : undefined;
+  if (!lang || b.kind === 'DB' || b.kind === 'IDB' || !b.mc7?.exact) return undefined;
+  const failed = convertBlockToGraphic(b, future, lang, newId);
+  if (failed.length > 0) {
+    const networks = failed.map((f) => f.network).join(', ');
+    return { code: 'AWL_NON_CONVERTITO', params: { language: lang, networks } };
+  }
+  b.mc7.sourceHash = sourceHashOf(b);
+  b.mc7.interfaceHash = interfaceHashOf(b);
+  return undefined;
+}
+
 const fbNameIn =
   (device: PlcDevice) =>
   (n: number): string | undefined =>
@@ -2181,6 +2208,8 @@ export function blockFromMc7(
   const others = device.blocks.filter(
     (x) => !(classOf(x.kind) === classOf(b.kind) && x.number === b.number),
   );
+  const graphic = graphicFromCpu(b, d.language, { ...device, blocks: [...others, b] }, newId);
+  if (graphic) r.notes.push(graphic);
   const scope: ImportScope = { batch: new Set([b.id]), kept: new Set(), before: device };
   for (const n of stampFidelity([b], { ...device, blocks: [...others, b] }, scope)) {
     r.notes.push({ code: n.code, ...(n.params ? { params: n.params } : {}) });
@@ -2617,6 +2646,7 @@ export function planImport(
   const fbNames = new Map<number, string>();
   for (const b of device.blocks) if (b.kind === 'FB') fbNames.set(b.number, b.name);
   for (const x of decoded) if (x.cls === 'FB') fbNames.set(x.d.number, x.name);
+  const languageOf = new Map<Block, number>();
   for (const x of decoded) {
     try {
       const { block, warnings, notes } = decodedToBlock(x.d, {
@@ -2629,6 +2659,7 @@ export function planImport(
         block.id = x.existing.id;
         block.group = x.existing.group;
       }
+      languageOf.set(block, x.d.language);
       for (const w of warnings) plan.warnings.push(`${x.name}: ${w}`);
       for (const n of notes) plan.notes.push({ ...n, block: x.name });
       for (const callee of rebuiltAgainst(x.d, fromDevice)) {
@@ -2652,6 +2683,16 @@ export function planImport(
     }
   }
   plan.skipped.sort((a, b) => a.index - b.index);
+  // Blocchi KOP/FUP sulla CPU: nel dispositivo come sarà dopo (i chiamati del lotto compresi).
+  const replacedBy = new Map(plan.replace.map((r) => [r.existing.id, r.incoming]));
+  const after: PlcDevice = {
+    ...device,
+    blocks: [...device.blocks.map((b) => replacedBy.get(b.id) ?? b), ...plan.create],
+  };
+  for (const [b, language] of languageOf) {
+    const note = graphicFromCpu(b, language, after, newId);
+    if (note) plan.notes.push({ ...note, block: b.name });
+  }
   // Regola S: i blocchi di questa importazione sono un lotto.
   const batchId = newId();
   const incoming = () => [

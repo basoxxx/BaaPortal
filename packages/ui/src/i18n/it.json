@@ -95,6 +95,12 @@
     "importSkipped": "{{file}}: saltato ({{reason}})",
     "importReadOnly": "Il blocco {{name}} è stato importato in sola lettura: non si può ricodificare identico.",
     "importWarning": "Importazione: {{message}}",
+    "awlConvert": {
+      "SHAPE": "{{block}}, segmento {{network}}: resta in AWL, nessuna rete KOP/FUP dà le stesse istruzioni (riconosciuto fino alla riga {{line}}).",
+      "SYNTAX": "{{block}}, segmento {{network}}: resta in AWL, il codice ha errori.",
+      "EMPTY": "{{block}}, segmento {{network}}: resta in AWL, non ci sono istruzioni.",
+      "TOO_COMPLEX": "{{block}}, segmento {{network}}: resta in AWL, troppe combinazioni da provare."
+    },
     "importZipInvalid": "Impossibile leggere l'archivio \"{{name}}\": {{message}}",
     "importZipEmpty": "L'archivio \"{{name}}\" non contiene blocchi (cartella blocchi/).",
     "importFailed": "Importazione dei blocchi non riuscita: {{message}}",
@@ -173,6 +179,7 @@
     "insert.device": "Nuovo dispositivo…",
     "insert.block": "Nuovo blocco…",
     "block.switchLanguage": "Cambia linguaggio KOP/FUP",
+    "block.convertToGraphic": "Converti in KOP/FUP",
     "online.goOnline": "Collegamento online",
     "online.compare": "Confronta con la CPU",
     "online.goOffline": "Interrompi collegamento online",
@@ -504,6 +511,7 @@
     "addDevice": "Aggiungi dispositivo",
     "addBlock": "Aggiungi blocco",
     "switchLanguage": "Cambia linguaggio",
+    "convertToGraphic": "Converti in KOP/FUP",
     "addTagTable": "Aggiungi tabella delle variabili",
     "addUdt": "Aggiungi tipo di dati",
     "paste": "Incolla oggetti",
@@ -878,6 +886,7 @@
     "removeOverride": "Rimuovi",
     "removeOverrideLabel": "Rimuovi il valore di {{path}}",
     "deleteNetwork": "Elimina segmento",
+    "convertNetwork": "Converti in KOP/FUP",
     "instanceFbMissing": "Il DB di istanza si riferisce all'FB {{name}}, che non esiste",
     "problems": "Problemi",
     "mnemonic": "Mnemonica",
@@ -893,7 +902,7 @@
     "rawHint": "Questa rete contiene istruzioni MC7 grezze: si può modificare solo togliendole o ripristinandola.",
     "showAwl": "Mostra AWL",
     "hideAwl": "Nascondi AWL",
-    "kopAwlOnly": "Segmento in AWL: la conversione arriva con il piano 4C",
+    "kopAwlOnly": "Segmento in AWL: «Converti in KOP/FUP» nel menu del segmento lo rende grafico, se una rete KOP dà le stesse istruzioni.",
     "toFup": "Passa a FUP",
     "toKop": "Passa a KOP"
   },
@@ -1101,6 +1110,7 @@
       "DB_NON_CONVERTITO_rebuilt_changed": "Il DB resta un DB globale in sola lettura coi suoi byte: BaaPortal rifà la struttura di {{fb}} perché {{src}} è cambiato, e come suo DB di istanza sarebbe bloccato.",
       "DB_NON_CONVERTITO_rebuilt_changed_via": "Il DB resta un DB globale in sola lettura coi suoi byte: BaaPortal rifà la struttura di {{fb}} ({{via}} si rifà perché {{src}} è cambiato), e come suo DB di istanza sarebbe bloccato.",
       "ACCESSO_ASSOLUTO_ISTANZA": "Rete {{network}}: l'interfaccia è cambiata: gli accessi assoluti all'area d'istanza non seguono i nuovi offset, verificarli.",
+      "AWL_NON_CONVERTITO": "Sulla CPU il blocco è in {{language}}: resta in AWL perché i segmenti {{networks}} non hanno una rete {{language}} che dia le stesse istruzioni.",
       "BLOCCO_IMPORTATO_NON_RICODIFICABILE": "Il blocco importato non si può ricodificare dopo le modifiche: ripristinarlo o reimportarlo.",
       "BLOCK_NUMBER": "Numero di blocco fuori intervallo.",
       "BLOCK_TOO_LARGE": "Il blocco è troppo grande per il formato MC7.",
@@ -1687,15 +1697,15 @@
       "DIV_R": "DIV_R (Divisione REAL)"
     },
     "network": "Segmento KOP {{n}}",
-    "toolbar": "Strumenti del segmento KOP",
+    "toolbar": "Strumenti del segmento",
     "slot": "Punto d'inserimento",
     "operand": "Operando",
     "boxMenu": "Box",
     "fupView": "Vista FUP del segmento",
-    "fupHint": "Per aggiungere elementi passa a KOP",
     "boxEl": "Box {{kind}}",
     "cannotClose": "Impossibile chiudere il ramo qui: scegli un elemento che segue il ramo aperto, nella stessa serie.",
     "cannotDo": "Operazione non possibile in questo punto.",
+    "cannotNegate": "Qui non si nega: scegli un contatto, la prima entrata di un riquadro o un cerchietto di negazione.",
     "tool": {
       "contactNo": "NA",
       "contactNc": "NC",
@@ -1704,6 +1714,15 @@
       "openBranch": "Apri ramo",
       "closeBranch": "Chiudi ramo",
       "box": "Box vuoto"
+    },
+    "fupTool": {
+      "contactNo": "Entrata &",
+      "contactNc": "Entrata & negata",
+      "openBranch": "Entrata >=1",
+      "closeBranch": "Chiudi >=1",
+      "negate": "Nega",
+      "coil": "Uscita =",
+      "tBranch": "Nuova uscita"
     },
     "field": {
       "op": "Operando",
@@ -1732,7 +1751,7 @@
       "shift": "Scorrimento",
       "jumps": "Salti",
       "program": "Controllo del programma",
-      "noTarget": "Seleziona un punto in un segmento KOP"
+      "noTarget": "Seleziona un punto in un segmento KOP o FUP"
     }
   }
 }

@@ -154,11 +154,17 @@ describe('blocchi KOP nell’editor dei blocchi', () => {
         }),
       );
       expect(screen.getByTestId('kop-awl-hint')).toHaveTextContent(
-        'Segmento in AWL: la conversione arriva con il piano 4C',
+        'Segmento in AWL: «Converti in KOP/FUP» nel menu del segmento',
       );
       expect(screen.getByRole('textbox', { name: 'Codice del segmento 1' })).toHaveTextContent(
         'A I 0.0',
       );
+      // «Converti in KOP/FUP» dal menu del segmento: torna grafico
+      await app.user.click(screen.getByRole('button', { name: 'Menu del segmento 1' }));
+      await app.user.click(screen.getByRole('menuitem', { name: 'Converti in KOP/FUP' }));
+      expect(kopBlocks(app)[0]!.networks[0]!.lad).toBeDefined();
+      expect(screen.queryByTestId('kop-awl-hint')).toBeNull();
+      expect(canvas()).toBeInTheDocument();
     },
     T,
   );
@@ -170,7 +176,7 @@ describe('blocchi KOP nell’editor dei blocchi', () => {
       const pal = await screen.findByTestId('lad-palette');
       const b = within(pal).getByRole('button', { name: 'Contatto NA' });
       expect(b).toBeDisabled();
-      expect(b).toHaveAttribute('title', 'Seleziona un punto in un segmento KOP');
+      expect(b).toHaveAttribute('title', 'Seleziona un punto in un segmento KOP o FUP');
     },
     T,
   );

@@ -1,6 +1,7 @@
 import type { StoreApi } from 'zustand/vanilla';
-import { findDevice, findSource, type ObjectRef } from '@baaportal/project';
+import { findDevice, findSource, kopElemAt, type ObjectRef } from '@baaportal/project';
 import { flushDetachedEdits, flushPendingEdits } from '../flushPendingEdits';
+import { displayText } from '../editors/awl/awlExtensions';
 import { currentMnemonic } from '../editors/awl/mnemonicPreference';
 import type { AppState } from '../state/store';
 import { findInProject } from './findInProject';
@@ -152,11 +153,28 @@ export function openHit(store: Store, hit: Hit): void {
     return;
   }
   const network = 'networkIndex' in l && l.networkIndex !== undefined ? l.networkIndex + 1 : 0;
+  // Un risultato nel codice generato di un segmento KOP/FUP porta all'elemento che l'ha prodotto.
+  let elemId: string | undefined;
+  let line = 1;
+  if (l.kind === 'network') {
+    const dev = findDevice(doc.project, l.deviceId);
+    const found = dev?.blocks.find((b) => b.id === l.blockId);
+    const block = found && found.kind !== 'DB' && found.kind !== 'IDB' ? found : undefined;
+    const net = block?.networks[l.networkIndex];
+    if (dev && block && net?.lad) {
+      // Gli offset sono nel testo mostrato (a capo LF): le righe sono le stesse del generato.
+      line = displayText(net.source, currentMnemonic() === 'de' ? 'german' : 'international')
+        .slice(0, l.from)
+        .split('\n').length;
+      elemId = kopElemAt(block, dev, network, line);
+    }
+  }
   s.openBlockAt({
     deviceId: l.deviceId,
     blockId: l.blockId,
     network,
-    line: 1,
+    line,
     ...(l.kind === 'network' ? { range: { from: l.from, to: l.to } } : {}),
+    ...(elemId ? { elemId } : {}),
   });
 }

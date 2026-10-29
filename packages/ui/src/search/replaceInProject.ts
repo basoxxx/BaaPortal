@@ -1,4 +1,12 @@
-import type { Block, PlcDevice, Project } from '@baaportal/project';
+import { mapOperands } from '@baaportal/ladfbd';
+import {
+  kopSources,
+  type Block,
+  type CodeBlock,
+  type KopOperandRef,
+  type PlcDevice,
+  type Project,
+} from '@baaportal/project';
 import { lineEndingOf, storedText } from '../editors/awl/awlExtensions';
 import { scanProject, type Match } from './findInProject';
 import type { FindOptions, Hit, HitLocation } from './types';
@@ -62,16 +70,21 @@ export function replaceInProject(
   const mnemonic = o.mnemonic === 'de' ? 'german' : 'international';
 
   // Raggruppa per campo di testo da riscrivere.
-  const groups = new Map<string, { loc: HitLocation; to: string; text: string }[]>();
+  const groups = new Map<
+    string,
+    { loc: HitLocation; to: string; text: string; kop?: KopOperandRef }[]
+  >();
   const push = (g: string, loc: HitLocation, m: Match) => {
     const list = groups.get(g) ?? [];
-    list.push({ loc, to: m.replacement(replacement), text: m.text });
+    list.push({ loc, to: m.replacement(replacement), text: m.text, kop: m.kop });
     groups.set(g, list);
   };
   for (const m of todo) {
     const l = m.hit.loc;
     if (l.kind === 'tag') push(`tag|${l.deviceId}|${l.tableId}|${l.tagId}|${l.field}`, l, m);
     else if (l.kind === 'source') push(`src|${l.deviceId}|${l.sourceId}`, l, m);
+    else if (l.kind === 'network' && m.kop)
+      push(`kop|${l.deviceId}|${l.blockId}|${l.networkIndex}`, l, m);
     else
       push(
         `${l.kind}|${l.deviceId}|${l.blockId}|${'networkIndex' in l ? l.networkIndex : ''}`,
@@ -113,6 +126,35 @@ export function replaceInProject(
         break;
       }
       case 'network': {
+        if (list[0]!.kop) {
+          // Un operando del grafico non può avere a capo: i risultati con a capo si saltano.
+          const ok = list.filter((x) => !/[\r\n]/.test(x.to));
+          skipped += list.length - ok.length;
+          if (ok.length === 0) continue;
+          const b = blk(l) as CodeBlock;
+          const n = b.networks[l.networkIndex]!;
+          const per = new Map<string, typeof ok>();
+          for (const x of ok) {
+            const k = `${x.kop!.elemId}|${x.kop!.field}`;
+            per.set(k, [...(per.get(k) ?? []), x]);
+          }
+          n.lad = mapOperands(n.lad!, (value, _role, at) => {
+            const hits = per.get(`${at.id}|${at.field}`);
+            if (!hits) return value;
+            let out = value;
+            for (const x of [...hits].sort((a, c) => c.kop!.from - a.kop!.from)) {
+              out = out.slice(0, x.kop!.from) + x.to + out.slice(x.kop!.to);
+            }
+            return out;
+          });
+          // La sorgente generata segue il grafico (come dopo ogni modifica dell'editor).
+          const sources = kopSources(b, dev(l.deviceId));
+          b.networks.forEach((x, i) => {
+            x.source = sources[i]?.source ?? x.source;
+          });
+          replaced += ok.length;
+          continue;
+        }
         const n = (blk(l) as Extract<Block, { networks: unknown }>).networks[l.networkIndex]!;
         n.source = storedText(applyAll(list[0]!.text, list), mnemonic, lineEndingOf(n.source));
         break;

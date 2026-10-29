@@ -13,3 +13,4 @@ export * from './watchOperand';
 export * from './plcAccess';
 export * from './backupFile';
 export * from './kopSources';
+export * from './awlToGraphic';

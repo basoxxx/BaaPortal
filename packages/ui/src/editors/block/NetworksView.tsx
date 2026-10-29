@@ -27,6 +27,7 @@ import { FupNetworkView } from '../fbd/FupNetworkView';
 import { LadNetworkEditor } from '../lad/LadNetworkEditor';
 import { setLadActive } from '../lad/ladActive';
 import { callInstanceOf } from './callInstance';
+import { convertAwl } from './convertAwl';
 import { hasRawLines, isLockedImport, lockedBannerKey } from './readOnlyImport';
 import { useMnemonic } from '../awl/mnemonicPreference';
 import { useAppStore, useServices } from '../../state/AppContext';
@@ -266,7 +267,15 @@ export function NetworksView({ deviceId, blockId }: Props) {
     if (!reveal || reveal.blockId !== blockId || reveal.deviceId !== deviceId || !block) return;
     const n = reveal.network > 0 ? block.networks[reveal.network - 1] : undefined;
     const handle = n && handles.current.get(n.id);
-    if (handle && reveal.range) handle.selectRange(reveal.range.from, reveal.range.to);
+    if (reveal.elemId) {
+      // Elemento del grafico KOP/FUP: lo stesso clic e fuoco dell'utente lo selezionano.
+      const el = root.current?.querySelector<HTMLElement>(
+        `[data-lad-id="${reveal.elemId}"],[data-fup-id="${reveal.elemId}"]`,
+      );
+      el?.click();
+      el?.focus();
+      el?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    } else if (handle && reveal.range) handle.selectRange(reveal.range.from, reveal.range.to);
     else if (handle) handle.focusAt(offsetOfLineCol(handle.getText(), Math.max(reveal.line, 1), 1));
     store.getState().clearCompileReveal(reveal.n);
   }, [reveal, block, blockId, deviceId, store]);
@@ -306,8 +315,22 @@ export function NetworksView({ deviceId, blockId }: Props) {
     (byNetwork[n.id] ?? NO_DIAGNOSTICS).map((d) => ({ d, id: n.id, pos: i + 1 })),
   );
   const kopProblems = kopMessages.flatMap((m, i) =>
-    [...[...m.byElem.values()].flat(), ...m.loose].map((message) => ({ pos: i + 1, message })),
+    [
+      ...[...m.byElem].flatMap(([elemId, ms]) => ms.map((message) => ({ elemId, message }))),
+      ...m.loose.map((message) => ({ elemId: undefined, message })),
+    ].map(({ elemId, message }) => ({ pos: i + 1, message, elemId })),
   );
+  /** Voce del menu di un segmento AWL di un blocco KOP/FUP: lo converte in grafico. */
+  const convertItem = (id: string) => {
+    const at = block.networks.findIndex((x) => x.id === id);
+    const n = block.networks[at];
+    return {
+      id: 'convert',
+      label: t('block.convertNetwork'),
+      disabled: locked || !n || !!n.lad || n.source.trim() === '',
+      run: () => convertAwl(store, deviceId, blockId, at),
+    };
+  };
   const onDraft = (n: Network, text: string) => {
     if (text === shown(n.source, mnemonic)) drafts.current.delete(n.id);
     else drafts.current.set(n.id, { base: n.source, mnemonic, text });
@@ -401,15 +424,15 @@ export function NetworksView({ deviceId, blockId }: Props) {
             n.lad || n.source === '' ? (
               <>
                 {isFup ? (
-                  <>
-                    <FupNetworkView
-                      net={n.lad ?? placeholder(n.id)}
-                      diagnostics={kopMessages[i]?.byElem ?? NO_MESSAGES}
-                      readOnly={locked}
-                      onChange={(next) => editLad(n.id, next, 'history.editLad')}
-                    />
-                    <p className="baa-raw-hint">{t('lad.fupHint')}</p>
-                  </>
+                  <FupNetworkView
+                    net={n.lad ?? placeholder(n.id)}
+                    diagnostics={kopMessages[i]?.byElem ?? NO_MESSAGES}
+                    readOnly={locked}
+                    onChange={(next, key) => editLad(n.id, next, key)}
+                    callParams={callParams}
+                    onActive={(api, on) => setLadActive(api, on, { deviceId, blockId })}
+                    callOfDrop={(raw) => callInstanceOf(dev, raw)}
+                  />
                 ) : (
                   <LadNetworkEditor
                     net={n.lad ?? placeholder(n.id)}
@@ -540,7 +563,22 @@ export function NetworksView({ deviceId, blockId }: Props) {
             hidden={kopProblems.length === 0}
           >
             {kopProblems.map((p, k) => (
-              <li key={k}>{t('lad.problemRow', p)}</li>
+              <li key={k}>
+                <button
+                  type="button"
+                  onClick={() =>
+                    store.getState().openBlockAt({
+                      deviceId,
+                      blockId,
+                      network: p.pos,
+                      line: 1,
+                      ...(p.elemId ? { elemId: p.elemId } : {}),
+                    })
+                  }
+                >
+                  {t('lad.problemRow', { pos: p.pos, message: p.message })}
+                </button>
+              </li>
             ))}
           </ul>
         </section>
@@ -557,6 +595,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
           anchor={menu.anchor}
           label={t('block.networkMenu')}
           items={[
+            ...(isKop ? [convertItem(menu.id)] : []),
             {
               id: 'delete',
               label: t('block.deleteNetwork'),

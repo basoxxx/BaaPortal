@@ -4,6 +4,7 @@
 import type { AwlContext } from '@baaportal/awl';
 import {
   blockToAwl,
+  mapOperands,
   normalizeInstance,
   type LadDiag,
   type LadNetwork,
@@ -118,4 +119,57 @@ export function kopSources(block: CodeBlock, dev: PlcDevice): KopNetworkResult[]
 /** L'AWL di ogni segmento, qualsiasi sia il linguaggio del blocco. */
 export function blockSources(block: CodeBlock, dev: PlcDevice): string[] {
   return kopSources(block, dev).map((r) => r.source);
+}
+
+/**
+ * L'elemento del grafico che ha prodotto la riga AWL `line` (da 1) del segmento `network` (da 1)
+ * di un blocco KOP/FUP; `undefined` se il segmento non ha grafico o la riga non ha un proprietario.
+ */
+export function kopElemAt(
+  block: CodeBlock,
+  dev: PlcDevice,
+  network: number,
+  line: number,
+): string | undefined {
+  if (network < 1 || line < 1 || !isKop(block, network - 1)) return undefined;
+  const lines = kopSources(block, dev)[network - 1]?.lines ?? [];
+  return lines.filter((l) => l.line <= line - 1).at(-1)?.elemId;
+}
+
+/** Un intervallo dentro l'operando `field` dell'elemento `elemId` (offset nel testo dell'operando). */
+export type KopOperandRef = { elemId: string; field: string; from: number; to: number };
+
+/**
+ * Per un risultato di Trova nel codice generato: se `len` caratteri da `col` (0, nella riga
+ * `lineText` da 1 di `network`, da 0) cadono per intero dentro un solo operando dell'elemento che
+ * ha prodotto la riga, dice quale e dove. `undefined` per il testo solo generato (mnemonici,
+ * `:=`, etichette) o se la riga non scrive l'operando come nel grafico.
+ */
+export function kopOperandResolver(
+  block: CodeBlock,
+  dev: PlcDevice,
+): (
+  network: number,
+  line: number,
+  lineText: string,
+  col: number,
+  len: number,
+) => KopOperandRef | undefined {
+  const results = kopSources(block, dev);
+  return (network, line, lineText, col, len) => {
+    const lad = isKop(block, network);
+    const elemId = results[network]?.lines.filter((l) => l.line <= line - 1).at(-1)?.elemId;
+    if (!lad || !elemId) return undefined;
+    const found = new Map<string, KopOperandRef>();
+    mapOperands(lad, (value, _role, at) => {
+      if (at.id !== elemId || value === '') return value;
+      for (let i = lineText.indexOf(value); i >= 0; i = lineText.indexOf(value, i + 1)) {
+        if (col >= i && col + len <= i + value.length) {
+          found.set(at.field, { elemId, field: at.field, from: col - i, to: col - i + len });
+        }
+      }
+      return value;
+    });
+    return found.size === 1 ? [...found.values()][0] : undefined;
+  };
 }
