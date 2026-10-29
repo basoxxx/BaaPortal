@@ -27,6 +27,7 @@ import { FupNetworkView } from '../fbd/FupNetworkView';
 import { LadNetworkEditor } from '../lad/LadNetworkEditor';
 import { setLadActive } from '../lad/ladActive';
 import { callInstanceOf } from './callInstance';
+import { convertAwl } from './convertAwl';
 import { hasRawLines, isLockedImport, lockedBannerKey } from './readOnlyImport';
 import { useMnemonic } from '../awl/mnemonicPreference';
 import { useAppStore, useServices } from '../../state/AppContext';
@@ -319,6 +320,17 @@ export function NetworksView({ deviceId, blockId }: Props) {
       ...m.loose.map((message) => ({ elemId: undefined, message })),
     ].map(({ elemId, message }) => ({ pos: i + 1, message, elemId })),
   );
+  /** Voce del menu di un segmento AWL di un blocco KOP/FUP: lo converte in grafico. */
+  const convertItem = (id: string) => {
+    const at = block.networks.findIndex((x) => x.id === id);
+    const n = block.networks[at];
+    return {
+      id: 'convert',
+      label: t('block.convertNetwork'),
+      disabled: locked || !n || !!n.lad || n.source.trim() === '',
+      run: () => convertAwl(store, deviceId, blockId, at),
+    };
+  };
   const onDraft = (n: Network, text: string) => {
     if (text === shown(n.source, mnemonic)) drafts.current.delete(n.id);
     else drafts.current.set(n.id, { base: n.source, mnemonic, text });
@@ -583,6 +595,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
           anchor={menu.anchor}
           label={t('block.networkMenu')}
           items={[
+            ...(isKop ? [convertItem(menu.id)] : []),
             {
               id: 'delete',
               label: t('block.deleteNetwork'),

@@ -50,6 +50,7 @@ export const MENUS: MenuDef[] = [
       'edit.compileFull',
       'sep',
       'block.switchLanguage',
+      'block.convertToGraphic',
     ],
   },
   {

@@ -16,6 +16,7 @@ import { getSettings } from '../settings/settings';
 import { simControllerFor } from '../sim/simController';
 import { targetPlcId } from '../project/navigation/treeIds';
 import { isLockedImport } from '../editors/block/readOnlyImport';
+import { canConvertAwl, convertAwl } from '../editors/block/convertAwl';
 import { findDevice, isGraphic } from '@baaportal/project';
 
 export type CommandId =
@@ -50,6 +51,7 @@ export type CommandId =
   | 'insert.device'
   | 'insert.block'
   | 'block.switchLanguage'
+  | 'block.convertToGraphic'
   | 'online.goOnline'
   | 'online.goOffline'
   | 'online.compare'
@@ -108,6 +110,12 @@ function editableGraphicBlock(s: AppState) {
   return b && b.kind !== 'DB' && b.kind !== 'IDB' && isGraphic(b.language) && !isLockedImport(b)
     ? { deviceId: e.deviceId, blockId: b.id }
     : undefined;
+}
+/** Il blocco aperto nel riquadro con il fuoco. */
+function focusedBlock(s: AppState) {
+  const wa = s.workArea;
+  const e = wa.editors.find((x) => x.key === wa.panes[wa.focusedPane]);
+  return e?.kind === 'block' ? { deviceId: e.deviceId, blockId: e.objectId } : undefined;
 }
 const always = () => true;
 const never = () => false;
@@ -280,6 +288,16 @@ const list: Command[] = [
         if (b && b.kind !== 'DB' && b.kind !== 'IDB')
           b.language = b.language === 'KOP' ? 'FUP' : 'KOP';
       });
+    },
+  }),
+  def('block.convertToGraphic', {
+    isEnabled: (s) => {
+      const t = focusedBlock(s);
+      return !!t && canConvertAwl(s, t.deviceId, t.blockId);
+    },
+    run: ({ store }) => {
+      const t = focusedBlock(store.getState());
+      if (t) convertAwl(store, t.deviceId, t.blockId);
     },
   }),
   def('online.goOnline', {

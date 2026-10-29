@@ -6,3 +6,4 @@ export * from './validate.js';
 export * from './toAwl.js';
 export * from './block.js';
 export * from './operands.js';
+export * from './fromAwl.js';

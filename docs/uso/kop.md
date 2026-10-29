@@ -14,13 +14,14 @@ Guida breve all'editor a contatti (KOP, piano 4A). Un blocco KOP si disegna; Baa
 6. **Chiamare un blocco.** Si trascina un FC o un FB dall'albero sul segmento: nasce un box _CALL_ con i parametri del blocco chiamato. Per un FB senza DB di istanza, il DB va scritto a mano.
 7. **Mostra AWL.** Il pulsante sotto ogni segmento apre il codice AWL generato, di sola lettura. Gli operandi sono scritti in forma assoluta con il `%` (`A %I0.0`, `= %Q4.0`). Serve a vedere che cosa verrà compilato.
 8. **Annulla e salva.** Ogni modifica è un passo di _Annulla/Ripristina_. Il progetto salva il grafico e il codice AWL generato.
-9. **Compilare e provare.** Il blocco KOP si compila come gli altri (_Compila → Software_): gli errori del disegno bloccano la compilazione. Si carica nel simulatore e si prova con una tabella di controllo.
+9. **Convertire da AWL.** _Modifica → Converti in KOP/FUP_ trasforma un blocco AWL in KOP se ogni segmento ha una rete KOP che dà le stesse istruzioni; altrimenti il blocco non cambia e la finestra _Informazioni_ dice quali segmenti restano AWL e perché. In un blocco KOP o FUP lo stesso comando converte i segmenti AWL che si possono; un solo segmento si converte dal suo menu (⋯). Ogni conversione è un passo di _Annulla_. Si riconoscono le forme che BaaPortal stesso genera (`docs/limiti-noti.md`); un segmento scritto a mano con altre forme resta AWL, in sola lettura.
+10. **Compilare e provare.** Il blocco KOP si compila come gli altri (_Compila → Software_): gli errori del disegno bloccano la compilazione. Si carica nel simulatore e si prova con una tabella di controllo.
 
 ## Che cosa non si può ancora fare
 
 - Nessun box dentro un ramo parallelo né nella logica di un pin: un box va in serie sulla linea principale, o all'inizio di un ramo a T.
 - La rinomina dei simboli aggiorna anche gli operandi del grafico (KOP e FUP). _Trova_ cerca nel codice generato: un risultato dentro un solo operando si può sostituire (cambia l'operando nel grafico); quello che tocca testo solo generato (come `L`, `==I`, `:=`) resta non modificabile.
-- Non si converte un segmento AWL in KOP (né il contrario): arriva nel piano 4C. Un segmento con solo AWL si vede in AWL, sola lettura. Il passaggio KOP ↔ FUP c'è, in prova (`docs/uso/fup-scl.md`).
+- Un segmento KOP non torna AWL modificabile. Il passaggio KOP ↔ FUP c'è, in prova (`docs/uso/fup-scl.md`).
 - Un blocco KOP con errori non entra nella sorgente AWL esportata.
 
 L'elenco completo delle scelte e dei limiti è in `docs/limiti-noti.md`, sezione _Editor KOP (piano 4A)_.
