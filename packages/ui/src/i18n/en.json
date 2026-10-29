@@ -77,6 +77,7 @@
     "fileDialogFailed": "The file selection window could not be opened: {{message}}",
     "sourceReplaceChanged": "Source \"{{name}}\": the project changed while confirming and the objects to replace are no longer the ones listed. Nothing was changed: run \"Generate blocks from source\" again.",
     "actionFailed": "The operation failed: {{message}}",
+    "sclRenameSkipped": "The SCL text of {{blocks}} was not updated: \"{{name}}\" is not an SCL identifier (letters, digits and _ only). The old name stays there and fails to compile: fix it by hand or choose a name without spaces or accents.",
     "compileInterrupted": "Compilation stopped: the blocks already compiled stay compiled.",
     "compileFailed": "Compilation failed: {{message}}",
     "simStarted": "Simulation started for {{name}} (CPU in STOP).",

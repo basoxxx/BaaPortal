@@ -95,3 +95,30 @@ describe('rinomina nel testo SCL', () => {
     expect(net(code(d, 'Main'))).toBe('"Dati".A.Posizione.X := 1.0;\n"Altro".A.Pos.X := 2.0;');
   });
 });
+
+describe('rinomina nel testo SCL con un nome che non è un identificatore', () => {
+  it('variabile e parametro: il testo SCL resta com è e i blocchi si restituiscono', () => {
+    const d = makeDevice();
+    const fc = withFc(d);
+    setScl(fc, '#A := A + 1;');
+    setScl(code(d, 'Main'), '"Calcola"(A := 1);');
+    const skipped = renameMemberWithOverrides(
+      d,
+      { kind: 'block', id: fc.id },
+      'fc-a',
+      'Motor Speed',
+    );
+    expect(net(fc)).toBe('#A := A + 1;');
+    expect(net(code(d, 'Main'))).toBe('"Calcola"(A := 1);');
+    expect(skipped).toEqual(['Calcola', 'Main']);
+    expect(fc.interface.input[0]!.name).toBe('Motor Speed');
+  });
+
+  it('con un identificatore non si restituisce niente', () => {
+    const d = makeDevice();
+    const fc = withFc(d);
+    setScl(fc, '#A := A + 1;');
+    expect(renameMemberWithOverrides(d, { kind: 'block', id: fc.id }, 'fc-a', 'B')).toEqual([]);
+    expect(net(fc)).toBe('#B := B + 1;');
+  });
+});

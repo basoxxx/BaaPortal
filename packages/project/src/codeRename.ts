@@ -3,7 +3,7 @@
 // toccano (sono file indipendenti).
 import { renameInSource, type RenameTarget } from '@baaportal/awl';
 import { mapOperands, type OperandRole } from '@baaportal/ladfbd';
-import { renameInScl, type SclRenameOptions } from '@baaportal/scl';
+import { renameInScl, sclRenameSkipped, type SclRenameOptions } from '@baaportal/scl';
 import { parseType, sameName, validateS7Name, type DataType } from '@baaportal/s7-types';
 import { kopSources } from './kopSources';
 import { isGraphic, type CodeBlock, type Member, type PlcDevice, type Udt } from './model';
@@ -63,13 +63,17 @@ function namedTypeOf(m: Member): string | undefined {
   return base.kind === 'named' ? base.name : undefined;
 }
 
-/** Applica `target` alle reti dei blocchi indicati. */
+/**
+ * Applica `target` alle reti dei blocchi indicati. Restituisce i blocchi SCL lasciati come sono
+ * perché il nome nuovo non si può scrivere lì (vedi `sclRenameSkipped`).
+ */
 function rewrite(
   device: PlcDevice,
   blocks: CodeBlock[],
   target: RenameTarget,
   newName: string,
-): void {
+): string[] {
+  const skipped: string[] = [];
   const key = nameKey(target.oldName);
   // In SCL un FB si chiama col suo DB di istanza: `"Inst_DB"(in := …)`.
   const sclOpts: SclRenameOptions =
@@ -99,6 +103,10 @@ function rewrite(
       }
       // Scorciatoia: se il nome vecchio non compare nel testo non c'e niente da fare.
       if (!nameKey(n.source).includes(key)) continue;
+      if (b.language === 'SCL' && sclRenameSkipped(n.source, target, newName, sclOpts)) {
+        if (!skipped.includes(b.name)) skipped.push(b.name);
+        continue;
+      }
       n.source =
         b.language === 'SCL'
           ? renameInScl(n.source, target, newName, sclOpts)
@@ -112,6 +120,7 @@ function rewrite(
       });
     }
   }
+  return skipped;
 }
 
 const usable = (oldName: string, newName: string): boolean =>
@@ -153,6 +162,7 @@ function chainTo(list: Member[], id: string): Member[] | undefined {
 /**
  * Rinomina di un membro (chiamare prima di cambiargli il nome): aggiorna il codice che lo usa.
  * Dove non si puo stabilire con certezza a cosa si riferisce un percorso, il codice resta com'e.
+ * Restituisce i blocchi SCL non aggiornati perché il nome nuovo non è un identificatore SCL.
  */
 export function renameMemberInCode(
   device: PlcDevice,
@@ -160,19 +170,19 @@ export function renameMemberInCode(
   memberId: string,
   oldName: string,
   newName: string,
-): void {
-  if (!usable(oldName, newName)) return;
+): string[] {
+  if (!usable(oldName, newName)) return [];
   if (owner.kind === 'udt') {
     const udt = device.udts.find((u) => u.id === owner.id);
     const chain = udt && chainTo(udt.members, memberId);
     if (udt && chain) renameUdtMember(device, udt, chain, newName);
-    return;
+    return [];
   }
   const block = device.blocks.find((b) => b.id === owner.id);
-  if (!block || block.kind === 'IDB') return;
+  if (!block || block.kind === 'IDB') return [];
   if (block.kind === 'DB') {
     const chain = chainTo(block.members, memberId);
-    if (!chain) return;
+    if (!chain) return [];
     const path = chain.slice(0, -1).map((m) => m.name);
     rewrite(
       device,
@@ -180,16 +190,14 @@ export function renameMemberInCode(
       { kind: 'member', root: 'symbol', rootName: block.name, path, oldName },
       newName,
     );
-    return;
+    return [];
   }
   for (const section of SECTIONS) {
     if (block.kind === 'OB' && section !== 'temp') continue;
     const chain = chainTo(block.interface[section], memberId);
-    if (chain) {
-      renameInterfaceMember(device, block, section, chain, newName);
-      return;
-    }
+    if (chain) return renameInterfaceMember(device, block, section, chain, newName);
   }
+  return [];
 }
 
 function renameInterfaceMember(
@@ -198,12 +206,12 @@ function renameInterfaceMember(
   section: Section,
   chain: Member[],
   newName: string,
-): void {
+): string[] {
   const target = chain[chain.length - 1]!;
   const oldName = target.name;
   const parents = chain.slice(0, -1).map((m) => m.name);
   // Dentro il blocco stesso: locale (o percorso con radice locale se e annidato).
-  rewrite(
+  const skipped = rewrite(
     device,
     [block],
     parents.length === 0
@@ -217,7 +225,7 @@ function renameInterfaceMember(
         },
     newName,
   );
-  if (block.kind === 'OB') return;
+  if (block.kind === 'OB') return skipped;
   const all = codeBlocks(device);
   const isParam =
     parents.length === 0 && (section === 'input' || section === 'output' || section === 'inOut');
@@ -233,7 +241,7 @@ function renameInterfaceMember(
               })
               .map((m) => m.name)
           : [];
-      rewrite(
+      const s = rewrite(
         device,
         [caller],
         {
@@ -245,12 +253,14 @@ function renameInterfaceMember(
         },
         newName,
       );
+      for (const n of s) if (!skipped.includes(n)) skipped.push(n);
     }
   }
-  if (block.kind !== 'FB' || section === 'temp') return;
+  if (block.kind !== 'FB' || section === 'temp') return skipped;
   // DB di istanza ("Istanza".membro) e multi-istanze (#istanza.membro), anche annidate: anche
   // attraverso il DB di istanza o le multi-istanze di un FB che contiene questo FB.
   renameNestedMember(device, { kind: 'fb', name: block.name }, parents, oldName, newName);
+  return skipped;
 }
 
 interface Root {

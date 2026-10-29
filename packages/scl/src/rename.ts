@@ -14,6 +14,13 @@ export type SclRenameOptions = {
   instanceDbs?: string[];
 };
 
+/**
+ * Una variabile locale o un parametro si scrivono senza virgolette: con un nome che non è un
+ * identificatore SCL (`Motor Speed`, `Velocità`) `renameInScl` lascia il testo com'è.
+ */
+const needsIdentifier = (target: RenameTarget, newName: string): boolean =>
+  (target.kind === 'local' || target.kind === 'callParam') && !IDENT.test(newName);
+
 /** Riscrive `source` sostituendo solo i token che si riferiscono a `target`. */
 export function renameInScl(
   source: string,
@@ -23,6 +30,35 @@ export function renameInScl(
 ): string {
   // Un nome con virgolette o caratteri di controllo romperebbe il codice.
   if (/["\u0000-\u001f\u007f\u2028\u2029]/.test(newName)) return source;
+  // `"Motor Speed"` sarebbe un simbolo globale: meglio il nome vecchio, che non compila.
+  if (needsIdentifier(target, newName)) return source;
+  const edits = sclEdits(source, target, newName, opts);
+  if (edits.size === 0) return source;
+  let out = '';
+  let pos = 0;
+  for (const [t, text] of [...edits].sort((a, b) => a[0].from - b[0].from)) {
+    out += source.slice(pos, t.from) + text;
+    pos = t.from + t.text.length;
+  }
+  return out + source.slice(pos);
+}
+
+/** Vero se `source` usa `target` ma `renameInScl` lo lascia com'è perché `newName` non si può scrivere. */
+export function sclRenameSkipped(
+  source: string,
+  target: RenameTarget,
+  newName: string,
+  opts: SclRenameOptions = {},
+): boolean {
+  return needsIdentifier(target, newName) && sclEdits(source, target, 'x', opts).size > 0;
+}
+
+function sclEdits(
+  source: string,
+  target: RenameTarget,
+  newName: string,
+  opts: SclRenameOptions,
+): Map<Tok, string> {
   const toks = lex(source, { errors: [] });
   const quoted = `"${newName}"`;
   const bare = IDENT.test(newName) ? newName : quoted;
@@ -59,7 +95,9 @@ export function renameInScl(
           edits.set(t, bare);
         break;
       case 'local':
-        if (isLocal(i, target.oldName)) edits.set(t, t.kind === 'local' ? `#${newName}` : bare);
+        // `Nome(…)` senza `#` chiama un blocco (come in sclToAwl), anche se c'è un locale `Nome`.
+        if (t.kind === 'id' && at(i + 1) === '(') break;
+        if (isLocal(i, target.oldName)) edits.set(t, t.kind === 'local' ? `#${newName}` : newName);
         break;
       case 'member': {
         const rootOk =
@@ -100,18 +138,11 @@ export function renameInScl(
           if (at(q) === '(') depth++;
           else if (at(q) === ')' && --depth === 0) break;
           else if (depth === 1 && isParamName(q) && sameName(toks[q]!.text, target.oldName))
-            edits.set(toks[q]!, bare);
+            edits.set(toks[q]!, newName);
         }
         break;
       }
     }
   }
-  if (edits.size === 0) return source;
-  let out = '';
-  let pos = 0;
-  for (const [t, text] of [...edits].sort((a, b) => a[0].from - b[0].from)) {
-    out += source.slice(pos, t.from) + text;
-    pos = t.from + t.text.length;
-  }
-  return out + source.slice(pos);
+  return edits;
 }

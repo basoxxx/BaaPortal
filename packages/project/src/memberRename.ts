@@ -153,24 +153,25 @@ function renameMemberInWatchRows(
 /**
  * Rinomina un membro di un blocco o di un UDT (da usare dentro `edit`) e sposta sul nome nuovo le
  * chiavi dei valori sostituiti che passano da lui: nei DB di istanza (anche attraverso multi-istanze)
- * e nei membri di tipo UDT o FB, diretti, in array o annidati.
+ * e nei membri di tipo UDT o FB, diretti, in array o annidati. Restituisce i blocchi SCL il cui
+ * testo non è stato aggiornato perché il nome nuovo non è un identificatore SCL.
  */
 export function renameMemberWithOverrides(
   device: PlcDevice,
   owner: { kind: 'block' | 'udt'; id: string },
   memberId: string,
   newName: string,
-): void {
+): string[] {
   const lists =
     owner.kind === 'udt'
       ? device.udts.filter((u) => u.id === owner.id).map((u) => u.members)
       : device.blocks.filter((b) => b.id === owner.id).flatMap(blockLists);
   let target: Member | undefined;
   for (const l of lists) target ??= findIn(l, memberId);
-  if (!target) return;
-  if (target.name === newName) return;
+  if (!target) return [];
+  if (target.name === newName) return [];
   // Il codice si aggiorna con i tipi com'erano; il nome del membro cambia dopo.
-  renameMemberInCode(device, owner, memberId, target.name, newName);
+  const sclSkipped = renameMemberInCode(device, owner, memberId, target.name, newName);
   renameMemberInWatchRows(device, owner, memberId, target.name, newName);
 
   if (pathSafe(newName)) {
@@ -206,4 +207,5 @@ export function renameMemberWithOverrides(
     for (const [rec, renames] of pending) applyRenames(rec, renames);
   }
   target.name = newName;
+  return sclSkipped;
 }
