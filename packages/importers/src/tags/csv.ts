@@ -89,8 +89,19 @@ export function parseTagsCsv(text: string): ParsedTags {
   const records = parseCsv(text, detectSeparator(text.replace(/^\ufeff/, '')));
   const [header, ...rows] = records;
   if (!header) return { tags: [], constants: [], errors: [] };
-  return buildTagRows(header.cells, rows);
+  return buildTagRows(
+    header.cells,
+    rows.map((r) => ({ ...r, cells: r.cells.map(unescapeFormula) })),
+  );
 }
+
+// Protezione dalle formule (OWASP, CSV injection): una cella che comincia con =, +, -, @, tab o CR
+// (dopo eventuali apici) si esporta con un apice in più. In lettura se ne toglie uno solo alle celle
+// fatte così: un apice iniziale seguito da altro (`'ciao`) è un valore e resta com'è.
+const FORMULA = /^'*[=+\-@\t\r]/;
+const ESCAPED = /^'+[=+\-@\t\r]/;
+const escapeFormula = (v: string): string => (FORMULA.test(v) ? `'${v}` : v);
+const unescapeFormula = (v: string): string => (ESCAPED.test(v) ? v.slice(1) : v);
 
 const quote = (v: string, sep: string): string =>
   /["\r\n]/.test(v) || v.includes(sep) ? `"${v.replace(/"/g, '""')}"` : v;
@@ -100,16 +111,18 @@ export function tagsToCsv(table: TagTable): string {
   const flag = (b: boolean): string => (b ? 'True' : 'False');
   const lines: string[][] = [[...TAG_COLUMNS]];
   for (const t of table.tags) {
-    lines.push([
-      t.name,
-      table.name,
-      t.type,
-      toLogicalAddress(t.address),
-      t.comment,
-      flag(t.hmi),
-      flag(t.hmi),
-      flag(t.hmi),
-    ]);
+    lines.push(
+      [
+        t.name,
+        table.name,
+        t.type,
+        toLogicalAddress(t.address),
+        t.comment,
+        flag(t.hmi),
+        flag(t.hmi),
+        flag(t.hmi),
+      ].map(escapeFormula),
+    );
   }
   return '\ufeff' + lines.map((l) => l.map((v) => quote(v, sep)).join(sep)).join('\r\n') + '\r\n';
 }

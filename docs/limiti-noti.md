@@ -304,7 +304,7 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
 - **Costanti in csv.** Il csv ha un solo foglio, quindi le costanti non si esportano: per averle si usa xlsx.
 - **xlsx scritto in forma minima.** Nessuna formattazione (larghezze, colori, stili); il file si apre ma è spartano.
 - **csv, virgolette non chiuse.** Una virgoletta aperta e mai chiusa inghiotte il resto del file in un solo errore `RIGA_ILLEGGIBILE`.
-- **csv, formule.** In esportazione le celle che iniziano con `=`, `+`, `-` o `@` non sono protette: Excel può leggerle come formule.
+- **csv, formule.** In esportazione una cella che inizia con `=`, `+`, `-`, `@`, tab o a capo (dopo eventuali apici) riceve un apice davanti (`'=1+1`), così Excel non la legge come formula. In importazione, a una cella che inizia con uno o più apici seguiti da uno di quei caratteri se ne toglie uno; `'ciao` resta com'è. Un file di altra origine con una cella `'=x` volutamente con l'apice la perde.
 - **xlsx, limite di dimensione.** Il file compresso può arrivare a 50 MB. Si gonfiano solo le voci che servono (cartella di lavoro, relazioni, stringhe condivise, tipi di contenuto e i fogli referenziati); ogni voce e il totale non possono superare 200 MB, altrimenti errore chiaro «troppo grande». Il limite per voce si fida della dimensione dichiarata nell'intestazione dello zip, e la misura reale viene ricontrollata dopo l'estrazione.
 - **Valori delle costanti importate.** Non vengono controllati rispetto al loro tipo, come nell'editor a griglia.
 - **xlsx, DOCTYPE.** Un DOCTYPE con sottoinsieme interno non si legge (errore chiaro).
