@@ -261,7 +261,8 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§10–§13). Come per il 
 - **Id diagnostici sintetici** dove il manuale non ne dà uno: `AVVIO`, `STOP_RICHIESTO`, `CANCELLAZIONE_TOTALE`, stack pieni, `MC7_NON_ESEGUIBILE`, `ISTRUZIONE_NON_S7300`, `OB_RICHIAMATO` generico, `SFC_NON_SIMULATA`, `SFB_NON_SIMULATA` (da 16#9000, in ordine stabile).
 - **Codici RET_VAL delle SFC non verificati:** 16#8091 per aree sovrapposte di BLKMOV/FILL potrebbe essere inventato; 16#8080 (SET_CLK), 16#80A1/16#80B1/16#80B2 (SFC 22–24), 16#0081/16#8082/16#8083 (RDSYSST) e i 16#8xyy generali (22 lettura, 23 scrittura, 24 ANY non valido, 28/29 allineamento, 3A DB) sono dedotti. Per i 16#8xyy il numero del parametro `x` conta IN, OUT, IN_OUT **escludendo RET_VAL**: potrebbe non corrispondere alla CPU vera.
 - **DEL_DB** di un DB aperto o richiamato: il DB sparisce subito, senza controlli.
-- **Compilatore e SFC:** il compilatore MC7 non sa passare DATE_AND_TIME e SSL_HEADER a SFC 0, 1 e 51 da AWL; si provano con liste di puntatori scritte a mano.
+- **Compilatore e SFC:** il compilatore MC7 non sa passare DATE_AND_TIME, SSL_HEADER e le strutture di RD_SINFO a SFC 0, 1, 6 e 51 da AWL; si provano con liste di puntatori scritte a mano.
+- **SFC 6, 13–15, 41–43 (da verificare su CPU reale):** SFC 13, 14 e 15 rispondono sempre «nessuno slave DP» (16#8090; SFC 13 con REQ = 0 dà 16#7000), perché la CPU simulata non ha periferia decentrata; il 16#8080 di EN_AIRT senza ritardi e il 16#7000 sono dedotti. DIS_AIRT ritarda OB35, OB82 e OB86 ma non l'OB80 del tempo di ciclo. RD_SINFO dà i dati di avvio dell'ultimo avvio a caldo anche senza OB100.
 - **SFC 64 TIME_TCK** conta dal primo RUN della CPU simulata, non dall'accensione; SFC 47 WAIT non attende davvero ma somma il tempo all'orologio; RDSYSST è sempre sincrona (BUSY 0).
 - **Stato degli SFB 0–5 fuori dal DB di istanza** (memorie dei fronti, istanti di avvio): la CPU non lo azzera con il download di un DB ma solo con STOP→RUN e MRES; le uscite cambiano solo alla chiamata.
 - **SFB 3 TP:** un fronte di IN esattamente alla fine dell'impulso si perde (dipende da quando si chiama l'SFB).
@@ -270,7 +271,7 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§10–§13). Come per il 
 - **CREAT_DB, codici 16#80A1/16#80B1/16#80B2 non verificati:** un'altra lettura del manuale dà 16#80A2 per la lunghezza errata e 16#80B1 per nessun numero libero.
 - **Senza OB1:** OB35 gira comunque all'inizio del ciclo, ma non c'è un controllo di fine ciclo (watchdog, evento di ciclo).
 - **OB121, profondità dei blocchi:** la profondità dei blocchi dentro l'OB121 riparte da 0 invece di sommarsi a quella del blocco interrotto.
-- **SFC e SFB non simulati:** sono un avviso («non simulata», BR = 0, uscite intatte, una volta per numero e per RUN), non un errore. Sono non simulate **tutte** le SFC e gli SFB tranne SFC 0, 1, 20, 21, 22, 23, 24, 46, 47, 51, 64 e SFB 0–5.
+- **SFC e SFB non simulati:** sono un avviso («non simulata», BR = 0, uscite intatte, una volta per numero e per RUN), non un errore. Sono non simulate **tutte** le SFC e gli SFB tranne SFC 0, 1, 6, 13, 14, 15, 20, 21, 22, 23, 24, 41, 42, 43, 46, 47, 51, 64 e SFB 0–5.
 
 ## Strumenti di test (piano 2C)
 

@@ -54,6 +54,7 @@ function layoutOf(b: SystemBlock): Layout {
 function standaloneServices(ctx: ExecContext): SystemServices {
   const boot = ctx.now();
   let offset = 0;
+  let delays = 0;
   let waitedUs = 0;
   const now = (): number => ctx.now() + Math.floor(waitedUs / 1000);
   return {
@@ -72,6 +73,9 @@ function standaloneServices(ctx: ExecContext): SystemServices {
     sfbState: new Map(),
     szl: () => undefined,
     maxDb: 16000,
+    retrigger: () => undefined,
+    delayInterrupts: (delta) => (delta < 0 && delays === 0 ? undefined : (delays += delta)),
+    startInfo: () => ({ top: new Uint8Array(12), startUp: new Uint8Array(12) }),
   };
 }
 

@@ -80,6 +80,15 @@ export interface SystemServices {
   readonly sfbState: Map<string, SfbState>;
   /** Numero massimo di DB della CPU (catalogo). */
   readonly maxDb: number;
+  /** Riavvia il controllo del tempo di ciclo (SFC 43 RE_TRIGR). */
+  retrigger(): void;
+  /**
+   * Ritardi degli allarmi dell'OB in corso (SFC 41/42): `+1` o `-1`; il numero dopo la chiamata,
+   * `undefined` se `-1` senza ritardi attivi.
+   */
+  delayInterrupts(delta: 1 | -1): number | undefined;
+  /** Primi 12 byte dei dati di avvio dell'OB in corso e dell'ultimo OB di avvio (SFC 6). */
+  startInfo(): { top: Uint8Array; startUp: Uint8Array };
 }
 
 /** Richiamo di una SFC o di un SFB, come lo vede il gestore. */
