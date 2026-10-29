@@ -67,7 +67,7 @@ Per ogni voce si indica che cosa succede oggi. "Errore chiaro" vuol dire che Baa
 - **`_DELE` usa 'A'.** Vedi «Caricamento e confronto (piano 3B)».
 - **Impostazione dell'ora con protezione di livello 3.** Anche la risposta `0xD0A1` è un'ipotesi (§12.0).
 - **Il numero di richieste nella conferma è un massimo solo se la CPU concorda una PDU di almeno 240 byte.** Con una PDU più piccola le richieste possono essere di più.
-- **Più tabelle con «Osserva tutto» interrogano ognuna per conto suo.** Il limite di 200 righe vale per tabella, e le tabelle aperte ma non in primo piano continuano a interrogare.
+- **Più tabelle online osservano insieme.** Le loro richieste si uniscono in un solo giro di letture per PLC (operandi uguali letti una volta) e il limite di 200 righe vale per l'insieme: le righe oltre il limite, in ordine di accensione, danno un errore di riga e un avviso. Una tabella che non è più aperta in un riquadro smette di interrogare. Sul simulatore resta una sola tabella osservata (vedi «Tabelle di controllo»).
 - **Il backup continua sul suo collegamento** anche se il collegamento online cade o si va offline: lo ferma solo _Interrompi_.
 - **I file `.baapbak` non compaiono nell'albero.** Restano così anche dopo il 3D: si aprono con la finestra dei file (vedi 3D).
 - **I record di diagnostica più corti di 20 byte si scartano.**
@@ -289,7 +289,7 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
 - **Tabelle di controllo.**
   - La scrittura di T e C non è supportata (lo stato si legge).
   - Non si osservano L, DI, accessi indiretti, puntatori, variabili locali (`#x`) né tipi composti (ARRAY, STRUCT, STRING interi).
-  - Si osserva una sola tabella alla volta: quella su cui si è attivato «Osserva tutto», finché è visibile in un riquadro qualsiasi; una tabella in una finestra staccata smette di essere osservata.
+  - Sul simulatore si osserva una sola tabella alla volta (online invece più tabelle insieme): quella su cui si è attivato «Osserva tutto», finché è visibile in un riquadro qualsiasi; una tabella in una finestra staccata smette di essere osservata.
   - Gli operandi si risolvono sul **progetto offline**, non sul programma caricato: se si modifica il layout di un DB senza caricarlo, letture e scritture usano i nuovi offset della modifica e non c'è confronto online/offline.
   - Le modifiche alle proprietà della CPU (tempo di ciclo, merker di clock, intervallo di OB35) valgono solo dopo aver riavviato la simulazione.
   - La rinomina di un tag, di una costante o di un blocco/DB aggiorna le righe che usano `"Nome"` o `"Nome".membro`; anche la rinomina di un **membro** di un DB, di un UDT o di un FB (DB di istanza) aggiorna le righe, nello stesso passo annullabile.

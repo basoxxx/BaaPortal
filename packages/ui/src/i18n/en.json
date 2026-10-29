@@ -151,7 +151,8 @@
     "watchExported": "Watch table \"{{name}}\" exported to \"{{path}}\".",
     "watchExportFailed": "Could not export watch table \"{{name}}\": {{message}}",
     "watchImported": "Import from \"{{name}}\": {{count}} rows added to table \"{{table}}\", {{skipped}} skipped{{detail}}.",
-    "watchImportFailed": "Could not import a watch table from \"{{name}}\": {{message}}"
+    "watchImportFailed": "Could not import a watch table from \"{{name}}\": {{message}}",
+    "watchSharedLimit": "The watch tables watched together exceed the limit of {{max}} rows on the PLC: the extra rows are not read (row error)."
   },
   "commands": {
     "project.new": "New…",
@@ -1360,7 +1361,8 @@
       "ONLINE_ADDRESS": "Address outside the limits accepted online (DB 1 to 65535, area within 2 MB).",
       "ONLINE_TOO_MANY": "Too many rows to monitor online: the CPU accepts at most 200.",
       "ONLINE_NO_COMMAND": "Online this row can only be monitored: PI, timers and counters cannot be modified."
-    }
+    },
+    "sharedLimit": "Not watched: the tables watched together exceed the limit of {{max}} rows."
   },
   "accessDevices": {
     "title": "Accessible devices",

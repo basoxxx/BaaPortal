@@ -17,7 +17,7 @@ import {
   type GridColumn,
   type GridDiagnostic,
 } from '../../grid/DataGrid';
-import { WatchOnlineController } from '../../online/watchOnline';
+import { watchHubFor } from '../../online/watchHub';
 import { MAX_WATCH_ITEMS } from '../../sim/protocol';
 import { simControllerFor } from '../../sim/simController';
 import { useAppStore, useServices } from '../../state/AppContext';
@@ -68,7 +68,7 @@ export function WatchTableView({ editor }: { editor: EditorRef }) {
   const plcOn = useAppStore((s) => s.online.status === 'on' && s.online.deviceId === deviceId);
   // La sorgente: il simulatore se è attivo, il PLC se si è online, altrimenti nessuna.
   const source: WatchSource | null = simOn ? 'sim' : plcOn ? 'plc' : null;
-  const online = useMemo(() => new WatchOnlineController(store, bridge), [store, bridge]);
+  const online = useMemo(() => watchHubFor(store, bridge).client(), [store, bridge]);
   const onlineState = useSyncExternalStore(online.subscribe, online.getState);
   const simWatching = useAppStore(
     (s) => s.sim.watch?.deviceId === deviceId && s.sim.watch.tableId === tableId,

@@ -151,7 +151,8 @@
     "watchExported": "Tabella di controllo \"{{name}}\" esportata in \"{{path}}\".",
     "watchExportFailed": "Impossibile esportare la tabella di controllo \"{{name}}\": {{message}}",
     "watchImported": "Importazione da \"{{name}}\": {{count}} righe aggiunte alla tabella \"{{table}}\", scartate {{skipped}}{{detail}}.",
-    "watchImportFailed": "Impossibile importare la tabella di controllo da \"{{name}}\": {{message}}"
+    "watchImportFailed": "Impossibile importare la tabella di controllo da \"{{name}}\": {{message}}",
+    "watchSharedLimit": "Le tabelle di controllo osservate insieme superano il limite di {{max}} righe sul PLC: le righe in più non vengono lette (errore sulla riga)."
   },
   "commands": {
     "project.new": "Nuovo…",
@@ -1360,7 +1361,8 @@
       "ONLINE_ADDRESS": "Indirizzo fuori dai limiti accettati online (DB da 1 a 65535, area entro 2 MB).",
       "ONLINE_TOO_MANY": "Troppe righe da osservare online: la CPU ne accetta al più 200.",
       "ONLINE_NO_COMMAND": "Online questa riga si può solo osservare: PI, temporizzatori e contatori non si comandano."
-    }
+    },
+    "sharedLimit": "Non osservata: le tabelle osservate insieme superano il limite di {{max}} righe."
   },
   "accessDevices": {
     "title": "Dispositivi accessibili",
