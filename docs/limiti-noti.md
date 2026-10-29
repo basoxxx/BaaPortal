@@ -291,7 +291,7 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
   - Si osserva una sola tabella alla volta: quella su cui si è attivato «Osserva tutto», finché è visibile in un riquadro qualsiasi; una tabella in una finestra staccata smette di essere osservata.
   - Gli operandi si risolvono sul **progetto offline**, non sul programma caricato: se si modifica il layout di un DB senza caricarlo, letture e scritture usano i nuovi offset della modifica e non c'è confronto online/offline.
   - Le modifiche alle proprietà della CPU (tempo di ciclo, merker di clock, intervallo di OB35) valgono solo dopo aver riavviato la simulazione.
-  - La rinomina di un tag, di una costante o di un blocco/DB aggiorna le righe che usano `"Nome"` o `"Nome".membro`; la rinomina di un **membro** di un DB o di un UDT non aggiorna le tabelle di controllo (la riga mostra un errore di risoluzione finché non si corregge).
+  - La rinomina di un tag, di una costante o di un blocco/DB aggiorna le righe che usano `"Nome"` o `"Nome".membro`; anche la rinomina di un **membro** di un DB, di un UDT o di un FB (DB di istanza) aggiorna le righe, nello stesso passo annullabile.
   - Non c'è un forzamento permanente né un «trigger»: c'è solo «Comanda», una scrittura una tantum.
   - Le tabelle non si copiano, tagliano, incollano né trascinano nell'albero; non ci sono gruppi né importazione o esportazione.
   - Al più 1000 righe osservate per richiesta; le righe oltre il limite danno un errore di riga.
