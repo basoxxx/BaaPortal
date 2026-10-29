@@ -60,7 +60,11 @@ export function blockText(b: Block, device: PlcDevice): NetworkText[] {
     return [{ title: '', lines: [b.instanceOf, ...ov] }];
   }
   const sources = blockSources(b, device);
-  return b.networks.map((n, k) => ({ title: n.title, lines: sources[k]!.split('\n') }));
+  return b.networks.map((n, k) => ({
+    title: n.title,
+    comment: n.comment,
+    lines: sources[k]!.split('\n'),
+  }));
 }
 
 type Online =
@@ -222,7 +226,10 @@ export function CompareView({ editor }: { editor: EditorRef }) {
           data-presence={d.presence}
         >
           <h4>
-            {t('compareView.network', { n: d.index + 1 })}
+            {t('compareView.network', { n: d.leftNo ?? d.rightNo })}
+            {d.leftNo && d.rightNo && d.leftNo !== d.rightNo
+              ? ` (${t('compareView.networkOnCpu', { n: d.rightNo })})`
+              : ''}
             {d.leftTitle || d.rightTitle ? ` - ${d.leftTitle || d.rightTitle}` : ''}
             {d.presence === 'left' ? ` (${t('compareView.onlyProject')})` : ''}
             {d.presence === 'right' ? ` (${t('compareView.onlyCpu')})` : ''}
@@ -233,6 +240,18 @@ export function CompareView({ editor }: { editor: EditorRef }) {
               {t('compareView.approximate')}
             </p>
           ) : null}
+          {(
+            [
+              ['title', d.titleDiff],
+              ['comment', d.commentDiff],
+            ] as const
+          ).map(([k, x]) =>
+            x ? (
+              <p key={k} className="baa-compare-note" data-testid={`compare-${k}-diff`}>
+                {t(`compareView.${k}Diff`, { left: x.left, right: x.right })}
+              </p>
+            ) : null,
+          )}
           <table>
             <tbody>
               {d.rows.map((r, i) => (

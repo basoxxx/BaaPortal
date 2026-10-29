@@ -147,11 +147,23 @@ export const lineDiff = (a: string[], b: string[]): DiffRow[] => lineDiffEx(a, b
 
 export interface NetworkText {
   title: string;
+  /** Commento della rete; assente dove non si conosce (il compilato della CPU non lo contiene). */
+  comment?: string;
   lines: string[];
 }
 
+/** Una differenza di titolo o di commento: si mostra, ma non entra nel verdetto del checksum. */
+export interface TextDiff {
+  left: string;
+  right: string;
+}
+
 export interface NetworkDiff {
+  /** Posizione nell'elenco allineato. */
   index: number;
+  /** Numero (da 1) della rete in ciascun lato; assente se la rete manca da quel lato. */
+  leftNo?: number;
+  rightNo?: number;
   /** Titolo di ciascun lato; assente se la rete manca da quel lato. */
   leftTitle?: string;
   rightTitle?: string;
@@ -161,27 +173,87 @@ export interface NetworkDiff {
   /** `both`: la rete c'è da entrambi i lati; altrimenti il lato che ce l'ha. */
   presence: 'both' | 'left' | 'right';
   different: boolean;
+  titleDiff?: TextDiff;
+  commentDiff?: TextDiff;
 }
 
-/** Reti allineate per posizione: quelle in più su un lato sono tutte «solo progetto» o «solo CPU». */
+/** Chiave di una rete: le sue righe normalizzate, senza righe vuote. */
+const networkKey = (n: NetworkText): string =>
+  n.lines
+    .map(normLine)
+    .filter((l) => l !== '')
+    .join('\n');
+
+/**
+ * Allinea le reti con la sottosequenza comune più lunga sul contenuto. Tra due reti uguali, le
+ * tolte e le aggiunte si affiancano due a due (rete modificata) e il resto è «solo progetto» o
+ * «solo CPU». Troppe reti: per posizione.
+ */
+function alignNetworks(a: string[], b: string[]): [number | null, number | null][] {
+  const n = a.length;
+  const m = b.length;
+  const out: [number | null, number | null][] = [];
+  if ((n + 1) * (m + 1) > MAX_LCS_CELLS) {
+    for (let x = 0; x < Math.max(n, m); x++) out.push([x < n ? x : null, x < m ? x : null]);
+    return out;
+  }
+  const w = m + 1;
+  const lcs = new Uint32Array((n + 1) * w);
+  for (let i = n - 1; i >= 0; i--)
+    for (let j = m - 1; j >= 0; j--)
+      lcs[i * w + j] =
+        a[i] === b[j]
+          ? lcs[(i + 1) * w + j + 1]! + 1
+          : Math.max(lcs[(i + 1) * w + j]!, lcs[i * w + j + 1]!);
+  let del: number[] = [];
+  let add: number[] = [];
+  const flush = () => {
+    const k = Math.max(del.length, add.length);
+    for (let x = 0; x < k; x++) out.push([del[x] ?? null, add[x] ?? null]);
+    del = [];
+    add = [];
+  };
+  let i = 0;
+  let j = 0;
+  while (i < n || j < m) {
+    if (i < n && j < m && a[i] === b[j]) {
+      flush();
+      out.push([i++, j++]);
+    } else if (j >= m || (i < n && lcs[(i + 1) * w + j]! >= lcs[i * w + j + 1]!)) del.push(i++);
+    else add.push(j++);
+  }
+  flush();
+  return out;
+}
+
+/** Titolo o commento diversi: solo se entrambi i lati li hanno (la CPU non conserva né l'uno né l'altro). */
+const textDiff = (l: string | undefined, r: string | undefined): TextDiff | undefined =>
+  l && r && l !== r ? { left: l, right: r } : undefined;
+
+/**
+ * Reti allineate per contenuto (LCS): quelle inserite o tolte sono «solo progetto» o «solo CPU»,
+ * quelle modificate si affiancano con le righe diverse. Titoli e commenti sono differenze a parte.
+ */
 export function diffNetworks(left: NetworkText[], right: NetworkText[]): NetworkDiff[] {
-  const out: NetworkDiff[] = [];
-  const count = Math.max(left.length, right.length);
-  for (let index = 0; index < count; index++) {
-    const l = left[index];
-    const r = right[index];
+  const pairs = alignNetworks(left.map(networkKey), right.map(networkKey));
+  return pairs.map(([i, j], index) => {
+    const l = i === null ? undefined : left[i];
+    const r = j === null ? undefined : right[j];
     const { rows, approximate } = lineDiffEx(l?.lines ?? [], r?.lines ?? []);
-    out.push({
+    const titleDiff = l && r ? textDiff(l.title, r.title) : undefined;
+    const commentDiff = l && r ? textDiff(l.comment, r.comment) : undefined;
+    return {
       index,
-      ...(l ? { leftTitle: l.title } : {}),
-      ...(r ? { rightTitle: r.title } : {}),
+      ...(i !== null ? { leftNo: i + 1, leftTitle: l!.title } : {}),
+      ...(j !== null ? { rightNo: j + 1, rightTitle: r!.title } : {}),
       rows,
       approximate,
       presence: l && r ? 'both' : l ? 'left' : 'right',
-      different: !l || !r || rows.some((x) => x.kind !== 'same'),
-    });
-  }
-  return out;
+      different: !l || !r || rows.some((x) => x.kind !== 'same') || !!titleDiff || !!commentDiff,
+      ...(titleDiff ? { titleDiff } : {}),
+      ...(commentDiff ? { commentDiff } : {}),
+    };
+  });
 }
 
 /** Dump esadecimale: 16 byte per riga, con l'offset. */

@@ -452,7 +452,10 @@
     "loading": "Loading the block from the CPU...",
     "failed": "The block could not be read from the CPU: {{message}}",
     "offline": "The online connection is not active.",
-    "undecodable": "The CPU block cannot be decoded: its bytes are shown in hexadecimal."
+    "undecodable": "The CPU block cannot be decoded: its bytes are shown in hexadecimal.",
+    "networkOnCpu": "network {{n}} on the CPU",
+    "titleDiff": "Different title: project \"{{left}}\", CPU \"{{right}}\".",
+    "commentDiff": "Different comment: project \"{{left}}\", CPU \"{{right}}\"."
   },
   "compare": {
     "same": "Same as CPU",

@@ -452,7 +452,10 @@
     "loading": "Caricamento del blocco dalla CPU...",
     "failed": "Il blocco non si è potuto leggere dalla CPU: {{message}}",
     "offline": "Il collegamento online non è attivo.",
-    "undecodable": "Il blocco della CPU non si può decodificare: si mostrano i suoi byte in esadecimale."
+    "undecodable": "Il blocco della CPU non si può decodificare: si mostrano i suoi byte in esadecimale.",
+    "networkOnCpu": "rete {{n}} nella CPU",
+    "titleDiff": "Titolo diverso: progetto \"{{left}}\", CPU \"{{right}}\".",
+    "commentDiff": "Commento diverso: progetto \"{{left}}\", CPU \"{{right}}\"."
   },
   "compare": {
     "same": "Uguale alla CPU",

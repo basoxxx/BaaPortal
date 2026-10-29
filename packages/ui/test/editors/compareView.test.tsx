@@ -314,9 +314,47 @@ describe('editor di confronto', () => {
     );
   });
 
-  it('diff per righe: reti allineate per posizione', () => {
+  it('diff per righe: una rete senza controparte è solo del suo lato', () => {
     const d = diffNetworks([{ title: 'a', lines: ['x'] }], []);
     expect(d[0]!.presence).toBe('left');
     expect(d[0]!.rows[0]!.kind).toBe('missing');
+  });
+
+  const net = (...lines: string[]) => ({ title: '', lines });
+
+  it('reti allineate per contenuto: una rete inserita non sfalsa le successive', () => {
+    const a = [net('A %I0.0', '= %Q0.0'), net('L 1', 'T MW0')];
+    const b = [net('A %I0.0', '= %Q0.0'), net('S M1.0'), net('l 1', 'T %MW0')];
+    const d = diffNetworks(a, b);
+    expect(d.map((x) => x.presence)).toEqual(['both', 'right', 'both']);
+    expect(d.map((x) => [x.leftNo, x.rightNo])).toEqual([
+      [1, 1],
+      [undefined, 2],
+      [2, 3],
+    ]);
+    expect(d.map((x) => x.different)).toEqual([false, true, false]);
+  });
+
+  it('rete tolta, e rete modificata sul posto (affiancata, righe diverse)', () => {
+    const d = diffNetworks(
+      [net('A I0.0'), net('L 1'), net('L 2', 'T MW2')],
+      [net('A I0.0'), net('L 3', 'T MW2')],
+    );
+    expect(d.map((x) => x.presence)).toEqual(['both', 'both', 'left']);
+    expect(d[1]!.rows.map((r) => r.kind)).toEqual(['changed', 'added']);
+    expect(d[2]!.rows.every((r) => r.kind === 'missing')).toBe(true);
+  });
+
+  it('titoli e commenti diversi si segnalano a parte, solo se entrambi i lati li hanno', () => {
+    const l = { title: 'Avvio', comment: 'vecchio', lines: ['A I0.0'] };
+    const same = diffNetworks([l], [{ ...l, title: 'Marcia', comment: 'nuovo' }])[0]!;
+    expect(same.titleDiff).toEqual({ left: 'Avvio', right: 'Marcia' });
+    expect(same.commentDiff).toEqual({ left: 'vecchio', right: 'nuovo' });
+    expect(same.rows.every((r) => r.kind === 'same')).toBe(true);
+    expect(same.different).toBe(true);
+    const cpu = diffNetworks([l], [{ title: '', lines: ['A I0.0'] }])[0]!;
+    expect(cpu.titleDiff).toBeUndefined();
+    expect(cpu.commentDiff).toBeUndefined();
+    expect(cpu.different).toBe(false);
   });
 });

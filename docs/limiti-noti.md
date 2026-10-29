@@ -33,8 +33,8 @@ Per ogni voce si indica che cosa succede oggi. "Errore chiaro" vuol dire che Baa
 - **Controllo dell'identità prima di scrivere.** Confronta il numero d'ordine, e il numero di serie solo se ce l'hanno entrambi i lati.
 - **Il confronto non si aggiorna a ogni modifica.** Parte al collegamento, dopo ogni caricamento e col comando _Confronta con la CPU_. Dopo una modifica di un blocco il suo distintivo passa a «Da compilare» e resta tale finché non si rilancia il confronto; una modifica fatta sulla CPU da altri non si vede finché non lo si rilancia.
 - **Editor di confronto.**
-  - Le reti si allineano per posizione.
-  - I titoli e i commenti delle reti non si confrontano.
+  - Le reti si allineano per contenuto (AWL normalizzato): quelle inserite o tolte compaiono come «solo progetto» o «solo CPU», e una rete modificata sul posto si affianca riga per riga. Con troppe reti l'allineamento ricade sulla posizione.
+  - Titoli e commenti delle reti si confrontano solo se entrambi i lati li hanno, e le differenze si mostrano a parte senza toccare i dati di checksum: il compilato della CPU non conserva né titoli né commenti, quindi dopo un caricamento non si vedono differenze di questo tipo.
   - I DB si confrontano come elenco di membri.
   - Con un compilato assente o non aggiornato il confronto è sul testo sorgente e gli operandi simbolici possono risultare diversi.
   - I blocchi molto grandi ricadono su un confronto per posizione, con una nota.
