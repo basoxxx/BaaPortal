@@ -11,7 +11,7 @@ import {
   type PathSegment,
 } from '@baaportal/awl';
 import { callLines } from '@baaportal/ladfbd';
-import { NO_RANGE, ownOperandResolver, SymbolError, type ResolvedOperand } from '@baaportal/mc7';
+import { NO_RANGE, ownOperandResolver, type ResolvedOperand } from '@baaportal/mc7';
 import { formatType, sameName, type DataType, type TypedMember } from '@baaportal/s7-types';
 import { intLiteral, parseAddress, SclError } from './lexer.js';
 import {
@@ -739,7 +739,8 @@ class Gen {
       this.resolver ??= ownOperandResolver(this.ctx);
       v = this.resolver(op);
     } catch (e) {
-      if (e instanceof SymbolError) return fail(o, e.message);
+      // Anche gli errori di layout dell'interfaccia (tipo mancante): diagnostica, non eccezione.
+      if (e instanceof Error) return fail(o, e.message);
       throw e;
     }
     if (v.k === 'inst') return { area: 'DI', bit: v.bit };

@@ -78,6 +78,19 @@ describe('sclToAwl 1.3: AWL degli indici variabili', () => {
 
 // ---- esecuzione nel simulatore: TEMP di una FC (al massimo 64 byte), indici e risultati in M ----
 
+it('un membro di tipo sconosciuto nell interfaccia dà una diagnostica, non un eccezione', () => {
+  const broken = makeCtx(
+    'FB',
+    emptyIface({
+      input: [m('i', el('Int'))],
+      static: [m('v', arr(el('Int'), [1, 5])), m('z', { kind: 'named', name: 'Mancante' })],
+    }),
+  );
+  const out = sclToAwl('v[i] := 1;', broken, 0);
+  expect(out.source).toBe('');
+  expect(out.diagnostics[0]!.message).toMatch(/Mancante/);
+});
+
 const fcOf = (temp: TypedMember[]) => ({
   ctx: makeCtx('FC', emptyIface({ temp, returnType: { kind: 'void' } })),
   temp,
