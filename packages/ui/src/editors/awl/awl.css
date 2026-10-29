@@ -52,6 +52,13 @@
   color: var(--baa-awl-comment);
   font-style: italic;
 }
+/* SCL: tipi e conversioni come le istruzioni AWL, operatori come i parametri. */
+.baa-awl-type {
+  color: var(--baa-awl-instruction);
+}
+.baa-awl-operator {
+  color: var(--baa-awl-param);
+}
 .baa-awl-problems {
   list-style: none;
   margin: 4px 0 8px;

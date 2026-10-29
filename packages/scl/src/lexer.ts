@@ -2,8 +2,16 @@
 // `//` e `(* *)` (non annidati), simboli "…", locali #nome, indirizzi assoluti I/Q/M, interi in
 // base 2/8/16 (`16#FF`) e tipizzati (`INT#5`, `W#16#FF`, `L#5`).
 
-export type TokKind = 'id' | 'kw' | 'local' | 'symbol' | 'addr' | 'int' | 'real' | 'op' | 'eof';
-export type Tok = { kind: TokKind; text: string; line: number; col: number };
+export type TokKind =
+  'id' | 'kw' | 'local' | 'symbol' | 'addr' | 'int' | 'real' | 'op' | 'string' | 'comment' | 'eof';
+/** `from`: posizione nel testo (da 0); `col` da 1. */
+export type Tok = { kind: TokKind; text: string; line: number; col: number; from: number };
+export type LexOptions = {
+  /** Gli errori finiscono qui e il lexer prosegue; senza, lancia il primo. */
+  errors?: SclError[];
+  /** Anche i commenti come token `comment` (per l'evidenziazione). */
+  comments?: boolean;
+};
 
 export class SclError extends Error {
   constructor(
@@ -66,14 +74,19 @@ const OPS = [
   '&',
 ];
 
-export function lex(text: string): Tok[] {
+export function lex(text: string, opts: LexOptions = {}): Tok[] {
   const out: Tok[] = [];
   let i = 0;
   let line = 1;
   let lineStart = 0;
   const at = (k = 0) => text[i + k] ?? '';
-  const err = (message: string): never => {
-    throw new SclError(line, i - lineStart + 1, message);
+  const err = (message: string): void => {
+    const e = new SclError(line, i - lineStart + 1, message);
+    if (!opts.errors) throw e;
+    opts.errors.push(e);
+  };
+  const comment = (from: number, l: number, col: number) => {
+    if (opts.comments) out.push({ kind: 'comment', text: text.slice(from, i), line: l, col, from });
   };
   const newline = (pos: number) => {
     line++;
@@ -90,44 +103,70 @@ export function lex(text: string): Tok[] {
       i++;
       continue;
     }
+    const col = i - lineStart + 1;
     if (c === '/' && at(1) === '/') {
+      const from = i;
       while (i < text.length && at() !== '\n') i++;
+      comment(from, line, col);
       continue;
     }
     if (c === '(' && at(1) === '*') {
-      const end = text.indexOf('*)', i + 2);
-      if (end < 0) err('Commento (* senza *)');
+      const [from, l] = [i, line];
+      let end = text.indexOf('*)', i + 2);
+      if (end < 0) {
+        err('Commento (* senza *)');
+        end = text.length - 2;
+      }
       for (let j = i; j < end; j++) if (text[j] === '\n') newline(j);
       i = end + 2;
+      comment(from, l, col);
       continue;
     }
-    const col = i - lineStart + 1;
     const push = (kind: TokKind, t: string) => {
-      out.push({ kind, text: t, line, col });
+      out.push({ kind, text: t, line, col, from: i });
       i += t.length;
     };
-    if (c === '"') {
-      const end = text.indexOf('"', i + 1);
+    // Fino alla chiusura sulla stessa riga; se manca, il resto della riga.
+    const quoted = (q: string, message: string): string => {
       const nl = text.indexOf('\n', i);
-      if (end < 0 || (nl >= 0 && nl < end)) err('Simbolo senza le virgolette di chiusura');
-      push('symbol', text.slice(i, end + 1));
+      const stop = nl < 0 ? text.length : nl;
+      const end = text.indexOf(q, i + 1);
+      if (end >= 0 && end < stop) return text.slice(i, end + 1);
+      err(message);
+      return text.slice(i, stop);
+    };
+    if (c === '"') {
+      push('symbol', quoted('"', 'Simbolo senza le virgolette di chiusura'));
+      continue;
+    }
+    if (c === "'") {
+      const s = quoted("'", "Stringa senza l'apice di chiusura");
+      if (s.length > 1 && s.endsWith("'")) err('Le stringhe non sono supportate in prova');
+      push('string', s);
       continue;
     }
     const lit = INT_LIT.exec(text.slice(i))?.[0];
     if (lit) {
+      let kind: TokKind = 'int';
       try {
         intLiteral(lit);
       } catch {
         err(`Costante non valida: ${lit}`);
+        // come nome sconosciuto: la traduzione lo scarta senza leggerne il valore
+        kind = 'id';
       }
-      push('int', lit);
+      push(kind, lit);
       continue;
     }
     const word = /^%?[A-Za-z_][A-Za-z0-9_]*(?:\.[0-7](?![0-9]))?/.exec(text.slice(i))?.[0];
     if (c === '#') {
       const name = /^#[A-Za-z_][A-Za-z0-9_]*/.exec(text.slice(i))?.[0];
-      if (!name) err('Dopo # serve il nome di una variabile');
-      push('local', name!);
+      if (!name) {
+        err('Dopo # serve il nome di una variabile');
+        i++;
+        continue;
+      }
+      push('local', name);
       continue;
     }
     if (word) {
@@ -151,10 +190,14 @@ export function lex(text: string): Tok[] {
       continue;
     }
     const op = OPS.find((o) => text.startsWith(o, i));
-    if (!op) err(`Carattere non valido: ${c}`);
-    push('op', op!);
+    if (!op) {
+      err(`Carattere non valido: ${c}`);
+      i++;
+      continue;
+    }
+    push('op', op);
   }
-  out.push({ kind: 'eof', text: '', line, col: i - lineStart + 1 });
+  out.push({ kind: 'eof', text: '', line, col: i - lineStart + 1, from: i });
   return out;
 }
 

@@ -10,6 +10,7 @@ import {
   isGraphic,
   kopCallParams,
   kopSources,
+  tempEnd,
   type CodeBlock,
   type Network,
   type PlcDevice,
@@ -17,8 +18,8 @@ import {
 import { CommitInput, CommitTextarea } from '../../components/CommitField';
 import { ContextMenu } from '../../components/ContextMenu';
 import { AwlEditor, type AwlEditorHandle } from '../awl/AwlEditor';
-import { CommittedEditor } from '../awl/CommittedEditor';
-import { sourceCodec } from '../source/sourceExtensions';
+import { SclEditor } from '../scl/SclEditor';
+import { sclComplete, sclProblems } from '../scl/sclExtensions';
 import { displayText } from '../awl/awlExtensions';
 import { monitorLinesByNetwork, monitorLinesFromPlc } from '../awl/monitorExtension';
 import { plcMonitorFor } from '../../online/plcMonitor';
@@ -71,6 +72,17 @@ export function NetworksView({ deviceId, blockId }: Props) {
       dev && (isAwl || isKop) ? createAwlContext(dev, blockId, findCpu(dev.cpu.typeId)) : null,
     [dev, blockId, isAwl, isKop],
   );
+  // SCL: errori del traduttore e del controllo AWL sul testo mostrato, alla riga SCL; completamento.
+  const scl = useMemo(() => {
+    if (!block || !dev || !isScl) return undefined;
+    const ctx = createAwlContext(dev, blockId, findCpu(dev.cpu.typeId));
+    const end = tempEnd(block, dev);
+    return {
+      check: (text: string) =>
+        sclProblems(text, ctx, end, (d) => t(`awl.diag.${d.code}`, d.params ?? {})),
+      complete: (offset: number, text: string) => sclComplete(text, offset, ctx),
+    };
+  }, [block, dev, blockId, isScl, t]);
   // Segmenti KOP: la sorgente generata di ognuno, con le righe per elemento e le diagnostiche.
   const kop = useMemo(
     () => (block && dev && (isKop || isScl) ? kopSources(block, dev) : null),
@@ -526,20 +538,18 @@ export function NetworksView({ deviceId, blockId }: Props) {
             </div>
           ) : isKop ? null : (
             <div className="baa-network-source" title={t('block.sourceHint')}>
-              <CommittedEditor
+              <SclEditor
                 value={n.source}
-                codec={sourceCodec}
                 readOnly={locked}
                 aria-label={`${t('block.source')} ${i + 1}`}
+                // Il testo SCL è solo nel segmento 0 (vedi kopSources).
+                {...(scl && i === 0 ? scl : {})}
                 onCommit={(v) => editNetwork(n.id, 'source', v)}
+                ref={(h) => {
+                  if (h) handles.current.set(n.id, h);
+                  else handles.current.delete(n.id);
+                }}
               />
-              <ul className="baa-awl-problems" aria-label={t('block.sclProblems')}>
-                {(kop?.[i]?.scl?.diagnostics ?? []).map((d, k) => (
-                  <li key={k} className="is-error">
-                    {t('block.sclProblemRow', { line: d.line, message: d.message })}
-                  </li>
-                ))}
-              </ul>
             </div>
           )}
         </section>

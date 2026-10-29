@@ -170,7 +170,7 @@ Si crea solo con _Funzioni sperimentali_ attive; un blocco FUP già esistente si
 - **Osservazione della vista FUP** con gli stessi dati del KOP: il bordo inferiore di ogni elemento è verde (1), blu tratteggiato (0) o grigio punteggiato (non elaborato), senza bordo se fuori dalla finestra o in attesa; un'entrata mostra il segnale del suo operando, gli altri elementi la loro uscita. I riquadri `&` comuni e i fili non hanno colore; un elemento ripetuto (ramo a T) ha lo stesso stato in ogni copia.
 - **Aspetto chiaro/scuro** non controllato a mano.
 
-## SCL in prova (1.0.0, esteso in 1.1 e 1.3)
+## SCL in prova (1.0.0, esteso in 1.1, 1.3 e 1.4)
 
 Si crea solo con _Funzioni sperimentali_ attive. Il testo SCL si traduce in AWL (pacchetto `scl`), che si compila come gli altri blocchi.
 
@@ -186,8 +186,9 @@ Si crea solo con _Funzioni sperimentali_ attive. Il testo SCL si traduce in AWL 
 - **Fuori:** membri o elementi di un parametro di FC o di un IN_OUT di FB (sono puntatori, anche con indici variabili), ARRAY o STRUCT interi come operando o parametro, STRING, TIME, CHAR, `**`, chiamata di un FB senza DB di istanza, parametri per posizione, PI/PQ, mnemonici tedeschi negli indirizzi. Nessun confronto fra BOOL (si usa XOR/NOT); con BYTE/WORD/DWORD solo `=` e `<>`.
 - **FOR.** Il valore finale si calcola una volta sola. Al limite del tipo il ciclo esce e la variabile resta all'ultimo valore eseguito. Modificare la variabile dentro il ciclo non è controllato. EXIT esce dal ciclo più interno; CONTINUE passa all'incremento (FOR), alla condizione (WHILE, REPEAT).
 - **Parentesi più del minimo.** Un AND dentro un OR va sempre fra parentesi, quindi il limite di 7 parentesi aperte di AWL («Espressione troppo annidata») può arrivare prima che in STEP 7.
-- **Errori.** Si riporta solo il primo errore; un `;` mancante si segnala sulla riga dopo. Gli errori del controllo AWL sul codice generato si riportano alla riga SCL solo nei messaggi di compilazione, non nell'editor.
-- **Editor semplice.** Niente evidenziazione, completamento né osservazione. La rinomina dei simboli non aggiorna il testo SCL. La scrittura negli ingressi di una FC non è controllata.
+- **Errori (1.4).** Si riportano fino a 50 errori: dopo un errore il parser riparte dal `;` dell'istruzione o dalla fine del costrutto (`END_…`), e un errore nell'intestazione di IF, CASE, FOR, WHILE o UNTIL salta il resto di quella riga e legge comunque il corpo. Un `;` mancante alla fine della riga si segnala sulla riga dove manca. Dopo un errore di sintassi qualche errore successivo può esserne la conseguenza (per esempio un nome nel corpo di un FOR con l'intestazione sbagliata). Sulla riga di un errore del lexer (carattere non valido, costante sbagliata, simbolo senza la virgoletta di chiusura) non si riportano altri errori di sintassi. Gli errori del controllo AWL sul codice generato compaiono nell'editor alla riga SCL (colonna 1) solo se il traduttore non ne ha trovati; quelli della compilazione MC7 restano nei messaggi di compilazione.
+- **Editor (1.4).** Evidenziazione, completamento (variabili, tag, DB e loro membri, chiamate con i parametri, parole chiave) ed errori sottolineati mentre si scrive. Niente osservazione. Il completamento non propone i parametri dentro le parentesi di una chiamata già scritta, né i membri dopo un indice variabile. La scrittura negli ingressi di una FC non è controllata.
+- **Rinomina (1.4).** Tag, costanti, blocchi, DB, membri di DB e UDT, variabili e parametri dell'interfaccia si aggiornano anche nel testo SCL, sui token: commenti e stringhe restano come sono. Un parametro si rinomina solo nelle chiamate di quel blocco (`"Fc"(…)`, `Fc(…)`, `"Inst_DB"(…)`, `#multi(…)`). Nel codice di una FC il suo nome usato come valore di ritorno (`Fc := …`) non si rinomina col blocco.
 
 ## Adattatore MPI (piano 3M)
 

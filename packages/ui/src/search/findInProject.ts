@@ -145,7 +145,11 @@ function scanBlock(re: RegExp, o: FindOptions, d: PlcDevice, b: Block, out: Matc
       : hasRawLines(n.source)
         ? { editable: false, reason: 'MC7_GREZZO' }
         : ok;
-    const shown = displayText(n.source, o.mnemonic === 'de' ? 'german' : 'international');
+    // Il testo SCL non è AWL: nessuna conversione di mnemonica.
+    const shown = displayText(
+      n.source,
+      o.mnemonic === 'de' && b.language !== 'SCL' ? 'german' : 'international',
+    );
     // Un risultato dentro un solo operando del grafico si sostituisce nel grafico.
     let resolve: ReturnType<typeof kopOperandResolver> | undefined;
     const operandAt =

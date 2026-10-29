@@ -159,13 +159,16 @@ function rootOptions(ctx: AwlContext, mode: Mode, calleeName: string | null): Co
   }
 }
 
-/** Completa un operando simbolico; `base` e' l'offset di `text` nella rete. */
-function completeOperand(
+/**
+ * Completa un operando simbolico (`#s.`, `"DB".m`, `"Mot`); `base` e' l'offset di `text` nella
+ * rete. Esportato anche per l'editor SCL, con gli stessi nomi.
+ */
+export function completeOperand(
   ctx: AwlContext,
   text: string,
   base: number,
-  mode: Mode,
-  calleeName: string | null,
+  mode: Mode = 'generic',
+  calleeName: string | null = null,
 ): Result {
   const scan = scanPath(text);
   if (!scan) return none(base + text.length);

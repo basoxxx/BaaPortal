@@ -1,6 +1,6 @@
 # FUP e SCL (in prova)
 
-Guida breve ai due linguaggi in prova della versione 1.0.0 (SCL esteso nella 1.1). Funzionano nel simulatore, ma non sono mai stati provati su una CPU reale.
+Guida breve ai due linguaggi in prova della versione 1.0.0 (SCL esteso nella 1.1 e nella 1.4). Funzionano nel simulatore, ma non sono mai stati provati su una CPU reale.
 
 ## Attivarli
 
@@ -47,7 +47,9 @@ _Impostazioni → Funzioni sperimentali_. Da quel momento, in _Inserisci → Nuo
 4. **Tipi e costanti.** BOOL, BYTE, WORD, DWORD, INT, DINT e REAL. Le costanti si scrivono anche in esadecimale o binario (`16#FF`, `2#1010`) o col tipo (`INT#5`, `W#16#00FF`, `L#100000`). Fra tipi diversi si converte con le funzioni `…_TO_…` (per esempio `DINT_TO_INT`, `INT_TO_WORD`). `MD` non è mai REAL da solo: per leggerlo come REAL usa `DWORD_TO_REAL`.
 5. **Chiamate.** Una FC si chiama col suo nome e i parametri per nome, `:=` per gli ingressi e `=>` per le uscite: `"Scala"(ingresso := #grezzo, fuori => #valore);`. Se la FC restituisce un valore si usa in un'espressione: `#v := "Somma"(a := 1, b := 2) * 2;`. Un FB si chiama col suo DB di istanza, `"Nastro_DB"(avvio := TRUE);`, o come multi-istanza, `#nastro(avvio := TRUE);`.
 6. **Cicli.** Dentro FOR, WHILE e REPEAT, `EXIT;` esce dal ciclo e `CONTINUE;` passa al giro dopo. Nel CASE un ramo può avere un intervallo: `1..5:`.
-7. **Errori.** Il primo errore compare sotto il testo come «Riga N: …» e blocca la compilazione.
-8. **Compilare e provare.** _Compila_ traduce il testo in AWL e compila quello. Si carica nel simulatore e si prova con una tabella di controllo.
+7. **Errori.** Mentre si scrive, gli errori sono sottolineati nel testo, segnati nel margine ed elencati sotto come «Riga N: …» (un clic porta alla riga). Si vedono tutti, non solo il primo: anche quelli del controllo AWL sul codice generato, alla riga SCL che l'ha prodotto. Un errore blocca la compilazione.
+8. **Scrivere.** Parole chiave, tipi, costanti, commenti, variabili e simboli hanno colori diversi. Il completamento (Ctrl+Spazio, e da solo dopo `#`, `"` e `.`) propone le variabili dell'interfaccia, i tag e i DB, i membri dopo `"DB".` o `#s.`, le chiamate di FC e DB di istanza con tutti i parametri (`"Scala"(ingresso := , fuori => )`) e le parole chiave.
+9. **Rinominare.** Rinominare un tag, un blocco, un membro di DB o una variabile dell'interfaccia aggiorna anche il testo SCL, in un solo passo di _Annulla_; un parametro si rinomina nelle chiamate di quel blocco.
+10. **Compilare e provare.** _Compila_ traduce il testo in AWL e compila quello. Si carica nel simulatore e si prova con una tabella di controllo.
 
 Che cosa c'è e che cosa manca (tipi, istruzioni, conversioni): `docs/limiti-noti.md`, sezioni _FUP in prova_ e _SCL in prova_.

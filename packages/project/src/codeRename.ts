@@ -3,6 +3,7 @@
 // toccano (sono file indipendenti).
 import { renameInSource, type RenameTarget } from '@baaportal/awl';
 import { mapOperands, type OperandRole } from '@baaportal/ladfbd';
+import { renameInScl, type SclRenameOptions } from '@baaportal/scl';
 import { parseType, sameName, validateS7Name, type DataType } from '@baaportal/s7-types';
 import { kopSources } from './kopSources';
 import { isGraphic, type CodeBlock, type Member, type PlcDevice, type Udt } from './model';
@@ -11,11 +12,13 @@ import { isGraphic, type CodeBlock, type Member, type PlcDevice, type Udt } from
 const nameKey = (name: string): string => name.normalize('NFC').toLowerCase();
 const MAX_DEPTH = 24;
 
-// AWL, KOP e FUP: il testo di SCL non e AWL e non va analizzato come tale.
+// AWL, KOP, FUP e SCL (il testo SCL si riscrive sui token del lexer SCL, non come AWL).
 const codeBlocks = (device: PlcDevice): CodeBlock[] =>
   device.blocks.filter(
     (b): b is CodeBlock =>
-      b.kind !== 'DB' && b.kind !== 'IDB' && (b.language === 'AWL' || isGraphic(b.language)),
+      b.kind !== 'DB' &&
+      b.kind !== 'IDB' &&
+      (b.language === 'AWL' || b.language === 'SCL' || isGraphic(b.language)),
   );
 
 // Un operando del grafico si riscrive come operando di un'istruzione AWL, cosi valgono le stesse
@@ -68,6 +71,15 @@ function rewrite(
   newName: string,
 ): void {
   const key = nameKey(target.oldName);
+  // In SCL un FB si chiama col suo DB di istanza: `"Inst_DB"(in := …)`.
+  const sclOpts: SclRenameOptions =
+    target.kind === 'callParam'
+      ? {
+          instanceDbs: device.blocks
+            .filter((d) => d.kind === 'IDB' && sameName(d.instanceOf, target.block))
+            .map((d) => d.name),
+        }
+      : {};
   for (const b of blocks) {
     let lad = false;
     for (const n of b.networks) {
@@ -87,7 +99,10 @@ function rewrite(
       }
       // Scorciatoia: se il nome vecchio non compare nel testo non c'e niente da fare.
       if (!nameKey(n.source).includes(key)) continue;
-      n.source = renameInSource(n.source, target, newName, 'international');
+      n.source =
+        b.language === 'SCL'
+          ? renameInScl(n.source, target, newName, sclOpts)
+          : renameInSource(n.source, target, newName, 'international');
     }
     // La sorgente generata segue il grafico (come dopo ogni modifica dell'editor).
     if (lad) {

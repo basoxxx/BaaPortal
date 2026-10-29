@@ -155,8 +155,11 @@ export function replaceInProject(
           replaced += ok.length;
           continue;
         }
-        const n = (blk(l) as Extract<Block, { networks: unknown }>).networks[l.networkIndex]!;
-        n.source = storedText(applyAll(list[0]!.text, list), mnemonic, lineEndingOf(n.source));
+        const b = blk(l) as Extract<Block, { networks: unknown }>;
+        const n = b.networks[l.networkIndex]!;
+        // Il testo SCL si cerca e si scrive com'è (vedi findInProject).
+        const m = b.language === 'SCL' ? 'international' : mnemonic;
+        n.source = storedText(applyAll(list[0]!.text, list), m, lineEndingOf(n.source));
         break;
       }
       case 'networkTitle':
