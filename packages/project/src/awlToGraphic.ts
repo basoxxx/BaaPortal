@@ -4,9 +4,13 @@
 // del blocco, ordine dei parametri delle CALL.
 import {
   awlLabels,
+  awlLocalBytes,
   awlToLad,
   blockAwlToLad,
+  blockJumps,
   blockToAwl,
+  ladLabels,
+  ladLocalBytes,
   type AwlToLadFailure,
 } from '@baaportal/ladfbd';
 import { kopCallParams, kopSources, tempEnd } from './kopSources';
@@ -80,19 +84,32 @@ export function convertNetworkToGraphic(
     end,
     { callParams },
   ).networks.filter((x) => x !== null);
-  const sources = kopSources(block, dev);
+  const sources = kopSources(block, dev).map((s) => s.source);
+  const others = block.networks.filter((_, i) => i !== index);
+  // le etichette automatiche degli altri grafici si rinumerano dopo (`refreshSources`): non contano
   const foreignLabels = new Set(
-    sources.flatMap((s, i) => (i === index ? [] : [...awlLabels(s.source)])),
+    others.flatMap((x) => [...(x.lad ? ladLabels(x.lad) : awlLabels(x.source))]),
+  );
+  const foreignLocals = new Set(
+    others.flatMap((x) => [...(x.lad ? ladLocalBytes(x.lad) : awlLocalBytes(x.source))]),
   );
   const r = awlToLad(n.source, {
     tempEnd: end,
     firstLabel: before.at(-1)?.nextLabel ?? 1,
     callParams,
     foreignLabels,
+    foreignLocals,
     newId,
   });
   if (!r.ok) return r.reason;
+  const saved = block.networks.map((x) => x.source);
   n.lad = r.network;
   refreshSources(block, dev);
-  return null;
+  // dopo la rinumerazione ogni salto del blocco porta alla stessa istruzione di prima
+  const jumps = blockJumps(sources);
+  const after = blockJumps(block.networks.map((x) => x.source));
+  if (jumps && after && JSON.stringify(jumps) === JSON.stringify(after)) return null;
+  delete n.lad;
+  block.networks.forEach((x, i) => (x.source = saved[i]!));
+  return { code: 'SHAPE' };
 }

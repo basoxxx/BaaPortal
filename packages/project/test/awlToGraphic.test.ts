@@ -132,3 +132,75 @@ describe('caricamento dalla CPU: lingua 0x02/0x03', () => {
     expect((blockFromMc7(target, file, seq('i')).block as CodeBlock).language).toBe('AWL');
   });
 });
+
+describe('convertNetworkToGraphic: altri segmenti', () => {
+  const box: LadNetwork = {
+    root: {
+      id: 'r',
+      series: [
+        { id: 'c', k: 'contact', neg: false, op: 'I 0.0' },
+        {
+          id: 'm',
+          k: 'box',
+          box: 'MOVE',
+          instance: '',
+          pins: { IN: 'MW 0', OUT: 'MW 2' },
+          boolPins: {},
+        },
+      ],
+      outs: [],
+    },
+  };
+  const compiles = (b: CodeBlock, dev: PlcDevice) =>
+    expect(
+      blockToMc7File(b, dev, cpu315pn, now).diagnostics.filter((d) => d.severity === 'error'),
+    ).toEqual([]);
+
+  it('le etichette automatiche di un grafico dopo si rinumerano: il segmento si converte', () => {
+    const dev = makeDevice(seq('a'));
+    const b = fc(dev, 50, 'KOP', [MOVE, '']);
+    b.networks[1]!.lad = structuredClone(box);
+    expect(convertNetworkToGraphic(b, dev, 0, seq('x'))).toBeNull();
+    const src = blockSources(b, dev);
+    expect(src[0]).toContain('_001');
+    expect(src[1]).toContain('_002');
+    compiles(b, dev);
+  });
+
+  it("un salto da un segmento AWL all'etichetta di un grafico porta ancora lì", () => {
+    const dev = makeDevice(seq('a'));
+    const b = fc(dev, 51, 'KOP', ['A I 0.1\nJC DEST', MOVE, '']);
+    b.networks[2]!.lad = { ...structuredClone(box), label: 'DEST' };
+    expect(convertNetworkToGraphic(b, dev, 1, seq('x'))).toBeNull();
+    expect(blockSources(b, dev)[2]).toMatch(/^DEST:/m);
+    compiles(b, dev);
+  });
+
+  it('un salto che dopo la rinumerazione cambierebbe bersaglio: resta AWL', () => {
+    const dev = makeDevice(seq('a'));
+    const b = fc(dev, 52, 'KOP', ['A I 0.1\nJC _002', MOVE, '']);
+    b.networks[2]!.lad = structuredClone(box);
+    const before = structuredClone(b);
+    expect(convertNetworkToGraphic(b, dev, 1, seq('x'))).toEqual({ code: 'SHAPE' });
+    expect(b).toEqual(before);
+  });
+
+  it('un bit L letto da un altro segmento non diventa il bit nascosto di un ramo a T', () => {
+    const seg = 'A I 0.0\n= L 0.0\nA L 0.0\n= Q 0.0\nA L 0.0\n= Q 0.1';
+    for (const other of ['AWL', 'KOP'] as const) {
+      const dev = makeDevice(seq('a'));
+      const b = fc(dev, 53, 'KOP', [seg, 'A L 0.0\n= Q 1.0']);
+      if (other === 'KOP')
+        b.networks[1]!.lad = {
+          root: {
+            id: 'r',
+            series: [{ id: 'c', k: 'contact', neg: false, op: 'L 0.0' }],
+            outs: [{ id: 'q', k: 'coil', op: 'Q 1.0' }],
+          },
+        };
+      expect(convertNetworkToGraphic(b, dev, 0, seq('x'))).toBeNull();
+      // L 0.0 resta scritto nella rete: non dipende da dove finiscono i TEMP
+      expect(JSON.stringify(b.networks[0]!.lad)).toContain('L0.0');
+    }
+  });
+});

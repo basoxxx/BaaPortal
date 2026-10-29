@@ -10,7 +10,8 @@ import type { Operand } from '@baaportal/awl';
 import { BOX_CATALOG } from './catalog.js';
 import type { BoxDef } from './catalog.js';
 import type { BoxKind, CmpFn, LadBox, LadElem, LadNetwork, LadNode, LadOut } from './model.js';
-import { CMP_FNS } from './model.js';
+import { CMP_FNS, isNode } from './model.js';
+import { mapOperands } from './operands.js';
 import { networkToAwl } from './toAwl.js';
 import type { NetworkAwlOpts } from './toAwl.js';
 
@@ -30,12 +31,17 @@ export type AwlToLadOpts = NetworkAwlOpts & {
   newId: () => string;
   /** Etichette scritte negli altri segmenti del blocco: queste non si rinominano. */
   foreignLabels?: ReadonlySet<string>;
+  /**
+   * Byte L scritti come operandi negli altri segmenti: un bit L in questi byte non diventa il bit
+   * nascosto di un ramo a T o di un pin (il compilatore lo sceglie dopo i TEMP, l'altro segmento no).
+   */
+  foreignLocals?: ReadonlySet<number>;
 };
 
 /**
  * Perché un segmento resta AWL: `SYNTAX` errori nel testo, `EMPTY` nessuna istruzione, `SHAPE`
  * nessuna rete KOP dà le stesse istruzioni (`line`: fin dove si è riconosciuto), `TOO_COMPLEX`
- * troppe combinazioni da provare.
+ * troppe istruzioni o combinazioni da provare.
  */
 export type AwlToLadFailure = { code: 'SYNTAX' | 'EMPTY' | 'SHAPE' | 'TOO_COMPLEX'; line?: number };
 export type AwlToLadResult =
@@ -43,6 +49,8 @@ export type AwlToLadResult =
 
 const MAX_STEPS = 200_000;
 const MAX_CANDIDATES = 200;
+/** Oltre, il segmento resta AWL senza provarci: la ricerca crescerebbe col quadrato. */
+const MAX_INSTRUCTIONS = 300;
 const TIMER_FNS = ['SP', 'SE', 'SD', 'SS', 'SF'] as const;
 type TimerFn = (typeof TIMER_FNS)[number];
 const L_BIT = /^%L\d+\.[0-7]$/;
@@ -85,6 +93,60 @@ export function awlLabels(source: string): Set<string> {
   return out;
 }
 
+/** Byte L letti o scritti da operandi assoluti (`%L0.0`, `%LW2`…) in testo AWL formattato. */
+function localBytesOf(texts: Iterable<string>, re: RegExp): Set<number> {
+  const out = new Set<number>();
+  for (const t of texts)
+    for (const m of t.matchAll(re)) {
+      const width = { B: 1, W: 2, D: 4 }[m[1] as 'B' | 'W' | 'D'] ?? 1;
+      for (let k = 0; k < width; k++) out.add(Number(m[2]) + k);
+    }
+  return out;
+}
+
+// shortcut: gli accessi indiretti all'area L (`W[AR1,P#…]`, puntatori P#L) non si vedono; servirebbe
+// un'analisi dei puntatori.
+/** Byte L usati da un segmento AWL (per `foreignLocals`). */
+export function awlLocalBytes(source: string): Set<number> {
+  return localBytesOf([formatNetwork(source, 'international')], /%L([BWD]?)(\d+)/g);
+}
+
+/** Byte L usati dagli operandi scritti di una rete KOP/FUP (per `foreignLocals`). */
+export function ladLocalBytes(net: LadNetwork): Set<number> {
+  const ops: string[] = [];
+  mapOperands(net, (v) => (ops.push(v.replace(/[\s%]/g, '')), v));
+  return localBytesOf(ops, /^L([BWD]?)(\d+)(?:\.[0-7])?$/g);
+}
+
+/** Etichette scritte in una rete KOP/FUP: quella del segmento e quelle dei salti (non le automatiche). */
+export function ladLabels(net: LadNetwork): Set<string> {
+  const out = new Set<string>(net.label ? [net.label] : []);
+  const walk = (n: LadNode): void =>
+    n.outs.forEach((o) => {
+      if (isNode(o)) walk(o);
+      else if (o.k === 'jmp' || o.k === 'jmpn') out.add(o.label);
+    });
+  walk(net.root);
+  return out;
+}
+
+/**
+ * Dove porta ogni salto di un blocco (segmenti in ordine): `segmento:istruzione` del bersaglio,
+ * `?` se l'etichetta non c'è; `null` se un'etichetta è definita due volte. Un segmento con errori
+ * non conta.
+ */
+export function blockJumps(sources: string[]): string[] | null {
+  const toks = sources.map((s) => tokensOf(s) ?? []);
+  const where = new Map<string, string>();
+  for (const [n, ts] of toks.entries())
+    for (const [i, t] of ts.entries()) {
+      if (!t.label) continue;
+      if (where.has(t.label)) return null;
+      where.set(t.label, `${n}:${i}`);
+    }
+  return toks.flatMap((ts) => ts.flatMap((t) => (t.ref ? [where.get(t.arg) ?? '?'] : [])));
+}
+
 /**
  * Stesse istruzioni e operandi; un'etichetta si può rinominare solo in modo coerente (biiezione)
  * e solo se nessun altro segmento scrive né il vecchio né il nuovo nome.
@@ -121,6 +183,8 @@ for (const d of Object.values(BOX_CATALOG)) {
 }
 
 type Gen<T> = Generator<[T, number]>;
+/** Serie come lista concatenata: le serie memorizzate condividono la coda, senza copie. */
+type List = { head: LadElem; tail: List; closed: boolean } | null;
 /** Bit L della logica dei pin BOOL dei box CALL (H18) → la sua serie. */
 type Pre = ReadonlyMap<string, LadElem[]>;
 const NO_PRE: Pre = new Map();
@@ -133,18 +197,38 @@ class Parser {
   far = 0;
   /** Box con ENO o Q libero: chiudono la serie e il nodo (nessuna uscita dopo). */
   private readonly last = new WeakSet<LadElem>();
-  private readonly memo = new Map<string, [LadElem[], number][]>();
+  private readonly memo = new Map<string, [List, number][]>();
   private readonly preIds = new WeakMap<Pre, number>();
   private preCount = 0;
 
   constructor(
     private readonly t: Tok[],
     private readonly id: () => string,
+    private readonly foreignLocals: ReadonlySet<number>,
   ) {}
+
+  /** Un passo di lavoro: oltre `MAX_STEPS` la ricerca si ferma. */
+  private tick(): void {
+    if (++this.steps > MAX_STEPS) throw new Budget();
+  }
+
+  /** Bit L che può restare nascosto nel grafico (nessun altro segmento ne usa il byte). */
+  private hidden(bit: string | undefined): bit is string {
+    return !!bit && L_BIT.test(bit) && !this.foreignLocals.has(Number(/\d+/.exec(bit)![0]));
+  }
+
+  private list(l: List): LadElem[] {
+    const out: LadElem[] = [];
+    for (; l; l = l.tail) {
+      this.tick();
+      out.push(l.head);
+    }
+    return out;
+  }
 
   /** L'istruzione `op` in posizione `i`, senza etichetta (o con l'etichetta `label`). */
   private at(i: number, op: string, label?: string): Tok | undefined {
-    if (++this.steps > MAX_STEPS) throw new Budget();
+    this.tick();
     const k = this.t[i];
     if (!k || k.op !== op || k.label !== label) return undefined;
     if (i > this.far) this.far = i;
@@ -184,25 +268,28 @@ class Parser {
     root: boolean,
   ): Gen<LadNode> {
     for (const [pre2, j] of prelude ? this.prelude(i, pre) : [[pre, i] as [Pre, number]]) {
-      for (const [series, k] of this.series(j, fresh, pre2, root ? 'any' : 'first')) {
-        if (!root && fresh && series.length === 0) continue;
-        if (fresh && series.length === 0) {
+      for (const [s, k] of this.series(j, fresh, pre2, root ? 'any' : 'first')) {
+        if (!root && fresh && !s) continue;
+        const nodeOf = (outs: (LadOut | LadNode)[]): LadNode => ({
+          id: this.id(),
+          series: this.list(s),
+          outs,
+        });
+        if (fresh && !s) {
           for (const [outs, m] of this.railOuts(k, pre2))
-            if (outs.length > 0) yield [{ id: this.id(), series, outs }, m];
+            if (outs.length > 0) yield [nodeOf(outs), m];
           continue;
         }
         // un box con ENO o Q libero chiude il nodo senza uscite
-        const tail = series.at(-1);
-        if (tail && this.last.has(tail)) {
-          yield [{ id: this.id(), series, outs: [] }, k];
+        if (s?.closed) {
+          yield [nodeOf([]), k];
           continue;
         }
-        for (const [outs, m] of this.outList(k, true))
-          if (outs.length > 0) yield [{ id: this.id(), series, outs }, m];
+        for (const [outs, m] of this.outList(k, true)) if (outs.length > 0) yield [nodeOf(outs), m];
         const bit = this.arg(k, '=');
-        if (bit && L_BIT.test(bit)) {
+        if (this.hidden(bit)) {
           for (const [outs, m] of this.shared(k + 1, bit, pre2))
-            if (outs.length > 0) yield [{ id: this.id(), series, outs }, m];
+            if (outs.length > 0) yield [nodeOf(outs), m];
         }
       }
     }
@@ -212,10 +299,10 @@ class Parser {
   private *prelude(i: number, pre: Pre): Gen<Pre> {
     yield [pre, i];
     for (const [s, j] of this.series(i, true, NO_PRE, 'none')) {
-      if (s.length === 0) continue;
+      if (!s) continue;
       const bit = this.arg(j, '=');
-      if (!bit || !L_BIT.test(bit) || pre.has(bit)) continue;
-      yield* this.prelude(j + 1, new Map([...pre, [bit, s]]));
+      if (!this.hidden(bit) || pre.has(bit)) continue;
+      yield* this.prelude(j + 1, new Map([...pre, [bit, this.list(s)]]));
     }
   }
 
@@ -291,22 +378,25 @@ class Parser {
   // ---- serie ----
 
   /** Tutte le serie da `i`, la più lunga per prima (memorizzate: le stesse si riprovano spesso). */
-  private series(i: number, fresh: boolean, pre: Pre, boxes: Boxes): [LadElem[], number][] {
+  private series(i: number, fresh: boolean, pre: Pre, boxes: Boxes): [List, number][] {
     let preId = this.preIds.get(pre);
     if (preId === undefined) this.preIds.set(pre, (preId = this.preCount++));
     const key = `${i}|${fresh}|${boxes}|${preId}`;
     const hit = this.memo.get(key);
     if (hit) return hit;
-    const out: [LadElem[], number][] = [];
+    const out: [List, number][] = [];
     for (const [e, j] of this.item(i, fresh, pre, boxes !== 'none')) {
       if (this.last.has(e)) {
-        out.push([[e], j]);
+        out.push([{ head: e, tail: null, closed: true }, j]);
         continue;
       }
       const restBoxes = boxes === 'any' ? 'any' : 'none';
-      for (const [rest, k] of this.series(j, false, pre, restBoxes)) out.push([[e, ...rest], k]);
+      for (const [tail, k] of this.series(j, false, pre, restBoxes)) {
+        this.tick();
+        out.push([{ head: e, tail, closed: tail?.closed ?? false }, k]);
+      }
     }
-    out.push([[], i]);
+    out.push([null, i]);
     this.memo.set(key, out);
     return out;
   }
@@ -396,8 +486,9 @@ class Parser {
     }
     if (this.bare(i, 'O(')) {
       for (const [s, j] of this.series(i + 1, true, pre, 'none')) {
-        if (s.length === 0 || !this.bare(j, ')')) continue;
-        for (const [rest, k] of this.orBranches(j + 1, pre)) yield [[s, ...rest], k];
+        if (!s || !this.bare(j, ')')) continue;
+        const branch = this.list(s);
+        for (const [rest, k] of this.orBranches(j + 1, pre)) yield [[branch, ...rest], k];
       }
     }
     yield [[], i];
@@ -431,7 +522,7 @@ class Parser {
       for (const e of ends) {
         const k = this.t[e];
         if (!k || k.label !== label) continue;
-        if (++this.steps > MAX_STEPS) throw new Budget();
+        this.tick();
         if (k.op === 'A' && k.arg === 'BR') yield [{ ...b }, e + 1];
         if (k.op === 'NOP' && k.arg === '0') yield [this.final({ ...b }), e + 1];
       }
@@ -552,7 +643,7 @@ class Parser {
       return;
     }
     for (const [s, j] of this.series(i, true, pre, 'none')) {
-      if (s.length === 0) continue;
+      if (!s) continue;
       const act = this.action(def, name, inst, j);
       if (!act) continue;
       yield* this.boolInputs(
@@ -562,7 +653,7 @@ class Parser {
         act.end,
         pre,
         { ...pins, ...act.pins },
-        { ...boolPins, [name]: s },
+        { ...boolPins, [name]: this.list(s) },
       );
     }
     yield* this.boolInputs(def, inst, rest, i, pre, pins, boolPins);
@@ -616,8 +707,9 @@ export function awlToLad(source: string, opts: AwlToLadOpts): AwlToLadResult {
   const input = tokensOf(source);
   if (!input) return { ok: false, reason: { code: 'SYNTAX' } };
   if (input.length === 0) return { ok: false, reason: { code: 'EMPTY' } };
+  if (input.length > MAX_INSTRUCTIONS) return { ok: false, reason: { code: 'TOO_COMPLEX' } };
   const foreign = opts.foreignLabels ?? new Set<string>();
-  const p = new Parser(structuredClone(input), opts.newId);
+  const p = new Parser(structuredClone(input), opts.newId, opts.foreignLocals ?? new Set());
   let tried = 0;
   try {
     for (const [network] of p.network()) {
@@ -647,13 +739,20 @@ export function awlToLad(source: string, opts: AwlToLadOpts): AwlToLadResult {
  */
 export function blockAwlToLad(
   sources: string[],
-  opts: Omit<AwlToLadOpts, 'firstLabel' | 'foreignLabels'>,
+  opts: Omit<AwlToLadOpts, 'firstLabel' | 'foreignLabels' | 'foreignLocals'>,
 ): AwlToLadResult[] {
   const labels = sources.map(awlLabels);
+  const locals = sources.map(awlLocalBytes);
+  const others = <T>(all: Set<T>[], i: number) =>
+    new Set(all.flatMap((l, k) => (k === i ? [] : [...l])));
   let firstLabel = 1;
   return sources.map((s, i) => {
-    const foreignLabels = new Set(labels.flatMap((l, k) => (k === i ? [] : [...l])));
-    const r = awlToLad(s, { ...opts, firstLabel, foreignLabels });
+    const r = awlToLad(s, {
+      ...opts,
+      firstLabel,
+      foreignLabels: others(labels, i),
+      foreignLocals: others(locals, i),
+    });
     if (r.ok) firstLabel = r.nextLabel;
     return r;
   });

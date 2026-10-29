@@ -1,5 +1,6 @@
 // Conversione AWL → KOP: andata e ritorno. Ogni rete tradotta in AWL e riconvertita deve dare la
 // stessa sorgente; una sorgente che nessuna rete KOP genera resta AWL con un motivo.
+import { formatNetwork } from '@baaportal/awl';
 import { describe, expect, it } from 'vitest';
 import { awlToLad, blockAwlToLad, networkToAwl, validateNetwork } from '../src/index.js';
 import type { BoxKind, CmpFn, LadBox, LadElem, LadNetwork, LadNode, LadOut } from '../src/index.js';
@@ -376,5 +377,46 @@ describe('awlToLad: etichette', () => {
   it('blockAwlToLad: le etichette crescono nel blocco', () => {
     const r = blockAwlToLad([src, src.replace(/M001/g, 'M002')], { tempEnd: 20, newId: nid });
     expect(r.map((x) => x.ok && x.nextLabel)).toEqual([2, 3]);
+  });
+});
+
+describe('awlToLad: limiti di tempo e memoria', () => {
+  const contacts = (n: number, tail: string) =>
+    Array.from({ length: n }, (_, i) => `A M ${i}.0`).join('\n') + `\n${tail}`;
+
+  it.each([
+    [1200, '= Q 0.0'],
+    [5000, '= Q 0.0'],
+    [299, '= Q 0.0'],
+    [299, 'X M 1.0'],
+    [5000, 'X M 1.0'],
+  ])('%i contatti e «%s»: risponde subito, convertito o TOO_COMPLEX', (n, tail) => {
+    const t = performance.now();
+    const r = convert(contacts(n, tail));
+    expect(performance.now() - t).toBeLessThan(1000);
+    if (!r.ok) expect(['TOO_COMPLEX', 'SHAPE']).toContain(r.reason.code);
+    if (tail.startsWith('X ')) expect(r.ok).toBe(false);
+  });
+});
+
+describe('awlToLad: bit L usati da altri segmenti', () => {
+  const seg1 = 'A I 0.0\n= L 0.0\nA L 0.0\n= Q 0.0\nA L 0.0\n= Q 0.1';
+  /** L'AWL della rete con i TEMP più lunghi: cambia se la rete nasconde un bit L. */
+  const moved = (r: ReturnType<typeof awlToLad>) =>
+    r.ok && networkToAwl(r.network, { tempEnd: 10, firstLabel: 1 }).source;
+
+  it.each(['A L 0.0\n= Q 1.0', 'L LW 0\nT MW 0'])(
+    'il bit L che «%s» legge resta un operando della rete',
+    (other) => {
+      const [r] = blockAwlToLad([seg1, other], { tempEnd: 0, newId: nid });
+      expect(r!.ok).toBe(true);
+      expect(moved(r!)).toBe(formatNetwork(seg1, 'international'));
+    },
+  );
+
+  it('senza altri lettori il bit L è quello del ramo a T', () => {
+    const [r] = blockAwlToLad([seg1, 'A L 1.0\n= Q 1.0'], { tempEnd: 0, newId: nid });
+    expect(r!.ok).toBe(true);
+    expect(moved(r!)).toContain('L10.0');
   });
 });
