@@ -11,6 +11,30 @@ Guida breve al collegamento a una CPU S7-300 (piano 3A) e alle operazioni sulla 
 7. **Collegamento interrotto.** Se la CPU non risponde più, l'app torna offline e mostra il messaggio «Collegamento interrotto». _Interrompi collegamento online_ chiude il collegamento a mano.
 8. **Simulazione.** La simulazione e il collegamento a un PLC si escludono: va spenta una prima di accendere l'altro.
 
+## Collegamento MPI (piano 3M)
+
+Per una CPU che ha solo la porta MPI, come la 313C, ci sono due strade.
+
+1. **Gateway MPI→Ethernet (consigliato).** Un gateway che dichiari RFC 1006 o ISO-on-TCP, per esempio IBH Link S7++, Helmholz NETLink PRO o Hilscher NT 50-MPI. Si collega come una CPU in rete, con il tipo _Gateway RFC 1006_ (punto 4 sopra). È la strada più provata: il protocollo è lo stesso del TCP.
+2. **PC Adapter seriale o adattatore USB-COM (sperimentale).** Il PC Adapter RS232 e gli adattatori USB che si presentano come porta COM e parlano lo stesso protocollo. In _Dispositivi accessibili_ scegli il tipo _Adattatore MPI (seriale o USB-COM)_, poi:
+   - la porta (_Aggiorna_ rilegge l'elenco dopo aver attaccato l'adattatore);
+   - velocità di trasmissione e parità della porta: di solito 38400 e dispari;
+   - indirizzo MPI della CPU (di solito 2), indirizzo del PC (0), indirizzo più alto (HSA, di solito 31) e velocità del bus (di solito 187,5 kbit/s);
+   - la variante del protocollo: _Automatico_ prova v1 e poi v2.
+
+   _Cerca_ elenca gli indirizzi presenti sul bus; un clic su un indirizzo lo usa per la CPU, che deve avere un indirizzo diverso da quello del PC. _Collega_ salva l'accesso nelle proprietà della CPU, come per il TCP. Tutte le funzioni online funzionano allo stesso modo, solo più lente.
+
+   L'adattatore regge una sola sessione alla volta. Durante un'operazione con un collegamento proprio (caricamento nel dispositivo, scrittura delle variabili, ripristino, osservazione di un blocco, stack, caricamento dalla CPU, backup) la sorveglianza della CPU si ferma e riparte da sola alla fine: il collegamento resta online. In quel tempo le letture sul collegamento della finestra (tabelle di controllo, elenco dei blocchi, diagnostica) rispondono «Porta MPI occupata da un'altra operazione» e due operazioni di questo tipo non vanno insieme: la seconda dice «La porta … è già usata da un altro collegamento di BaaPortal».
+
+**Non funzionano:** il PC Adapter USB originale Siemens (6ES7972-0CB20), le schede CP 5611/5711 e gli adattatori PROFIBUS USB Siemens. Usano protocolli chiusi con driver Siemens.
+
+Messaggi tipici:
+
+- «Adattatore MPI non risponde»: porta sbagliata, velocità o parità diverse da quelle dell'adattatore, cavo staccato o adattatore senza alimentazione (prende corrente dalla porta MPI della CPU).
+- «Nessuna CPU risponde all'indirizzo MPI …»: l'adattatore funziona ma la CPU ha un altro indirizzo; il messaggio elenca gli indirizzi visti sul bus.
+- «La porta … è usata da un altro programma»: chiudi SIMATIC Manager, TIA Portal o l'altro programma che tiene aperta la porta.
+- «La porta … è già usata da un altro collegamento di BaaPortal»: un'altra finestra è online sulla stessa porta, o è in corso un'altra operazione (per esempio l'osservazione di un blocco); aspetta che finisca o fermala.
+
 ## Carica nel dispositivo (piano 3B)
 
 Con il collegamento attivo, _Carica nel dispositivo_ (barra degli strumenti, menu _Online_, o menu contestuale di uno o più blocchi nell'albero) scrive i blocchi del progetto nella CPU.

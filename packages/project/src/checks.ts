@@ -245,8 +245,8 @@ function checkProperties(ctx: Ctx): void {
     bad('retentivity.counters');
   }
   if (!inRange(p.cyclicInterrupts.ob35Ms, 1, 60000)) bad('cyclicInterrupts.ob35Ms');
-  // L'accesso online non blocca il progetto: un host non IPv4 è solo un avviso.
-  if (p.access && !parseIp(p.access.host)) {
+  // L'accesso online non blocca il progetto: un host non IPv4 è solo un avviso (con MPI l'host non conta).
+  if (p.access && p.access.link?.kind !== 'mpi' && !parseIp(p.access.host)) {
     add(ctx, {
       severity: 'warning',
       code: 'PROPERTY_INVALID',

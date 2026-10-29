@@ -1,3 +1,5 @@
+import type { PlcAccess } from '@baaportal/project';
+
 const OCTET = /^(0|[1-9]\d{0,2})$/;
 
 /** Esito della lettura di un indirizzo scritto a mano: `error` è una chiave i18n. */
@@ -34,4 +36,9 @@ export function parseAccessInput(text: string): AccessInput {
 export function parseTsap(text: string): number | null {
   const m = /^([0-9a-fA-F]{2})\.([0-9a-fA-F]{2})$/.exec(text.trim());
   return m ? (parseInt(m[1]!, 16) << 8) | parseInt(m[2]!, 16) : null;
+}
+
+/** Dove sta la CPU, nei messaggi: l'host, oppure porta seriale e indirizzo MPI. */
+export function accessWhere(a: PlcAccess): string {
+  return a.link?.kind === 'mpi' ? `${a.link.port}, MPI ${a.link.cpuAddress}` : a.host;
 }

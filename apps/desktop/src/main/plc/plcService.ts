@@ -2,6 +2,7 @@ import { S7Error, isUnavailable, type S7Client } from '@baaportal/s7comm';
 import { connectTcp } from '@baaportal/s7comm/node';
 import type { ConnectOptions } from '@baaportal/s7comm';
 import { toPlcIdentity, toPlcMode } from './plcMap';
+import { accessLabel, connectOptions, holdPort } from './access';
 import { FRCE_LED, forceFrom } from './diagnostics';
 import type {
   PlcAccess,
@@ -53,10 +54,8 @@ export interface PlcServiceOptions {
   connect?: PlcConnectFn;
 }
 
-const DEFAULT_PORT = 102;
 /** Il LED FRCE si legge una volta ogni tanti giri di sorveglianza (circa 5 s). */
 const FORCE_EVERY = 5;
-const CONNECTION_TYPES = { PG: 'pg', OP: 'op', S7_BASIC: 'basic' } as const;
 
 interface Link {
   /** Numero progressivo: distingue un collegamento da uno successivo allo stesso indirizzo. */
@@ -79,15 +78,29 @@ interface Link {
   forceGone: boolean;
   /** Giri di sorveglianza fatti: il LED si legge uno ogni `FORCE_EVERY`. */
   polls: number;
+  /**
+   * Con l'adattatore MPI: quante altre sessioni hanno fermato la sorveglianza per usare la porta.
+   * Intanto il collegamento resta online per la finestra, senza client aperto.
+   */
+  paused: number;
+  /** Toglie la sorveglianza dall'elenco delle porte MPI. */
+  unhold: () => void;
 }
 
+/** Lettura chiesta mentre un'altra operazione usa la porta MPI della sorveglianza. */
+export const MPI_PAUSED =
+  'Porta MPI occupata da un’altra operazione (scrittura, osservazione, caricamento): riprovare al termine';
+
 export function connectMessage(err: unknown, access: PlcAccess): string {
-  const port = access.port ?? DEFAULT_PORT;
   if (err instanceof S7Error) {
     if (err.code === 'COTP_REJECTED')
       return 'La CPU ha rifiutato il collegamento (rack/slot o TSAP)';
+    // Adattatore MPI e porta seriale: il messaggio dice già che cosa controllare.
+    if (err.code.startsWith('MPI_') || err.code.startsWith('SERIAL_')) return err.message;
     if (['CONNECT_REFUSED', 'CONNECT_TIMEOUT', 'TIMEOUT'].includes(err.code)) {
-      return `Nessuna risposta da ${access.host}:${port}`;
+      const where =
+        access.link?.kind === 'mpi' ? accessLabel(access) : `${access.host}:${access.port ?? 102}`;
+      return `Nessuna risposta da ${where}`;
     }
     if (err.code === 'ABORTED') return 'Collegamento annullato';
     return `Collegamento non riuscito: ${err.message}`;
@@ -140,13 +153,7 @@ export class PlcService {
     let client: Client;
     try {
       client = await this.connectFn({
-        host: access.host,
-        port: access.port ?? DEFAULT_PORT,
-        rack: access.rack,
-        slot: access.slot,
-        connectionType: CONNECTION_TYPES[access.connectionType],
-        ...(access.remoteTsap !== undefined ? { remoteTsap: access.remoteTsap } : {}),
-        timeoutMs: this.connectTimeoutMs,
+        ...connectOptions(access, this.connectTimeoutMs, true),
         mode: 'read-only',
       });
     } catch (err) {
@@ -204,9 +211,15 @@ export class PlcService {
       force,
       forceGone,
       polls: 0,
+      paused: 0,
+      unhold: () => undefined,
     };
     owner.once('destroyed', link.onGone);
     this.links.set(owner, link);
+    link.unhold = holdPort(access, {
+      pause: () => this.pause(link),
+      resume: () => this.resume(owner, link),
+    });
     for (const cb of [...this.connectListeners]) {
       try {
         cb(owner);
@@ -311,6 +324,7 @@ export class PlcService {
     const run = <R>(fn: (client: ReadClient) => Promise<R>): Promise<R> =>
       this.exclusive(link, async () => {
         if (link.done) throw new S7Error('CLOSED', 'collegamento chiuso');
+        if (link.paused > 0) throw new Error(MPI_PAUSED);
         if (Date.now() > end) {
           throw new S7Error('ABORTED', `Lettura troppo lunga: oltre ${deadlineMs / 1000} s`);
         }
@@ -349,8 +363,45 @@ export class PlcService {
     await link.client.close().catch(() => undefined);
   }
 
+  /**
+   * Un'altra sessione vuole la porta MPI: niente più giri di sorveglianza, poi (dopo la richiesta in
+   * corso) il client si chiude. Si risolve a porta libera. Nessun evento: per la finestra il
+   * collegamento resta online.
+   */
+  private pause(link: Link): Promise<void> {
+    link.paused++;
+    clearInterval(link.timer);
+    return this.exclusive(link, () => link.client.close().catch(() => undefined));
+  }
+
+  /** Fine dell'ultima sessione che aveva fermato la sorveglianza: si riapre, o il collegamento è perso. */
+  private resume(owner: PlcOwner, link: Link): Promise<void> {
+    if (--link.paused > 0) return Promise.resolve();
+    return this.exclusive(link, async () => {
+      if (link.done || link.paused > 0) return;
+      let client: Client;
+      try {
+        client = await this.connectFn({
+          ...connectOptions(link.access, this.connectTimeoutMs, true),
+          mode: 'read-only',
+        });
+      } catch {
+        this.lost(owner, link, 'closed');
+        return;
+      }
+      if (link.done || link.paused > 0) {
+        await client.close().catch(() => undefined);
+        return;
+      }
+      link.client = client;
+      link.failures = 0;
+      link.timer = setInterval(() => void this.tick(owner, link), this.intervalMs);
+    });
+  }
+
   private finish(owner: PlcOwner, link: Link): void {
     link.done = true;
+    link.unhold();
     clearInterval(link.timer);
     owner.removeListener('destroyed', link.onGone);
   }
@@ -382,7 +433,7 @@ export class PlcService {
 
   /** Un giro di sorveglianza; se la lettura precedente non è finita, salta. */
   private async tick(owner: PlcOwner, link: Link): Promise<void> {
-    if (link.done || link.polling) return;
+    if (link.done || link.polling || link.paused > 0) return;
     if (link.client.closed) {
       this.lost(owner, link, 'closed');
       return;
@@ -397,7 +448,7 @@ export class PlcService {
   }
 
   private async poll(owner: PlcOwner, link: Link): Promise<void> {
-    if (link.done) return;
+    if (link.done || link.paused > 0) return;
     let timer: NodeJS.Timeout | undefined;
     try {
       const timeout = new Promise<never>((_, reject) => {

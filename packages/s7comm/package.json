@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "fflate": "^0.8.3"
+    "fflate": "^0.8.3",
+    "serialport": "^13.0.0"
   },
   "devDependencies": {
     "@baaportal/s7-server": "*"

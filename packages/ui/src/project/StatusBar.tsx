@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '../state/AppContext';
 import { cancelDownload, useUpdateState } from '../update/updateController';
+import { accessWhere } from '../online/accessInput';
 import { useProgress } from './progress';
 
 /** Barra di stato: durante un'operazione lunga avanzamento e Interrompi, altrimenti l'ultimo messaggio. */
@@ -26,7 +27,7 @@ export function StatusBar() {
             ? t('status.onlineConnecting')
             : t('status.online', {
                 module: online.identity?.moduleName ?? online.identity?.orderNumber ?? '',
-                host: online.access?.host ?? '',
+                host: online.access ? accessWhere(online.access) : '',
                 mode: online.mode ?? 'UNKNOWN',
               })}
         </span>

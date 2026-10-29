@@ -17,6 +17,8 @@ import type {
   PlcEvent,
   PlcScanEvent,
   PlcScanStartResult,
+  PlcMpiNodesResult,
+  MpiLink,
   PlcStatus,
   PlcBlocksResult,
   PlcBlockRef,
@@ -463,6 +465,16 @@ export class FakeBridge implements BaaBridge {
   plcScanStartCalls: string[] = [];
   plcScanCancelCalls = 0;
   private plcScanCbs = new Set<(e: PlcScanEvent) => void>();
+  plcSerialPortsValue: { path: string }[] = [];
+  async plcSerialPorts() {
+    return this.plcSerialPortsValue;
+  }
+  plcMpiNodesValue: PlcMpiNodesResult = { ok: true, nodes: [] };
+  plcMpiNodesCalls: MpiLink[] = [];
+  async plcMpiNodes(link: MpiLink) {
+    this.plcMpiNodesCalls.push(link);
+    return this.plcMpiNodesValue;
+  }
   async plcInterfaces() {
     return this.plcInterfacesValue;
   }

@@ -5,3 +5,5 @@ export { collectTcp } from './collectTcp';
 export { connectWriteTcp } from './connectWrite';
 export { connectTestTcp } from './connectTest';
 export { probePort } from './probePort';
+// La porta seriale grezza (`openSerial`) resta interna: fuori solo il link MPI, già controllato.
+export { listMpiNodesSerial, listSerialPorts, mpiSerialLink } from './serialTransport';

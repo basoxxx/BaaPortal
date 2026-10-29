@@ -23,7 +23,13 @@ const REPO = 'BaaPortal';
 const ASAR_NEEDS = [
   '/node_modules/electron-updater/package.json',
   '/node_modules/builder-util-runtime/package.json',
+  '/node_modules/serialport/package.json',
 ];
+// Binario nativo di serialport (fuori dall'asar): uno per piattaforma; sul Mac è un solo file per arm64 e x64.
+const SERIAL_PREBUILD = {
+  win32: 'win32-x64',
+  darwin: 'darwin-x64+arm64',
+};
 
 function readYml(file, errors) {
   if (!existsSync(file)) {
@@ -51,7 +57,7 @@ function sha512Of(file) {
   return hash.digest('base64');
 }
 
-function checkApp(resources, label, errors) {
+function checkApp(resources, label, errors, platform) {
   const asarFile = join(resources, 'app.asar');
   if (!existsSync(asarFile)) {
     errors.push(`${label}: manca app.asar`);
@@ -60,6 +66,14 @@ function checkApp(resources, label, errors) {
     for (const need of ASAR_NEEDS) {
       if (!entries.has(need)) errors.push(`${label}: app.asar non contiene ${need.split('/')[2]}`);
     }
+  }
+  const prebuilds = join(
+    resources,
+    'app.asar.unpacked/node_modules/@serialport/bindings-cpp/prebuilds',
+    SERIAL_PREBUILD[platform],
+  );
+  if (!existsSync(prebuilds) || !readdirSync(prebuilds).some((n) => n.endsWith('.node'))) {
+    errors.push(`${label}: manca il binario .node di serialport (${SERIAL_PREBUILD[platform]})`);
   }
   const updFile = join(resources, 'app-update.yml');
   if (!existsSync(updFile)) {
@@ -95,7 +109,7 @@ function checkFile(dir, name, files, errors, blockmap = true) {
 export function checkDist(dir, platform, version) {
   const errors = [];
   if (platform === 'win32') {
-    checkApp(join(dir, 'win-unpacked', 'resources'), 'win-unpacked', errors);
+    checkApp(join(dir, 'win-unpacked', 'resources'), 'win-unpacked', errors, 'win32');
     const latest = readYml(join(dir, 'latest.yml'), errors);
     if (latest) {
       if (latest.version !== version)
@@ -103,8 +117,13 @@ export function checkDist(dir, platform, version) {
       checkFile(dir, `BaaPortal-Setup-${version}.exe`, latest.files ?? [], errors);
     }
   } else {
-    checkApp(join(dir, 'mac-arm64', 'BaaPortal.app', 'Contents', 'Resources'), 'mac-arm64', errors);
-    checkApp(join(dir, 'mac', 'BaaPortal.app', 'Contents', 'Resources'), 'mac', errors);
+    checkApp(
+      join(dir, 'mac-arm64', 'BaaPortal.app', 'Contents', 'Resources'),
+      'mac-arm64',
+      errors,
+      'darwin',
+    );
+    checkApp(join(dir, 'mac', 'BaaPortal.app', 'Contents', 'Resources'), 'mac', errors, 'darwin');
     const ymls = readdirSync(dir).filter((n) => /^latest-mac.*\.yml$/.test(n));
     if (ymls.length > 1) errors.push(`più di un latest-mac*.yml: ${ymls.join(', ')}`);
     const latest = readYml(join(dir, 'latest-mac.yml'), errors);

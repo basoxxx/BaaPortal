@@ -1,15 +1,14 @@
-import { decodeCotp, encodeCotp, type CotpPdu } from './cotp';
 import { S7Error } from './errors';
-import { FrameReader, encodeTpkt } from './tpkt';
+import { IsoTcpLink, type PduLink, type PduLinkFactory } from './link';
 import { LOCAL_TSAP_PG, remoteTsap, type ConnectionType } from './tsap';
-import { assertOutgoingFrame, type ConnectionMode } from './readOnlyGuard';
+import { assertOutgoingPdu, type ConnectionMode } from './readOnlyGuard';
 import type { BlockType } from './s7/blocks';
 import { decodeDownloadBlockJob, decodeDownloadEnded, encodeDownloadBlockAck } from './s7/download';
 import { decodeS7, encodeS7, type S7Pdu } from './s7/header';
 import { decodeSetup, encodeSetup } from './s7/setup';
 import { decodeUserdata, type DecodedUserdata } from './s7/userdata';
 import type { CaptureRecorder } from './capture/captureLog';
-import type { Transport, TransportFactory } from './transport';
+import type { TransportFactory } from './transport';
 
 export interface ConnectOptions {
   host: string;
@@ -23,6 +22,11 @@ export interface ConnectOptions {
   proposedPdu?: number;
   /** Obbligatorio: il nucleo non sceglie un trasporto (vedi `openTcp` in `./node`). */
   transport: TransportFactory;
+  /**
+   * Link alternativo (per esempio l'adattatore MPI). Senza, ISO-on-TCP da `transport`, `host`,
+   * `port` e TSAP; con un link, quei campi e `recorder` non si usano.
+   */
+  link?: PduLinkFactory;
   recorder?: CaptureRecorder;
   signal?: AbortSignal;
   /** Fissato all'apertura, mai modificabile. Default `'read-only'`. */
@@ -32,10 +36,6 @@ export interface ConnectOptions {
 const DEFAULT_PORT = 102;
 const DEFAULT_TIMEOUT_MS = 5000;
 const DEFAULT_PDU = 480;
-const SRC_REF = 0x0100; // proto §2.2, §14
-const TPDU_SIZE = 0x0a; // 1024
-const MAX_FRAGMENTS = 64; // proto §2.6
-const MAX_REASSEMBLED = 0xffff + 16;
 const MAX_IGNORED_LOG = 100;
 /** Indication (proto §18.1) tenute in coda in modo `online-test`: le più vecchie si scartano. */
 const MAX_INDICATIONS = 8;
@@ -44,42 +44,6 @@ const MAX_INDICATIONS = 8;
 export function nextPduRef(prev: number): number {
   return (prev % 0xffff) + 1;
 }
-
-// BEGIN CHOKE POINT
-/**
- * L'unico punto del pacchetto che invia byte a un `Transport`. Lavora su una copia privata
- * (nessun altro la possiede), la fa controllare da `assertOutgoingFrame`, la invia e solo dopo
- * la consegna la dà al registratore (altra copia, errori ignorati).
- */
-export function guardedSender(
-  transport: Pick<Transport, 'send'>,
-  recorder: CaptureRecorder | undefined,
-  onRefused: () => void,
-  mode: ConnectionMode = 'read-only',
-  pduLength?: () => number,
-): (frame: Uint8Array) => void {
-  return (frame) => {
-    const out = frame.slice();
-    try {
-      assertOutgoingFrame(out, mode, pduLength?.());
-    } catch (e) {
-      onRefused();
-      throw e;
-    }
-    // Copia per il registratore presa PRIMA dell'invio: un trasporto che modificasse i byte
-    // ricevuti non può alterare ciò che la cattura mostra (sempre i byte approvati).
-    const recorded = recorder ? out.slice(4) : undefined;
-    transport.send(out);
-    if (recorder && recorded) {
-      try {
-        recorder.record('tx', recorded);
-      } catch {
-        // un registratore difettoso non tocca la connessione
-      }
-    }
-  };
-}
-// END CHOKE POINT
 
 interface Pending {
   param: Uint8Array;
@@ -117,12 +81,6 @@ interface IndicationWaiter {
   signal?: AbortSignal;
 }
 
-interface CcWaiter {
-  resolve(cc: Extract<CotpPdu, { type: 'CR' | 'CC' }>): void;
-  reject(e: Error): void;
-  timer: ReturnType<typeof setTimeout>;
-}
-
 const h = (n: number): string => `0x${n.toString(16).padStart(2, '0')}`;
 
 function matches(d: DecodedUserdata, m: IndicationMatch): boolean {
@@ -130,9 +88,9 @@ function matches(d: DecodedUserdata, m: IndicationMatch): boolean {
 }
 
 /**
- * Connessione S7 in sola lettura: un solo job in volo, timeout, annullamento, registratore.
- * Il `Transport` non è mai conservato sull'istanza: la classe tiene solo il mittente filtrato
- * (`guardedSender`) e le funzioni di chiusura, in campi `#privati`.
+ * Connessione S7 in sola lettura: un solo job in volo, timeout, annullamento.
+ * Il `Transport` non è mai conservato sull'istanza: la classe tiene solo un `PduLink`, in un
+ * campo `#privato`, e ogni PDU in uscita passa prima da `assertOutgoingPdu` (`#sendPdu`).
  */
 export class S7Connection {
   /** Frame rifiutati dal filtro di sola lettura (mai inviati). */
@@ -144,55 +102,35 @@ export class S7Connection {
   #pduLength: number;
   #amq = 1;
   #closed = false;
-  #closing = false;
-  #established = false;
-  #peerRef = 0;
+  #closingDone: Promise<void> | undefined;
   #lastRef = 0;
   #current: Pending | undefined;
   readonly #queue: Pending[] = [];
-  #ccWaiter: CcWaiter | undefined;
-  readonly #reader = new FrameReader();
-  #fragments: Uint8Array[] = [];
-  #fragmentBytes = 0;
   #abortListener: (() => void) | undefined;
-  readonly #sendFrame: (frame: Uint8Array) => void;
-  readonly #closeTransport: () => void;
+  readonly #link: PduLink;
   readonly #signal: AbortSignal | undefined;
   readonly #defaultTimeoutMs: number;
   #download: DownloadState | undefined;
   readonly #mode: ConnectionMode;
-  #tpduCap = Infinity;
   readonly #indications: DecodedUserdata[] = [];
   readonly #indicationWaiters: IndicationWaiter[] = [];
   /** Job cancellati (`gruppo/sub/seq`): le indication tardive si scartano (proto §18.4.1). */
   readonly #deadJobs = new Set<string>();
-  readonly #rec: CaptureRecorder | undefined;
 
   private constructor(
-    transport: Transport,
-    recorder: CaptureRecorder | undefined,
+    link: PduLink,
     signal: AbortSignal | undefined,
     defaultTimeoutMs: number,
     proposedPdu: number,
     mode: ConnectionMode,
   ) {
     this.#mode = mode;
-    this.#rec = recorder;
     this.#pduLength = proposedPdu;
     this.#defaultTimeoutMs = defaultTimeoutMs;
     this.#signal = signal;
-    this.#sendFrame = guardedSender(
-      transport,
-      recorder,
-      () => {
-        this.refusedCount++;
-      },
-      mode,
-      () => this.#pduLength,
-    );
-    this.#closeTransport = () => transport.close();
-    transport.onData((chunk) => this.#onData(chunk));
-    transport.onClose((err) =>
+    this.#link = link;
+    link.onPdu((s7) => this.#onData(s7));
+    link.onClose((err) =>
       this.#fail(
         err instanceof S7Error
           ? err
@@ -249,8 +187,31 @@ export class S7Connection {
     }
     const dstTsap = o.remoteTsap ?? remoteTsap(o.connectionType ?? 'pg', o.rack ?? 0, o.slot ?? 2);
     if (o.signal?.aborted) throw new S7Error('ABORTED', 'operazione annullata');
-    const transport = await o.transport(o.host, o.port ?? DEFAULT_PORT, timeoutMs, o.signal);
-    const conn = new S7Connection(transport, o.recorder, o.signal, timeoutMs, proposed, mode);
+    // I controlli del link ISO vedono la connessione solo dopo che esiste.
+    const ref: { conn?: S7Connection } = {};
+    const link = o.link
+      ? await o.link({
+          timeoutMs,
+          signal: o.signal,
+          mode,
+          pduLength: () => (ref.conn ? ref.conn.#pduLength : proposed),
+        })
+      : await IsoTcpLink.open({
+          host: o.host,
+          port: o.port ?? DEFAULT_PORT,
+          transport: o.transport,
+          srcTsap: o.localTsap ?? LOCAL_TSAP_PG,
+          dstTsap,
+          timeoutMs,
+          signal: o.signal,
+          recorder: o.recorder,
+          mode,
+          pduLength: () => (ref.conn ? ref.conn.#pduLength : proposed),
+          onRefused: () => {
+            if (ref.conn) ref.conn.refusedCount++;
+          },
+        });
+    const conn = (ref.conn = new S7Connection(link, o.signal, timeoutMs, proposed, mode));
     try {
       if (conn.#closed) {
         // Una fabbrica che ignora il segnale e risolve dopo l'abort: ABORTED, non CLOSED.
@@ -258,7 +219,8 @@ export class S7Connection {
           ? new S7Error('ABORTED', 'operazione annullata')
           : new S7Error('CLOSED', "connessione chiusa durante l'apertura");
       }
-      await conn.#handshake(o.localTsap ?? LOCAL_TSAP_PG, dstTsap, proposed, timeoutMs);
+      const tpduCap = link instanceof IsoTcpLink ? link.tpduCap : Infinity;
+      await conn.#setup(proposed, tpduCap, timeoutMs);
     } catch (e) {
       conn.#fail(e instanceof Error ? e : new S7Error('PROTOCOL', String(e)));
       throw e;
@@ -482,7 +444,7 @@ export class S7Connection {
     if (s7.length > this.#pduLength) {
       throw new RangeError(`PDU di ${s7.length} byte oltre la PDU negoziata ${this.#pduLength}`);
     }
-    this.#sendFrame(encodeTpkt(encodeCotp({ type: 'DT', eot: true, data: s7 })));
+    this.#sendPdu(s7);
     if (fn === 0x1c) {
       this.#endDownload(st);
       st.resolve();
@@ -491,74 +453,21 @@ export class S7Connection {
     }
   }
 
+  /** Si risolve a link chiuso davvero (con l'adattatore MPI: porta seriale libera). */
   close(): Promise<void> {
-    if (this.#closed || this.#closing) return Promise.resolve();
-    this.#closing = true;
-    if (this.#established) {
-      try {
-        this.#sendFrame(
-          encodeTpkt(
-            encodeCotp({ type: 'DR', dstRef: this.#peerRef, srcRef: SRC_REF, reason: 0x80 }),
-          ),
-        );
-      } catch {
-        // chiusura comunque
-      }
-    }
+    if (this.#closingDone) return this.#closingDone;
+    if (this.#closed) return this.#link.close().catch(() => undefined);
+    // Chiusura ordinata del link (DR su ISO-on-TCP), poi le promesse in sospeso.
+    this.#closingDone = this.#link.close().catch(() => undefined);
     this.#fail(new S7Error('CLOSED', 'connessione chiusa'));
-    return Promise.resolve();
+    return this.#closingDone;
   }
 
   // ---- apertura ----------------------------------------------------------------------------
 
-  async #handshake(
-    srcTsap: number,
-    dstTsap: number,
-    proposed: number,
-    timeoutMs: number,
-  ): Promise<void> {
-    const cc = new Promise<Extract<CotpPdu, { type: 'CR' | 'CC' }>>((resolve, reject) => {
-      const timer = setTimeout(
-        () => reject(new S7Error('CONNECT_TIMEOUT', `nessun CC dalla CPU entro ${timeoutMs} ms`)),
-        timeoutMs,
-      );
-      this.#ccWaiter = { resolve, reject, timer };
-    });
-    cc.catch(() => undefined); // l'errore arriva da `await cc` o dal catch sotto
-    try {
-      this.#sendFrame(
-        encodeTpkt(
-          encodeCotp({
-            type: 'CR',
-            dstRef: 0,
-            srcRef: SRC_REF,
-            tpduSize: TPDU_SIZE,
-            srcTsap,
-            dstTsap,
-          }),
-        ),
-      );
-    } catch (e) {
-      const w = this.#ccWaiter;
-      this.#ccWaiter = undefined;
-      if (w) clearTimeout(w.timer);
-      throw e;
-    }
-    const confirm = await cc;
-    this.#peerRef = confirm.srcRef;
-    if (confirm.tpduSize !== undefined && confirm.tpduSize <= 16) {
-      // Il TPDU della CPU può essere più piccolo del nostro: la PDU S7 deve entrare in un DT.
-      this.#tpduCap = 2 ** confirm.tpduSize - 3;
-      if (this.#tpduCap < 20) {
-        throw new S7Error(
-          'COTP_REJECTED',
-          `TPDU-size ${h(confirm.tpduSize)} della CPU troppo piccola per S7`,
-        );
-      }
-    }
-    this.#established = true;
+  async #setup(proposed: number, tpduCap: number, timeoutMs: number): Promise<void> {
     const res = await this.request(
-      encodeSetup({ amqCalling: 1, amqCalled: 1, pduLength: Math.min(proposed, this.#tpduCap) }),
+      encodeSetup({ amqCalling: 1, amqCalled: 1, pduLength: Math.min(proposed, tpduCap) }),
       new Uint8Array(0),
       1,
       timeoutMs,
@@ -578,20 +487,20 @@ export class S7Connection {
       throw new S7Error('PROTOCOL', `PDU negoziata ${s.pduLength} troppo piccola`);
     }
     // Si adotta il valore della CPU, mai oltre la proposta né oltre il TPDU; un job alla volta.
-    this.#pduLength = Math.min(s.pduLength, proposed, this.#tpduCap);
+    this.#pduLength = Math.min(s.pduLength, proposed, tpduCap);
     this.#amq = Math.max(1, Math.min(s.amqCalling, s.amqCalled));
   }
 
   // ---- invio -------------------------------------------------------------------------------
 
   #pump(): void {
-    while (!this.#closed && this.#established && !this.#current && this.#queue.length > 0) {
+    while (!this.#closed && !this.#current && this.#queue.length > 0) {
       const p = this.#queue.shift()!;
       const ref = nextPduRef(this.#lastRef);
       this.#lastRef = ref;
-      let frame: Uint8Array;
+      let s7: Uint8Array;
       try {
-        const s7 = encodeS7({
+        s7 = encodeS7({
           rosctr: p.rosctr,
           pduRef: ref,
           errorClass: 0,
@@ -604,13 +513,12 @@ export class S7Connection {
             `PDU di ${s7.length} byte oltre la PDU negoziata ${this.#pduLength}`,
           );
         }
-        frame = encodeTpkt(encodeCotp({ type: 'DT', eot: true, data: s7 }));
       } catch (e) {
         p.reject(e instanceof Error ? e : new Error(String(e)));
         continue;
       }
       // `current` e il timer esistono prima dell'invio: se la connessione si chiude durante
-      // l'invio (trasporto o registratore), `#fail` rifiuta anche questa richiesta.
+      // l'invio (link, trasporto o registratore), `#fail` rifiuta anche questa richiesta.
       p.ref = ref;
       p.timer = setTimeout(
         () =>
@@ -621,7 +529,7 @@ export class S7Connection {
       );
       this.#current = p;
       try {
-        this.#sendFrame(frame);
+        this.#sendPdu(s7);
       } catch (e) {
         if (this.#current === p) {
           this.#current = undefined;
@@ -640,76 +548,29 @@ export class S7Connection {
     }
   }
 
+  /**
+   * Ogni PDU in uscita passa da qui, su qualunque link: copia privata, controllo di sola lettura
+   * (`assertOutgoingPdu`), solo dopo il link. Un rifiuto non arriva mai al link.
+   */
+  #sendPdu(s7: Uint8Array): void {
+    const out = s7.slice();
+    try {
+      assertOutgoingPdu(out, this.#mode, this.#pduLength);
+    } catch (e) {
+      this.refusedCount++;
+      throw e;
+    }
+    this.#link.sendPdu(out);
+  }
+
   // ---- ricezione ---------------------------------------------------------------------------
 
-  #onData(chunk: Uint8Array): void {
+  #onData(s7: Uint8Array): void {
     if (this.#closed) return;
     try {
-      for (const payload of this.#reader.push(chunk)) {
-        if (this.#closed) return;
-        this.#recordRx(payload);
-        this.#onCotp(decodeCotp(payload));
-      }
+      this.#onPdu(decodeS7(s7));
     } catch (e) {
       this.#fail(e instanceof S7Error ? e : new S7Error('PROTOCOL', String(e)));
-    }
-  }
-
-  #recordRx(payload: Uint8Array): void {
-    try {
-      this.#rec?.record('rx', payload.slice());
-    } catch {
-      // un registratore difettoso non tocca la connessione
-    }
-  }
-
-  #onCotp(c: CotpPdu): void {
-    switch (c.type) {
-      case 'CC': {
-        const w = this.#ccWaiter;
-        if (!w) throw new S7Error('PROTOCOL', 'CC inatteso a connessione aperta');
-        this.#ccWaiter = undefined;
-        clearTimeout(w.timer);
-        w.resolve(c);
-        return;
-      }
-      case 'DR':
-      case 'ER': {
-        const why =
-          c.type === 'DR'
-            ? `DR dalla CPU, motivo ${h(c.reason)}`
-            : `ER dalla CPU, causa ${h(c.cause)}`;
-        const w = this.#ccWaiter;
-        if (w) {
-          this.#ccWaiter = undefined;
-          clearTimeout(w.timer);
-          w.reject(new S7Error('COTP_REJECTED', `connessione COTP rifiutata: ${why}`));
-        } else {
-          this.#fail(new S7Error('CLOSED', `la CPU ha chiuso la connessione: ${why}`));
-        }
-        return;
-      }
-      case 'CR':
-        throw new S7Error('PROTOCOL', 'CR ricevuto dalla CPU');
-      case 'DT': {
-        if (!this.#established) throw new S7Error('PROTOCOL', 'dati prima del CC');
-        this.#fragments.push(c.data);
-        this.#fragmentBytes += c.data.length;
-        if (this.#fragments.length > MAX_FRAGMENTS || this.#fragmentBytes > MAX_REASSEMBLED) {
-          throw new S7Error('PROTOCOL', 'PDU S7 frammentata oltre i limiti');
-        }
-        if (!c.eot) return;
-        const whole = new Uint8Array(this.#fragmentBytes);
-        let at = 0;
-        for (const f of this.#fragments) {
-          whole.set(f, at);
-          at += f.length;
-        }
-        this.#fragments = [];
-        this.#fragmentBytes = 0;
-        this.#onPdu(decodeS7(whole));
-        return;
-      }
     }
   }
 
@@ -751,12 +612,6 @@ export class S7Connection {
     if (this.#signal && this.#abortListener) {
       this.#signal.removeEventListener('abort', this.#abortListener);
     }
-    const w = this.#ccWaiter;
-    this.#ccWaiter = undefined;
-    if (w) {
-      clearTimeout(w.timer);
-      w.reject(err);
-    }
     const dl = this.#download;
     this.#download = undefined;
     if (dl) {
@@ -774,10 +629,9 @@ export class S7Connection {
       cur.reject(err);
     }
     for (const q of queued) q.reject(aborted ? err : new S7Error('CLOSED', 'connessione chiusa'));
-    try {
-      this.#closeTransport();
-    } catch {
-      // già chiuso
-    }
+    // ISO-on-TCP chiude senza DR dopo un errore; la chiusura ordinata l'ha già fatta `close()`.
+    const l = this.#link;
+    if (l instanceof IsoTcpLink) l.abort();
+    else void l.close().catch(() => undefined);
   }
 }

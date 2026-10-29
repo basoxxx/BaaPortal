@@ -382,6 +382,11 @@ describe('sorgente: punto di invio e confini della piattaforma', () => {
       const text = stripComments(readFileSync(f, 'utf8'));
       if (r === 'transport.ts' || r.startsWith('node/')) continue;
       if (r === 'connection.ts') {
+        // le PDU vanno al link solo da `#sendPdu`, dopo `assertOutgoingPdu`
+        expect(text.match(/\.sendPdu\(/g)?.length, r).toBe(1);
+        expect(text).toMatch(/assertOutgoingPdu\([^)]*\);[\s\S]{0,80}this\.#link\.sendPdu\(out\)/);
+      }
+      if (r === 'link.ts') {
         // i marcatori sono commenti: cercarli nel testo originale
         const raw = readFileSync(f, 'utf8');
         const s0 = raw.indexOf('// BEGIN CHOKE POINT');

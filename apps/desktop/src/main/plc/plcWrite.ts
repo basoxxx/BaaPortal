@@ -26,6 +26,7 @@ import type {
 import type { ConfirmFn, WriteConfirmTexts } from './confirm';
 import { FRCE_LED, forceFrom, view as diagView } from './diagnostics';
 import { toPlcMode } from './plcMap';
+import { accessLabel, connectOptions, mpiKey } from './access';
 import {
   planRestore,
   restoreLines,
@@ -45,7 +46,6 @@ export const MAX_FILE_BYTES = 1024 * 1024;
 export const MAX_TOTAL_BYTES = 32 * 1024 * 1024;
 const LOADABLE = ['OB', 'FB', 'FC', 'DB'];
 const DEFAULT_PORT = 102;
-const CONNECTION_TYPES = { PG: 'pg', OP: 'op', S7_BASIC: 'basic' } as const;
 const DELETABLE = ['OB', 'FB', 'FC', 'DB'];
 const MAX_LIST_LINES = 20;
 const PROGRESS_MIN_MS = 100; // al massimo 10 eventi al secondo, più quello finale
@@ -76,7 +76,8 @@ export type PlcWriteConnectFn = (
 
 /** Il collegamento del ripristino: il client di scrittura più SZL, lista dei job e `_DELE` degli SDB. */
 export type RestoreClient = WriteClient &
-  Pick<S7WriteClient, 'readSzl' | 'readJobList' | 'deleteSystemBlock'>;
+  Pick<S7WriteClient, 'readSzl' | 'readJobList' | 'deleteSystemBlock'> &
+  Partial<Pick<S7WriteClient, 'listBlocks'>>;
 export type PlcRestoreConnectFn = (
   o: Omit<ConnectOptions, 'transport' | 'mode'>,
 ) => Promise<RestoreClient>;
@@ -235,7 +236,9 @@ function listLines(lines: string[]): string {
 
 /** Identifica una CPU: indirizzo, porta, rack e slot. */
 function cpuKey(a: PlcAccess): string {
-  return `${a.host.trim().toLowerCase()}:${a.port ?? DEFAULT_PORT}/${a.rack}/${a.slot}`;
+  return (
+    mpiKey(a) ?? `${a.host.trim().toLowerCase()}:${a.port ?? DEFAULT_PORT}/${a.rack}/${a.slot}`
+  );
 }
 
 function errText(err: unknown): string {
@@ -801,9 +804,16 @@ export class PlcWriteService {
         );
       }
       // la lista degli SDB può essere cambiata (altro PG) dopo la preparazione: si rilegge prima di scrivere
-      const live = await this.o.service.read?.(owner, async (run) =>
-        (await run((x) => x.listBlocks('SDB'))).map((e) => e.number),
-      );
+      // Con l'adattatore MPI la sorveglianza è ferma (una sessione per porta): si rilegge qui.
+      const live =
+        target.access.link?.kind === 'mpi' && c.listBlocks
+          ? await c.listBlocks('SDB').then(
+              (l) => ({ ok: true as const, value: l.map((e) => e.number) }),
+              () => undefined,
+            )
+          : await this.o.service.read?.(owner, async (run) =>
+              (await run((x) => x.listBlocks('SDB'))).map((e) => e.number),
+            );
       if (!live || !live.ok) {
         return fin(
           'Elenco degli SDB della CPU non rileggibile. La CPU è rimasta in STOP, nulla è stato scritto',
@@ -1025,15 +1035,7 @@ export class PlcWriteService {
     const access = target.access;
     let c: WriteClient;
     try {
-      c = await connect({
-        host: access.host,
-        port: access.port ?? DEFAULT_PORT,
-        rack: access.rack,
-        slot: access.slot,
-        connectionType: CONNECTION_TYPES[access.connectionType],
-        ...(access.remoteTsap !== undefined ? { remoteTsap: access.remoteTsap } : {}),
-        timeoutMs: this.connectTimeoutMs,
-      });
+      c = await connect(connectOptions(access, this.connectTimeoutMs));
     } catch (err) {
       return connectMessage(err, access);
     }
@@ -1146,9 +1148,7 @@ function cpuName(t: {
   access: PlcAccess;
   identity: { moduleName?: string; orderNumber: string };
 }): string {
-  const port =
-    t.access.port !== undefined && t.access.port !== DEFAULT_PORT ? `:${t.access.port}` : '';
-  return `${t.identity.moduleName ?? t.identity.orderNumber} (${t.access.host}${port})`;
+  return `${t.identity.moduleName ?? t.identity.orderNumber} (${accessLabel(t.access)})`;
 }
 
 function fromDate(d: Date): S7DateTime {

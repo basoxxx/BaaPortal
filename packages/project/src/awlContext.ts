@@ -81,7 +81,7 @@ export function createAwlContext(
   const owner = device.blocks.find((b) => b.id === blockId);
   const ownerInfo: AwlContext['owner'] =
     owner && owner.kind !== 'DB' && owner.kind !== 'IDB'
-      ? { kind: owner.kind, iface: ifaceOf(owner.interface) }
+      ? { kind: owner.kind, iface: ifaceOf(owner.interface), name: owner.name }
       : { kind: 'OB', iface: emptyIface() };
 
   const ctx: AwlContext = {

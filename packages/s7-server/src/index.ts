@@ -19,3 +19,5 @@ export type {
   StoredBlock,
 } from './backend';
 export { encodeStoredBlockInfo } from './blockInfo';
+export { serveMpiAdapter } from './mpiAdapter';
+export type { FakeMpiAdapter, FakeMpiAdapterOptions } from './mpiAdapter';

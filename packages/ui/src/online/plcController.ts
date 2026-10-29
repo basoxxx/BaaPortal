@@ -6,6 +6,7 @@ import { compileProgram, contextHashOf, hashOf } from '../project/compile/compil
 import { beginProgress, getProgress } from '../project/progress';
 import { ONLINE_OFF, type AppState } from '../state/store';
 import { compareBlocks, type CompareProjectBlock } from './compare';
+import { accessWhere } from './accessInput';
 import type { PlcControlOp, PlcEvent, PlcLostReason } from './plcTypes';
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -105,7 +106,7 @@ export class PlcController {
       this.lose(gen, 'closed');
       return;
     }
-    this.push('info', 'plcConnected', { name: dev.name, host: access.host });
+    this.push('info', 'plcConnected', { name: dev.name, host: accessWhere(access) });
     if (norm(result.identity.orderNumber) !== norm(dev.cpu.orderNumber)) {
       this.push('warning', 'plcMismatch', {
         connected: result.identity.orderNumber,
