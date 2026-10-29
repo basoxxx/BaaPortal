@@ -1703,6 +1703,11 @@
     "boxMenu": "Box",
     "fupView": "Vista FUP del segmento",
     "boxEl": "Box {{kind}}",
+    "mon": {
+      "state": "stato",
+      "operand": "operando",
+      "none": "non elaborato"
+    },
     "cannotClose": "Impossibile chiudere il ramo qui: scegli un elemento che segue il ramo aperto, nella stessa serie.",
     "cannotDo": "Operazione non possibile in questo punto.",
     "cannotNegate": "Qui non si nega: scegli un contatto, la prima entrata di un riquadro o un cerchietto di negazione.",

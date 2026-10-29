@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { checkBlockCode, completeAt, type AwlDiagnostic, type Mnemonic } from '@baaportal/awl';
 import { findCpu } from '@baaportal/catalog';
 import { current } from 'immer';
-import { emptyNetwork, type LadNetwork } from '@baaportal/ladfbd';
+import { emptyNetwork, networkStatus, type LadNetwork } from '@baaportal/ladfbd';
 import {
   createAwlContext,
   findDevice,
@@ -114,6 +114,13 @@ export function NetworksView({ deviceId, blockId }: Props) {
     plcMon && (plcMon.reason === 'ok' || plcMon.reason === 'waiting') && plcLines && lineMap
       ? monitorLinesFromPlc(lineMap, plcLines, monHex)
       : null;
+  const monShown = plcLinesShown ?? monLines;
+  /** Osservazione di un segmento grafico: lo stato per riga dell'AWL generato, sugli elementi. */
+  const ladMonitor = (i: number, lad: LadNetwork | undefined) => {
+    const m = monShown?.get(i);
+    const r = kop?.[i];
+    return m && r && lad ? { status: networkStatus(lad, r.lines, m.cells), hex: m.hex } : undefined;
+  };
   const drafts = useRef(new Map<string, Draft>());
   /** Il testo non confermato sospende l'osservazione finché c'è (poi vale il confronto delle impronte). */
   const markEdited = useCallback(() => {
@@ -432,6 +439,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
                     callParams={callParams}
                     onActive={(api, on) => setLadActive(api, on, { deviceId, blockId })}
                     callOfDrop={(raw) => callInstanceOf(dev, raw)}
+                    monitor={ladMonitor(i, n.lad)}
                   />
                 ) : (
                   <LadNetworkEditor
@@ -443,6 +451,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
                     callParams={callParams}
                     onActive={(api, on) => setLadActive(api, on, { deviceId, blockId })}
                     callOfDrop={(raw) => callInstanceOf(dev, raw)}
+                    monitor={ladMonitor(i, n.lad)}
                   />
                 )}
                 <button
@@ -474,7 +483,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
                 mnemonic={mnemonic}
                 aria-label={`${t('block.source')} ${i + 1}`}
                 diagnostics={byNetwork[n.id] ?? NO_DIAGNOSTICS}
-                monitor={(plcLinesShown ?? monLines)?.get(i) ?? null}
+                monitor={monShown?.get(i) ?? null}
                 complete={(offset) => ({ from: offset, options: [] })}
                 onCommit={() => {}}
               />
@@ -488,7 +497,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
                 mnemonic={mnemonic}
                 aria-label={`${t('block.source')} ${i + 1}`}
                 diagnostics={byNetwork[n.id] ?? NO_DIAGNOSTICS}
-                monitor={(plcLinesShown ?? monLines)?.get(i) ?? null}
+                monitor={monShown?.get(i) ?? null}
                 complete={(offset, text) =>
                   awlCtx
                     ? completeAt(textsShown({ index: i, text }), i, offset, awlCtx, mnemonic)

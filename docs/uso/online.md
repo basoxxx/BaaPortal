@@ -102,7 +102,7 @@ _Online_ > _Carica backup dal dispositivo online…_ (o il menu della cartella _
 
 ## Osservazione del programma online
 
-Con il collegamento attivo e un blocco AWL aperto, _Osserva programma_ (barra degli strumenti o menu _Online_) mostra a destra di ogni riga RLC, STA, ACCU1 e STW; le caselle _ACCU2_ e _AR1_ ne aggiungono altri due e riducono le righe osservate. Le righe che la CPU non elabora sono in grigio. Il blocco della CPU deve essere uguale a quello compilato del progetto: se è diverso, la barra lo dice e propone _Confronta con la CPU_.
+Con il collegamento attivo e un blocco AWL aperto, _Osserva programma_ (barra degli strumenti o menu _Online_) mostra a destra di ogni riga RLC, STA, ACCU1 e STW; le caselle _ACCU2_ e _AR1_ ne aggiungono altri due e riducono le righe osservate. Le righe che la CPU non elabora sono in grigio. In un blocco KOP o FUP il grafico si colora con gli stessi dati (`docs/uso/kop.md`). Il blocco della CPU deve essere uguale a quello compilato del progetto: se è diverso, la barra lo dice e propone _Confronta con la CPU_.
 
 - Si osservano solo le righe visibili, entro i limiti di una PDU (24 righe con STW e ACCU1, meno con più registri); se sono di più la barra dice «Osservate le prime N righe».
 - I valori arrivano al massimo ogni 250 ms: sono quelli di un ciclo ogni tanto. Mentre si osserva il tempo di ciclo della CPU aumenta, e la barra di stato lo ricorda («Osservazione attiva»).

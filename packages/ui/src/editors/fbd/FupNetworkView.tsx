@@ -10,6 +10,7 @@ import { LadToolbar } from '../lad/LadToolbar';
 import { LAD_TOOL_KEYS, ladAction } from '../lad/ladKeys';
 import { fieldPatch, fieldValue, fieldsOf, flowPin, paletteIdOf, placeOf } from '../lad/ladOps';
 import type { CallParams, LadField } from '../lad/ladOps';
+import { monAttr, monText, pinValues, type LadMonitor } from '../lad/ladMonitor';
 import { useLadEdit } from '../lad/useLadEdit';
 import type { LadInsertApi } from '../lad/useLadEdit';
 import './fbd.css';
@@ -24,6 +25,8 @@ type Props = {
   /** Come in `LadNetworkEditor`: la tavolozza inserisce nell'ultima vista attiva. */
   onActive?: (api: LadInsertApi, active: boolean) => void;
   callOfDrop?: (raw: string) => string | undefined;
+  /** Osservazione del programma: stato degli elementi, solo da mostrare. */
+  monitor?: LadMonitor;
 };
 
 type Item = LadElem | LadOut;
@@ -36,6 +39,7 @@ interface Ctx {
   commit: (id: string, fld: LadField, value: string) => void;
   stop: () => void;
   diagnostics: Map<string, string[]>;
+  monitor?: LadMonitor;
 }
 const FupCtx = createContext<Ctx | null>(null);
 const EMPTY = '??.?';
@@ -46,6 +50,13 @@ function nameOf(e: Item, t: (k: string, o?: Record<string, string>) => string): 
   const vals = fieldsOf(e).map((f) => fieldValue(e, f));
   const base = `${t(`lad.palette.${paletteIdOf(e)}`)}${e.k === 'cmp' ? ` ${e.fn}` : ''}`;
   return [base, ...vals.map((v, i) => v || (i === 0 ? EMPTY : ''))].filter(Boolean).join(' ');
+}
+
+/** In FUP un'entrata mostra il segnale del suo operando; gli altri elementi la loro uscita. */
+function fupMon(mon: LadMonitor | undefined, item: Item) {
+  const sta = mon?.status.get(item.id)?.sta;
+  if (item.k === 'contact' && sta !== undefined) return sta ? '1' : '0';
+  return monAttr(mon, item.id, 'out');
 }
 
 /** Elemento selezionabile (clic, tastiera) con le sue diagnostiche. */
@@ -61,6 +72,8 @@ function Sel({
   const { t } = useTranslation();
   const c = useContext(FupCtx)!;
   const msgs = c.diagnostics.get(item.id) ?? [];
+  const mon = monText(c.monitor, item, t);
+  const tip = [...msgs, ...(mon ? [mon] : [])].join('\n');
   const cls = [className, 'baa-fup-el'];
   if (c.sel === item.id) cls.push('baa-fup-el--selected');
   if (msgs.length > 0) cls.push('baa-fup-el--error');
@@ -69,10 +82,11 @@ function Sel({
       role="button"
       tabIndex={0}
       className={cls.join(' ')}
-      aria-label={nameOf(item, t)}
+      aria-label={mon ? `${nameOf(item, t)} (${mon})` : nameOf(item, t)}
       aria-pressed={c.sel === item.id}
-      title={msgs.length > 0 ? msgs.join('\n') : undefined}
+      title={tip || undefined}
       data-fup-id={item.id}
+      data-mon={fupMon(c.monitor, item)}
       onClick={(ev) => {
         ev.stopPropagation();
         c.select(item.id);
@@ -110,12 +124,14 @@ function Operand({ item, fld }: { item: Item; fld: LadField }) {
       />
     );
   }
+  const live = pinValues(c.monitor, item)[fld.key];
   return (
     <span
       className={`baa-fup-op${value === '' ? ' baa-fup-op--empty' : ''}`}
       onDoubleClick={() => c.edit(item.id, fld.key)}
     >
       {value || EMPTY}
+      {live !== undefined ? <i className="baa-lad-val">{live}</i> : null}
     </span>
   );
 }
@@ -354,6 +370,7 @@ export function FupNetworkView({
   newId = defaultId,
   onActive,
   callOfDrop,
+  monitor,
 }: Props) {
   const { t } = useTranslation();
   const [editing, setEditing] = useState<Editing | null>(null);
@@ -392,6 +409,7 @@ export function FupNetworkView({
       ed.wantFocus.current = true;
     },
     diagnostics,
+    monitor,
   };
 
   /**

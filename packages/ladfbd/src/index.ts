@@ -7,3 +7,4 @@ export * from './toAwl.js';
 export * from './block.js';
 export * from './operands.js';
 export * from './fromAwl.js';
+export * from './status.js';

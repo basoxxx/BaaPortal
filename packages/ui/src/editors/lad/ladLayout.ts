@@ -31,7 +31,12 @@ export type LadCell = {
   /** Solo per i box: riga (relativa alla cella) di ogni pin d'uscita; ENO/Q sta sulla riga 0. */
   outRows?: Record<string, number>;
 };
-export type LadWire = { from: [col: number, row: number]; to: [col: number, row: number] };
+/** `flow`: l'elemento (o nodo) e il lato il cui flusso il filo porta, per l'osservazione. */
+export type LadWire = {
+  from: [col: number, row: number];
+  to: [col: number, row: number];
+  flow?: { id: string; side: 'in' | 'out' };
+};
 /** Dove si può inserire (per clic e trascinamento); `col` può essere frazionario. */
 export type LadInsertSlot = { at: InsertPoint; col: number; row: number };
 export type LadLayout = {
@@ -161,14 +166,20 @@ type Ctx = {
   wires: LadWire[];
   slots: LadLayout['slots'];
   /** Uscite da collocare nell'ultima colonna, nota solo alla fine. */
-  outs: { cell: LadCell; end: number }[];
+  outs: { cell: LadCell; end: number; node: string }[];
   maxEnd: number;
   /** Prossima riga libera della zona dei pin del nodo che si sta posando. */
   poolNext: number;
 };
 
-const wire = (c: Ctx, c1: number, r1: number, c2: number, r2: number) =>
-  c.wires.push({ from: [c1, r1], to: [c2, r2] });
+type Flow = LadWire['flow'];
+const wire = (c: Ctx, c1: number, r1: number, c2: number, r2: number, flow: Flow) =>
+  c.wires.push({ from: [c1, r1], to: [c2, r2], ...(flow ? { flow } : {}) });
+/** Il flusso alla fine di una lista: l'uscita del suo ultimo elemento, altrimenti `empty`. */
+const flowAfter = (list: LadElem[], empty: Flow): Flow => {
+  const last = list.at(-1);
+  return last ? { id: last.id, side: 'out' } : empty;
+};
 
 /**
  * Posa una lista in serie da `col` sulla riga `row`; restituisce la colonna di fine.
@@ -217,11 +228,11 @@ function placeElem(c: Ctx, e: LadElem, col: number, row: number, depth: number):
     });
     r = row;
     e.branches.forEach((br, k) => {
-      if (ends[k]! < end) wire(c, ends[k]!, r, end, r);
+      if (ends[k]! < end) wire(c, ends[k]!, r, end, r, flowAfter(br, { id: e.id, side: 'in' }));
       r += listH(br);
     });
-    wire(c, col, row, col, last);
-    wire(c, end, row, end, last);
+    wire(c, col, row, col, last, { id: e.id, side: 'in' });
+    wire(c, end, row, end, last, { id: e.id, side: 'out' });
     return end;
   }
   if (e.k === 'box') return placeBox(c, e, col, row);
@@ -243,10 +254,11 @@ function placeBox(c: Ctx, b: LadBox, col: number, row: number): number {
     placed.push({ name, r, end });
     bx = Math.max(bx, end);
   }
-  if (bx > col) wire(c, col, row, bx, row);
+  if (bx > col) wire(c, col, row, bx, row, { id: b.id, side: 'in' });
   for (const { name, r, end } of placed) {
-    if (end < bx) wire(c, end, r, bx, r);
-    wire(c, bx, row + p.inRows[name]!, bx, r);
+    const flow = flowAfter(b.boolPins[name]!, undefined);
+    if (end < bx) wire(c, end, r, bx, r, flow);
+    wire(c, bx, row + p.inRows[name]!, bx, r, flow);
   }
   // Pin senza logica: resta scollegato, ma si può rilasciare un elemento sul suo bordo.
   for (const name of p.pins) {
@@ -281,12 +293,12 @@ function placeNode(c: Ctx, n: LadNode, start: number, row: number): void {
     else {
       const cell: LadCell = { elemId: out.id, kind: 'out', col: end, row: r, w: 1, h: 1 };
       c.cells.push(cell);
-      c.outs.push({ cell, end });
+      c.outs.push({ cell, end, node: n.id });
     }
   });
   // Rotaia da cui scendono le uscite e i rami a T, fino all'ultimo elemento.
   const last = row + (info.itemRows[info.itemRows.length - 1] ?? 0);
-  if (last > row) wire(c, end, row, end, last);
+  if (last > row) wire(c, end, row, end, last, { id: n.id, side: 'out' });
 }
 
 /** Se due slot coincidono, il successivo si sposta di poco: ogni slot ha un punto suo. */
@@ -302,9 +314,9 @@ export function layoutNetwork(net: LadNetwork): LadLayout {
   const c: Ctx = { cells: [], wires: [], slots: [], outs: [], maxEnd: 0, poolNext: 0 };
   placeNode(c, net.root, 0, 0);
   const cols = c.maxEnd + 1;
-  for (const { cell, end } of c.outs) {
+  for (const { cell, end, node } of c.outs) {
     cell.col = cols - 1;
-    if (cols - 1 > end) wire(c, end, cell.row, cols - 1, cell.row);
+    if (cols - 1 > end) wire(c, end, cell.row, cols - 1, cell.row, { id: node, side: 'out' });
   }
   separate(c.slots);
   return { cells: c.cells, wires: c.wires, slots: c.slots, cols, rows: nodeInfo(net.root).h };

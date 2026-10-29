@@ -31,3 +31,10 @@
   --baa-awl-keyword: #8c2f6b;
   --baa-awl-param: #4a5a8a;
 }
+
+/* Osservazione dei segmenti KOP e FUP: flusso (1), niente flusso (0), non elaborato */
+:root {
+  --baa-mon-on: #1a9e3a;
+  --baa-mon-off: #2f6fd0;
+  --baa-mon-none: #9aa7ae;
+}

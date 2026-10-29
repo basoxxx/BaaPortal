@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { LadBox, LadElem, LadOut } from '@baaportal/ladfbd';
 import type { LadCell } from './ladLayout';
 import { fieldValue, fieldsOf, flowPin, paletteIdOf } from './ladOps';
+import { monAttr, monText, pinValues, type LadMonitor, type MonAttr } from './ladMonitor';
 
 /** Dimensioni in pixel di una cella della griglia. */
 export const CELL_W = 64;
@@ -19,6 +20,8 @@ type Props = {
   onSelect: () => void;
   /** Doppio clic; `pin` è il nome del pin se il clic cade sull'etichetta o sull'operando di un pin. */
   onEdit: (pin?: string) => void;
+  /** Osservazione del segmento (assente se non si osserva). */
+  monitor?: LadMonitor;
 };
 
 /** Testo dentro il simbolo; le bobine con lettera usano le parentesi `( )`. */
@@ -49,16 +52,17 @@ function coilLetter(e: LadElem | LadOut): string | undefined {
   return COIL_LETTER[e.k];
 }
 
-function Symbol({ e }: { e: LadElem | LadOut }) {
+/** `inM`/`outM`: stato osservato del flusso in entrata e in uscita (`data-mon`). */
+function Symbol({ e, inM, outM }: { e: LadElem | LadOut; inM: MonAttr; outM: MonAttr }) {
   const mid = CELL_H / 2;
   if (e.k === 'contact') {
     return (
       <>
-        <line x1={0} y1={mid} x2={26} y2={mid} />
-        <line x1={38} y1={mid} x2={CELL_W} y2={mid} />
-        <line x1={26} y1={10} x2={26} y2={30} />
-        <line x1={38} y1={10} x2={38} y2={30} />
-        {e.neg && <line x1={28} y1={30} x2={36} y2={10} />}
+        <line x1={0} y1={mid} x2={26} y2={mid} data-mon={inM} />
+        <line x1={38} y1={mid} x2={CELL_W} y2={mid} data-mon={outM} />
+        <line x1={26} y1={10} x2={26} y2={30} data-mon={outM} />
+        <line x1={38} y1={10} x2={38} y2={30} data-mon={outM} />
+        {e.neg && <line x1={28} y1={30} x2={36} y2={10} data-mon={outM} />}
       </>
     );
   }
@@ -66,10 +70,10 @@ function Symbol({ e }: { e: LadElem | LadOut }) {
   if (letter !== undefined) {
     return (
       <>
-        <line x1={0} y1={mid} x2={22} y2={mid} />
-        <line x1={42} y1={mid} x2={CELL_W} y2={mid} />
-        <path d="M26 10 Q18 20 26 30" fill="none" />
-        <path d="M38 10 Q46 20 38 30" fill="none" />
+        <line x1={0} y1={mid} x2={22} y2={mid} data-mon={inM} />
+        <line x1={42} y1={mid} x2={CELL_W} y2={mid} data-mon={outM} />
+        <path d="M26 10 Q18 20 26 30" fill="none" data-mon={outM} />
+        <path d="M38 10 Q46 20 38 30" fill="none" data-mon={outM} />
         <text x={32} y={24} textAnchor="middle" className="baa-lad-sym-text">
           {letter}
         </text>
@@ -81,9 +85,9 @@ function Symbol({ e }: { e: LadElem | LadOut }) {
   const bottom = tall ? 37 : 32;
   return (
     <>
-      <line x1={0} y1={mid} x2={8} y2={mid} />
-      <line x1={56} y1={mid} x2={CELL_W} y2={mid} />
-      <rect x={8} y={top} width={48} height={bottom - top} fill="none" />
+      <line x1={0} y1={mid} x2={8} y2={mid} data-mon={inM} />
+      <line x1={56} y1={mid} x2={CELL_W} y2={mid} data-mon={outM} />
+      <rect x={8} y={top} width={48} height={bottom - top} fill="none" data-mon={outM} />
       <text x={32} y={mid + 4} textAnchor="middle" className="baa-lad-sym-text">
         {rectText(e)}
       </text>
@@ -91,16 +95,39 @@ function Symbol({ e }: { e: LadElem | LadOut }) {
   );
 }
 
-function BoxSymbol({ b, cell }: { b: LadBox; cell: LadCell }) {
+function BoxSymbol({ b, cell, monitor }: { b: LadBox; cell: LadCell; monitor?: LadMonitor }) {
   const w = cell.w * CELL_W;
   const h = cell.h * CELL_H;
+  const st = monitor?.status.get(b.id);
+  const flow = flowPin(b.box);
+  // Solo i pin BOOL hanno un flusso; i pin di dati restano del colore normale.
+  const pinM = (name: string): MonAttr => {
+    if (!monitor) return undefined;
+    if (!st) return 'off';
+    const v = name === flow ? st.out : st.pins?.[name];
+    return v === undefined ? undefined : v ? '1' : '0';
+  };
   return (
     <>
-      {Object.values(cell.pinRows ?? {}).map((r) => (
-        <line key={`i${r}`} x1={0} y1={r * CELL_H + 20} x2={8} y2={r * CELL_H + 20} />
+      {Object.entries(cell.pinRows ?? {}).map(([name, r]) => (
+        <line
+          key={`i${r}`}
+          x1={0}
+          y1={r * CELL_H + 20}
+          x2={8}
+          y2={r * CELL_H + 20}
+          data-mon={pinM(name)}
+        />
       ))}
-      {Object.values(cell.outRows ?? {}).map((r) => (
-        <line key={`o${r}`} x1={w - 8} y1={r * CELL_H + 20} x2={w} y2={r * CELL_H + 20} />
+      {Object.entries(cell.outRows ?? {}).map(([name, r]) => (
+        <line
+          key={`o${r}`}
+          x1={w - 8}
+          y1={r * CELL_H + 20}
+          x2={w}
+          y2={r * CELL_H + 20}
+          data-mon={pinM(name)}
+        />
       ))}
       <rect x={8} y={12} width={w - 16} height={Math.max(h - 16, 24)} fill="none" />
       <text x={w / 2} y={28} textAnchor="middle" className="baa-lad-sym-text">
@@ -112,10 +139,12 @@ function BoxSymbol({ b, cell }: { b: LadBox; cell: LadCell }) {
 
 const pinStyle = (row: number): CSSProperties => ({ top: row * CELL_H + 20 - 7 });
 
-export function LadElement({ elem, cell, selected, messages, onSelect, onEdit }: Props) {
+export function LadElement({ elem, cell, selected, messages, onSelect, onEdit, monitor }: Props) {
   const { t } = useTranslation();
   const fields = fieldsOf(elem);
   const values = fields.map((f) => fieldValue(elem, f));
+  const live = pinValues(monitor, elem);
+  const mon = monText(monitor, elem, t);
 
   let name: string;
   if (elem.k === 'box') {
@@ -127,6 +156,8 @@ export function LadElement({ elem, cell, selected, messages, onSelect, onEdit }:
     if (values.length > 0) name += ` ${values[0] || EMPTY_OPERAND}`;
     for (const v of values.slice(1)) if (v) name += ` ${v}`;
   }
+  if (mon) name += ` (${mon})`;
+  const tip = [...messages, ...(mon ? [mon] : [])].join('\n');
 
   const style: CSSProperties = {
     left: cell.col * CELL_W,
@@ -138,10 +169,11 @@ export function LadElement({ elem, cell, selected, messages, onSelect, onEdit }:
   if (selected) cls.push('baa-lad-el--selected');
   if (messages.length > 0) cls.push('baa-lad-el--error');
 
-  const operand = (text: string | undefined, pos: 'top' | 'bottom') =>
+  const operand = (text: string | undefined, pos: 'top' | 'bottom', key?: string) =>
     text === undefined ? null : (
       <span className={`baa-lad-op baa-lad-op--${pos}${text === '' ? ' baa-lad-op--empty' : ''}`}>
         {text === '' ? EMPTY_OPERAND : text}
+        {key && live[key] !== undefined ? <i className="baa-lad-val">{live[key]}</i> : null}
       </span>
     );
 
@@ -152,7 +184,7 @@ export function LadElement({ elem, cell, selected, messages, onSelect, onEdit }:
       style={style}
       aria-label={name}
       aria-pressed={selected}
-      title={messages.length > 0 ? messages.join('\n') : undefined}
+      title={tip || undefined}
       tabIndex={selected ? 0 : -1}
       data-lad-id={elem.id}
       onClick={onSelect}
@@ -168,21 +200,29 @@ export function LadElement({ elem, cell, selected, messages, onSelect, onEdit }:
         height={cell.h * CELL_H}
         aria-hidden="true"
       >
-        {elem.k === 'box' ? <BoxSymbol b={elem} cell={cell} /> : <Symbol e={elem} />}
+        {elem.k === 'box' ? (
+          <BoxSymbol b={elem} cell={cell} monitor={monitor} />
+        ) : (
+          <Symbol
+            e={elem}
+            inM={monAttr(monitor, elem.id, 'in')}
+            outM={monAttr(monitor, elem.id, 'out')}
+          />
+        )}
       </svg>
       {elem.k === 'box' ? (
-        <BoxLabels b={elem} cell={cell} />
+        <BoxLabels b={elem} cell={cell} live={live} />
       ) : (
         <>
-          {operand(values[0], 'top')}
-          {operand(values[1], 'bottom')}
+          {operand(values[0], 'top', fields[0]?.key)}
+          {operand(values[1], 'bottom', fields[1]?.key)}
         </>
       )}
     </button>
   );
 }
 
-function BoxLabels({ b, cell }: { b: LadBox; cell: LadCell }) {
+function BoxLabels({ b, cell, live }: { b: LadBox; cell: LadCell; live: Record<string, string> }) {
   const flow = flowPin(b.box);
   const outs = Object.entries(cell.outRows ?? {});
   return (
@@ -197,6 +237,7 @@ function BoxLabels({ b, cell }: { b: LadBox; cell: LadCell }) {
         >
           {name}
           {b.pins[name] ? <b>{b.pins[name]}</b> : null}
+          {live[name] !== undefined ? <i className="baa-lad-val">{live[name]}</i> : null}
         </span>
       ))}
       {outs.map(([name, row]) => (
@@ -206,6 +247,7 @@ function BoxLabels({ b, cell }: { b: LadBox; cell: LadCell }) {
           data-pin={name}
           style={pinStyle(row)}
         >
+          {live[name] !== undefined ? <i className="baa-lad-val">{live[name]}</i> : null}
           {b.pins[name] && name !== flow ? <b>{b.pins[name]}</b> : null}
           {name}
         </span>
