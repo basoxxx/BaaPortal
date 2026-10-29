@@ -119,3 +119,18 @@ export function kopSources(block: CodeBlock, dev: PlcDevice): KopNetworkResult[]
 export function blockSources(block: CodeBlock, dev: PlcDevice): string[] {
   return kopSources(block, dev).map((r) => r.source);
 }
+
+/**
+ * L'elemento del grafico che ha prodotto la riga AWL `line` (da 1) del segmento `network` (da 1)
+ * di un blocco KOP/FUP; `undefined` se il segmento non ha grafico o la riga non ha un proprietario.
+ */
+export function kopElemAt(
+  block: CodeBlock,
+  dev: PlcDevice,
+  network: number,
+  line: number,
+): string | undefined {
+  if (network < 1 || line < 1 || !isKop(block, network - 1)) return undefined;
+  const lines = kopSources(block, dev)[network - 1]?.lines ?? [];
+  return lines.filter((l) => l.line <= line - 1).at(-1)?.elemId;
+}

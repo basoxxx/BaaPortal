@@ -4,6 +4,7 @@ import {
   blockSources,
   createCodeBlock,
   kopCallParams,
+  kopElemAt,
   kopSources,
   tempEnd,
   type CodeBlock,
@@ -165,5 +166,27 @@ describe('kopSources', () => {
     src = blockSources(b, dev)[0]!;
     expect(src.indexOf('In1')).toBeLessThan(src.indexOf('RET_VAL'));
     expect(src.indexOf('RET_VAL')).toBeLessThan(src.indexOf('Out1'));
+  });
+});
+
+describe('kopElemAt', () => {
+  it('riporta la riga AWL all elemento che l ha prodotta', () => {
+    const dev = makeDevice(seq('k'));
+    const b = kopFc(dev);
+    const a = contact('I 0.0');
+    const q = coil('Q 4.0');
+    b.networks[0]!.lad = net([a], [q]);
+    const lines = blockSources(b, dev)[0]!.split('\n');
+    expect(kopElemAt(b, dev, 1, lines.findIndex((l) => l.includes('I0.0')) + 1)).toBe(a.id);
+    expect(kopElemAt(b, dev, 1, lines.findIndex((l) => l.includes('Q4.0')) + 1)).toBe(q.id);
+  });
+
+  it('senza grafico o fuori dal segmento non c è elemento', () => {
+    const dev = makeDevice(seq('k'));
+    const b = kopFc(dev);
+    expect(kopElemAt(b, dev, 1, 1)).toBeUndefined();
+    b.networks[0]!.lad = net([contact('I 0.0')], [coil('Q 4.0')]);
+    expect(kopElemAt(b, dev, 2, 1)).toBeUndefined();
+    expect(kopElemAt(b, dev, 1, 0)).toBeUndefined();
   });
 });

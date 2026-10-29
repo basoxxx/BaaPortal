@@ -9,7 +9,7 @@ Guida breve all'editor a contatti (KOP, piano 4A). Un blocco KOP si disegna; Baa
    - **F8** apre un ramo parallelo, **F9** lo chiude;
    - **Invio** modifica l'operando dell'elemento selezionato, **Tab** passa al campo successivo, **Esc** annulla;
    - **Canc** elimina l'elemento; le **frecce** spostano la selezione.
-4. **Operandi.** Si scrivono come in AWL (`I 0.0`, `M 1.2`, un simbolo tra virgolette) e si controllano a ogni modifica. Un operando mancante o una forma non ammessa appare in _Problemi_ come «Segmento n: …» e sull'elemento.
+4. **Operandi.** Si scrivono come in AWL (`I 0.0`, `M 1.2`, un simbolo tra virgolette) e si controllano a ogni modifica. Un operando mancante o una forma non ammessa appare in _Problemi_ come «Segmento n: …» e sull'elemento. Un clic sulla voce di _Problemi_, su un messaggio di compilazione o su un risultato di _Trova_ seleziona l'elemento nel grafico (KOP e FUP) e lo porta in vista.
 5. **Tavolozza.** Con un blocco KOP in primo piano, la task card _Istruzioni → Istruzioni di base_ mostra gruppi (logica a bit, temporizzatori, contatori, confronto, trasferimento, matematica, conversione, logica a parola, scorrimento, salti, controllo del programma). Un clic inserisce nel segmento attivo, oppure si trascina sul segmento.
 6. **Chiamare un blocco.** Si trascina un FC o un FB dall'albero sul segmento: nasce un box _CALL_ con i parametri del blocco chiamato. Per un FB senza DB di istanza, il DB va scritto a mano.
 7. **Mostra AWL.** Il pulsante sotto ogni segmento apre il codice AWL generato, di sola lettura. Gli operandi sono scritti in forma assoluta con il `%` (`A %I0.0`, `= %Q4.0`). Serve a vedere che cosa verrà compilato.
@@ -19,8 +19,7 @@ Guida breve all'editor a contatti (KOP, piano 4A). Un blocco KOP si disegna; Baa
 ## Che cosa non si può ancora fare
 
 - Nessun box dentro un ramo parallelo né nella logica di un pin: un box va in serie sulla linea principale, o all'inizio di un ramo a T.
-- Cerca/Sostituisci e rinomina dei simboli non toccano i blocchi KOP.
-- Gli errori in _Problemi_ non si possono cliccare per saltare all'elemento.
+- Cerca/Sostituisci e rinomina dei simboli non modificano i blocchi KOP: _Trova_ li trova nel codice generato ma non si sostituiscono.
 - Non si converte un segmento AWL in KOP (né il contrario): arriva nel piano 4C. Un segmento con solo AWL si vede in AWL, sola lettura. Il passaggio KOP ↔ FUP c'è, in prova (`docs/uso/fup-scl.md`).
 - Un blocco KOP con errori non entra nella sorgente AWL esportata.
 

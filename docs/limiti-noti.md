@@ -152,9 +152,8 @@ Per ogni voce si indica che cosa succede oggi. "Errore chiaro" vuol dire che Baa
 - **Parametri di CALL.** Sempre `nome := valore`, anche per le uscite; i pin vuoti si omettono e il controllo AWL segnala poi i parametri mancanti sulla riga della CALL. Un FB trascinato dall'albero senza DB di istanza diventa `"Nome", ` con il DB vuoto: il box dà l'errore `BAD_INSTANCE` finché non si sceglie il DB a mano.
 - **Fuori dal test di equivalenza** KOP/AWL: temporizzatori, contatori, `MCR(`, CALL e box in virgola mobile (ABS è provato sui valori interi).
 - **Cerca/Sostituisci e rinomina non toccano i KOP.** Trova mostra i segmenti KOP con grafico come risultati non modificabili (motivo «Segmento KOP») e Sostituisci li salta, contandoli fra i non sostituiti: il compilatore parte dal grafico, non dal testo AWL. Titoli e commenti si sostituiscono come negli altri blocchi. La rinomina non aggiorna i riferimenti dentro il grafico.
-- **Messaggi di compilazione e risultati di Trova non portano all'elemento.** Per un blocco KOP aprono il blocco ma non selezionano l'elemento del grafico.
 - **Il test e2e si ferma alla compilazione.** L'esecuzione nel simulatore è coperta da `packages/project/test/kopCompile.test.ts`.
-- **Problemi non cliccabili.** Le voci del pannello _Problemi_ di un blocco KOP non portano all'elemento. Un errore senza elemento di riferimento compare solo nel pannello.
+- **Errori senza elemento.** Un messaggio, un risultato di Trova o una voce di _Problemi_ di un blocco KOP/FUP selezionano l'elemento che ha prodotto l'errore (o la riga AWL generata); un errore senza elemento apre solo il segmento.
 - **Esportazione con KOP in errore.** «Genera sorgente AWL» salta i blocchi KOP con errori e lo segnala. Un blocco KOP il cui `source` non è aggiornato non si legge direttamente: contano il grafico e il codice generato da esso.
 - **Blocchi caricati con lingua `02`.** Un blocco letto dalla CPU con il byte di linguaggio KOP si importa come AWL, senza grafico.
 - **Conversione solo KOP ↔ FUP.** La conversione AWL → KOP/FUP arriva nel piano 4C; fino ad allora un segmento AWL in un blocco KOP si vede in sola lettura.

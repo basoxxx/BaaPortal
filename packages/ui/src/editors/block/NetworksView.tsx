@@ -266,7 +266,15 @@ export function NetworksView({ deviceId, blockId }: Props) {
     if (!reveal || reveal.blockId !== blockId || reveal.deviceId !== deviceId || !block) return;
     const n = reveal.network > 0 ? block.networks[reveal.network - 1] : undefined;
     const handle = n && handles.current.get(n.id);
-    if (handle && reveal.range) handle.selectRange(reveal.range.from, reveal.range.to);
+    if (reveal.elemId) {
+      // Elemento del grafico KOP/FUP: lo stesso clic e fuoco dell'utente lo selezionano.
+      const el = root.current?.querySelector<HTMLElement>(
+        `[data-lad-id="${reveal.elemId}"],[data-fup-id="${reveal.elemId}"]`,
+      );
+      el?.click();
+      el?.focus();
+      el?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    } else if (handle && reveal.range) handle.selectRange(reveal.range.from, reveal.range.to);
     else if (handle) handle.focusAt(offsetOfLineCol(handle.getText(), Math.max(reveal.line, 1), 1));
     store.getState().clearCompileReveal(reveal.n);
   }, [reveal, block, blockId, deviceId, store]);
@@ -306,7 +314,10 @@ export function NetworksView({ deviceId, blockId }: Props) {
     (byNetwork[n.id] ?? NO_DIAGNOSTICS).map((d) => ({ d, id: n.id, pos: i + 1 })),
   );
   const kopProblems = kopMessages.flatMap((m, i) =>
-    [...[...m.byElem.values()].flat(), ...m.loose].map((message) => ({ pos: i + 1, message })),
+    [
+      ...[...m.byElem].flatMap(([elemId, ms]) => ms.map((message) => ({ elemId, message }))),
+      ...m.loose.map((message) => ({ elemId: undefined, message })),
+    ].map(({ elemId, message }) => ({ pos: i + 1, message, elemId })),
   );
   const onDraft = (n: Network, text: string) => {
     if (text === shown(n.source, mnemonic)) drafts.current.delete(n.id);
@@ -540,7 +551,22 @@ export function NetworksView({ deviceId, blockId }: Props) {
             hidden={kopProblems.length === 0}
           >
             {kopProblems.map((p, k) => (
-              <li key={k}>{t('lad.problemRow', p)}</li>
+              <li key={k}>
+                <button
+                  type="button"
+                  onClick={() =>
+                    store.getState().openBlockAt({
+                      deviceId,
+                      blockId,
+                      network: p.pos,
+                      line: 1,
+                      ...(p.elemId ? { elemId: p.elemId } : {}),
+                    })
+                  }
+                >
+                  {t('lad.problemRow', { pos: p.pos, message: p.message })}
+                </button>
+              </li>
             ))}
           </ul>
         </section>

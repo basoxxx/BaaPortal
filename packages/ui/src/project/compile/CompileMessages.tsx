@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
-import type { Mc7Diagnostic } from '@baaportal/project';
+import { findDevice, kopElemAt, type Mc7Diagnostic } from '@baaportal/project';
 import { useAppStore, useServices } from '../../state/AppContext';
 import type { CompileRow } from '../../state/store';
 
@@ -98,14 +98,25 @@ export function CompileMessages() {
                         data-testid="compile-message"
                         className={`baa-info-link is-${d.severity}`}
                         title={t('compile.goTo')}
-                        onClick={() =>
+                        onClick={() => {
+                          const project = store.getState().doc?.project;
+                          const dev = project && findDevice(project, r.deviceId);
+                          const block = dev?.blocks.find((b) => b.id === r.blockId);
+                          // Errori del grafico: l'elemento è nei parametri; quelli dell'AWL generato
+                          // tornano all'elemento che ha prodotto la riga.
+                          const elemId =
+                            d.params?.elemId ??
+                            (dev && block && block.kind !== 'DB' && block.kind !== 'IDB'
+                              ? kopElemAt(block, dev, d.network, d.line)
+                              : undefined);
                           store.getState().openBlockAt({
                             deviceId: r.deviceId,
                             blockId: r.blockId,
                             network: d.network,
                             line: d.line,
-                          })
-                        }
+                            ...(elemId ? { elemId } : {}),
+                          });
+                        }}
                       >
                         <span aria-hidden="true">
                           {d.severity === 'error' ? '✗' : d.severity === 'info' ? 'ℹ' : '⚠'}

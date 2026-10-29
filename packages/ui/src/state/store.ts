@@ -114,6 +114,8 @@ export interface CompileReveal {
   line: number;
   /** Se c'è, il testo da selezionare nel segmento (spostamenti nel testo mostrato). */
   range?: { from: number; to: number };
+  /** Se c'è, l'elemento del grafico KOP/FUP da selezionare nel segmento. */
+  elemId?: string;
   n: number;
 }
 export interface PanelState {
