@@ -1706,7 +1706,8 @@
     "mon": {
       "state": "state",
       "operand": "operand",
-      "none": "not processed"
+      "none": "not processed",
+      "outside": "outside the monitoring window or waiting"
     },
     "cannotClose": "Cannot close the branch here: pick an element that follows the open branch in the same series.",
     "cannotDo": "This operation is not possible here.",

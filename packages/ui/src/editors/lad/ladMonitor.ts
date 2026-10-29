@@ -3,17 +3,21 @@ import { BOX_CATALOG } from '@baaportal/ladfbd';
 import type { ElemStatus, LadElem, LadOut } from '@baaportal/ladfbd';
 import { formatAccu } from '../awl/monitorExtension';
 
-/** Stato osservato di un segmento: per elemento (assente = non elaborato) e formato degli ACCU. */
+/** Stato osservato di un segmento: per elemento (assente = sconosciuto) e formato degli ACCU. */
 export type LadMonitor = { status: ReadonlyMap<string, ElemStatus>; hex: boolean };
 
-/** `data-mon`: «1» flusso, «0» niente flusso, «off» non elaborato; `undefined` senza osservazione. */
+/**
+ * `data-mon`: «1» flusso, «0» niente flusso, «off» non elaborato; `undefined` senza osservazione o
+ * con stato sconosciuto (fuori finestra, in attesa): nessun colore.
+ */
 export type MonAttr = '1' | '0' | 'off' | undefined;
 
 export function monAttr(mon: LadMonitor | undefined, id: string, side: 'in' | 'out'): MonAttr {
   if (!mon) return undefined;
   const st = mon.status.get(id);
+  if (st?.notRun) return 'off';
   const v = st?.[side];
-  return v === undefined ? (st ? undefined : 'off') : v ? '1' : '0';
+  return v === undefined ? undefined : v ? '1' : '0';
 }
 
 /** Valore di un pin nel suo tipo: REAL in virgola mobile, INT/DINT con segno, il resto in esadecimale. */
@@ -53,8 +57,8 @@ export function pinValues(
 }
 
 /**
- * Lo stato come testo, per `aria-label` e `title`: «1», «0» o «non elaborato», con i valori
- * dei pin; `''` senza osservazione.
+ * Lo stato come testo, per `aria-label` e `title`: «1», «0», «non elaborato» o «fuori dalla
+ * finestra», con i valori dei pin; `''` senza osservazione.
  */
 export function monText(
   mon: LadMonitor | undefined,
@@ -63,8 +67,9 @@ export function monText(
 ): string {
   if (!mon) return '';
   const st = mon.status.get(e.id);
-  if (!st) return t('lad.mon.none');
-  const parts: string[] = [];
+  if (st?.notRun) return t('lad.mon.none');
+  if (!st) return t('lad.mon.outside');
+  const parts: string[] = st.unknown ? [t('lad.mon.outside')] : [];
   if (st.out !== undefined) parts.push(`${t('lad.mon.state')} ${st.out ? '1' : '0'}`);
   if (st.sta !== undefined) parts.push(`${t('lad.mon.operand')} ${st.sta ? '1' : '0'}`);
   for (const [pin, v] of Object.entries(pinValues(mon, e))) parts.push(`${pin} ${v}`);

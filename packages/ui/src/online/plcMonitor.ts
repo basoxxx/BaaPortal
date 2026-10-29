@@ -353,7 +353,10 @@ export class PlcMonitorController {
     this.offsets = req.offsets;
     this.lastWindowAt = this.timers.now();
     // finché la CPU non risponde sulla nuova finestra, i valori vecchi non valgono più
-    this.patch({ monitorLines: req.offsets.map((offset) => ({ offset, regs: null })) });
+    this.patch({
+      monitorLines: req.offsets.map((offset) => ({ offset, regs: null })),
+      monitorLinesUnsure: true,
+    });
     let ok = true;
     try {
       const r = await this.bridge.plcStatusWindow(req);
@@ -409,7 +412,7 @@ export class PlcMonitorController {
       return;
     }
     if (r.state === 'values') {
-      this.patch({ monitorLines: r.lines });
+      this.patch({ monitorLines: r.lines, monitorLinesUnsure: r.partial === true });
       this.setMonitor('ok', r.partial ? { partial: true } : {});
     } else if (r.state === 'stop') {
       this.patch({ monitorLines: null });
@@ -417,7 +420,7 @@ export class PlcMonitorController {
     } else {
       // nessun risultato: le righe della finestra restano, grigie
       const lines = this.offsets.map((offset) => ({ offset, regs: null }));
-      this.patch({ monitorLines: lines });
+      this.patch({ monitorLines: lines, monitorLinesUnsure: true });
       this.setMonitor('waiting');
     }
     this.timer = this.timers.set(() => {

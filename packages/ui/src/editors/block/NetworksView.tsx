@@ -26,6 +26,7 @@ import { offsetOfLineCol } from '../../project/navigation/sourceActions';
 import { FupNetworkView } from '../fbd/FupNetworkView';
 import { LadNetworkEditor } from '../lad/LadNetworkEditor';
 import { setLadActive } from '../lad/ladActive';
+import type { LadMonitor } from '../lad/ladMonitor';
 import { callInstanceOf } from './callInstance';
 import { convertAwl } from './convertAwl';
 import { hasRawLines, isLockedImport, lockedBannerKey } from './readOnlyImport';
@@ -110,17 +111,29 @@ export function NetworksView({ deviceId, blockId }: Props) {
       : null,
   );
   const plcLines = useAppStore((s) => s.online.monitorLines);
-  const plcLinesShown =
-    plcMon && (plcMon.reason === 'ok' || plcMon.reason === 'waiting') && plcLines && lineMap
-      ? monitorLinesFromPlc(lineMap, plcLines, monHex)
-      : null;
+  const plcUnsure = useAppStore((s) => s.online.monitorLinesUnsure === true);
+  const plcShown = !!plcMon && (plcMon.reason === 'ok' || plcMon.reason === 'waiting');
+  const plcLinesShown = useMemo(
+    () => (plcShown && plcLines && lineMap ? monitorLinesFromPlc(lineMap, plcLines, monHex) : null),
+    [plcShown, plcLines, lineMap, monHex],
+  );
   const monShown = plcLinesShown ?? monLines;
-  /** Osservazione di un segmento grafico: lo stato per riga dell'AWL generato, sugli elementi. */
-  const ladMonitor = (i: number, lad: LadNetwork | undefined) => {
-    const m = monShown?.get(i);
-    const r = kop?.[i];
-    return m && r && lad ? { status: networkStatus(lad, r.lines, m.cells), hex: m.hex } : undefined;
-  };
+  // Osservazione dei segmenti grafici: lo stato per riga dell'AWL generato, sugli elementi. Si
+  // ricalcola solo quando cambiano i dati osservati o il grafico, così ogni segmento riceve lo
+  // stesso oggetto tra un render e l'altro. Online contano solo le reti nella finestra (le altre
+  // non hanno celle).
+  const blockNets = block?.networks;
+  const ladMonitors = useMemo(
+    () =>
+      blockNets?.map((n, i): LadMonitor | undefined => {
+        const m = monShown?.get(i);
+        const r = kop?.[i];
+        if (!m || !r || !n.lad) return undefined;
+        const nullUnknown = plcLinesShown !== null && plcUnsure;
+        return { status: networkStatus(n.lad, r.lines, m.cells, { nullUnknown }), hex: m.hex };
+      }),
+    [blockNets, monShown, kop, plcLinesShown, plcUnsure],
+  );
   const drafts = useRef(new Map<string, Draft>());
   /** Il testo non confermato sospende l'osservazione finché c'è (poi vale il confronto delle impronte). */
   const markEdited = useCallback(() => {
@@ -439,7 +452,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
                     callParams={callParams}
                     onActive={(api, on) => setLadActive(api, on, { deviceId, blockId })}
                     callOfDrop={(raw) => callInstanceOf(dev, raw)}
-                    monitor={ladMonitor(i, n.lad)}
+                    monitor={ladMonitors?.[i]}
                   />
                 ) : (
                   <LadNetworkEditor
@@ -451,7 +464,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
                     callParams={callParams}
                     onActive={(api, on) => setLadActive(api, on, { deviceId, blockId })}
                     callOfDrop={(raw) => callInstanceOf(dev, raw)}
-                    monitor={ladMonitor(i, n.lad)}
+                    monitor={ladMonitors?.[i]}
                   />
                 )}
                 <button

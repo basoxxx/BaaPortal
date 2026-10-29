@@ -102,8 +102,8 @@ function BoxSymbol({ b, cell, monitor }: { b: LadBox; cell: LadCell; monitor?: L
   const flow = flowPin(b.box);
   // Solo i pin BOOL hanno un flusso; i pin di dati restano del colore normale.
   const pinM = (name: string): MonAttr => {
-    if (!monitor) return undefined;
-    if (!st) return 'off';
+    if (!monitor || !st) return undefined;
+    if (st.notRun) return 'off';
     const v = name === flow ? st.out : st.pins?.[name];
     return v === undefined ? undefined : v ? '1' : '0';
   };

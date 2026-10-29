@@ -27,7 +27,7 @@ _Impostazioni → Funzioni sperimentali_. Da quel momento, in _Inserisci → Nuo
 
      Le uscite `S`, `R`, temporizzatori, contatori e salti si aggiungono dalla tavolozza; i box (MOVE, ADD_I…) dalla tavolozza o da _Box vuoto_ nella barra.
 5. **Compilare.** Come un blocco KOP: stesso AWL generato, stessi errori.
-6. **Osservare.** _Osserva programma_ funziona come in KOP: il bordo inferiore di ogni entrata, riquadro e uscita è verde (1), blu tratteggiato (0) o grigio (non elaborato), con lo stato anche nel testo dell'elemento; accanto agli operandi dei box compare il valore.
+6. **Osservare.** _Osserva programma_ funziona come in KOP: il bordo inferiore di ogni entrata, riquadro e uscita è verde (1), blu tratteggiato (0) o grigio (non elaborato), senza colore se fuori dalla finestra di osservazione, con lo stato anche nel testo dell'elemento; accanto agli operandi dei box compare il valore.
 
 ## SCL
 

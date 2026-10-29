@@ -214,7 +214,8 @@ describe('networkStatus sul simulatore', () => {
       net([after], [coil('Q 5.4')], 'SKIP'),
     ];
     const at = run(nets, 0b1001);
-    expect(at(1).size).toBe(0);
+    expect([...at(1).values()].every((x) => x.notRun)).toBe(true);
+    expect(at(1).get(q.id)).toEqual({ notRun: true });
     expect(at(2).get(after.id)!.out).toBe(true);
   });
 });

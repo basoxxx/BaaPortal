@@ -1706,7 +1706,8 @@
     "mon": {
       "state": "stato",
       "operand": "operando",
-      "none": "non elaborato"
+      "none": "non elaborato",
+      "outside": "fuori dalla finestra di osservazione o in attesa"
     },
     "cannotClose": "Impossibile chiudere il ramo qui: scegli un elemento che segue il ramo aperto, nella stessa serie.",
     "cannotDo": "Operazione non possibile in questo punto.",

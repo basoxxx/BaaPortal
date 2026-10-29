@@ -169,6 +169,91 @@ describe('dati della CPU', () => {
     const st = networkStatus(net, lines, cells);
     expect(st.get('a')).toMatchObject({ out: true, sta: true });
     expect(st.get('b')).toMatchObject({ in: true, out: false, sta: false });
-    expect(st.has('q')).toBe(false);
+    expect(st.get('q')).toEqual({ notRun: true });
   });
+});
+
+/** Blocco KOP osservato sulla CPU: `regs` per elemento della rete 0 (`absent` = fuori finestra). */
+async function setupPlc(
+  regs: (elemId: string) => { stw: number; accu1: number } | null | 'absent',
+  unsure: boolean,
+  language: 'KOP' | 'FUP' = 'KOP',
+) {
+  const f = createCodeBlock({ kind: 'FC', number: 9, name: 'Prova', language });
+  f.networks = nets().map((lad, i) => ({ id: `s${i}`, title: '', comment: '', source: '', lad }));
+  const app = await openEditor('block', f.id, (d) => void d.blocks.push(f));
+  const deviceId = dev(app).id;
+  const src = kopSources(f, dev(app));
+  const map = src.flatMap((r, net) =>
+    r.lines.map((l) => ({ offset: offset(net, l.line), length: 2, network: net, line: l.line })),
+  );
+  const lines = src[0]!.lines.flatMap((l) => {
+    const r = regs(l.elemId);
+    return r === 'absent' ? [] : [{ offset: offset(0, l.line), regs: r }];
+  });
+  act(() => {
+    app.store.setState((x) => ({
+      online: {
+        ...x.online,
+        status: 'on',
+        deviceId,
+        monitor: { deviceId, blockId: f.id, reason: 'ok' },
+        monitorLines: lines,
+        monitorLinesUnsure: unsure,
+      },
+      compile: { ...x.compile, lines: { [f.id]: map } },
+    }));
+  });
+  return app;
+}
+
+describe('osservazione sulla CPU: fuori finestra e non elaborato', () => {
+  const one = { stw: 0b110, accu1: 0 };
+  it(
+    'righe fuori finestra: nessun colore e «fuori dalla finestra», non «non elaborato»',
+    async () => {
+      await setupPlc((id) => (id === 'a' ? one : 'absent'), false);
+      expect(mons(lad('a'))).toEqual(['1', '1', '1', '1']);
+      // entra il flusso di «a», l'uscita non si conosce
+      expect(mons(lad('b'))).toEqual(['1']);
+      expect(mons(lad('q'))).toEqual([]);
+      for (const id of ['b', 'q']) {
+        expect(lad(id).getAttribute('aria-label')).toContain('fuori dalla finestra');
+        expect(lad(id).getAttribute('aria-label')).not.toContain('non elaborato');
+      }
+    },
+    T,
+  );
+
+  it(
+    'riga null dalla CPU: grigio e «non elaborato»',
+    async () => {
+      await setupPlc((id) => (id === 'a' ? one : null), false);
+      expect(mons(lad('b'))).toEqual(['off', 'off', 'off', 'off']);
+      expect(lad('q').getAttribute('aria-label')).toContain('non elaborato');
+    },
+    T,
+  );
+
+  it(
+    'righe null di un segnaposto o di una risposta parziale: come fuori finestra',
+    async () => {
+      await setupPlc((id) => (id === 'a' ? one : null), true);
+      expect(mons(lad('b'))).toEqual(['1']);
+      expect(lad('q').getAttribute('aria-label')).toContain('fuori dalla finestra');
+      expect(document.querySelector('.baa-lad [data-mon="off"]')).toBeNull();
+    },
+    T,
+  );
+
+  it(
+    'FUP: stesso stato «fuori dalla finestra», senza bordo colorato',
+    async () => {
+      await setupPlc((id) => (id === 'a' ? one : 'absent'), false, 'FUP');
+      expect(fup('a').getAttribute('data-mon')).toBe('1');
+      expect(fup('b').hasAttribute('data-mon')).toBe(false);
+      expect(fup('q').getAttribute('aria-label')).toContain('fuori dalla finestra');
+    },
+    T,
+  );
 });

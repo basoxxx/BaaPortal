@@ -1,7 +1,8 @@
 // Osservazione di una rete KOP/FUP: dallo stato per riga dell'AWL generato (simulatore o CPU)
 // allo stato di ogni elemento del grafico. La forma dell'AWL è quella di `networkToAwl`: i
 // contatti si leggono dal loro STA (stato dell'operando), gli altri elementi dall'RLO dopo
-// l'ultima loro riga eseguita, le uscite e i nodi ricevono il flusso della serie davanti.
+// la loro ultima riga (quella che dà l'uscita), le uscite e i nodi ricevono il flusso della serie
+// davanti. Una riga senza cella (non chiesta, fuori finestra, in attesa) lascia lo stato sconosciuto.
 import { BOX_CATALOG } from './catalog.js';
 import { isNode } from './model.js';
 import type { LadElem, LadNetwork, LadNode, LadOut } from './model.js';
@@ -11,11 +12,16 @@ import type { LineOwner } from './toAwl.js';
 export type LineState = { rlo: boolean; sta: boolean; accu1: number } | null;
 
 /**
- * Stato di un elemento (o di un nodo) elaborato. Un elemento senza voce non è stato elaborato
- * (o la sua riga non è stata chiesta). `in`/`out`: flusso in entrata e in uscita (ENO o Q di un
- * box; per le uscite e i nodi coincidono); `undefined` se non si può dire.
+ * Stato di un elemento (o di un nodo). Un elemento senza voce, o con `unknown`, ha stato
+ * sconosciuto; `notRun`: la sua ultima riga è stata chiesta ma non elaborata. `in`/`out`: flusso in
+ * entrata e in uscita (ENO o Q di un box; per le uscite e i nodi coincidono); `undefined` se non si
+ * può dire.
  */
 export type ElemStatus = {
+  /** L'ultima riga dell'elemento non ha cella: si sa al più il flusso davanti e qualche valore. */
+  unknown?: true;
+  /** L'ultima riga dell'elemento è chiesta e non elaborata nel ciclo. */
+  notRun?: true;
   in?: boolean;
   out?: boolean;
   /** Stato dell'operando di un contatto. */
@@ -28,10 +34,15 @@ export type ElemStatus = {
 
 type Flow = boolean | undefined;
 
+/**
+ * `nullUnknown`: una cella `null` non dice «non elaborata» (risposta parziale della CPU, segnaposto
+ * della finestra in attesa di risposta) e vale come assente.
+ */
 export function networkStatus(
   net: LadNetwork,
   lines: readonly LineOwner[],
   cells: ReadonlyMap<number, LineState>,
+  opts: { nullUnknown?: boolean } = {},
 ): Map<string, ElemStatus> {
   const owned = new Map<string, LineOwner[]>();
   for (const l of lines) {
@@ -40,14 +51,18 @@ export function networkStatus(
     else owned.set(l.elemId, [l]);
   }
   const out = new Map<string, ElemStatus>();
-  /** Stato dopo l'ultima riga eseguita dell'elemento. */
-  const lastRun = (id: string) => {
-    const own = owned.get(id) ?? [];
-    for (let i = own.length - 1; i >= 0; i--) {
-      const c = cells.get(own[i]!.line);
-      if (c) return c;
-    }
-    return undefined;
+  /**
+   * Stato dopo l'ultima riga dell'elemento, la sola che ne dà l'uscita (una riga prima ha un RLO
+   * intermedio): `undefined` sconosciuto, `null` non elaborata.
+   */
+  const outLine = (id: string): LineState | undefined => {
+    const own = owned.get(id);
+    const c = own && cells.get(own[own.length - 1]!.line);
+    return c === null && opts.nullUnknown ? undefined : c;
+  };
+  const known = (id: string) => {
+    const s = out.get(id);
+    return s !== undefined && !s.unknown && !s.notRun;
   };
   const valuesOf = (id: string): Record<string, number> | undefined => {
     let v: Record<string, number> | undefined;
@@ -72,44 +87,56 @@ export function networkStatus(
     if (e.k === 'parallel') {
       // ogni ramo riparte dal flusso davanti al parallelo; l'uscita è l'OR dei rami
       const outs = e.branches.map((b) => series(b, flow, flow, false));
-      if (outs.every((o) => o === undefined)) return undefined;
-      const res = outs.some((o) => o === true);
-      out.set(e.id, { ...(flow !== undefined ? { in: flow } : {}), out: res });
+      // un ramo sconosciuto lascia sconosciuto l'OR, se nessun altro ramo dà 1
+      const res = outs.includes(true) ? true : outs.includes(undefined) ? undefined : false;
+      if (res !== undefined)
+        out.set(e.id, { ...(flow !== undefined ? { in: flow } : {}), out: res });
+      else if (e.branches.flat().some((x) => out.get(x.id)?.notRun))
+        out.set(e.id, { notRun: true });
       return res;
     }
-    const run = lastRun(e.id);
-    if (!run) return undefined;
-    const st: ElemStatus = flow !== undefined ? { in: flow } : {};
+    const run = outLine(e.id);
+    const st: ElemStatus = run === null ? { notRun: true } : flow !== undefined ? { in: flow } : {};
+    if (run === undefined) st.unknown = true;
     if (e.k === 'contact') {
-      st.sta = run.sta;
-      st.out = flow !== false && run.sta !== e.neg;
+      if (run) {
+        st.sta = run.sta;
+        st.out = flow !== false && run.sta !== e.neg;
+      }
     } else if (e.k === 'box') {
       const def = BOX_CATALOG[e.box];
       const pins: Record<string, boolean> = {};
       const first = def.en ? 'EN' : def.firstPin;
       if (flow !== undefined && first) pins[first] = flow;
+      // la logica dei pin si visita sempre, così i suoi elementi hanno il loro stato
       for (const [name, list] of Object.entries(e.boolPins)) {
         if (list.length === 0) continue;
         const p = series(list, true, true, false);
         if (p !== undefined) pins[name] = p;
       }
-      if (Object.keys(pins).length > 0) st.pins = pins;
+      if (run !== null && Object.keys(pins).length > 0) st.pins = pins;
       // ENO/Q non collegato: l'AWL non lo calcola (NOP 0)
-      if (connected) st.out = and(ctx, run.rlo);
-    } else {
+      if (run && connected) st.out = and(ctx, run.rlo);
+    } else if (run) {
       st.out = and(ctx, run.rlo);
     }
-    const v = valuesOf(e.id);
+    const v = run === null ? undefined : valuesOf(e.id);
     if (v) st.values = v;
     out.set(e.id, st);
     return st.out;
   }
 
   function output(o: LadOut, flow: Flow): void {
-    const own = owned.get(o.id) ?? [];
-    if (!own.some((l) => cells.get(l.line))) return;
-    const st: ElemStatus = flow !== undefined ? { in: flow, out: flow } : {};
-    const v = valuesOf(o.id);
+    const run = outLine(o.id);
+    const st: ElemStatus =
+      run === null
+        ? { notRun: true }
+        : run === undefined
+          ? { unknown: true }
+          : flow !== undefined
+            ? { in: flow, out: flow }
+            : {};
+    const v = run === null ? undefined : valuesOf(o.id);
     if (v) st.values = v;
     out.set(o.id, st);
   }
@@ -121,8 +148,9 @@ export function networkStatus(
       else output(o, p);
     }
     // il nodo è elaborato se lo è qualcosa di suo (una serie vuota sulla barra non dice nulla)
-    const seen = [...n.series, ...n.outs].some((x) => out.has(x.id));
-    if (p !== undefined && seen) out.set(n.id, { in: p, out: p });
+    const kids = [...n.series, ...n.outs];
+    if (p !== undefined && kids.some((x) => known(x.id))) out.set(n.id, { in: p, out: p });
+    else if (kids.some((x) => out.get(x.id)?.notRun)) out.set(n.id, { notRun: true });
   }
 
   node(net.root, true);
