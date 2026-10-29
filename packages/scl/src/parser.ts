@@ -14,6 +14,8 @@ export type Operand =
       index?: number[];
       /** Membri dopo il nome: `#s.x`, `"DB".m[2].n`. */
       path?: Seg[];
+      /** Indici variabili dell'ultimo ARRAY (`#a[#i]`, `#s.m[#i, 2]`), uno per dimensione. */
+      vindex?: Expr[];
     })
   /** Solo dalla traduzione: una TEMP di appoggio già calcolata, di tipo `ty`. */
   | (Pos & { k: 'temp'; text: string; ty: string });
@@ -238,35 +240,53 @@ export function parse(text: string): Stmt[] {
       p++;
       const o: Operand = { k: t.kind, text: t.text, ...pos(t) };
       if (t.kind === 'addr') return o;
-      const index = indices();
+      let vindex: Expr[] | undefined;
+      const onlyLast = (at: Tok) =>
+        fail(at, "Indice variabile solo nell'ultimo ARRAY dell'operando: #a[#i], non #a[#i].x");
+      /** Indici tutti costanti come numeri; con un indice variabile vanno in `vindex`. */
+      const take = (): number[] | undefined => {
+        const at = peek();
+        const i = indices();
+        if (!i || i.every((e) => typeof e === 'number')) return i as number[] | undefined;
+        vindex = i.map((e) =>
+          typeof e === 'number' ? { k: 'int', text: String(e), ...pos(at) } : e,
+        );
+        return undefined;
+      };
+      const index = take();
       const path: Seg[] = [];
       while (is('.')) {
         p++;
         const m = peek();
         if (m.kind !== 'id' && m.kind !== 'symbol') fail(m, 'Dopo «.» serve il nome di un membro');
+        if (vindex) onlyLast(m);
         p++;
-        const i = indices();
+        const i = take();
         path.push(i ? { name: m.text, index: i } : { name: m.text });
       }
-      return { ...o, ...(index ? { index } : {}), ...(path.length ? { path } : {}) };
+      if (vindex && is('[')) onlyLast(peek());
+      return {
+        ...o,
+        ...(index ? { index } : {}),
+        ...(path.length ? { path } : {}),
+        ...(vindex ? { vindex } : {}),
+      };
     }
     return fail(t, `Atteso un operando, trovato ${shown(t)}`);
   }
 
-  /** Indici costanti `[1, -2]`; un indice che non è un numero intero è un errore. */
-  function indices(): number[] | undefined {
+  /** Indici `[1, -2]` (numeri interi) o espressioni `[#i + 1, 2]`. */
+  function indices(): (number | Expr)[] | undefined {
     if (!is('[')) return undefined;
     p++;
-    const out: number[] = [];
+    const out: (number | Expr)[] = [];
     for (;;) {
-      const t = peek();
       const neg = is('-');
-      if (neg) p++;
-      const n = peek();
-      if (n.kind !== 'int' || ![']', ','].includes(toks[p + 1]?.text ?? ''))
-        fail(t, 'Indice variabile non supportato in SCL in prova: solo indici costanti');
-      p++;
-      out.push(Number(intLiteral(`${neg ? '-' : ''}${n.text}`).value));
+      const n = toks[p + (neg ? 1 : 0)];
+      if (n?.kind === 'int' && [']', ','].includes(toks[p + (neg ? 2 : 1)]?.text ?? '')) {
+        p += neg ? 2 : 1;
+        out.push(Number(intLiteral(`${neg ? '-' : ''}${n.text}`).value));
+      } else out.push(expr());
       if (!is(',')) break;
       p++;
     }

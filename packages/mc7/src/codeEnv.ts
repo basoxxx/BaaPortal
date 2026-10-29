@@ -6,6 +6,7 @@ import { callBase } from './localData';
 import {
   instanceLayout,
   resolveValue,
+  sectionsOf,
   structLayout,
   type Value,
   type LayoutTools,
@@ -107,4 +108,17 @@ export function resolveGlobalOperand(op: Operand, ctx: AwlContext): Value {
     cache: new Map(),
   };
   return resolveValue(op, env);
+}
+
+/**
+ * Risolve un operando del blocco `ctx.owner`, locali compresi, con le regole del compilatore: lo usa
+ * l'SCL per la posizione degli elementi di un ARRAY con indici variabili. Lancia `SymbolError`.
+ */
+export function ownOperandResolver(ctx: AwlContext): (op: Operand) => Value {
+  let env: SymbolEnv | undefined;
+  return (op) => {
+    const { kind, iface } = ctx.owner;
+    env ??= codeEnvironment(kind, sectionsOf({ name: '', kind, number: 0, iface }), ctx, []).env;
+    return resolveValue(op, env);
+  };
 }

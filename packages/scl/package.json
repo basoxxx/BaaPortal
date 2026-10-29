@@ -12,6 +12,7 @@
   "dependencies": {
     "@baaportal/awl": "*",
     "@baaportal/ladfbd": "*",
+    "@baaportal/mc7": "*",
     "@baaportal/s7-types": "*"
   }
 }
