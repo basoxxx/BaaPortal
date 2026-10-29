@@ -83,15 +83,27 @@ describe('Carica nel dispositivo (PLC vero)', () => {
   }, 30_000);
 
   it('«Avviare la CPU?» rifiutata → nessun RUN', async () => {
+    const { app } = await setupOnline([['OB', 35]]);
+    app.bridge.plcDownloadResults.push({ ok: true, loaded: ['OB35'], deleted: [] });
+    app.bridge.questionAnswers.push(false);
+    await runDownload(app);
+    await ok();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Arresta la CPU' }));
+    await press();
+    await screen.findByTestId('download-result');
+    expect(app.bridge.plcWriteLog).toEqual(['STOP', 'download']);
+    expect(app.bridge.questions).toHaveLength(1);
+  }, 30_000);
+
+  it('CPU già in STOP prima del caricamento → nessuna domanda e nessun RUN', async () => {
     const { app } = await setupOnline([['FC', 1]], 'STOP');
     app.bridge.plcDownloadResults.push({ ok: true, loaded: ['FC1'], deleted: [] });
-    app.bridge.questionAnswers.push(false);
     await runDownload(app);
     await ok();
     await press();
     await screen.findByTestId('download-result');
     expect(app.bridge.plcWriteLog).toEqual(['download']);
-    expect(app.bridge.questions).toHaveLength(1);
+    expect(app.bridge.questions).toHaveLength(0);
   }, 30_000);
 
   it('CPU in RUN e nessun arresto → nessuna domanda', async () => {
