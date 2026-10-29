@@ -9,6 +9,7 @@ import type {
   PlcUploadedFile,
 } from '@baaportal/ui';
 import { toPlcIdentity } from './plcMap';
+import { connectOptions } from './access';
 import { connectMessage } from './plcService';
 
 /** Quanto serve di una finestra: abbastanza per i test senza Electron. */
@@ -58,7 +59,6 @@ export interface CollectOptions {
 }
 export const MAX_BLOCKS = 4096;
 export const MAX_BYTES = 64 * 1024 * 1024;
-const CONNECTION_TYPES = { PG: 'pg', OP: 'op', S7_BASIC: 'basic' } as const;
 
 export interface UploadServiceOptions {
   connect?: UploadConnectFn;
@@ -170,13 +170,7 @@ export class UploadService {
     try {
       const opened = await raced(
         this.connectFn({
-          host: access.host,
-          port: access.port ?? 102,
-          rack: access.rack,
-          slot: access.slot,
-          connectionType: CONNECTION_TYPES[access.connectionType],
-          ...(access.remoteTsap !== undefined ? { remoteTsap: access.remoteTsap } : {}),
-          timeoutMs: this.connectTimeoutMs,
+          ...connectOptions(access, this.connectTimeoutMs),
           mode: 'read-only',
           signal,
         }),

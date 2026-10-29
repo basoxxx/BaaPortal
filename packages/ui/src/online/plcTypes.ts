@@ -1,4 +1,4 @@
-import type { PlcAccess, PlcIdentity, PlcMode, WatchTarget } from '@baaportal/project';
+import type { MpiLink, PlcAccess, PlcIdentity, PlcMode, WatchTarget } from '@baaportal/project';
 import type {
   BStackEntry,
   CycleTime,
@@ -10,7 +10,7 @@ import type {
   S7DateTime,
 } from '@baaportal/s7comm';
 
-export type { PlcAccess, PlcIdentity, PlcMode };
+export type { MpiLink, PlcAccess, PlcIdentity, PlcMode };
 
 /** Eventi dal processo principale sul collegamento online della finestra. */
 /** Perché il collegamento è andato perso: la finestra lo traduce nel messaggio. */
@@ -45,6 +45,9 @@ export interface SerialPortInfo {
   vendorId?: string;
   productId?: string;
 }
+
+/** Nodi attivi sul bus MPI, letti dall'adattatore (per «Cerca»). */
+export type PlcMpiNodesResult = { ok: true; nodes: number[] } | { ok: false; error: string };
 
 /** Esito della ricerca su un indirizzo: una CPU riconosciuta, o un host che apre la 102 e basta. */
 export type FoundDevice =

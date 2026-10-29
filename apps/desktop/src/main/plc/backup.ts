@@ -7,6 +7,7 @@ import {
   type BackupManifest,
 } from '@baaportal/project';
 import { writeFileAtomic } from '../fsAtomic';
+import { accessLabel } from './access';
 import type { PlcOwner, PlcService } from './plcService';
 import { BACKUP_TYPES, type UploadOwner, type UploadService } from './uploadAll';
 
@@ -143,7 +144,8 @@ export class BackupService {
         ...(id.serial !== undefined ? { serial: id.serial } : {}),
         ...(id.moduleName !== undefined ? { moduleName: id.moduleName } : {}),
         ...(id.firmware !== undefined ? { firmware: id.firmware } : {}),
-        host: target.access.host,
+        // con MPI l'host del progetto non si usa: si scrive dove sta la CPU (porta e indirizzo)
+        host: target.access.link?.kind === 'mpi' ? accessLabel(target.access) : target.access.host,
         port: target.access.port ?? 102,
         rack: target.access.rack,
         slot: target.access.slot,

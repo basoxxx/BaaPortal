@@ -26,6 +26,7 @@ import type {
 import type { ConfirmFn, WriteConfirmTexts } from './confirm';
 import { FRCE_LED, forceFrom, view as diagView } from './diagnostics';
 import { toPlcMode } from './plcMap';
+import { accessLabel, connectOptions, mpiKey } from './access';
 import {
   planRestore,
   restoreLines,
@@ -45,7 +46,6 @@ export const MAX_FILE_BYTES = 1024 * 1024;
 export const MAX_TOTAL_BYTES = 32 * 1024 * 1024;
 const LOADABLE = ['OB', 'FB', 'FC', 'DB'];
 const DEFAULT_PORT = 102;
-const CONNECTION_TYPES = { PG: 'pg', OP: 'op', S7_BASIC: 'basic' } as const;
 const DELETABLE = ['OB', 'FB', 'FC', 'DB'];
 const MAX_LIST_LINES = 20;
 const PROGRESS_MIN_MS = 100; // al massimo 10 eventi al secondo, più quello finale
@@ -235,7 +235,9 @@ function listLines(lines: string[]): string {
 
 /** Identifica una CPU: indirizzo, porta, rack e slot. */
 function cpuKey(a: PlcAccess): string {
-  return `${a.host.trim().toLowerCase()}:${a.port ?? DEFAULT_PORT}/${a.rack}/${a.slot}`;
+  return (
+    mpiKey(a) ?? `${a.host.trim().toLowerCase()}:${a.port ?? DEFAULT_PORT}/${a.rack}/${a.slot}`
+  );
 }
 
 function errText(err: unknown): string {
@@ -1025,15 +1027,7 @@ export class PlcWriteService {
     const access = target.access;
     let c: WriteClient;
     try {
-      c = await connect({
-        host: access.host,
-        port: access.port ?? DEFAULT_PORT,
-        rack: access.rack,
-        slot: access.slot,
-        connectionType: CONNECTION_TYPES[access.connectionType],
-        ...(access.remoteTsap !== undefined ? { remoteTsap: access.remoteTsap } : {}),
-        timeoutMs: this.connectTimeoutMs,
-      });
+      c = await connect(connectOptions(access, this.connectTimeoutMs));
     } catch (err) {
       return connectMessage(err, access);
     }
@@ -1146,9 +1140,7 @@ function cpuName(t: {
   access: PlcAccess;
   identity: { moduleName?: string; orderNumber: string };
 }): string {
-  const port =
-    t.access.port !== undefined && t.access.port !== DEFAULT_PORT ? `:${t.access.port}` : '';
-  return `${t.identity.moduleName ?? t.identity.orderNumber} (${t.access.host}${port})`;
+  return `${t.identity.moduleName ?? t.identity.orderNumber} (${accessLabel(t.access)})`;
 }
 
 function fromDate(d: Date): S7DateTime {

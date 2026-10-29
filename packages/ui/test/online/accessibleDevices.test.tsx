@@ -224,6 +224,111 @@ describe('finestra «Dispositivi accessibili»', () => {
   });
 });
 
+describe('finestra «Dispositivi accessibili»: adattatore MPI', () => {
+  async function openMpi() {
+    const app = await openDialog();
+    app.bridge.plcSerialPortsValue = [{ path: 'COM3' }, { path: 'COM7' }];
+    await app.user.selectOptions(
+      within(app.dlg).getByLabelText('Tipo di interfaccia PG/PC'),
+      'mpi',
+    );
+    await within(app.dlg).findByRole('option', { name: 'COM3' });
+    return app;
+  }
+
+  it('mostra porte, velocità, parità, indirizzi, HSA, bus e variante con i valori predefiniti', async () => {
+    const { dlg } = await openMpi();
+    expect(within(dlg).getByLabelText('Interfaccia PG/PC')).toHaveValue('COM3');
+    expect(within(dlg).getByLabelText('Velocità di trasmissione (porta seriale)')).toHaveValue(
+      '38400',
+    );
+    expect(within(dlg).getByLabelText('Parità')).toHaveValue('odd');
+    expect(within(dlg).getByLabelText('Indirizzo MPI della CPU')).toHaveValue(2);
+    expect(within(dlg).getByLabelText('Indirizzo MPI del PG/PC')).toHaveValue(0);
+    expect(within(dlg).getByLabelText('Indirizzo più alto (HSA)')).toHaveValue('31');
+    expect(within(dlg).getByLabelText('Velocità di trasmissione (bus MPI)')).toHaveValue('187.5k');
+    expect(within(dlg).getByLabelText("Protocollo dell'adattatore")).toHaveValue('auto');
+    // la ricerca nella rete non c'entra con l'MPI
+    expect(within(dlg).queryByRole('button', { name: 'Avvia ricerca' })).not.toBeInTheDocument();
+  });
+
+  it('Aggiorna rilegge le porte', async () => {
+    const { user, bridge, dlg } = await openMpi();
+    bridge.plcSerialPortsValue = [{ path: 'COM9' }];
+    await user.click(within(dlg).getByRole('button', { name: 'Aggiorna' }));
+    await within(dlg).findByRole('option', { name: 'COM9' });
+    expect(within(dlg).getByLabelText('Interfaccia PG/PC')).toHaveValue('COM9');
+  });
+
+  it('Cerca elenca i nodi del bus e sceglierne uno fissa l’indirizzo della CPU', async () => {
+    const { user, bridge, dlg } = await openMpi();
+    bridge.plcMpiNodesValue = { ok: true, nodes: [0, 2, 6] };
+    await user.click(within(dlg).getByRole('button', { name: 'Cerca' }));
+    const group = await within(dlg).findByRole('group', { name: 'Nodi sul bus MPI' });
+    expect(bridge.plcMpiNodesCalls[0]).toMatchObject({ port: 'COM3', localAddress: 0 });
+    // l'indirizzo del PG/PC (0) non si propone
+    expect(within(group).queryByRole('button', { name: 'Indirizzo 0' })).not.toBeInTheDocument();
+    await user.click(within(group).getByRole('button', { name: 'Indirizzo 6' }));
+    expect(within(dlg).getByLabelText('Indirizzo MPI della CPU')).toHaveValue(6);
+  });
+
+  it('Cerca che fallisce: il messaggio dell’adattatore nella finestra', async () => {
+    const { user, bridge, dlg } = await openMpi();
+    bridge.plcMpiNodesValue = {
+      ok: false,
+      error: 'Adattatore MPI non risponde: controllare porta, velocità e cavo',
+    };
+    await user.click(within(dlg).getByRole('button', { name: 'Cerca' }));
+    expect(await within(dlg).findByRole('alert')).toHaveTextContent('Adattatore MPI non risponde');
+  });
+
+  it('Collega salva l’accesso MPI nella CPU ed esegue goOnline', async () => {
+    const { user, store, dlg } = await openMpi();
+    const goOnline = vi
+      .spyOn(PlcController.prototype, 'goOnline')
+      .mockImplementation(async () => {});
+    await user.selectOptions(within(dlg).getByLabelText('Interfaccia PG/PC'), 'COM7');
+    await user.selectOptions(within(dlg).getByLabelText('Parità'), 'even');
+    await user.clear(within(dlg).getByLabelText('Indirizzo MPI della CPU'));
+    await user.type(within(dlg).getByLabelText('Indirizzo MPI della CPU'), '4');
+    await user.click(within(dlg).getByRole('button', { name: 'Collega' }));
+    expect(findDevice(store.getState().doc!.project, 'id1')!.properties.access).toEqual({
+      host: '',
+      rack: 0,
+      slot: 2,
+      connectionType: 'PG',
+      link: {
+        kind: 'mpi',
+        port: 'COM7',
+        baudRate: 38400,
+        parity: 'even',
+        localAddress: 0,
+        cpuAddress: 4,
+        highestAddress: 31,
+        busSpeed: '187.5k',
+        variant: 'auto',
+      },
+    });
+    expect(goOnline).toHaveBeenCalledTimes(1);
+    goOnline.mockRestore();
+  });
+
+  it('indirizzo MPI oltre 126 o nessuna porta: Collega disattivo', async () => {
+    const { user, bridge, dlg } = await openMpi();
+    await user.clear(within(dlg).getByLabelText('Indirizzo MPI della CPU'));
+    await user.type(within(dlg).getByLabelText('Indirizzo MPI della CPU'), '127');
+    expect(within(dlg).getByRole('alert')).toHaveTextContent('tra 0 e 126');
+    expect(within(dlg).getByRole('button', { name: 'Collega' })).toBeDisabled();
+    await user.clear(within(dlg).getByLabelText('Indirizzo MPI della CPU'));
+    await user.type(within(dlg).getByLabelText('Indirizzo MPI della CPU'), '2');
+    expect(within(dlg).getByRole('button', { name: 'Collega' })).toBeEnabled();
+    bridge.plcSerialPortsValue = [];
+    await user.click(within(dlg).getByRole('button', { name: 'Aggiorna' }));
+    await within(dlg).findByRole('option', { name: 'Nessuna porta seriale trovata.' });
+    expect(within(dlg).getByRole('button', { name: 'Collega' })).toBeDisabled();
+  });
+});
+
 describe('finestra «Dispositivi accessibili»: chiusura e casi limite', () => {
   it('chiusa durante la ricerca: manda scanCancel e toglie il listener', async () => {
     const { user, bridge, dlg } = await openDialog();

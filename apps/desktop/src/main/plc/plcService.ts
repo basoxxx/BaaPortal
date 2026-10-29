@@ -2,6 +2,7 @@ import { S7Error, isUnavailable, type S7Client } from '@baaportal/s7comm';
 import { connectTcp } from '@baaportal/s7comm/node';
 import type { ConnectOptions } from '@baaportal/s7comm';
 import { toPlcIdentity, toPlcMode } from './plcMap';
+import { accessLabel, connectOptions } from './access';
 import { FRCE_LED, forceFrom } from './diagnostics';
 import type {
   PlcAccess,
@@ -53,10 +54,8 @@ export interface PlcServiceOptions {
   connect?: PlcConnectFn;
 }
 
-const DEFAULT_PORT = 102;
 /** Il LED FRCE si legge una volta ogni tanti giri di sorveglianza (circa 5 s). */
 const FORCE_EVERY = 5;
-const CONNECTION_TYPES = { PG: 'pg', OP: 'op', S7_BASIC: 'basic' } as const;
 
 interface Link {
   /** Numero progressivo: distingue un collegamento da uno successivo allo stesso indirizzo. */
@@ -82,12 +81,15 @@ interface Link {
 }
 
 export function connectMessage(err: unknown, access: PlcAccess): string {
-  const port = access.port ?? DEFAULT_PORT;
   if (err instanceof S7Error) {
     if (err.code === 'COTP_REJECTED')
       return 'La CPU ha rifiutato il collegamento (rack/slot o TSAP)';
+    // Adattatore MPI e porta seriale: il messaggio dice già che cosa controllare.
+    if (err.code.startsWith('MPI_') || err.code.startsWith('SERIAL_')) return err.message;
     if (['CONNECT_REFUSED', 'CONNECT_TIMEOUT', 'TIMEOUT'].includes(err.code)) {
-      return `Nessuna risposta da ${access.host}:${port}`;
+      const where =
+        access.link?.kind === 'mpi' ? accessLabel(access) : `${access.host}:${access.port ?? 102}`;
+      return `Nessuna risposta da ${where}`;
     }
     if (err.code === 'ABORTED') return 'Collegamento annullato';
     return `Collegamento non riuscito: ${err.message}`;
@@ -140,13 +142,7 @@ export class PlcService {
     let client: Client;
     try {
       client = await this.connectFn({
-        host: access.host,
-        port: access.port ?? DEFAULT_PORT,
-        rack: access.rack,
-        slot: access.slot,
-        connectionType: CONNECTION_TYPES[access.connectionType],
-        ...(access.remoteTsap !== undefined ? { remoteTsap: access.remoteTsap } : {}),
-        timeoutMs: this.connectTimeoutMs,
+        ...connectOptions(access, this.connectTimeoutMs),
         mode: 'read-only',
       });
     } catch (err) {

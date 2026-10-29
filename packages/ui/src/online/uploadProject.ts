@@ -15,6 +15,7 @@ import { t } from '../i18n';
 import type { ProjectService } from '../services/projectService';
 import { ids } from '../project/navigation/treeIds';
 import type { AppState } from '../state/store';
+import { accessWhere } from './accessInput';
 import type { PlcAccess, PlcIdentity, PlcUploadedFile } from './plcTypes';
 
 /** CPU usata quando il numero di ordinazione non è nel catalogo e la famiglia non è nota. */
@@ -71,9 +72,14 @@ export function uploadedProjectName(
   prefix: string,
 ): string {
   const module = identity.moduleName?.trim() || identity.orderNumber;
-  let name = `${prefix} ${module} ${access.host}`.replace(/[\u0000-\u001f\u007f/\\:*?"<>|]/g, '-');
+  let name = `${prefix} ${module} ${accessWhere(access)}`.replace(
+    /[\u0000-\u001f\u007f/\\:*?"<>|]/g,
+    '-',
+  );
   name = name.replace(/[. ]+$/, '').slice(0, 128);
-  return validateProjectName(name).ok ? name : `${prefix} ${access.host}`.replace(/[. ]+$/, '');
+  return validateProjectName(name).ok
+    ? name
+    : `${prefix} ${accessWhere(access)}`.replace(/[. ]+$/, '');
 }
 
 /**

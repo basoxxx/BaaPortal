@@ -13,9 +13,8 @@ import type { Decoded, PlcAccess, PlcMode, PlcStacksResult, Wire } from '@baapor
 import { cpuCode } from './blockStatus';
 import { connectMessage, type PlcOwner, type PlcService } from './plcService';
 import { toPlcMode } from './plcMap';
+import { connectOptions } from './access';
 
-const DEFAULT_PORT = 102;
-const CONNECTION_TYPES = { PG: 'pg', OP: 'op', S7_BASIC: 'basic' } as const;
 const MAX_LSTACK = 16;
 
 export type StacksClient = Pick<
@@ -86,15 +85,7 @@ export async function readStacks(
   const connect: StacksConnectFn = opts.connect ?? connectTestTcp;
   let client: StacksClient;
   try {
-    client = await connect({
-      host: access.host,
-      port: access.port ?? DEFAULT_PORT,
-      rack: access.rack,
-      slot: access.slot,
-      connectionType: CONNECTION_TYPES[access.connectionType],
-      ...(access.remoteTsap !== undefined ? { remoteTsap: access.remoteTsap } : {}),
-      timeoutMs: opts.connectTimeoutMs ?? 3000,
-    });
+    client = await connect(connectOptions(access, opts.connectTimeoutMs ?? 3000));
   } catch (err) {
     return fail('error', connectMessage(err, access));
   }

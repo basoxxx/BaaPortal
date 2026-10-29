@@ -16,10 +16,10 @@ import type {
 } from '@baaportal/ui';
 import { connectMessage, type PlcOwner, type PlcService } from './plcService';
 import type { TisJobStore } from './tisJobs';
+import { connectOptions, mpiKey } from './access';
 
 const FN = 0x13;
 const DEFAULT_PORT = 102;
-const CONNECTION_TYPES = { PG: 'pg', OP: 'op', S7_BASIC: 'basic' } as const;
 /** Quanto aspettare un enable prima di arrendersi del tutto (il job riparte da capo). */
 const ENABLE_LONG_MS = 30_000;
 const DELETE_LIMIT_MS = 1000;
@@ -103,7 +103,7 @@ export function parseStatusRequest(raw: unknown, maxLines = MAX_LINES): PlcStatu
 
 /** Chiave della CPU nel registro: indirizzo e, se noto, numero di serie (stesso IP, altra CPU). */
 export const cpuKey = (a: PlcAccess, serial?: string): string =>
-  `${a.host.toLowerCase()}:${a.port ?? DEFAULT_PORT}/${a.rack}/${a.slot}${serial ? `#${serial}` : ''}`;
+  `${mpiKey(a) ?? `${a.host.toLowerCase()}:${a.port ?? DEFAULT_PORT}/${a.rack}/${a.slot}`}${serial ? `#${serial}` : ''}`;
 
 /**
  * Se la finestra supera le righe concesse, taglia gli offset e la fine insieme: SAZ diventa
@@ -243,15 +243,7 @@ export class BlockStatusService {
   }
 
   private async open(access: PlcAccess): Promise<StatusClient> {
-    return this.connectFn({
-      host: access.host,
-      port: access.port ?? DEFAULT_PORT,
-      rack: access.rack,
-      slot: access.slot,
-      connectionType: CONNECTION_TYPES[access.connectionType],
-      ...(access.remoteTsap !== undefined ? { remoteTsap: access.remoteTsap } : {}),
-      timeoutMs: this.connectTimeoutMs,
-    });
+    return this.connectFn(connectOptions(access, this.connectTimeoutMs));
   }
 
   async start(owner: PlcOwner, raw: unknown): Promise<PlcStatusStartResult> {

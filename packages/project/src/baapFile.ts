@@ -12,6 +12,7 @@ import {
   type Udt,
   type WatchTable,
 } from './model';
+import { MPI_BUS_SPEEDS, MPI_HIGHEST_ADDRESSES } from './plcAccess';
 
 export type BaapErrorCode =
   'NOT_ZIP' | 'MISSING_MANIFEST' | 'INVALID_JSON' | 'INVALID_SCHEMA' | 'NEWER_FORMAT';
@@ -67,6 +68,8 @@ const memberSchema: z.ZodType<Member> = z.lazy(() =>
   }),
 );
 
+const mpiAddress = z.number().int().min(0).max(126);
+
 const deviceShape = {
   id,
   name: str,
@@ -92,6 +95,22 @@ const deviceShape = {
       slot: z.number().int().min(0).max(31),
       connectionType: z.enum(['PG', 'OP', 'S7_BASIC']),
       remoteTsap: z.number().int().min(0).max(0xffff).optional(),
+      link: z
+        .discriminatedUnion('kind', [
+          obj({ kind: z.literal('tcp') }),
+          obj({
+            kind: z.literal('mpi'),
+            port: z.string().min(1).max(255),
+            baudRate: z.number().int().positive(),
+            parity: z.enum(['odd', 'even', 'none']),
+            localAddress: mpiAddress,
+            cpuAddress: mpiAddress,
+            highestAddress: z.union(MPI_HIGHEST_ADDRESSES.map((n) => z.literal(n))),
+            busSpeed: z.enum(MPI_BUS_SPEEDS),
+            variant: z.enum(['auto', 'v1', 'v2']),
+          }),
+        ])
+        .optional(),
     }).optional(),
   }),
   groups: obj({ blocks: z.array(str), tags: z.array(str), types: z.array(str) }),

@@ -34,6 +34,40 @@ describe('CpuProperties.access', () => {
     expect(back.devices[0]!.properties.access).toEqual(p.devices[0]!.properties.access);
   });
 
+  const mpi = {
+    kind: 'mpi',
+    port: 'COM3',
+    baudRate: 38400,
+    parity: 'odd',
+    localAddress: 0,
+    cpuAddress: 2,
+    highestAddress: 31,
+    busSpeed: '187.5k',
+    variant: 'auto',
+  } as const;
+  const tcp = { host: '192.0.2.10', rack: 0, slot: 2, connectionType: 'PG' } as const;
+
+  it('access con link MPI si salva e si riapre uguale', () => {
+    const p = projectWithPlc();
+    p.devices[0]!.properties.access = { ...tcp, link: { ...mpi } };
+    const back = readBaap(writeBaap(p, { appVersion: '0.1.0' }));
+    expect(back.devices[0]!.properties.access).toEqual(p.devices[0]!.properties.access);
+  });
+
+  it('access senza link resta TCP (file vecchi)', () => {
+    const p = projectWithPlc();
+    p.devices[0]!.properties.access = { ...tcp };
+    const back = readBaap(writeBaap(p, { appVersion: '0.1.0' }));
+    expect(back.devices[0]!.properties.access).toEqual(tcp);
+    expect(back.devices[0]!.properties.access?.link).toBeUndefined();
+  });
+
+  it('con MPI un host vuoto non dà avvisi', () => {
+    const d = projectWithPlc().devices[0]!;
+    d.properties.access = { ...tcp, host: '', link: { ...mpi } };
+    expect(checkDevice(d, cpu315pn).filter((x) => x.property === 'access.host')).toHaveLength(0);
+  });
+
   it('un file senza access si apre', () => {
     const p = projectWithPlc();
     const back = readBaap(writeBaap(p, { appVersion: '0.1.0' }));
@@ -56,6 +90,16 @@ describe('CpuProperties.access', () => {
     ],
     ['host troppo lungo', { host: 'a'.repeat(65), rack: 0, slot: 2, connectionType: 'PG' }],
     ['porta fuori campo', { host: 'h', port: 0, rack: 0, slot: 2, connectionType: 'PG' }],
+    ['link sconosciuto', { ...tcp, link: { kind: 'usb' } }],
+    ['indirizzo CPU oltre 126', { ...tcp, link: { ...mpi, cpuAddress: 127 } }],
+    ['indirizzo locale negativo', { ...tcp, link: { ...mpi, localAddress: -1 } }],
+    ['HSA non ammesso', { ...tcp, link: { ...mpi, highestAddress: 30 } }],
+    ['velocità del bus sconosciuta', { ...tcp, link: { ...mpi, busSpeed: '12M' } }],
+    ['parità sconosciuta', { ...tcp, link: { ...mpi, parity: 'mark' } }],
+    ['baud rate non intero', { ...tcp, link: { ...mpi, baudRate: 9600.5 } }],
+    ['baud rate zero', { ...tcp, link: { ...mpi, baudRate: 0 } }],
+    ['porta seriale vuota', { ...tcp, link: { ...mpi, port: '' } }],
+    ['variante sconosciuta', { ...tcp, link: { ...mpi, variant: 'v3' } }],
   ])('access malformato (%s): INVALID_SCHEMA', (_n, access) => {
     const p = projectWithPlc();
     (p.devices[0]!.properties as unknown as Record<string, unknown>).access = access;

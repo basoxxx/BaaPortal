@@ -1,5 +1,12 @@
 import type { IpcMainInvokeEvent } from 'electron';
-import { listSerialPorts } from '@baaportal/s7comm/node';
+import { listMpiNodes } from '@baaportal/s7comm';
+import { listSerialPorts, openSerial } from '@baaportal/s7comm/node';
+import {
+  MPI_BUS_SPEEDS,
+  MPI_HIGHEST_ADDRESSES,
+  type MpiBusSpeed,
+  type PlcLink,
+} from '@baaportal/project';
 import type {
   PlcAccess,
   PlcClockResult,
@@ -20,6 +27,7 @@ import type {
   PlcStacksResult,
   PlcRestorePlanResult,
   PlcRestoreResult,
+  PlcMpiNodesResult,
 } from '@baaportal/ui';
 import { BlockStatusService } from './blockStatus';
 import { memoryJobStore, type TisJobStore } from './tisJobs';
@@ -50,7 +58,13 @@ function int(v: unknown, min: number, max: number): v is number {
 export function parsePlcAccess(raw: unknown): PlcAccess | string {
   if (typeof raw !== 'object' || raw === null) return 'Dati di accesso non validi';
   const r = raw as Record<string, unknown>;
-  if (typeof r['host'] !== 'string' || r['host'].length === 0 || r['host'].length > 255) {
+  const mpi =
+    typeof r['link'] === 'object' &&
+    r['link'] !== null &&
+    'kind' in r['link'] &&
+    r['link'].kind === 'mpi';
+  // Con l'adattatore MPI l'host non si usa: può restare vuoto.
+  if (typeof r['host'] !== 'string' || (!mpi && r['host'].length === 0) || r['host'].length > 255) {
     return 'Indirizzo non valido';
   }
   if (r['port'] !== undefined && !int(r['port'], 1, 65535)) return 'Porta non valida';
@@ -68,7 +82,75 @@ export function parsePlcAccess(raw: unknown): PlcAccess | string {
   };
   if (r['port'] !== undefined) out.port = r['port'] as number;
   if (r['remoteTsap'] !== undefined) out.remoteTsap = r['remoteTsap'] as number;
+  if (r['link'] !== undefined) {
+    const link = parseLink(r['link']);
+    if (typeof link === 'string') return link;
+    out.link = link;
+  }
   return out;
+}
+
+/** Stessi intervalli dello schema del file `.baap`. */
+function parseLink(raw: unknown): PlcLink | string {
+  if (typeof raw !== 'object' || raw === null) return 'Tipo di collegamento non valido';
+  const l = raw as Record<string, unknown>;
+  if (l['kind'] === 'tcp') return { kind: 'tcp' };
+  if (l['kind'] !== 'mpi') return 'Tipo di collegamento non valido';
+  const port = l['port'];
+  if (typeof port !== 'string' || port.length === 0 || port.length > 255) {
+    return 'Porta seriale non valida';
+  }
+  if (!int(l['baudRate'], 1, Number.MAX_SAFE_INTEGER)) return 'Velocità di trasmissione non valida';
+  const parity = l['parity'];
+  if (parity !== 'odd' && parity !== 'even' && parity !== 'none') return 'Parità non valida';
+  if (!int(l['localAddress'], 0, 126) || !int(l['cpuAddress'], 0, 126)) {
+    return 'Indirizzo MPI non valido';
+  }
+  const hsa = l['highestAddress'];
+  if (!(MPI_HIGHEST_ADDRESSES as readonly unknown[]).includes(hsa)) {
+    return 'Indirizzo più alto (HSA) non valido';
+  }
+  const busSpeed = l['busSpeed'];
+  if (!(MPI_BUS_SPEEDS as readonly unknown[]).includes(busSpeed)) {
+    return 'Velocità del bus non valida';
+  }
+  const variant = l['variant'];
+  if (variant !== 'auto' && variant !== 'v1' && variant !== 'v2') return 'Variante MPI non valida';
+  return {
+    kind: 'mpi',
+    port,
+    baudRate: l['baudRate'] as number,
+    parity,
+    localAddress: l['localAddress'] as number,
+    cpuAddress: l['cpuAddress'] as number,
+    highestAddress: hsa as number,
+    busSpeed: busSpeed as MpiBusSpeed,
+    variant,
+  };
+}
+
+/** «Cerca» sul bus MPI: apre l'adattatore, legge i nodi attivi e lo chiude. Mai eccezioni. */
+export async function mpiNodes(
+  raw: unknown,
+  list: typeof listMpiNodes = listMpiNodes,
+): Promise<PlcMpiNodesResult> {
+  const link = parseLink(raw);
+  if (typeof link === 'string') return { ok: false, error: link };
+  if (link.kind !== 'mpi') return { ok: false, error: 'Tipo di collegamento non valido' };
+  try {
+    const nodes = await list(
+      openSerial({ path: link.port, baudRate: link.baudRate, parity: link.parity }),
+      {
+        localAddress: link.localAddress,
+        highestAddress: link.highestAddress,
+        busSpeed: link.busSpeed,
+        variant: link.variant,
+      },
+    );
+    return { ok: true, nodes };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 /** Canali del collegamento online; il servizio tiene un collegamento per finestra (`e.sender`). */
@@ -106,6 +188,7 @@ export function registerPlc(
   // Ricerca: parte solo da questo canale, su richiesta; l'indirizzo deve essere di un'interfaccia reale.
   handle('plc:interfaces', () => scans.listInterfaces());
   handle('plc:serialPorts', () => listSerialPorts());
+  handle('plc:mpiNodes', (_e, raw) => mpiNodes(raw));
   handle('plc:scanStart', (e, address): PlcScanStartResult => {
     if (typeof address !== 'string') return { ok: false, error: 'Indirizzo non valido' };
     return scans.start(e.sender, address);

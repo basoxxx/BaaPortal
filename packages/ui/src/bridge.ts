@@ -8,6 +8,8 @@ import type {
   DiagPart,
   NetInterface,
   SerialPortInfo,
+  MpiLink,
+  PlcMpiNodesResult,
   PlcClockRequest,
   PlcClockResult,
   PlcDiagResult,
@@ -164,6 +166,8 @@ export interface BaaBridge {
   plcInterfaces(): Promise<NetInterface[]>;
   /** Porte seriali del PC, per l'adattatore MPI. */
   plcSerialPorts(): Promise<SerialPortInfo[]>;
+  /** Nodi del bus MPI dall'adattatore su `link.port`; `cpuAddress` non conta. */
+  plcMpiNodes(link: MpiLink): Promise<PlcMpiNodesResult>;
   /** `address` è l'indirizzo di una delle interfacce restituite da `plcInterfaces`. */
   plcScanStart(address: string): Promise<PlcScanStartResult>;
   plcScanCancel(): Promise<void>;

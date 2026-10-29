@@ -66,6 +66,7 @@ const bridge: RawBridge = {
   onPlcEvent: (cb) => subscribe<[PlcEvent]>('plc:event', cb),
   plcInterfaces: () => ipcRenderer.invoke('plc:interfaces'),
   plcSerialPorts: () => ipcRenderer.invoke('plc:serialPorts'),
+  plcMpiNodes: (link) => ipcRenderer.invoke('plc:mpiNodes', link),
   plcScanStart: (address) => ipcRenderer.invoke('plc:scanStart', address),
   plcScanCancel: () => ipcRenderer.invoke('plc:scanCancel'),
   onPlcScanEvent: (cb) => subscribe<[PlcScanEvent]>('plc:scanEvent', cb),
