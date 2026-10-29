@@ -16,6 +16,9 @@ export interface ProjectMeta {
 
 export type Language = 'AWL' | 'KOP' | 'FUP' | 'SCL';
 
+/** KOP e FUP condividono il modello grafico (`networks[i].lad`): cambia solo il linguaggio dichiarato. */
+export const isGraphic = (l: Language): l is 'KOP' | 'FUP' => l === 'KOP' || l === 'FUP';
+
 export interface CpuProperties {
   comment: string;
   pn?: { ipAddress: string; subnetMask: string; useRouter: boolean; routerAddress: string };

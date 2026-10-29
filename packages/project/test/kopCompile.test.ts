@@ -4,8 +4,12 @@ import type { LadElem, LadNetwork } from '@baaportal/ladfbd';
 import { describe, expect, it } from 'vitest';
 import {
   blockToMc7File,
+  blockSources,
   createCodeBlock,
+  createProject,
+  readBaap,
   sourceHashOf,
+  writeBaap,
   type CodeBlock,
   type PlcDevice,
 } from '../src/index';
@@ -90,5 +94,44 @@ describe('blocchi KOP compilati dall AWL generato', () => {
     cpu.memory.physIn[0] = 0b01;
     cpu.cycle();
     expect(cpu.memory.physOut[4]! & 1).toBe(0);
+  });
+});
+
+describe('FUP come vista del modello KOP', () => {
+  const pair = (): { dev: PlcDevice; kop: CodeBlock; fup: CodeBlock } => {
+    const dev = makeDevice(seq('k'));
+    const lad = andNet('I 0.0', 'I 0.1', 'Q 4.0');
+    const kop = kopFc(dev, 20, lad);
+    const fup = createCodeBlock({ kind: 'FC', number: 21, name: 'K20', language: 'FUP' });
+    fup.networks[0]!.lad = structuredClone(lad);
+    dev.blocks.push(fup);
+    return { dev, kop, fup };
+  };
+
+  it('stesso blocco in FUP e in KOP: stesse blockSources, MC7 diverso solo nel byte di linguaggio', () => {
+    const { dev, kop, fup } = pair();
+    expect(blockSources(fup, dev)).toEqual(blockSources(kop, dev));
+    const a = readBlockFile(blockToMc7File(kop, dev, cpu315pn, now).file!);
+    const rf = blockToMc7File(fup, dev, cpu315pn, now);
+    expect(rf.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
+    const b = readBlockFile(rf.file!);
+    expect(a.header.language).toBe(0x02);
+    expect(b.header.language).toBe(0x03);
+    expect(b.mc7).toEqual(a.mc7);
+    const rest = (h: typeof a.header) => ({ ...h, language: 0, number: 0, raw: undefined });
+    expect(rest(b.header)).toEqual(rest(a.header));
+  });
+
+  it('un .baap con un blocco FUP si salva, si rilegge e si compila', () => {
+    const { dev, fup } = pair();
+    const p = createProject({ name: 'X', author: '', comment: '' }, now);
+    p.devices.push(dev);
+    const back = readBaap(writeBaap(p, { appVersion: '1.0.0' }));
+    const d2 = back.devices[0]!;
+    const f2 = d2.blocks.find((b) => b.id === fup.id) as CodeBlock;
+    expect(f2.language).toBe('FUP');
+    const r = blockToMc7File(f2, d2, cpu315pn, now);
+    expect(r.diagnostics.map((d) => d.code)).not.toContain('LINGUAGGIO_NON_COMPILABILE');
+    expect(readBlockFile(r.file!).header.language).toBe(0x03);
   });
 });

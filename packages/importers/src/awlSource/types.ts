@@ -4,7 +4,6 @@ import type {
   DbAttributes,
   BlockHeader,
   GlobalDb,
-  Language,
   Member,
   ObjectRef,
   Udt,
@@ -89,8 +88,7 @@ export type GenerateWarning =
       /** Percorsi dei membri, es. `T1`, `Gruppo.Asse`. */
       members: string[];
     }
-  | { kind: 'language'; ref: ObjectRef; name: string; language: Language }
-  /** Blocco KOP con errori: l'AWL generato sarebbe incompleto, quindi non si scrive. */
+  /** Blocco KOP, FUP o SCL con errori: l'AWL generato sarebbe incompleto, quindi non si scrive. */
   | { kind: 'kop'; ref: ObjectRef; name: string };
 
 export interface GeneratedSource {

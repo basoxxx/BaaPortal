@@ -7,6 +7,7 @@ import { emptyNetwork, type LadNetwork } from '@baaportal/ladfbd';
 import {
   createAwlContext,
   findDevice,
+  isGraphic,
   kopCallParams,
   kopSources,
   type CodeBlock,
@@ -16,10 +17,13 @@ import {
 import { CommitInput, CommitTextarea } from '../../components/CommitField';
 import { ContextMenu } from '../../components/ContextMenu';
 import { AwlEditor, type AwlEditorHandle } from '../awl/AwlEditor';
+import { CommittedEditor } from '../awl/CommittedEditor';
+import { sourceCodec } from '../source/sourceExtensions';
 import { displayText } from '../awl/awlExtensions';
 import { monitorLinesByNetwork, monitorLinesFromPlc } from '../awl/monitorExtension';
 import { plcMonitorFor } from '../../online/plcMonitor';
 import { offsetOfLineCol } from '../../project/navigation/sourceActions';
+import { FupNetworkView } from '../fbd/FupNetworkView';
 import { LadNetworkEditor } from '../lad/LadNetworkEditor';
 import { setLadActive } from '../lad/ladActive';
 import { callInstanceOf } from './callInstance';
@@ -56,7 +60,9 @@ export function NetworksView({ deviceId, blockId }: Props) {
   const dev = useAppStore((s) => (s.doc ? findDevice(s.doc.project, deviceId) : undefined));
   const [mnemonic] = useMnemonic();
   const isAwl = block?.language === 'AWL';
-  const isKop = block?.language === 'KOP';
+  const isKop = block ? isGraphic(block.language) : false;
+  const isScl = block?.language === 'SCL';
+  const isFup = block?.language === 'FUP';
   // Il contesto del controllo si rifà a ogni revisione del dispositivo, non a ogni tasto.
   const awlCtx = useMemo(
     () =>
@@ -65,8 +71,8 @@ export function NetworksView({ deviceId, blockId }: Props) {
   );
   // Segmenti KOP: la sorgente generata di ognuno, con le righe per elemento e le diagnostiche.
   const kop = useMemo(
-    () => (block && dev && isKop ? kopSources(block, dev) : null),
-    [block, dev, isKop],
+    () => (block && dev && (isKop || isScl) ? kopSources(block, dev) : null),
+    [block, dev, isKop, isScl],
   );
   const callParams = useMemo(
     () => (block && dev && isKop ? kopCallParams(block, dev) : undefined),
@@ -188,19 +194,24 @@ export function NetworksView({ deviceId, blockId }: Props) {
       n.lad = next;
       refreshKopSources(b, d);
     });
+  // Stesso cambio del comando block.switchLanguage, ma sul blocco di questa vista (non del riquadro con il fuoco).
+  const switchLanguage = () =>
+    edit('history.switchLanguage', (b) => {
+      b.language = b.language === 'KOP' ? 'FUP' : 'KOP';
+    });
   const insert = () =>
     edit('history.addNetwork', (b, d) => {
       const fresh: Network = { id: newId(), title: '', comment: '', source: '' };
-      if (b.language === 'KOP') fresh.lad = emptyNetwork(newId);
+      if (isGraphic(b.language)) fresh.lad = emptyNetwork(newId);
       const at = b.networks.findIndex((x) => x.id === focusedId);
       b.networks.splice(at < 0 ? b.networks.length : at + 1, 0, fresh);
-      if (b.language === 'KOP') refreshKopSources(b, d);
+      if (isGraphic(b.language)) refreshKopSources(b, d);
     });
   const remove = (id: string) =>
     edit('history.deleteNetwork', (b, d) => {
       if (b.networks.length <= 1) return;
       b.networks = b.networks.filter((x) => x.id !== id);
-      if (b.language === 'KOP') refreshKopSources(b, d);
+      if (isGraphic(b.language)) refreshKopSources(b, d);
     });
 
   const networks = block?.networks;
@@ -340,6 +351,11 @@ export function NetworksView({ deviceId, blockId }: Props) {
         </label>
       </div>
       <h4 className="baa-block-networks-title">{t('block.networks')}</h4>
+      {isKop ? (
+        <button type="button" className="baa-panel-btn" disabled={locked} onClick={switchLanguage}>
+          {t(isFup ? 'block.toKop' : 'block.toFup')}
+        </button>
+      ) : null}
       {block.networks.map((n, i) => (
         <section
           key={n.id}
@@ -384,16 +400,28 @@ export function NetworksView({ deviceId, blockId }: Props) {
           {isKop ? (
             n.lad || n.source === '' ? (
               <>
-                <LadNetworkEditor
-                  net={n.lad ?? placeholder(n.id)}
-                  index={i}
-                  diagnostics={kopMessages[i]?.byElem ?? NO_MESSAGES}
-                  readOnly={locked}
-                  onChange={(next, key) => editLad(n.id, next, key)}
-                  callParams={callParams}
-                  onActive={(api, on) => setLadActive(api, on, { deviceId, blockId })}
-                  callOfDrop={(raw) => callInstanceOf(dev, raw)}
-                />
+                {isFup ? (
+                  <>
+                    <FupNetworkView
+                      net={n.lad ?? placeholder(n.id)}
+                      diagnostics={kopMessages[i]?.byElem ?? NO_MESSAGES}
+                      readOnly={locked}
+                      onChange={(next) => editLad(n.id, next, 'history.editLad')}
+                    />
+                    <p className="baa-raw-hint">{t('lad.fupHint')}</p>
+                  </>
+                ) : (
+                  <LadNetworkEditor
+                    net={n.lad ?? placeholder(n.id)}
+                    index={i}
+                    diagnostics={kopMessages[i]?.byElem ?? NO_MESSAGES}
+                    readOnly={locked}
+                    onChange={(next, key) => editLad(n.id, next, key)}
+                    callParams={callParams}
+                    onActive={(api, on) => setLadActive(api, on, { deviceId, blockId })}
+                    callOfDrop={(raw) => callInstanceOf(dev, raw)}
+                  />
+                )}
                 <button
                   type="button"
                   className="baa-panel-btn"
@@ -453,13 +481,20 @@ export function NetworksView({ deviceId, blockId }: Props) {
             </div>
           ) : isKop ? null : (
             <div className="baa-network-source" title={t('block.sourceHint')}>
-              <CommitTextarea
+              <CommittedEditor
                 value={n.source}
+                codec={sourceCodec}
                 readOnly={locked}
-                rows={6}
                 aria-label={`${t('block.source')} ${i + 1}`}
                 onCommit={(v) => editNetwork(n.id, 'source', v)}
               />
+              <ul className="baa-awl-problems" aria-label={t('block.sclProblems')}>
+                {(kop?.[i]?.scl?.diagnostics ?? []).map((d, k) => (
+                  <li key={k} className="is-error">
+                    {t('block.sclProblemRow', { line: d.line, message: d.message })}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </section>
@@ -510,9 +545,11 @@ export function NetworksView({ deviceId, blockId }: Props) {
           </ul>
         </section>
       ) : null}
-      <button type="button" className="baa-block-insert" onClick={insert} disabled={locked}>
-        {t('block.insertNetwork')}
-      </button>
+      {isScl ? null : (
+        <button type="button" className="baa-block-insert" onClick={insert} disabled={locked}>
+          {t('block.insertNetwork')}
+        </button>
+      )}
       {menu ? (
         <ContextMenu
           x={menu.x}

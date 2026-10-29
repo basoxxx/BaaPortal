@@ -3,6 +3,7 @@ import { findOb, type CpuType } from '@baaportal/catalog';
 import { emptyNetwork } from '@baaportal/ladfbd';
 import { renameSymbolInCode, renameSymbolInWatchRows } from './codeRename';
 import { renameMemberWithOverrides } from './memberRename';
+import { isGraphic } from './model';
 import type {
   Block,
   BlockHeader,
@@ -123,7 +124,7 @@ export function createCodeBlock(a: {
         title: '',
         comment: '',
         source: '',
-        ...(a.language === 'KOP' ? { lad: emptyNetwork(newId) } : {}),
+        ...(isGraphic(a.language) ? { lad: emptyNetwork(newId) } : {}),
       },
     ],
   };

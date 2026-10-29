@@ -16,16 +16,17 @@ import {
 } from '@baaportal/project';
 import { sameName, validateS7Name } from '@baaportal/s7-types';
 import { Dialog } from '../../components/Dialog';
+import { useSettings } from '../../settings/settings';
 import { useAppStore, useServices } from '../../state/AppContext';
 import { ids as nodeIds } from '../navigation/treeIds';
 
 type Kind = 'OB' | 'FB' | 'FC' | 'DB';
 const KINDS: Kind[] = ['OB', 'FB', 'FC', 'DB'];
-const LANGUAGES: { id: Language; enabled: boolean }[] = [
-  { id: 'AWL', enabled: true },
-  { id: 'KOP', enabled: true },
-  { id: 'FUP', enabled: false },
-  { id: 'SCL', enabled: false },
+const LANGUAGES: { id: Language; experimental: boolean }[] = [
+  { id: 'AWL', experimental: false },
+  { id: 'KOP', experimental: false },
+  { id: 'FUP', experimental: true },
+  { id: 'SCL', experimental: true },
 ];
 /** Senza il tipo di CPU nel catalogo si ripiega sul massimo del formato. */
 const FALLBACK_MAX = 65535;
@@ -54,6 +55,7 @@ function BlockForm({
 }) {
   const { t } = useTranslation();
   const { store } = useServices();
+  const [settings] = useSettings();
   const fid = { name: useId(), lang: useId(), num: useId(), event: useId(), fb: useId() };
   const cpu = findCpu(device.cpu.typeId);
 
@@ -193,7 +195,11 @@ function BlockForm({
               onChange={(e) => setLanguage(e.target.value as Language)}
             >
               {LANGUAGES.map((l) => (
-                <option key={l.id} value={l.id} disabled={!l.enabled}>
+                <option
+                  key={l.id}
+                  value={l.id}
+                  disabled={l.experimental && !settings.online.experimental}
+                >
                   {l.id}
                 </option>
               ))}

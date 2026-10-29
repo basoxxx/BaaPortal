@@ -21,7 +21,7 @@ Guida breve all'editor a contatti (KOP, piano 4A). Un blocco KOP si disegna; Baa
 - Nessun box dentro un ramo parallelo né nella logica di un pin: un box va in serie sulla linea principale, o all'inizio di un ramo a T.
 - Cerca/Sostituisci e rinomina dei simboli non toccano i blocchi KOP.
 - Gli errori in _Problemi_ non si possono cliccare per saltare all'elemento.
-- Non si converte un segmento AWL in KOP (né il contrario) e non c'è l'editor FUP: arrivano nei piani 4B e 4C. Un segmento con solo AWL si vede in AWL, sola lettura.
+- Non si converte un segmento AWL in KOP (né il contrario): arriva nel piano 4C. Un segmento con solo AWL si vede in AWL, sola lettura. Il passaggio KOP ↔ FUP c'è, in prova (`docs/uso/fup-scl.md`).
 - Un blocco KOP con errori non entra nella sorgente AWL esportata.
 
 L'elenco completo delle scelte e dei limiti è in `docs/limiti-noti.md`, sezione _Editor KOP (piano 4A)_.

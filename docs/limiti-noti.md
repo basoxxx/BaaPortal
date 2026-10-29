@@ -8,8 +8,7 @@ Per ogni voce si indica che cosa succede oggi. "Errore chiaro" vuol dire che Baa
 
 - **Stato della tappa 1.** Tutti i punti della spec §9 sono fatti (piani 1A–1F) tranne uno: la conformità su CPU reale, che resta **in sospeso**. La spec §6 dice che la tappa 1 non si chiude senza i test di conformità su CPU reale: la tappa 1 resta quindi **formalmente aperta** e si chiude solo quando quelle prove saranno fatte.
 - **Prove di conformità su una CPU reale.** Ora esistono i mezzi (carica nel dispositivo ed esecuzione, piano 1D-bis), ma le prove restano **in sospeso**: non c'è una S7-300 non in produzione. Le farà l'amico dell'utente a prodotto finito. I blocchi compilati da BaaPortal non sono mai stati caricati né eseguiti su una CPU. Il simulatore della tappa 2 controllerà la coerenza interna, ma non sostituisce questa verifica (spec §10). Il punto di decisione della spec §11 resta aperto.
-- **Provenienza 1D-bis.** Scrittura di variabili, carica nel dispositivo e STOP/avvio esistono e sono verificati contro il finto PLC e contro i byte delle catture pubbliche (`cisa/snap7.pcap` per scrittura, stop e avvio a freddo; la cattura del download di un blocco). Il giro completo «la CPU accetta ed esegue un blocco compilato da BaaPortal» non è mai stato provato su una CPU reale (spec §10). Il riavvio a caldo è verificato solo in parte. Restano per la tappa 3 (R1, R3): `_DELE`, `_GARB`, `_MODU` (copia RAM→ROM), MRES, forzatura, impostazione dell'orologio, riavvio a freddo e a caldo, e l'interfaccia online dell'app.
-- **Scorciatoie della tappa 3 non collegate.** Ctrl+L (carica nel dispositivo), Ctrl+K (collegamento online) e Ctrl+M (interrompi collegamento online) non fanno ancora nulla: le funzioni online dell'interfaccia sono della tappa 3.
+- **Provenienza 1D-bis.** Scrittura di variabili, carica nel dispositivo e STOP/avvio esistono e sono verificati contro il finto PLC e contro i byte delle catture pubbliche (`cisa/snap7.pcap` per scrittura, stop e avvio a freddo; la cattura del download di un blocco). Il giro completo «la CPU accetta ed esegue un blocco compilato da BaaPortal» non è mai stato provato su una CPU reale (spec §10). Il riavvio a caldo è verificato solo in parte. Dopo i piani 3B e 3C sono fatti nell'app, ma **mai provati su una CPU reale**: `_DELE` (cancella blocchi), `_GARB` (comprimi), `_MODU` (copia RAM→ROM), STOP e avvio (RUN, con avviamento a caldo), impostazione dell'orologio e l'interfaccia online. **Non sono fatti**: MRES da remoto (pulsante disabilitato, vedi «Caricamento e confronto (piano 3B)»), l'avviamento a freddo dall'interfaccia e la forzatura (vedi «Osservazione online, stack e ripristino (piano 3D)»).
 
 ## Online (piano 3A)
 
@@ -158,7 +157,31 @@ Per ogni voce si indica che cosa succede oggi. "Errore chiaro" vuol dire che Baa
 - **Problemi non cliccabili.** Le voci del pannello _Problemi_ di un blocco KOP non portano all'elemento. Un errore senza elemento di riferimento compare solo nel pannello.
 - **Esportazione con KOP in errore.** «Genera sorgente AWL» salta i blocchi KOP con errori e lo segnala. Un blocco KOP il cui `source` non è aggiornato non si legge direttamente: contano il grafico e il codice generato da esso.
 - **Blocchi caricati con lingua `02`.** Un blocco letto dalla CPU con il byte di linguaggio KOP si importa come AWL, senza grafico.
-- **Niente conversione di linguaggio.** FUP e conversione AWL → KOP arrivano nei piani 4B e 4C; fino ad allora un segmento AWL in un blocco KOP si vede in sola lettura.
+- **Conversione solo KOP ↔ FUP.** La conversione AWL → KOP/FUP arriva nel piano 4C; fino ad allora un segmento AWL in un blocco KOP si vede in sola lettura.
+
+## FUP in prova (1.0.0)
+
+Si crea solo con _Funzioni sperimentali_ attive; un blocco FUP già esistente si apre sempre.
+
+- **Stesso modello del KOP.** Un blocco FUP salva le stesse reti di un blocco KOP e genera lo stesso AWL; cambia solo il linguaggio dichiarato. _Cambia linguaggio KOP/FUP_ (menu _Modifica_ o pulsante sopra i segmenti) passa dall'uno all'altro senza perdere nulla. Vale tutto ciò che è scritto per l'_Editor KOP_.
+- **Mai provato su una CPU reale.** Il byte di linguaggio dell'intestazione è `03`, preso come documentazione dalle costanti pubbliche di snap7 e mai verificato con STEP 7; come per il KOP non ci sono marcatori BLD.
+- **Nessun inserimento in FUP.** Nella vista FUP si seleziona, si modifica l'operando (doppio clic o Invio) e si cancella (Canc). Per aggiungere elementi si passa a KOP: la tavolozza e il trascinamento in FUP non inseriscono.
+- **Resa semplificata.** Un `NOT` è un cerchietto a sé, non fuso sull'entrata che segue. Un box in mezzo a una serie è una voce a sé e non riceve la logica precedente sul primo pin. Un ramo a T ripete la logica comune invece di dividere un solo riquadro. Niente griglia, niente frecce fra elementi (si usa Tab), niente selezione multipla.
+- **Niente osservazione** della vista FUP, né nel simulatore né online.
+- **Aspetto chiaro/scuro** non controllato a mano.
+
+## SCL in prova (1.0.0)
+
+Si crea solo con _Funzioni sperimentali_ attive. Il testo SCL si traduce in AWL (pacchetto `scl`), che si compila come gli altri blocchi.
+
+- **Mai provato su una CPU reale né confrontato con il compilatore SCL di STEP 7.** L'AWL generato è provato con il controllo AWL e nel simulatore. Il byte di linguaggio è `04`, non verificato con STEP 7.
+- **Solo istruzioni.** Il testo non ha intestazione `FUNCTION`/`VAR`: l'interfaccia è quella del blocco. Un solo testo per blocco.
+- **Sottoinsieme.** Tipi BOOL, INT, DINT, REAL. Operandi: variabili dell'interfaccia (con o senza `#`), simboli `"nome"`, indirizzi I/Q/M (bit, `W`, `D`; `B` no). Operatori `+ - * /`, `MOD` (solo DINT), meno unario, confronti, AND/`&`, OR, XOR, NOT. Istruzioni `:=`, IF/ELSIF/ELSE, CASE (valori ed elenchi), FOR (BY costante), WHILE, REPEAT, RETURN. Conversioni INT_TO_DINT, INT_TO_REAL, DINT_TO_REAL, ROUND, TRUNC.
+- **Fuori:** chiamate di FC/FB, ARRAY, STRUCT, STRING, TIME, BYTE/WORD/DWORD, EXIT/CONTINUE, `**`, intervalli nel CASE, costanti tipizzate o esadecimali (`16#FF`, `INT#5`), valore di ritorno di una FC, PI/PQ, DB, mnemonici tedeschi negli indirizzi. Nessuna conversione verso INT (un DINT non si assegna a un INT); nessun confronto fra BOOL (si usa XOR/NOT).
+- **FOR.** Il valore finale si calcola una volta sola. Al limite del tipo il ciclo esce e la variabile resta all'ultimo valore eseguito. Modificare la variabile dentro il ciclo non è controllato.
+- **Parentesi più del minimo.** Un AND dentro un OR va sempre fra parentesi, quindi il limite di 7 parentesi aperte di AWL («Espressione troppo annidata») può arrivare prima che in STEP 7.
+- **Errori.** Si riporta solo il primo errore; un `;` mancante si segnala sulla riga dopo. Gli errori del controllo AWL sul codice generato si riportano alla riga SCL solo nei messaggi di compilazione, non nell'editor.
+- **Editor semplice.** Niente evidenziazione, completamento né osservazione. La rinomina dei simboli non aggiorna il testo SCL. La scrittura negli ingressi di una FC non è controllata.
 
 ## Simulatore (piano 2A)
 

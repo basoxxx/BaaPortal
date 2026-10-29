@@ -199,21 +199,6 @@ describe("segmenti AWL con l'editor CodeMirror", () => {
   );
 
   it(
-    "i blocchi non AWL tengono l'area di testo del piano 1B",
-    async () => {
-      const k = createCodeBlock({ kind: 'FC', number: 5, name: 'Fup', language: 'FUP' });
-      await openEditor('block', k.id, (d) => void d.blocks.push(k));
-      expect(textbox().tagName).toBe('TEXTAREA');
-      expect(textbox().parentElement).toHaveAttribute(
-        'title',
-        expect.stringContaining('blocchi AWL'),
-      );
-      expect(screen.queryByRole('combobox', { name: 'Mnemonica' })).toBeNull();
-    },
-    T,
-  );
-
-  it(
     'CRLF: gli errori cadono sui caratteri giusti',
     async () => {
       const f = fb('Nastro');
@@ -360,6 +345,28 @@ describe("segmenti AWL con l'editor CodeMirror", () => {
       expect(b.networks[0]!.source).toContain('_001');
       expect(b.networks[1]!.source).toContain('_002');
       expect(b.networks.some((n) => n.source.includes('_003'))).toBe(false);
+    },
+    T,
+  );
+});
+
+describe('blocchi SCL in prova', () => {
+  it(
+    'un solo editor di testo, nessun aggiungi segmento, errori SCL sotto con la riga',
+    async () => {
+      const s = createCodeBlock({ kind: 'FC', number: 22, name: 'S', language: 'SCL' });
+      s.id = 'fc-S';
+      s.networks[0]!.source = '#x := #nonesiste;';
+      const app = await openEditor('block', s.id, (d) => void d.blocks.push(s));
+      expect(screen.getAllByRole('textbox', { name: /Codice del segmento/ })).toHaveLength(1);
+      expect(screen.queryByRole('button', { name: 'Inserisci segmento' })).toBeNull();
+      expect(screen.getByRole('list', { name: 'Problemi SCL' }).textContent).toMatch(/^Riga 1: /);
+      // La modifica si conferma all uscita dal focus, come per AWL.
+      const v = viewOf();
+      focus(v);
+      set(v, '#x := #a;');
+      act(() => v.contentDOM.blur());
+      expect(block(app, s.id).networks[0]!.source).toBe('#x := #a;');
     },
     T,
   );

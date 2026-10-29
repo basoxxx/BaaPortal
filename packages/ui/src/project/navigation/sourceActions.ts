@@ -341,17 +341,11 @@ function reportGenerateWarnings(store: StoreApi<AppState>, warnings: GenerateWar
             textKey: 'messages.sourceStartValuesSkipped',
             params: { name: w.name, members: listNames(w.members, ', ') },
           }
-        : w.kind === 'kop'
-          ? {
-              severity: 'warning',
-              textKey: 'messages.sourceKopSkipped',
-              params: { name: w.name },
-            }
-          : {
-              severity: 'warning',
-              textKey: 'messages.sourceLanguageSkipped',
-              params: { name: w.name, language: w.language },
-            },
+        : {
+            severity: 'warning',
+            textKey: 'messages.sourceKopSkipped',
+            params: { name: w.name },
+          },
     );
   }
   s.setInspectorTab('info');
@@ -372,14 +366,12 @@ export function generateSourceFromNodes(
   if (!sel || !dev || sel.refs.length === 0) return null;
   const { text, warnings } = generateAwlSource(dev, sel.refs, mnemonic);
   reportGenerateWarnings(store, warnings);
-  // Solo blocchi in altre lingue: niente da scrivere.
+  // Solo blocchi con errori: niente da scrivere.
   if (text === '') return null;
-  // Il nome è quello del primo oggetto scritto (un blocco in un'altra lingua non c'è); può avere
+  // Il nome è quello del primo oggetto scritto (un blocco saltato non c'è); può avere
   // caratteri che un nome di file non ammette.
   const skipped = new Set(
-    warnings.flatMap((w) =>
-      (w.kind === 'language' || w.kind === 'kop') && 'id' in w.ref ? [w.ref.id] : [],
-    ),
+    warnings.flatMap((w) => (w.kind === 'kop' && 'id' in w.ref ? [w.ref.id] : [])),
   );
   const firstRef = sel.refs.find((r) => !('id' in r) || !skipped.has(r.id)) ?? sel.refs[0]!;
   const first = nameOfRef(dev, firstRef).replace(/[\\/:*?"<>|]/g, '_') || t('source.defaultName');

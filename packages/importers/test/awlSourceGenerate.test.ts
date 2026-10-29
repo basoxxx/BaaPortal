@@ -80,12 +80,19 @@ describe('generateAwlSource', () => {
     );
   });
 
-  it('i blocchi SCL e FUP non si scrivono: avviso "lingua X"; un blocco KOP si scrive con l AWL generato', () => {
+  it('i blocchi SCL non si scrivono: avviso "lingua X"; un blocco KOP o FUP si scrive con l AWL generato', () => {
     const d = emptyDevice();
     const newId = seq('g');
     const scl = createCodeBlock({ kind: 'FB', number: 1, name: 'Calc', language: 'SCL', newId });
-    scl.networks[0]!.source = 'x := 1;';
+    scl.networks[0]!.source = '#nonesiste := 1;';
     const fup = createCodeBlock({ kind: 'FC', number: 2, name: 'Fu', language: 'FUP', newId });
+    fup.networks[0]!.lad = {
+      root: {
+        id: 'rf',
+        series: [{ id: 'cf', k: 'contact', neg: false, op: 'I 0.1' }],
+        outs: [{ id: 'of', k: 'coil', op: 'Q 4.1' }],
+      },
+    };
     const awl = createCodeBlock({ kind: 'FC', number: 3, name: 'Aw', language: 'AWL', newId });
     const kop = createCodeBlock({ kind: 'FC', number: 4, name: 'Ko', language: 'KOP', newId });
     kop.networks[0]!.lad = {
@@ -99,29 +106,19 @@ describe('generateAwlSource', () => {
     d.blocks.push(scl, fup, awl, kop, bad);
     const { text, warnings } = generateAwlSource(d, allRefs(d), 'international');
     expect(text).not.toContain('"Calc"');
-    expect(text).not.toContain('"Fu"');
+    expect(text).toContain('FUNCTION "Fu" : Void');
+    expect(text).toContain('= %Q4.1;');
     expect(text).toContain('FUNCTION "Aw" : Void');
     expect(text).toContain('FUNCTION "Ko" : Void');
     expect(text).toContain('A %I0.0;');
     expect(text).toContain('= %Q4.0;');
     expect(warnings).toEqual([
-      {
-        kind: 'language',
-        ref: { kind: 'block', deviceId: d.id, id: scl.id },
-        name: 'Calc',
-        language: 'SCL',
-      },
-      {
-        kind: 'language',
-        ref: { kind: 'block', deviceId: d.id, id: fup.id },
-        name: 'Fu',
-        language: 'FUP',
-      },
+      { kind: 'kop', ref: { kind: 'block', deviceId: d.id, id: scl.id }, name: 'Calc' },
       { kind: 'kop', ref: { kind: 'block', deviceId: d.id, id: bad.id }, name: 'Rotto' },
     ]);
     expect(text).not.toContain('"Rotto"');
-    // Solo blocchi non AWL: nessuna unità, testo vuoto.
-    expect(generateAwlSource(d, allRefs(d).slice(0, 2), 'international').text).toBe('');
+    // Solo un blocco SCL: nessuna unità, testo vuoto.
+    expect(generateAwlSource(d, allRefs(d).slice(0, 1), 'international').text).toBe('');
   });
 
   it('mnemonico tedesco richiesto', () => {

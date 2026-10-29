@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createProject } from '@baaportal/project';
+import { createCodeBlock, createProject, findDevice, type CodeBlock } from '@baaportal/project';
+import { plc } from './blockFixtures';
 import { commands, matchShortcut, type CommandContext } from '../src/commands/commands';
 import { handleShortcutKeydown } from '../src/commands/useShortcuts';
 import { createAppStore } from '../src/state/store';
@@ -196,5 +197,101 @@ describe('comandi Inserisci', () => {
     expect(store.getState().dialog).toEqual({ kind: 'addDevice' });
     store.getState().setDoc(null);
     expect(store.getState().dialog).toBeNull();
+  });
+});
+
+describe('scorciatoie online', () => {
+  it('Ctrl+K collega, Ctrl+M interrompe, Ctrl+L carica', () => {
+    expect(commands['online.goOnline'].shortcut).toBe('Mod+K');
+    expect(commands['online.goOffline'].shortcut).toBe('Mod+M');
+    expect(commands['online.download'].shortcut).toBe('Mod+L');
+  });
+
+  it('nessuna scorciatoia è ripetuta fra i comandi', () => {
+    const all = Object.values(commands).flatMap((c) => [c.shortcut, ...(c.altShortcuts ?? [])]);
+    const used = all.filter((s): s is string => !!s);
+    expect(new Set(used).size).toBe(used.length);
+  });
+
+  it("Ctrl+L dentro l'editor AWL raggiunge il comando di carica (la conferma)", () => {
+    const store = createAppStore();
+    const ctx = {
+      store,
+      service: {} as never,
+      bridge: { platform: 'win32' } as never,
+    } as CommandContext;
+    const cmd = commands['online.download'];
+    const orig = { isEnabled: cmd.isEnabled, run: cmd.run };
+    let runs = 0;
+    cmd.isEnabled = () => true;
+    cmd.run = () => {
+      runs++;
+    };
+    const editable = document.createElement('div');
+    editable.setAttribute('contenteditable', 'true');
+    const e = new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      ctrlKey: true,
+      key: 'l',
+    });
+    Object.defineProperty(e, 'target', { value: editable });
+    try {
+      expect(handleShortcutKeydown(e, ctx)).toBe(true);
+      expect(e.defaultPrevented).toBe(true);
+      expect(runs).toBe(1);
+    } finally {
+      cmd.isEnabled = orig.isEnabled;
+      cmd.run = orig.run;
+    }
+  });
+});
+
+describe('block.switchLanguage', () => {
+  function setup(language: 'KOP' | 'FUP' | 'AWL' | 'SCL') {
+    const store = createAppStore();
+    const project = createProject({ name: 'P', author: '', comment: '' }, new Date());
+    const dev = plc();
+    const b = createCodeBlock({ kind: 'FC', number: 1, name: 'B', language });
+    if (b.networks[0]) b.networks[0].lad = { root: { id: 'N', series: [], outs: [] } };
+    dev.blocks.push(b);
+    project.devices.push(dev);
+    store.getState().setDoc({
+      project,
+      filePath: '/p.baap',
+      dirty: false,
+      revision: 0,
+      savedRevision: 0,
+    });
+    store.getState().openEditor({ kind: 'block', deviceId: dev.id, objectId: b.id });
+    const ctx = { store, service: {} as never, bridge: {} as never } as CommandContext;
+    const cur = () =>
+      findDevice(store.getState().doc!.project, dev.id)!.blocks.find(
+        (x) => x.id === b.id,
+      ) as CodeBlock;
+    return { store, ctx, cur };
+  }
+
+  it('abilitato solo su un blocco KOP o FUP aperto', () => {
+    const on = { KOP: true, FUP: true, AWL: false, SCL: false } as const;
+    for (const lang of Object.keys(on) as (keyof typeof on)[])
+      expect(commands['block.switchLanguage'].isEnabled(setup(lang).store.getState())).toBe(
+        on[lang],
+      );
+    expect(commands['block.switchLanguage'].isEnabled(createAppStore().getState())).toBe(false);
+  });
+
+  it('KOP → FUP → KOP lascia i segmenti uguali; annulla e ripeti funzionano', () => {
+    const { store, ctx, cur } = setup('KOP');
+    const before = structuredClone(cur().networks);
+    void commands['block.switchLanguage'].run(ctx);
+    expect(cur().language).toBe('FUP');
+    void commands['block.switchLanguage'].run(ctx);
+    expect(cur().language).toBe('KOP');
+    expect(cur().networks).toEqual(before);
+    store.getState().undo();
+    expect(cur().language).toBe('FUP');
+    store.getState().redo();
+    expect(cur().language).toBe('KOP');
   });
 });

@@ -10,17 +10,24 @@ import {
   type LineOwner,
 } from '@baaportal/ladfbd';
 import { tempEndByte } from '@baaportal/mc7';
+import { sclToAwl, type SclAwl } from '@baaportal/scl';
 import { formatType, sameName, type TypedMember } from '@baaportal/s7-types';
 import { createAwlContext } from './awlContext';
 import { toTypedMembers } from './members';
-import type { CodeBlock, PlcDevice } from './model';
+import { isGraphic, type CodeBlock, type PlcDevice } from './model';
 
 /** Un parametro del blocco chiamato: direzione dall'interfaccia (RET_VAL è un'uscita). */
 export type KopCallParam = { name: string; dir: 'in' | 'out' | 'inout'; type: string };
-export type KopNetworkResult = { source: string; lines: LineOwner[]; diagnostics: LadDiag[] };
+export type KopNetworkResult = {
+  source: string;
+  lines: LineOwner[];
+  diagnostics: LadDiag[];
+  /** Solo in un blocco SCL: errori SCL e corrispondenza riga AWL → riga SCL. */
+  scl?: SclAwl;
+};
 
 const isKop = (block: CodeBlock, i: number): LadNetwork | undefined =>
-  block.language === 'KOP' ? block.networks[i]?.lad : undefined;
+  isGraphic(block.language) ? block.networks[i]?.lad : undefined;
 
 /** Primo byte L libero dopo i TEMP dichiarati: stesso calcolo del compilatore (`codeEnvironment`). */
 export function tempEnd(block: CodeBlock, dev: PlcDevice): number {
@@ -87,6 +94,17 @@ export function kopSources(block: CodeBlock, dev: PlcDevice): KopNetworkResult[]
     lines: [],
     diagnostics: [],
   });
+  if (block.language === 'SCL') {
+    const scl = sclToAwl(
+      block.networks[0]?.source ?? '',
+      createAwlContext(dev, block.id, undefined),
+      tempEnd(block, dev),
+    );
+    // Un solo testo nel segmento 0; gli altri segmenti (non creati dall'app) restano come sono.
+    return block.networks.map((_, i) =>
+      i === 0 ? { source: scl.source, lines: [], diagnostics: [], scl } : plain(i),
+    );
+  }
   if (nets.every((n) => n === null)) return block.networks.map((_, i) => plain(i));
   const ctx = createAwlContext(dev, block.id, undefined);
   const { networks } = blockToAwl(nets, tempEnd(block, dev), {

@@ -15,6 +15,8 @@ import { preparePlcDownload } from '../online/plcDownload';
 import { getSettings } from '../settings/settings';
 import { simControllerFor } from '../sim/simController';
 import { targetPlcId } from '../project/navigation/treeIds';
+import { isLockedImport } from '../editors/block/readOnlyImport';
+import { findDevice, isGraphic } from '@baaportal/project';
 
 export type CommandId =
   | 'project.new'
@@ -47,6 +49,7 @@ export type CommandId =
   | 'view.portal'
   | 'insert.device'
   | 'insert.block'
+  | 'block.switchLanguage'
   | 'online.goOnline'
   | 'online.goOffline'
   | 'online.compare'
@@ -95,6 +98,17 @@ const hasPlc = (s: AppState) => (s.doc?.project.devices.length ?? 0) > 0;
 /** PLC online e libero: nessun caricamento né altro comando della CPU in corso. */
 const plcFree = (s: AppState) =>
   s.online.status === 'on' && !s.online.downloading && !s.online.commanding && !s.online.restoring;
+/** Il blocco KOP o FUP aperto nel riquadro con il fuoco, se si può modificare. */
+function editableGraphicBlock(s: AppState) {
+  const wa = s.workArea;
+  const key = wa.panes[wa.focusedPane];
+  const e = wa.editors.find((x) => x.key === key);
+  if (!e || e.kind !== 'block' || !s.doc) return undefined;
+  const b = findDevice(s.doc.project, e.deviceId)?.blocks.find((x) => x.id === e.objectId);
+  return b && b.kind !== 'DB' && b.kind !== 'IDB' && isGraphic(b.language) && !isLockedImport(b)
+    ? { deviceId: e.deviceId, blockId: b.id }
+    : undefined;
+}
 const always = () => true;
 const never = () => false;
 const noop = () => {};
@@ -256,13 +270,27 @@ const list: Command[] = [
       if (deviceId) store.getState().openDialog({ kind: 'addBlock', deviceId });
     },
   }),
+  def('block.switchLanguage', {
+    isEnabled: (s) => editableGraphicBlock(s) !== undefined,
+    run: ({ store }) => {
+      const t = editableGraphicBlock(store.getState());
+      if (!t) return;
+      store.getState().edit('history.switchLanguage', (p) => {
+        const b = findDevice(p, t.deviceId)?.blocks.find((x) => x.id === t.blockId);
+        if (b && b.kind !== 'DB' && b.kind !== 'IDB')
+          b.language = b.language === 'KOP' ? 'FUP' : 'KOP';
+      });
+    },
+  }),
   def('online.goOnline', {
+    shortcut: 'Mod+K',
     icon: 'goOnline',
     isEnabled: (s) => hasPlc(s) && s.sim.phase === 'off' && s.online.status === 'off',
     isChecked: (s) => s.online.status !== 'off',
     run: ({ store, bridge }) => plcControllerFor(store, bridge).goOnline(),
   }),
   def('online.goOffline', {
+    shortcut: 'Mod+M',
     icon: 'goOffline',
     isEnabled: (s) => s.online.status !== 'off',
     run: ({ store, bridge }) => plcControllerFor(store, bridge).goOffline(),
@@ -278,6 +306,7 @@ const list: Command[] = [
     run: ({ store }) => simControllerFor(store).toggle(),
   }),
   def('online.download', {
+    shortcut: 'Mod+L',
     icon: 'download',
     // Le due strade sono esclusive: col PLC online si carica nella CPU, con la simulazione nel simulatore.
     isEnabled: (s) =>

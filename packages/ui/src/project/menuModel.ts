@@ -48,6 +48,8 @@ export const MENUS: MenuDef[] = [
       'sep',
       'edit.compile',
       'edit.compileFull',
+      'sep',
+      'block.switchLanguage',
     ],
   },
   {
