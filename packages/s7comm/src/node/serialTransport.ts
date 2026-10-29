@@ -1,4 +1,4 @@
-import { SerialPort } from 'serialport';
+import type { SerialPort as SerialPortClass } from 'serialport';
 import { S7Error } from '../errors';
 import type { PduLinkFactory } from '../link';
 import { listMpiNodes, mpiAdapterLink, type MpiOptions, type SerialOpener } from '../mpi/adapter';
@@ -49,6 +49,18 @@ async function lease(path: string, timeoutMs: number): Promise<() => void> {
   return release;
 }
 
+/** `serialport` si carica al primo uso: se il modulo nativo manca, l'app parte lo stesso e fallisce solo l'MPI. */
+async function serialPortClass(): Promise<typeof SerialPortClass> {
+  try {
+    return (await import('serialport')).SerialPort;
+  } catch (e) {
+    throw new S7Error(
+      'SERIAL_OPEN',
+      `porta seriale non disponibile su questo computer (${e instanceof Error ? e.message : String(e)})`,
+    );
+  }
+}
+
 /**
  * Trasporto su porta seriale (adattatore MPI/USB), 8 bit di dati e 1 di stop. Carica `serialport`
  * solo nel main. Interno a questa cartella: fuori si usano `mpiSerialLink` e `listMpiNodesSerial`.
@@ -56,6 +68,7 @@ async function lease(path: string, timeoutMs: number): Promise<() => void> {
  */
 export function openSerial(o: SerialSettings): SerialOpener {
   return async (timeoutMs = 5000) => {
+    const SerialPort = await serialPortClass();
     const release = await lease(o.path, timeoutMs);
     return new Promise<Transport>((resolve, reject) => {
       const port = new SerialPort({
@@ -144,7 +157,7 @@ function openError(path: string, err: Error): S7Error {
 }
 
 export async function listSerialPorts(): Promise<SerialPortEntry[]> {
-  const list = await SerialPort.list();
+  const list = await (await serialPortClass()).list();
   return list.map(({ path, manufacturer, vendorId, productId }) => ({
     path,
     manufacturer,
