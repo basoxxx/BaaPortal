@@ -96,6 +96,12 @@
     "importSkipped": "{{file}}: skipped ({{reason}})",
     "importReadOnly": "Block {{name}} was imported read-only: it cannot be re-encoded identically.",
     "importWarning": "Import: {{message}}",
+    "graphicConvert": {
+      "SHAPE": "{{block}}: there are no LAD/FBD networks to convert.",
+      "JUMPS": "{{block}}: unchanged, after the conversion a jump would reach a different instruction.",
+      "NOT_COMPILABLE": "{{block}}: unchanged, the block does not compile (needed to check that the MC7 code stays the same).",
+      "MC7_DIFFERS": "{{block}}: unchanged, the compiled MC7 code would change."
+    },
     "awlConvert": {
       "SHAPE": "{{block}}, network {{network}}: stays AWL, no LAD/FBD network gives the same instructions (recognised up to line {{line}}).",
       "SYNTAX": "{{block}}, network {{network}}: stays AWL, the code has errors.",
@@ -186,6 +192,7 @@
     "insert.block": "New block…",
     "block.switchLanguage": "Switch language LAD/FBD",
     "block.convertToGraphic": "Convert to LAD/FBD",
+    "block.convertToAwl": "Convert to STL",
     "online.goOnline": "Go online",
     "online.compare": "Compare with CPU",
     "online.goOffline": "Go offline",
@@ -521,6 +528,7 @@
     "addBlock": "Add block",
     "switchLanguage": "Switch language",
     "convertToGraphic": "Convert to LAD/FBD",
+    "convertToAwl": "Convert to STL",
     "addTagTable": "Add tag table",
     "addUdt": "Add data type",
     "paste": "Paste objects",
@@ -899,6 +907,7 @@
     "removeOverrideLabel": "Remove the value of {{path}}",
     "deleteNetwork": "Delete network",
     "convertNetwork": "Convert to LAD/FBD",
+    "convertNetworkToAwl": "Convert to STL",
     "instanceFbMissing": "The instance DB refers to FB {{name}}, which does not exist",
     "problems": "Problems",
     "mnemonic": "Mnemonics",

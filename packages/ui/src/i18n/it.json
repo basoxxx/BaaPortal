@@ -96,6 +96,12 @@
     "importSkipped": "{{file}}: saltato ({{reason}})",
     "importReadOnly": "Il blocco {{name}} è stato importato in sola lettura: non si può ricodificare identico.",
     "importWarning": "Importazione: {{message}}",
+    "graphicConvert": {
+      "SHAPE": "{{block}}: non ci sono segmenti KOP/FUP da convertire.",
+      "JUMPS": "{{block}}: resta com'è, dopo la conversione un salto porterebbe a un'istruzione diversa.",
+      "NOT_COMPILABLE": "{{block}}: resta com'è, il blocco non si compila (serve per controllare che il codice MC7 non cambi).",
+      "MC7_DIFFERS": "{{block}}: resta com'è, il codice MC7 compilato cambierebbe."
+    },
     "awlConvert": {
       "SHAPE": "{{block}}, segmento {{network}}: resta in AWL, nessuna rete KOP/FUP dà le stesse istruzioni (riconosciuto fino alla riga {{line}}).",
       "SYNTAX": "{{block}}, segmento {{network}}: resta in AWL, il codice ha errori.",
@@ -186,6 +192,7 @@
     "insert.block": "Nuovo blocco…",
     "block.switchLanguage": "Cambia linguaggio KOP/FUP",
     "block.convertToGraphic": "Converti in KOP/FUP",
+    "block.convertToAwl": "Converti in AWL",
     "online.goOnline": "Collegamento online",
     "online.compare": "Confronta con la CPU",
     "online.goOffline": "Interrompi collegamento online",
@@ -521,6 +528,7 @@
     "addBlock": "Aggiungi blocco",
     "switchLanguage": "Cambia linguaggio",
     "convertToGraphic": "Converti in KOP/FUP",
+    "convertToAwl": "Converti in AWL",
     "addTagTable": "Aggiungi tabella delle variabili",
     "addUdt": "Aggiungi tipo di dati",
     "paste": "Incolla oggetti",
@@ -899,6 +907,7 @@
     "removeOverrideLabel": "Rimuovi il valore di {{path}}",
     "deleteNetwork": "Elimina segmento",
     "convertNetwork": "Converti in KOP/FUP",
+    "convertNetworkToAwl": "Converti in AWL",
     "instanceFbMissing": "Il DB di istanza si riferisce all'FB {{name}}, che non esiste",
     "problems": "Problemi",
     "mnemonic": "Mnemonica",

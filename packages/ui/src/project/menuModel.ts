@@ -51,6 +51,7 @@ export const MENUS: MenuDef[] = [
       'sep',
       'block.switchLanguage',
       'block.convertToGraphic',
+      'block.convertToAwl',
     ],
   },
   {

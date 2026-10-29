@@ -29,7 +29,7 @@ import { LadNetworkEditor } from '../lad/LadNetworkEditor';
 import { setLadActive } from '../lad/ladActive';
 import type { LadMonitor } from '../lad/ladMonitor';
 import { callInstanceOf } from './callInstance';
-import { convertAwl } from './convertAwl';
+import { convertAwl, convertToAwl } from './convertAwl';
 import { hasRawLines, isLockedImport, lockedBannerKey } from './readOnlyImport';
 import { useMnemonic } from '../awl/mnemonicPreference';
 import { useAppStore, useServices } from '../../state/AppContext';
@@ -363,6 +363,16 @@ export function NetworksView({ deviceId, blockId }: Props) {
       run: () => convertAwl(store, deviceId, blockId, at),
     };
   };
+  /** Voce del menu di un segmento grafico: diventa un segmento AWL modificabile. */
+  const toAwlItem = (id: string) => {
+    const at = block.networks.findIndex((x) => x.id === id);
+    return {
+      id: 'convertToAwl',
+      label: t('block.convertNetworkToAwl'),
+      disabled: locked || !block.networks[at]?.lad,
+      run: () => convertToAwl(store, deviceId, blockId, at),
+    };
+  };
   const onDraft = (n: Network, text: string) => {
     if (text === shown(n.source, mnemonic)) drafts.current.delete(n.id);
     else drafts.current.set(n.id, { base: n.source, mnemonic, text });
@@ -627,7 +637,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
           anchor={menu.anchor}
           label={t('block.networkMenu')}
           items={[
-            ...(isKop ? [convertItem(menu.id)] : []),
+            ...(isKop ? [convertItem(menu.id), toAwlItem(menu.id)] : []),
             {
               id: 'delete',
               label: t('block.deleteNetwork'),

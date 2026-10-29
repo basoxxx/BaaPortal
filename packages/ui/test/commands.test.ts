@@ -3,6 +3,7 @@ import { createCodeBlock, createProject, findDevice, type CodeBlock } from '@baa
 import { plc } from './blockFixtures';
 import { commands, matchShortcut, type CommandContext } from '../src/commands/commands';
 import { handleShortcutKeydown } from '../src/commands/useShortcuts';
+import { convertToAwl } from '../src/editors/block/convertAwl';
 import { createAppStore } from '../src/state/store';
 
 describe('matchShortcut', () => {
@@ -354,5 +355,75 @@ describe('block.convertToGraphic', () => {
     void cmd.run(ctx);
     expect(cur().language).toBe('KOP');
     expect(cur().networks.map((n) => n.lad !== undefined)).toEqual([true, false]);
+  });
+});
+
+describe('block.convertToAwl', () => {
+  function setup() {
+    const store = createAppStore();
+    const project = createProject({ name: 'P', author: '', comment: '' }, new Date());
+    const dev = plc();
+    const b = createCodeBlock({ kind: 'FC', number: 1, name: 'B', language: 'AWL' });
+    b.networks = ['A I 0.0\n= Q 4.0', 'A I 0.1\n= Q 4.1'].map((source, i) => ({
+      id: `n${i}`,
+      title: '',
+      comment: '',
+      source,
+    }));
+    dev.blocks.push(b);
+    project.devices.push(dev);
+    store.getState().setDoc({
+      project,
+      filePath: '/p.baap',
+      dirty: false,
+      revision: 0,
+      savedRevision: 0,
+    });
+    store.getState().openEditor({ kind: 'block', deviceId: dev.id, objectId: b.id });
+    const ctx = { store, service: {} as never, bridge: {} as never } as CommandContext;
+    const cur = () =>
+      findDevice(store.getState().doc!.project, dev.id)!.blocks.find(
+        (x) => x.id === b.id,
+      ) as CodeBlock;
+    void commands['block.convertToGraphic'].run(ctx);
+    return { store, ctx, cur, deviceId: dev.id, blockId: b.id };
+  }
+  const cmd = commands['block.convertToAwl'];
+
+  it('blocco KOP: diventa AWL con lo stesso codice, in un solo passo annullabile', () => {
+    const { store, ctx, cur } = setup();
+    expect(cur().language).toBe('KOP');
+    const sources = cur().networks.map((n) => n.source);
+    expect(cmd.isEnabled(store.getState())).toBe(true);
+    void cmd.run(ctx);
+    expect(cur().language).toBe('AWL');
+    expect(cur().networks.map((n) => n.source)).toEqual(sources);
+    expect(cur().networks.some((n) => n.lad)).toBe(false);
+    expect(cmd.isEnabled(store.getState())).toBe(false);
+    store.getState().undo();
+    expect(cur().language).toBe('KOP');
+    expect(cur().networks.every((n) => n.lad)).toBe(true);
+  });
+
+  it('un segmento: resta AWL dentro il blocco KOP', () => {
+    const { store, cur, deviceId, blockId } = setup();
+    convertToAwl(store, deviceId, blockId, 1);
+    expect(cur().language).toBe('KOP');
+    expect(cur().networks.map((n) => n.lad !== undefined)).toEqual([true, false]);
+  });
+
+  it('blocco che non compila: non cambia, messaggio', () => {
+    const { store, ctx, cur } = setup();
+    store.getState().edit('history.editNetworkCode', (p) => {
+      const b = p.devices[0]!.blocks.find((x) => x.name === 'B') as CodeBlock;
+      b.networks[0]!.lad!.root.outs = [{ id: 'q', k: 'coil', op: '"NonEsiste"' }];
+    });
+    const rev = store.getState().doc!.revision;
+    void cmd.run(ctx);
+    expect(cur().language).toBe('KOP');
+    expect(store.getState().doc!.revision).toBe(rev);
+    expect(store.getState().messages.at(-1)).toMatchObject({
+      textKey: 'messages.graphicConvert.NOT_COMPILABLE',
+    });
   });
 });
