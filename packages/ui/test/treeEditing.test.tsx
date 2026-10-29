@@ -424,6 +424,8 @@ describe('gruppi e menu contestuale', () => {
       'Genera sorgente dai blocchi',
       'Compila',
       'Esporta blocco compilato (.blk)…',
+      'Riferimenti incrociati',
+      'Struttura di richiamo',
       'Proprietà',
     ]);
     expect(items[0]).not.toHaveAttribute('aria-disabled'); // Apri: la tabella si apre

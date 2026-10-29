@@ -411,6 +411,18 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
 - **Installazione fallita dopo «Non salvare»:** la copia di recupero era già stata cancellata (`beforeWindowClose`).
 - **Installazione fallita:** se l'installatore non parte, l'app riabilita le operazioni online e mostra l'errore; la finestra di salvataggio e l'offline erano già stati eseguiti.
 
+## Informazioni sul programma (piano 7A)
+
+- **Indirizzamento indiretto non risolto.** `L MW [MD 20]` registra la lettura del puntatore `MD20`, non l'indirizzo puntato; gli accessi tramite registro (`[AR1, P#…]`) e i puntatori `P#…` non compaiono.
+- **DB aperto.** `L DBW 4` dopo un `OPN` è la voce `%DBW4` senza numero di DB: non si segue quale DB è aperto. Gli accessi `DI…` restano a sé, senza il DB di istanza.
+- **Fuori dai riferimenti incrociati:** variabili locali (`#x`, area L, anche i bit di appoggio del KOP), costanti scritte, salti ed etichette, `STW` e i registri, le sorgenti AWL esterne, i valori iniziali dei DB, i blocchi know-how. Le tabelle di controllo non contano come uso.
+- **Dati complessi interi** (STRUCT, ARRAY, UDT passati a una CALL) non hanno un indirizzo elementare: restano col testo scritto e non si confrontano per sovrapposizione.
+- **Simboli sconosciuti** restano col testo scritto, senza indirizzo.
+- **Parametro sconosciuto** di una CALL (blocco mancante o parametro non dichiarato): l'accesso è «lettura e scrittura».
+- **KOP e FUP:** il punto d'uso è l'elemento che ha prodotto la riga dell'AWL generato; il primo operando dell'elemento per Maiusc+F11. **SCL:** la parola sotto il cursore, senza il parser SCL; la riga è quella del testo SCL da cui viene l'istruzione AWL.
+- **Struttura di richiamo:** solo le chiamate scritte (CALL, UC, CC, multi-istanze); un `UC` con puntatore o un richiamo calcolato non compare. Gli OB non chiamati non sono «non usati»: sono le radici. Un albero con molte chiamate ripetute si apre un livello alla volta.
+- **Ricalcolo:** tutto si ricalcola a ogni modifica del progetto mentre la scheda è aperta; su programmi molto grandi può essere lento.
+
 ## Fuori dal codice, in sospeso per l'utente
 
 - Controlli a mano dei piani 1B (Windows e Mac), 1C e 1F. Le liste sono nei piani; per la 1F: xlsx in Excel e LibreOffice, xlsx di TIA Portal, Archivia/Ritira con percorsi accentati e con spazi, scala a 125%.

@@ -76,7 +76,6 @@ describe('buildTree', () => {
     expect(plc.children.filter((c) => !c.enabled).map((c) => c.labelKey)).toEqual([
       'tree.plc.deviceConfig',
       'tree.plc.backup',
-      'tree.plc.progInfo',
     ]);
     const blocks = plc.children[2]!;
     expect(blocks.children.map((c) => labelOf(c))).toEqual([

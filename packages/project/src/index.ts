@@ -14,3 +14,5 @@ export * from './plcAccess';
 export * from './backupFile';
 export * from './kopSources';
 export * from './awlToGraphic';
+export * from './crossRef';
+export * from './callGraph';

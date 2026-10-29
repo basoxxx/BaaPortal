@@ -1759,5 +1759,45 @@
       "program": "Program control",
       "noTarget": "Select a point in a LAD or FBD network"
     }
+  },
+  "xref": {
+    "title": "Cross-references",
+    "filter": "Filter",
+    "filterHint": "Operand, symbol or block",
+    "withOverlaps": "Show overlapping accesses",
+    "count": "{{operands}} operands, {{uses}} uses",
+    "empty": "The program uses no operands.",
+    "noMatch": "No operand matches the filter.",
+    "operand": "Operand",
+    "symbol": "Symbol",
+    "type": "Type",
+    "location": "Location",
+    "access": "Access",
+    "overlapped": "overlapping",
+    "overlapsWith": "Overlaps",
+    "goTo": "Go to the location",
+    "atAwl": "{{block}} NW {{network}} line {{line}}",
+    "atGraphic": "{{block}} NW {{network}}",
+    "atScl": "{{block}} line {{line}}",
+    "accessKind": {
+      "read": "Read",
+      "write": "Write",
+      "readWrite": "Read and write",
+      "call": "Call",
+      "open": "Open"
+    }
+  },
+  "callTree": {
+    "title": "Call structure",
+    "mode": "View",
+    "calls": "Call structure",
+    "dependencies": "Dependencies",
+    "noOb": "No OB in the program.",
+    "empty": "No blocks in the program.",
+    "unreferenced": "Unused blocks",
+    "recursion": "recursion",
+    "open": "Open the block",
+    "expand": "Expand {{name}}",
+    "collapse": "Collapse {{name}}"
   }
 }

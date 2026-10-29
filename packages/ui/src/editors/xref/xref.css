@@ -1,0 +1,72 @@
+.baa-xref {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: auto;
+  padding: 8px 12px;
+  color: var(--baa-text);
+  font-size: 13px;
+}
+.baa-xref-bar {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.baa-xref-count {
+  color: var(--baa-text-muted);
+}
+.baa-xref-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.baa-xref-table th {
+  position: sticky;
+  top: 0;
+  background: var(--baa-surface);
+  text-align: left;
+  border-bottom: 1px solid var(--baa-border);
+}
+.baa-xref-table th,
+.baa-xref-table td {
+  padding: 2px 12px 2px 0;
+  text-align: left;
+  vertical-align: top;
+}
+.baa-xref-table tr.is-first td {
+  border-top: 1px solid var(--baa-border);
+}
+.baa-xref-muted,
+.baa-xref-overlaps {
+  color: var(--baa-text-muted);
+}
+.baa-xref-overlaps {
+  display: block;
+  font-size: 12px;
+}
+.baa-xref-badge {
+  margin-left: 6px;
+  padding: 0 4px;
+  border: 1px solid var(--baa-border);
+  color: var(--baa-text-muted);
+  font-size: 12px;
+}
+.baa-calls-tree,
+.baa-calls-tree ul {
+  list-style: none;
+  margin: 0;
+  padding-left: 18px;
+}
+.baa-calls-tree {
+  padding-left: 0;
+}
+.baa-calls-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.baa-calls-spacer {
+  display: inline-block;
+  width: 24px;
+}
