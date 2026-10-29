@@ -1,11 +1,11 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type { LadNetwork } from '@baaportal/ladfbd';
-import { createCodeBlock, type CodeBlock } from '@baaportal/project';
+import { createCodeBlock, findDevice, type CodeBlock } from '@baaportal/project';
 import { FupNetworkView } from '../../src/editors/fbd/FupNetworkView';
 import { i18next, initI18n } from '../../src/i18n';
-import { openEditor, dev } from '../blockFixtures';
+import { PLC, dev, fakeDataTransfer, openEditor } from '../blockFixtures';
 
 beforeAll(async () => {
   await initI18n('it');
@@ -91,17 +91,39 @@ describe('FupNetworkView', () => {
 });
 
 describe('NetworksView di un blocco FUP', () => {
-  it('mostra la vista FUP e il pulsante cambia il linguaggio', async () => {
+  it('mostra la vista FUP, inserisce da tavolozza e albero, il pulsante cambia il linguaggio', async () => {
     const f = createCodeBlock({ kind: 'FC', number: 31, name: 'Fup', language: 'FUP' });
     f.networks[0]!.lad = net();
     const app = await openEditor('block', f.id, (d) => void d.blocks.push(f));
     expect(screen.getByRole('group', { name: 'Vista FUP del segmento' })).toBeInTheDocument();
-    expect(screen.getByText('Per aggiungere elementi passa a KOP')).toBeInTheDocument();
+    // La tavolozza inserisce nella vista FUP che ha il fuoco.
+    const pal = await screen.findByTestId('lad-palette');
+    act(() => screen.getByRole('button', { name: 'Bobina Q 0.0' }).focus());
+    fireEvent.click(within(pal).getByRole('button', { name: 'Bobina RESET (R)' }));
+    expect(screen.getByRole('button', { name: 'Bobina RESET (R) ??.?' })).toBeInTheDocument();
+    const lad = () => (dev(app).blocks.find((b) => b.id === f.id) as CodeBlock).networks[0]!.lad!;
+    expect(lad().root.outs.map((o) => ('k' in o ? o.k : 'node'))).toEqual(['coil', 'reset']);
+    // Un FC dall'albero rilasciato sulla rete diventa un box CALL.
+    const callee = createCodeBlock({ kind: 'FC', number: 30, name: 'Dest', language: 'AWL' });
+    act(() =>
+      app.store
+        .getState()
+        .edit('history.addBlock', (p) => void findDevice(p, PLC)!.blocks.push(callee)),
+    );
+    const tree = fakeDataTransfer();
+    tree.setData(
+      'application/x-baaportal',
+      JSON.stringify({ deviceId: PLC, refs: [{ kind: 'block', deviceId: PLC, id: callee.id }] }),
+    );
+    fireEvent.drop(screen.getByRole('group', { name: 'Vista FUP del segmento' }), {
+      dataTransfer: tree,
+    });
+    expect(screen.getAllByRole('button', { name: /Box CALL/ })[0]).toHaveTextContent('Dest');
     const lang = () => (dev(app).blocks.find((b) => b.id === f.id) as CodeBlock).language;
     fireEvent.click(screen.getByRole('button', { name: 'Passa a KOP' }));
     expect(lang()).toBe('KOP');
     expect(screen.queryByRole('group', { name: 'Vista FUP del segmento' })).toBeNull();
     fireEvent.click(await screen.findByRole('button', { name: 'Passa a FUP' }));
     expect(lang()).toBe('FUP');
-  });
+  }, 30_000);
 });

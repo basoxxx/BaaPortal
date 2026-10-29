@@ -4,7 +4,6 @@ import { useSyncExternalStore } from 'react';
 import type { DragEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BOX_CATALOG, PALETTE } from '@baaportal/ladfbd';
-import { findDevice } from '@baaportal/project';
 import type { BoxGroup, BoxKind } from '@baaportal/ladfbd';
 import { LAD_DRAG_TYPE } from './LadNetworkEditor';
 import { useAppStore } from '../../state/AppContext';
@@ -87,15 +86,6 @@ export function LadPalette() {
     const e = wa.editors.find((x) => x.key === key);
     return e?.kind === 'block' ? `${e.deviceId}/${e.objectId}` : null;
   });
-  const fup = useAppStore((s) => {
-    const wa = s.workArea;
-    const e = wa.editors.find((x) => x.key === wa.panes[wa.focusedPane]);
-    const b =
-      e?.kind === 'block' && s.doc
-        ? findDevice(s.doc.project, e.deviceId)?.blocks.find((x) => x.id === e.objectId)
-        : undefined;
-    return b !== undefined && b.kind !== 'DB' && b.kind !== 'IDB' && b.language === 'FUP';
-  });
   const ready = active !== null && visible === `${active.deviceId}/${active.blockId}`;
   const click = (item: Item) => {
     const api = ready ? active.api : null;
@@ -118,7 +108,7 @@ export function LadPalette() {
               type="button"
               draggable
               disabled={!ready}
-              title={ready ? undefined : t(fup ? 'lad.fupHint' : 'lad.palettePanel.noTarget')}
+              title={ready ? undefined : t('lad.palettePanel.noTarget')}
               onClick={() => click(item)}
               onDragStart={(e) => drag(e, item)}
             >

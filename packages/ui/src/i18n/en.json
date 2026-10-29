@@ -1687,15 +1687,15 @@
       "DIV_R": "DIV_R (Divide REAL)"
     },
     "network": "LAD network {{n}}",
-    "toolbar": "LAD network tools",
+    "toolbar": "Network tools",
     "slot": "Insertion point",
     "operand": "Operand",
     "boxMenu": "Box",
     "fupView": "FBD view of the network",
-    "fupHint": "To add elements switch to LAD",
     "boxEl": "Box {{kind}}",
     "cannotClose": "Cannot close the branch here: pick an element that follows the open branch in the same series.",
     "cannotDo": "This operation is not possible here.",
+    "cannotNegate": "Cannot negate here: pick a contact, the first input of a box or a negation circle.",
     "tool": {
       "contactNo": "NO",
       "contactNc": "NC",
@@ -1704,6 +1704,15 @@
       "openBranch": "Open branch",
       "closeBranch": "Close branch",
       "box": "Empty box"
+    },
+    "fupTool": {
+      "contactNo": "& input",
+      "contactNc": "Negated & input",
+      "openBranch": ">=1 input",
+      "closeBranch": "Close >=1",
+      "negate": "Negate",
+      "coil": "= output",
+      "tBranch": "New output"
     },
     "field": {
       "op": "Operand",
@@ -1732,7 +1741,7 @@
       "shift": "Shift",
       "jumps": "Jumps",
       "program": "Program control",
-      "noTarget": "Select a point in a LAD network"
+      "noTarget": "Select a point in a LAD or FBD network"
     }
   }
 }

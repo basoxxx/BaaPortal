@@ -1687,15 +1687,15 @@
       "DIV_R": "DIV_R (Divisione REAL)"
     },
     "network": "Segmento KOP {{n}}",
-    "toolbar": "Strumenti del segmento KOP",
+    "toolbar": "Strumenti del segmento",
     "slot": "Punto d'inserimento",
     "operand": "Operando",
     "boxMenu": "Box",
     "fupView": "Vista FUP del segmento",
-    "fupHint": "Per aggiungere elementi passa a KOP",
     "boxEl": "Box {{kind}}",
     "cannotClose": "Impossibile chiudere il ramo qui: scegli un elemento che segue il ramo aperto, nella stessa serie.",
     "cannotDo": "Operazione non possibile in questo punto.",
+    "cannotNegate": "Qui non si nega: scegli un contatto, la prima entrata di un riquadro o un cerchietto di negazione.",
     "tool": {
       "contactNo": "NA",
       "contactNc": "NC",
@@ -1704,6 +1704,15 @@
       "openBranch": "Apri ramo",
       "closeBranch": "Chiudi ramo",
       "box": "Box vuoto"
+    },
+    "fupTool": {
+      "contactNo": "Entrata &",
+      "contactNc": "Entrata & negata",
+      "openBranch": "Entrata >=1",
+      "closeBranch": "Chiudi >=1",
+      "negate": "Nega",
+      "coil": "Uscita =",
+      "tBranch": "Nuova uscita"
     },
     "field": {
       "op": "Operando",
@@ -1732,7 +1741,7 @@
       "shift": "Scorrimento",
       "jumps": "Salti",
       "program": "Controllo del programma",
-      "noTarget": "Seleziona un punto in un segmento KOP"
+      "noTarget": "Seleziona un punto in un segmento KOP o FUP"
     }
   }
 }

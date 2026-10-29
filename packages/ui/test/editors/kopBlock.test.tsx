@@ -170,7 +170,7 @@ describe('blocchi KOP nell’editor dei blocchi', () => {
       const pal = await screen.findByTestId('lad-palette');
       const b = within(pal).getByRole('button', { name: 'Contatto NA' });
       expect(b).toBeDisabled();
-      expect(b).toHaveAttribute('title', 'Seleziona un punto in un segmento KOP');
+      expect(b).toHaveAttribute('title', 'Seleziona un punto in un segmento KOP o FUP');
     },
     T,
   );

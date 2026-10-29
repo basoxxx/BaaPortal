@@ -158,14 +158,15 @@ Per ogni voce si indica che cosa succede oggi. "Errore chiaro" vuol dire che Baa
 - **Blocchi caricati con lingua `02`.** Un blocco letto dalla CPU con il byte di linguaggio KOP si importa come AWL, senza grafico.
 - **Conversione solo KOP ↔ FUP.** La conversione AWL → KOP/FUP arriva nel piano 4C; fino ad allora un segmento AWL in un blocco KOP si vede in sola lettura.
 
-## FUP in prova (1.0.0)
+## FUP in prova (1.0.0, esteso in 1.1)
 
 Si crea solo con _Funzioni sperimentali_ attive; un blocco FUP già esistente si apre sempre.
 
 - **Stesso modello del KOP.** Un blocco FUP salva le stesse reti di un blocco KOP e genera lo stesso AWL; cambia solo il linguaggio dichiarato. _Cambia linguaggio KOP/FUP_ (menu _Modifica_ o pulsante sopra i segmenti) passa dall'uno all'altro senza perdere nulla. Vale tutto ciò che è scritto per l'_Editor KOP_.
 - **Mai provato su una CPU reale.** Il byte di linguaggio dell'intestazione è `03`, preso come documentazione dalle costanti pubbliche di snap7 e mai verificato con STEP 7; come per il KOP non ci sono marcatori BLD.
-- **Nessun inserimento in FUP.** Nella vista FUP si seleziona, si modifica l'operando (doppio clic o Invio) e si cancella (Canc). Per aggiungere elementi si passa a KOP: la tavolozza e il trascinamento in FUP non inseriscono.
-- **Resa semplificata.** Un `NOT` è un cerchietto a sé, non fuso sull'entrata che segue. Un box in mezzo a una serie è una voce a sé e non riceve la logica precedente sul primo pin. Un ramo a T ripete la logica comune invece di dividere un solo riquadro. Niente griglia, niente frecce fra elementi (si usa Tab), niente selezione multipla.
+- **Inserimento con i gesti del KOP.** Tavolozza (clic e trascinamento), albero del progetto (FC/FB → box CALL), barra e tasti della vista FUP fanno le stesse modifiche dell'editor KOP: gli stessi gesti danno la stessa rete e lo stesso AWL. Un'entrata nuova va dopo quella selezionata, nello stesso riquadro `&`; un `>=1` si apre sull'entrata selezionata (F8) e si chiude come un ramo KOP (F9). Il rilascio va dopo l'elemento sotto il puntatore, o in fondo alla serie principale; non ci sono punti d'inserimento da scegliere.
+- **Negazione (N) limitata.** Si nega un contatto (NA ↔ NC) o la prima entrata di una serie (riceve un `NOT` subito dopo). Un'entrata non contatto più avanti nella serie non si nega da sola: un `NOT` lì negherebbe tutta la logica che lo precede, come in AWL.
+- **Resa semplificata.** Un `NOT` è il cerchietto sull'uscita della logica che lo precede nella serie, sul pin con cui entra nel riquadro `&` successivo. Un box in mezzo a una serie è una voce a sé e non riceve la logica precedente sul primo pin. Un ramo a T, o più uscite sullo stesso nodo, ripete la logica comune invece di dividere un solo riquadro: gli elementi ripetuti compaiono più volte e le frecce li visitano una volta per copia. Le frecce seguono l'ordine del disegno (sinistra/su = precedente, destra/giù = successivo), non la posizione sullo schermo. Niente griglia, niente selezione multipla.
 - **Niente osservazione** della vista FUP, né nel simulatore né online.
 - **Aspetto chiaro/scuro** non controllato a mano.
 

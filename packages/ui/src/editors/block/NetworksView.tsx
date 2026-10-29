@@ -412,15 +412,15 @@ export function NetworksView({ deviceId, blockId }: Props) {
             n.lad || n.source === '' ? (
               <>
                 {isFup ? (
-                  <>
-                    <FupNetworkView
-                      net={n.lad ?? placeholder(n.id)}
-                      diagnostics={kopMessages[i]?.byElem ?? NO_MESSAGES}
-                      readOnly={locked}
-                      onChange={(next) => editLad(n.id, next, 'history.editLad')}
-                    />
-                    <p className="baa-raw-hint">{t('lad.fupHint')}</p>
-                  </>
+                  <FupNetworkView
+                    net={n.lad ?? placeholder(n.id)}
+                    diagnostics={kopMessages[i]?.byElem ?? NO_MESSAGES}
+                    readOnly={locked}
+                    onChange={(next, key) => editLad(n.id, next, key)}
+                    callParams={callParams}
+                    onActive={(api, on) => setLadActive(api, on, { deviceId, blockId })}
+                    callOfDrop={(raw) => callInstanceOf(dev, raw)}
+                  />
                 ) : (
                   <LadNetworkEditor
                     net={n.lad ?? placeholder(n.id)}
