@@ -54,6 +54,13 @@ import {
   objectsToGenerate,
 } from './sourceActions';
 import { exportTagTable, importTagTable } from './tagTableIo';
+import {
+  copyWatchTables,
+  exportWatchTable,
+  importWatchTable,
+  pasteWatchTables,
+  watchPasteDevice,
+} from './watchTableCommands';
 import { RenameInput } from './RenameInput';
 import type { CompareState } from '../../online/compare';
 import { preparePlcDownload } from '../../online/plcDownload';
@@ -208,14 +215,15 @@ export function ProjectTree() {
         const d = doc && findDevice(doc.project, r.deviceId);
         return r.kind === 'tagTable' && !!d && isStandardTable(d, r.id);
       }),
-    copy: objectRefs.length > 0,
+    copy: objectRefs.length > 0 || watchNodes.length > 0,
     delete:
       objectRefs.length > 0 || groups.length > 0 || sourceNodes.length > 0 || watchNodes.length > 0,
     rename: selectedIds.length === 1 && renameInfo(doc, selectedIds[0]!) !== null,
     paste:
-      clip?.kind === 'objects' &&
-      !!pasteTarget &&
-      clip.items.some((i) => areaOfItem(i) === pasteTarget.area),
+      (clip?.kind === 'objects' &&
+        !!pasteTarget &&
+        clip.items.some((i) => areaOfItem(i) === pasteTarget.area)) ||
+      (clip?.kind === 'watchTables' && !!selection && watchPasteDevice(selection) !== null),
     selectAll: selection !== null,
   };
 
@@ -247,12 +255,19 @@ export function ProjectTree() {
     switch (action) {
       case 'copy':
       case 'cut':
-        copyNodes(ctx, selectedIds, action === 'cut');
+        if (objectRefs.length > 0 || action === 'cut')
+          copyNodes(ctx, selectedIds, action === 'cut');
+        else copyWatchTables(ctx, selectedIds);
         setClipboardTick((n) => n + 1);
         return;
       case 'paste':
         return selection
-          ? settle(pasteAt(ctx, selection).then(() => setClipboardTick((n) => n + 1)))
+          ? settle(
+              (peekClipboardPayload()?.kind === 'watchTables'
+                ? pasteWatchTables(ctx, selection)
+                : pasteAt(ctx, selection)
+              ).then(() => setClipboardTick((n) => n + 1)),
+            )
           : undefined;
       case 'delete':
         return settle(deleteNodes(ctx, selectedIds));
@@ -359,6 +374,29 @@ export function ProjectTree() {
         label: t('tagIo.import'),
         separator: true,
         run: () => void settle(importTagTable({ deviceId: parsed.dev }, ctx)),
+      });
+    }
+    if (parsed.kind === 'watchTable') {
+      tagIoItems.push(
+        {
+          id: 'importWatch',
+          label: t('watchIo.import'),
+          separator: true,
+          run: () =>
+            void settle(importWatchTable({ deviceId: parsed.dev, tableId: parsed.id }, ctx)),
+        },
+        {
+          id: 'exportWatch',
+          label: t('watchIo.export'),
+          run: () => void settle(exportWatchTable({ deviceId: parsed.dev, id: parsed.id }, ctx)),
+        },
+      );
+    } else if (parsed.kind === 'folder' && parsed.folder === 'watch') {
+      tagIoItems.push({
+        id: 'importWatch',
+        label: t('watchIo.import'),
+        separator: true,
+        run: () => void settle(importWatchTable({ deviceId: parsed.dev }, ctx)),
       });
     }
     // Dei blocchi e dei tipi selezionati; sulle cartelle, di tutti quelli che contengono.

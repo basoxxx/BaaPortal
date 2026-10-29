@@ -147,7 +147,11 @@
     "uploadFirmwareUnknown": "Firmware {{firmware}} non presente nel catalogo: il progetto usa {{used}}.",
     "backupDone": "Backup salvato in «{{path}}»: {{count}} blocchi.",
     "backupDonePartial": "Backup incompleto: {{missing}} blocchi non letti ({{list}}). Salvato in «{{path}}» ({{count}} blocchi); non si può ripristinare.",
-    "backupFailed": "Backup non riuscito: {{message}}"
+    "backupFailed": "Backup non riuscito: {{message}}",
+    "watchExported": "Tabella di controllo \"{{name}}\" esportata in \"{{path}}\".",
+    "watchExportFailed": "Impossibile esportare la tabella di controllo \"{{name}}\": {{message}}",
+    "watchImported": "Importazione da \"{{name}}\": {{count}} righe aggiunte alla tabella \"{{table}}\", scartate {{skipped}}{{detail}}.",
+    "watchImportFailed": "Impossibile importare la tabella di controllo da \"{{name}}\": {{message}}"
   },
   "commands": {
     "project.new": "Nuovo…",
@@ -542,7 +546,10 @@
     "importBlocks": "Importa blocchi",
     "importTags": "Importa variabili",
     "addWatchTable": "Aggiungi tabella di controllo",
-    "setAccess": "Imposta accesso CPU"
+    "setAccess": "Imposta accesso CPU",
+    "moveRows": "Sposta righe",
+    "pasteWatchTable": "Incolla tabelle di controllo",
+    "importWatch": "Importa tabella di controllo"
   },
   "inspector": {
     "tab": {
@@ -1800,5 +1807,15 @@
     "open": "Apri il blocco",
     "expand": "Espandi {{name}}",
     "collapse": "Comprimi {{name}}"
+  },
+  "watchIo": {
+    "import": "Importa tabella di controllo…",
+    "export": "Esporta tabella di controllo…",
+    "filterCsv": "CSV (*.csv)",
+    "err": {
+      "COLONNA_MANCANTE": "manca la colonna «Operando»",
+      "RIGA_ILLEGGIBILE": "riga illeggibile",
+      "OPERANDO_VUOTO": "operando vuoto"
+    }
   }
 }

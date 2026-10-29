@@ -147,7 +147,11 @@
     "uploadFirmwareUnknown": "Firmware {{firmware}} is not in the catalog: the project uses {{used}}.",
     "backupDone": "Backup saved to \"{{path}}\": {{count}} blocks.",
     "backupDonePartial": "Incomplete backup: {{missing}} blocks not read ({{list}}). Saved to \"{{path}}\" ({{count}} blocks); it cannot be restored.",
-    "backupFailed": "Backup failed: {{message}}"
+    "backupFailed": "Backup failed: {{message}}",
+    "watchExported": "Watch table \"{{name}}\" exported to \"{{path}}\".",
+    "watchExportFailed": "Could not export watch table \"{{name}}\": {{message}}",
+    "watchImported": "Import from \"{{name}}\": {{count}} rows added to table \"{{table}}\", {{skipped}} skipped{{detail}}.",
+    "watchImportFailed": "Could not import a watch table from \"{{name}}\": {{message}}"
   },
   "commands": {
     "project.new": "New…",
@@ -542,7 +546,10 @@
     "importBlocks": "Import blocks",
     "importTags": "Import tags",
     "addWatchTable": "Add watch table",
-    "setAccess": "Set CPU access"
+    "setAccess": "Set CPU access",
+    "moveRows": "Move rows",
+    "pasteWatchTable": "Paste watch tables",
+    "importWatch": "Import watch table"
   },
   "inspector": {
     "tab": {
@@ -1800,5 +1807,15 @@
     "open": "Open the block",
     "expand": "Expand {{name}}",
     "collapse": "Collapse {{name}}"
+  },
+  "watchIo": {
+    "import": "Import watch table…",
+    "export": "Export watch table…",
+    "filterCsv": "CSV (*.csv)",
+    "err": {
+      "COLONNA_MANCANTE": "the \"Operando\" column is missing",
+      "RIGA_ILLEGGIBILE": "unreadable row",
+      "OPERANDO_VUOTO": "empty operand"
+    }
   }
 }

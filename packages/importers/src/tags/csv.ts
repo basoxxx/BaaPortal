@@ -13,7 +13,7 @@ export interface CsvRecord {
 const SEPARATORS = [';', ',', '\t'] as const;
 
 /** Separatore più frequente nella riga d'intestazione, fuori dalle virgolette. */
-function detectSeparator(text: string): string {
+export function detectSeparator(text: string): string {
   const counts = new Map<string, number>(SEPARATORS.map((s) => [s, 0]));
   let quoted = false;
   for (const ch of text) {
@@ -100,10 +100,10 @@ export function parseTagsCsv(text: string): ParsedTags {
 // fatte così: un apice iniziale seguito da altro (`'ciao`) è un valore e resta com'è.
 const FORMULA = /^'*[=+\-@\t\r]/;
 const ESCAPED = /^'+[=+\-@\t\r]/;
-const escapeFormula = (v: string): string => (FORMULA.test(v) ? `'${v}` : v);
-const unescapeFormula = (v: string): string => (ESCAPED.test(v) ? v.slice(1) : v);
+export const escapeFormula = (v: string): string => (FORMULA.test(v) ? `'${v}` : v);
+export const unescapeFormula = (v: string): string => (ESCAPED.test(v) ? v.slice(1) : v);
 
-const quote = (v: string, sep: string): string =>
+export const quote = (v: string, sep: string): string =>
   /["\r\n]/.test(v) || v.includes(sep) ? `"${v.replace(/"/g, '""')}"` : v;
 
 export function tagsToCsv(table: TagTable): string {

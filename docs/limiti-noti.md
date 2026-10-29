@@ -294,7 +294,7 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
   - Le modifiche alle proprietà della CPU (tempo di ciclo, merker di clock, intervallo di OB35) valgono solo dopo aver riavviato la simulazione.
   - La rinomina di un tag, di una costante o di un blocco/DB aggiorna le righe che usano `"Nome"` o `"Nome".membro`; anche la rinomina di un **membro** di un DB, di un UDT o di un FB (DB di istanza) aggiorna le righe, nello stesso passo annullabile.
   - Non c'è un forzamento permanente né un «trigger»: c'è solo «Comanda», una scrittura una tantum.
-  - Le tabelle non si copiano, tagliano, incollano né trascinano nell'albero; non ci sono gruppi né importazione o esportazione.
+  - Le righe si copiano, tagliano, incollano (anche tra tabelle) e si riordinano trascinandole; le tabelle si copiano e incollano nell'albero (anche tra PLC, ma non si tagliano né si trascinano). Importazione ed esportazione solo in csv (colonne Operando, Formato, Valore di comando, Commento). Non ci sono gruppi.
   - Al più 1000 righe osservate per richiesta; le righe oltre il limite danno un errore di riga.
   - Un file `.baap` del formato 4 non si apre con un'app più vecchia (`NEWER_FORMAT`).
 
