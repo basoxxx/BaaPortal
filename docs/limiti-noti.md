@@ -310,7 +310,7 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
 - **xlsx, DOCTYPE.** Un DOCTYPE con sottoinsieme interno non si legge (errore chiaro).
 - **xlsx, ritorni a capo.** Un `\r` dentro un testo non torna identico dopo l'esportazione e la rilettura.
 - **Nomi unici per CPU solo nell'importazione** (`NOME_IN_ALTRA_TABELLA`). Nomi doppi creati a mano in tabelle diverse non vengono segnalati.
-- **Nome file.** Un nome digitato come `x.txt` in esportazione diventa `x.txt.xlsx`.
+- **Nome file.** In esportazione un'estensione digitata che non è `csv` né `xlsx` (fino a 4 caratteri con almeno una lettera, come `x.txt`) è sostituita: `x.xlsx`. Un punto nel nome (`v1.2`) resta e si aggiunge l'estensione.
 
 ### Archivio (.baapz)
 
