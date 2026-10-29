@@ -93,6 +93,10 @@ describe('CpuProperties.access', () => {
     ['link sconosciuto', { ...tcp, link: { kind: 'usb' } }],
     ['indirizzo CPU oltre 126', { ...tcp, link: { ...mpi, cpuAddress: 127 } }],
     ['indirizzo locale negativo', { ...tcp, link: { ...mpi, localAddress: -1 } }],
+    [
+      'adattatore e CPU allo stesso indirizzo',
+      { ...tcp, link: { ...mpi, localAddress: 2, cpuAddress: 2 } },
+    ],
     ['HSA non ammesso', { ...tcp, link: { ...mpi, highestAddress: 30 } }],
     ['velocità del bus sconosciuta', { ...tcp, link: { ...mpi, busSpeed: '12M' } }],
     ['parità sconosciuta', { ...tcp, link: { ...mpi, parity: 'mark' } }],

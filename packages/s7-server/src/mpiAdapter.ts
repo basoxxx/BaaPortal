@@ -226,6 +226,7 @@ export function serveMpiAdapter(
         // collisione: vince l'adattatore, lo STX del PC si ignora finché il nostro frame non passa
         if (state === 'idle') {
           state = 'rx';
+          dec.expectFrame();
           put(Uint8Array.of(DLE));
         }
       } else if (it === 'DLE') {
@@ -237,7 +238,7 @@ export function serveMpiAdapter(
           state = 'idle';
           kick();
         }
-      } else if (state === 'rx') {
+      } else if (it instanceof Uint8Array && state === 'rx') {
         put(Uint8Array.of(DLE));
         state = 'idle';
         onFrame(it);

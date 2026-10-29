@@ -28,8 +28,11 @@ vi.mock('serialport', async () => {
       this.written.push(b);
     }
     close() {
-      this.isOpen = false;
-      this.emit('close');
+      // come la porta vera: l'evento arriva dopo, a porta chiusa davvero
+      setTimeout(() => {
+        this.isOpen = false;
+        this.emit('close');
+      }, 5);
     }
     static list = async () => [{ path: 'COM3', manufacturer: 'FTDI', extra: 1 }];
   }
@@ -61,6 +64,7 @@ describe('openSerial', () => {
     expect(got).toEqual([[1, 2], [3]]);
     t.send(new Uint8Array([9]));
     expect(h.inst.written).toHaveLength(1);
+    await t.close();
   });
 
   it('porta occupata: SERIAL_BUSY con il percorso reale', async () => {
@@ -71,6 +75,35 @@ describe('openSerial', () => {
       code: 'SERIAL_BUSY',
       message: 'La porta COM7 è usata da un altro programma',
     });
+  });
+
+  it('porta bloccata (macOS «Cannot lock port»): SERIAL_BUSY', async () => {
+    h.openErr = new Error('Error Resource temporarily unavailable Cannot lock port');
+    await expect(open()).rejects.toMatchObject({ code: 'SERIAL_BUSY' });
+  });
+
+  it('stessa porta aperta due volte: la seconda aspetta la chiusura della prima', async () => {
+    const t = await open();
+    const first = h.inst;
+    let second = false;
+    const next = open().then((x) => ((second = true), x));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(second).toBe(false);
+    await t.close();
+    expect(first.isOpen).toBe(false);
+    const t2 = await next;
+    expect(h.inst).not.toBe(first);
+    await t2.close();
+  });
+
+  it('stessa porta ancora occupata oltre il tempo: SERIAL_BUSY, senza aprirla', async () => {
+    const t = await open();
+    const first = h.inst;
+    await expect(
+      openSerial({ path: 'com3 ', baudRate: 38400, parity: 'odd' })(30),
+    ).rejects.toMatchObject({ code: 'SERIAL_BUSY', message: expect.stringContaining('BaaPortal') });
+    expect(h.inst).toBe(first);
+    await t.close();
   });
 
   it('altro errore di apertura: SERIAL_OPEN', async () => {
@@ -91,7 +124,7 @@ describe('openSerial', () => {
     const t = await open();
     const cb = vi.fn();
     t.onClose(cb);
-    t.close();
+    await t.close();
     expect(h.inst.isOpen).toBe(false);
     expect(cb).toHaveBeenCalledWith(undefined);
     expect(() => t.send(new Uint8Array([1]))).toThrow();

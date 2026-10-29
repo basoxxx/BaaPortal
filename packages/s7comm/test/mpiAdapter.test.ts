@@ -28,13 +28,25 @@ type Reply = (p: Uint8Array) => (Uint8Array | string)[] | undefined;
  * Lato adattatore minimo: risponde DLE a STX e ai frame, manda le risposte di `reply` con
  * STX → DLE → frame → DLE. `rx` sono i payload arrivati dal PC, nell'ordine.
  */
-function scripted(end: Transport, reply: Reply) {
+interface Faults {
+  /** Cambia i byte in uscita dall'adattatore (rumore, BCC rovinato). */
+  mangle?: (b: Uint8Array) => Uint8Array;
+  /** Quanti frame dal PC ricevono un NAK invece del DLE. */
+  nakFrames?: number;
+}
+
+function scripted(end: Transport, reply: Reply, f: Faults = {}) {
   const rx: Uint8Array[] = [];
   const dec = new MpiFrameDecoder();
   const out: Uint8Array[] = [];
   let state: 'idle' | 'rx' | 'tx1' | 'tx2' = 'idle';
   let closed = false;
-  const put = (b: number[] | Uint8Array): void => end.send(Uint8Array.from(b));
+  let naks = f.nakFrames ?? 0;
+  let retry: ReturnType<typeof setTimeout> | undefined;
+  const put = (b: number[] | Uint8Array): void => {
+    const bytes = Uint8Array.from(b);
+    end.send(f.mangle ? f.mangle(bytes) : bytes);
+  };
   const kick = (): void => {
     if (state !== 'idle' || out.length === 0) return;
     state = 'tx1';
@@ -47,18 +59,30 @@ function scripted(end: Transport, reply: Reply) {
         // collisione: vince l'adattatore, lo STX del PC si ignora
         if (state === 'idle') {
           state = 'rx';
+          dec.expectFrame();
           put([0x10]);
         }
       } else if (it === 'DLE') {
         if (state === 'tx1') {
           state = 'tx2';
           put(encodeMpiFrame(out[0]!));
+          // 3964R: senza DLE dopo il frame si riparte con uno STX
+          retry = setTimeout(() => {
+            if (state !== 'tx2' || closed) return;
+            state = 'idle';
+            kick();
+          }, 5);
         } else if (state === 'tx2') {
+          clearTimeout(retry);
           out.shift();
           state = 'idle';
           kick();
         }
-      } else if (state === 'rx') {
+      } else if (it instanceof Uint8Array && state === 'rx' && naks > 0) {
+        naks--;
+        state = 'idle';
+        put([0x15]);
+      } else if (it instanceof Uint8Array && state === 'rx') {
         rx.push(it);
         put([0x10]);
         state = 'idle';
@@ -88,6 +112,19 @@ function partners(active: number[]): Uint8Array {
   for (const a of active) p[6 + a] = 0x30;
   return p;
 }
+
+/** Setup communication con riferimento `ref`: una PDU che il controllo di sola lettura ammette. */
+const setup = (ref = 0xffff): Uint8Array =>
+  Uint8Array.of(
+    0x32,
+    1,
+    0,
+    0,
+    ref >> 8,
+    ref & 0xff,
+    ...fromHex('00 08 00 00 F0 00 00 01 00 01 03 C0'),
+  );
+const SETUP_HEX = '32010000ffff00080000f0000001000103c0';
 
 const hdrV1 = (cn2: number) => [0x04, 0x82, 0x80, 0x0c, 0x14, cn2];
 
@@ -120,9 +157,14 @@ function v1Adapter(o: { cn2?: number; cpu?: boolean; active?: number[] } = {}): 
   };
 }
 
-async function open(reply: Reply, o: Partial<MpiOptions> = {}, timeoutMs = 300) {
+async function open(
+  reply: Reply,
+  o: Partial<MpiOptions> = {},
+  timeoutMs = 300,
+  faults: Faults = {},
+) {
   const [a, b] = memoryTransportPair();
-  const ad = scripted(b, reply);
+  const ad = scripted(b, reply, faults);
   const link = await mpiAdapterLink(async () => a, { ...BASE, ...o })({ timeoutMs });
   return { ad, link };
 }
@@ -182,10 +224,10 @@ describe('PC Adapter MPI: inizializzazione e connessione', () => {
     expect(hex(ad.rx[v2 + 1]!)).toBe('000d0003e00400800002010601000001020201' + '00');
     expect(hex(ad.rx[v2 + 2]!)).toBe('000c0703' + '0501');
     const q = nextPdu(link);
-    link.sendPdu(fromHex('32 01 00 00 00 01 00 00 00 00'));
-    expect(hex(await q.one())).toBe('32010000000100000000');
+    link.sendPdu(setup());
+    expect(hex(await q.one())).toBe(SETUP_HEX);
     await settle();
-    expect(hex(ad.rx.at(-2)!)).toBe('000c0703f100' + '32010000000100000000');
+    expect(hex(ad.rx.at(-2)!)).toBe('000c0703f100' + SETUP_HEX);
     expect(hex(ad.rx.at(-1)!)).toBe('000c0703b00100');
     await link.close();
   });
@@ -247,6 +289,7 @@ describe('PC Adapter MPI: inizializzazione e connessione', () => {
       return memoryTransportPair()[0];
     };
     expect(() => mpiAdapterLink(t, { ...BASE, cpuAddress: 127 })).toThrow(RangeError);
+    expect(() => mpiAdapterLink(t, { ...BASE, localAddress: 2 })).toThrow(RangeError);
     expect(() => mpiAdapterLink(t, { ...BASE, busSpeed: '9.6k' as never })).toThrow(RangeError);
     expect(opened).toBe(false);
   });
@@ -256,11 +299,11 @@ describe('PC Adapter MPI: PDU, ack e chiusura', () => {
   it('una PDU inviata e una ricevuta, con l’ack giusto (cn2 = 0x10 raddoppiato sul filo)', async () => {
     const { ad, link } = await open(v1Adapter());
     const q = nextPdu(link);
-    link.sendPdu(fromHex('32 01 00 00 00 05 00 00 00 00'));
-    expect(hex(await q.one())).toBe('32030000000500000000');
+    link.sendPdu(setup());
+    expect(hex(await q.one())).toBe('3203' + SETUP_HEX.slice(4));
     await settle();
     expect(ad.rx.map(hex).slice(-2)).toEqual([
-      '0482800c1014f100' + '32010000000500000000',
+      '0482800c1014f100' + SETUP_HEX,
       '0482800c1014b00101',
     ]);
     await link.close();
@@ -270,7 +313,7 @@ describe('PC Adapter MPI: PDU, ack e chiusura', () => {
     const { ad, link } = await open(v1Adapter());
     const q = nextPdu(link);
     for (let i = 0; i < 258; i++) {
-      link.sendPdu(Uint8Array.of(0x32, 1, 0, 0, i >> 8, i & 0xff, 0, 0, 0, 0));
+      link.sendPdu(setup(i + 1));
       await q.one();
     }
     await settle();
@@ -336,9 +379,97 @@ describe('PC Adapter MPI: PDU, ack e chiusura', () => {
     const errs: (Error | undefined)[] = [];
     link.onClose((e) => errs.push(e));
     mute = true;
-    link.sendPdu(fromHex('32 01 00 00 00 05 00 00 00 00'));
+    link.sendPdu(setup());
     await new Promise((r) => setTimeout(r, 200));
     expect(errs).toEqual([expect.objectContaining({ code: 'MPI_NO_ADAPTER' })]);
     await expect(link.close()).resolves.toBeUndefined();
+  });
+});
+
+describe('PC Adapter MPI: linea disturbata', () => {
+  it('rumore prima di uno STX: si scarta, il frame dopo passa', async () => {
+    let first = true;
+    const { ad, link } = await open(v1Adapter(), {}, 300, {
+      // un byte di rumore (0x00, come l'inizio di un payload) davanti al primo STX dell'adattatore
+      mangle: (b) => {
+        if (!first || b[0] !== 0x02 || b.length !== 1) return b;
+        first = false;
+        return Uint8Array.of(0x00, 0xff, 0x02);
+      },
+    });
+    expect(first).toBe(false);
+    expect(ad.rx.map(hex)[0]).toBe('010d02');
+    await link.close();
+  });
+
+  it('BCC sbagliato: frame scartato senza DLE, la ritrasmissione passa', async () => {
+    let bad = 1;
+    const { link } = await open(v1Adapter(), {}, 300, {
+      mangle: (b) => {
+        if (bad === 0 || b.length < 4) return b;
+        bad--;
+        const x = b.slice();
+        x[x.length - 1]! ^= 0xff;
+        return x;
+      },
+    });
+    expect(bad).toBe(0);
+    const q = nextPdu(link);
+    link.sendPdu(setup());
+    expect(hex(await q.one())).toBe('3203' + SETUP_HEX.slice(4));
+    await link.close();
+  });
+
+  it('NAK dopo il frame: il PC lo rimanda e va avanti', async () => {
+    const { ad, link } = await open(v1Adapter(), {}, 300, { nakFrames: 2 });
+    expect(ad.rx.map(hex)[0]).toBe('010d02');
+    await link.close();
+  });
+
+  it('PDU dati senza DLE dopo il frame: mai rimandata (una scrittura non va eseguita due volte)', async () => {
+    let drop = false;
+    const [a, b] = memoryTransportPair();
+    const ad = scripted(
+      {
+        send: (x) => {
+          // l'adattatore prende il frame dati ma il suo DLE si perde sulla linea
+          if (drop && x.length === 1 && x[0] === 0x10) {
+            drop = false;
+            return;
+          }
+          b.send(x);
+        },
+        onData: (cb) =>
+          b.onData((c) => {
+            if (c.length > 10 && c.includes(0xf1)) drop = true;
+            cb(c);
+          }),
+        onClose: (cb) => b.onClose(cb),
+        close: () => b.close(),
+      },
+      v1Adapter(),
+    );
+    const link = await mpiAdapterLink(async () => a, BASE)({ timeoutMs: 300 });
+    const errs: (Error | undefined)[] = [];
+    link.onClose((e) => errs.push(e));
+    link.sendPdu(setup());
+    await new Promise((r) => setTimeout(r, 200));
+    expect(errs).toHaveLength(1);
+    expect(ad.rx.filter((p) => p[6] === 0xf1)).toHaveLength(1);
+    await link.close();
+  });
+
+  it('una scrittura in sola lettura si rifiuta nel link, prima di qualunque byte', async () => {
+    const { ad, link } = await open(v1Adapter());
+    await settle();
+    const before = ad.rx.length;
+    // write var (funzione 0x05) di un byte in M0
+    const write = fromHex(
+      '32 01 00 00 00 02 00 0e 00 05 05 01 12 0a 10 02 00 01 00 00 83 00 00 00 00 04 00 08 01',
+    );
+    expect(() => link.sendPdu(write)).toThrowError(expect.objectContaining({ code: 'FORBIDDEN' }));
+    await settle();
+    expect(ad.rx.length).toBe(before);
+    await link.close();
   });
 });

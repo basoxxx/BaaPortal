@@ -1,10 +1,10 @@
-import { S7Error } from '../errors';
-
 // Caratteri di controllo del line procedure in stile 3964R.
 // libnodave nodave.h (righe 112-116); da verificare su adattatore reale.
 export const STX = 0x02;
 export const ETX = 0x03;
 export const DLE = 0x10;
+// Risposta negativa (3964R): il telegramma non è stato preso, si rimanda.
+export const NAK = 0x15;
 
 /** Payload massimo accettato: PDU da 960 più intestazione MPI, con margine. */
 const MAX_PAYLOAD = 2048;
@@ -30,72 +30,84 @@ export function encodeMpiFrame(payload: Uint8Array): Uint8Array {
   return Uint8Array.from(out);
 }
 
-/** Un segnale della procedura (STX o DLE isolati) o il payload di un frame, senza raddoppi. */
-export type MpiItem = 'STX' | 'DLE' | Uint8Array;
-
-const h = (n: number): string => `0x${n.toString(16).padStart(2, '0')}`;
+/** Un segnale della procedura (STX, DLE o NAK isolati) o il payload di un frame, senza raddoppi. */
+export type MpiItem = 'STX' | 'DLE' | 'NAK' | Uint8Array;
 
 /**
- * Riceve i byte dalla linea. Fuori da un frame, STX e DLE sono segnali; ogni altro byte apre un
- * frame (i payload del PC Adapter cominciano con 00, 01 o 04, mai con STX o DLE). Il frame
- * finisce a `DLE ETX` e il BCC si controlla: uno sbagliato dà `MPI_FRAME`.
+ * Riceve i byte dalla linea. Un frame si accetta solo dopo `expectFrame()` (chi riceve ha appena
+ * risposto DLE a uno STX); fuori da lì STX, DLE e NAK sono segnali e ogni altro byte è rumore e
+ * si scarta. Il frame finisce a `DLE ETX` e il BCC si controlla. Non solleva mai: un frame
+ * rovinato (BCC sbagliato, DLE seguito da un byte strano, troppo lungo) si scarta in silenzio,
+ * così chi l'ha mandato non riceve il DLE e lo rimanda (3964R).
  */
 export class MpiFrameDecoder {
-  #state: 'idle' | 'data' | 'dle' | 'bcc' = 'idle';
+  #state: 'idle' | 'expect' | 'data' | 'dle' | 'bcc' = 'idle';
   #buf: number[] = [];
+
+  /** Il prossimo byte che non è STX apre un frame. */
+  expectFrame(): void {
+    this.#state = 'expect';
+    this.#buf = [];
+  }
+
+  /** Torna a riposo e scarta un frame a metà. */
+  reset(): void {
+    this.#state = 'idle';
+    this.#buf = [];
+  }
 
   push(chunk: Uint8Array): MpiItem[] {
     const out: MpiItem[] = [];
-    for (const b of chunk) {
-      switch (this.#state) {
-        case 'idle':
-          if (b === STX) out.push('STX');
-          else if (b === DLE) out.push('DLE');
-          else {
-            this.#buf = [b];
-            this.#state = 'data';
-          }
-          break;
-        case 'data':
-          if (b === DLE) this.#state = 'dle';
-          else this.#add(b);
-          break;
-        case 'dle':
-          if (b === DLE) {
-            this.#add(DLE);
-            this.#state = 'data';
-          } else if (b === ETX) {
-            this.#state = 'bcc';
-          } else {
-            this.#reset();
-            throw new S7Error('MPI_FRAME', `frame MPI: DLE seguito da ${h(b)}`);
-          }
-          break;
-        case 'bcc': {
-          const payload = Uint8Array.from(this.#buf);
-          this.#reset();
-          const want = mpiBcc(payload);
-          if (b !== want) {
-            throw new S7Error('MPI_FRAME', `frame MPI: BCC ${h(b)}, atteso ${h(want)}`);
-          }
-          out.push(payload);
-          break;
-        }
-      }
-    }
+    for (const b of chunk) this.#byte(b, out);
     return out;
   }
 
-  #add(b: number): void {
-    if (this.#buf.length >= MAX_PAYLOAD) {
-      this.#reset();
-      throw new S7Error('MPI_FRAME', `frame MPI oltre ${MAX_PAYLOAD} byte senza fine`);
+  #byte(b: number, out: MpiItem[]): void {
+    switch (this.#state) {
+      case 'idle':
+        if (b === STX) out.push('STX');
+        else if (b === DLE) out.push('DLE');
+        else if (b === NAK) out.push('NAK');
+        return; // rumore fuori da un frame
+      case 'expect':
+        if (b === STX) {
+          // l'altro lato non ha visto il nostro DLE e riparte da capo
+          this.reset();
+          out.push('STX');
+        } else {
+          this.#state = 'data';
+          this.#add(b);
+        }
+        return;
+      case 'data':
+        if (b === DLE) this.#state = 'dle';
+        else this.#add(b);
+        return;
+      case 'dle':
+        if (b === DLE) {
+          this.#state = 'data';
+          this.#add(DLE);
+        } else if (b === ETX) {
+          this.#state = 'bcc';
+        } else {
+          // frame rovinato: si scarta e il byte vale di nuovo da solo (può essere uno STX)
+          this.reset();
+          this.#byte(b, out);
+        }
+        return;
+      case 'bcc': {
+        const payload = Uint8Array.from(this.#buf);
+        this.reset();
+        // BCC sbagliato: niente frame, quindi niente DLE da parte nostra e l'altro lato rimanda
+        if (b === mpiBcc(payload)) out.push(payload);
+        return;
+      }
     }
-    this.#buf.push(b);
   }
 
-  #reset(): void {
-    this.#state = 'idle';
-    this.#buf = [];
+  #add(b: number): void {
+    if (this.#buf.length >= MAX_PAYLOAD)
+      this.reset(); // frame senza fine: scartato
+    else this.#buf.push(b);
   }
 }

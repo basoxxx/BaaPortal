@@ -1,5 +1,6 @@
 import { S7Error } from '../errors';
 import { lineWriter, type PduLink, type PduLinkFactory } from '../link';
+import { assertOutgoingPdu, type ConnectionMode } from '../readOnlyGuard';
 import type { Transport } from '../transport';
 import { DLE, MpiFrameDecoder, STX, encodeMpiFrame, type MpiItem } from './framing';
 
@@ -81,6 +82,9 @@ function checkOptions(o: Omit<MpiOptions, 'cpuAddress'> & { cpuAddress?: number 
       throw new RangeError(`${name} ${v} fuori 0-126`);
     }
   }
+  if (o.cpuAddress !== undefined && o.cpuAddress === o.localAddress) {
+    throw new RangeError(`indirizzo MPI ${o.cpuAddress} uguale per adattatore e CPU`);
+  }
   if (!Object.hasOwn(SPEED_CODE, o.busSpeed)) {
     throw new RangeError(`velocità del bus "${String(o.busSpeed)}" sconosciuta`);
   }
@@ -133,23 +137,21 @@ function replyText(p: Uint8Array): string | undefined {
 /** La porta verso l'adattatore: elementi in arrivo in coda, un solo lettore alla volta. */
 class Line {
   #items: MpiItem[] = [];
+  readonly #dec = new MpiFrameDecoder();
+  /** Si risolve quando la porta è chiusa davvero (dopo `fail`). */
+  #closed: Promise<void> | undefined;
   #wake: (() => void) | undefined;
   #err: Error | undefined;
   readonly #write: (b: Uint8Array) => void;
-  readonly #close: () => void;
+  readonly #close: () => void | Promise<void>;
   onFail: ((err: Error) => void) | undefined;
 
   constructor(t: Transport) {
-    const dec = new MpiFrameDecoder();
     this.#write = lineWriter(t);
     this.#close = () => t.close();
     t.onData((chunk) => {
       if (this.#err) return;
-      try {
-        this.#items.push(...dec.push(chunk));
-      } catch (e) {
-        this.fail(e instanceof Error ? e : new S7Error('MPI_FRAME', String(e)));
-      }
+      this.#items.push(...this.#dec.push(chunk));
       this.poke();
     });
     t.onClose((err) =>
@@ -181,8 +183,20 @@ class Line {
     return this.#items.shift();
   }
 
+  /** Scarta ciò che è arrivato, compreso un frame a metà. */
   clear(): void {
     this.#items = [];
+    this.#dec.reset();
+  }
+
+  /** Il prossimo dato dopo il nostro DLE è un frame. */
+  expectFrame(): void {
+    this.#dec.expectFrame();
+  }
+
+  /** La porta chiusa davvero: subito se la linea è ancora aperta (nessuna chiusura chiesta). */
+  get closed(): Promise<void> {
+    return this.#closed ?? Promise.resolve();
   }
 
   /** Il prossimo elemento entro `timeoutMs`; se non arriva, `MPI_NO_ADAPTER`. */
@@ -225,7 +239,7 @@ class Line {
     this.#err = err;
     this.#items = [];
     try {
-      this.#close();
+      this.#closed = Promise.resolve(this.#close()).catch(() => undefined);
     } catch {
       // già chiusa
     }
@@ -236,52 +250,79 @@ class Line {
 
 // ---- procedura 3964R: un telegramma in uscita, uno in arrivo --------------------------------
 
+interface TransmitOptions {
+  /** Frame dell'adattatore arrivato in collisione (vince lui); il nostro riparte dopo. */
+  onCollision?: (frame: Uint8Array) => void;
+  attempts?: number;
+  /**
+   * Telegramma dati (una PDU S7): una volta sul filo si rimanda solo dopo un NAK. Senza DLE non si
+   * sa se l'adattatore l'ha preso (DLE perso) e rimandarlo potrebbe far eseguire due volte una
+   * scrittura alla CPU; in quel caso il collegamento cade.
+   */
+  data?: boolean;
+}
+
 /**
- * PC → adattatore: STX, DLE, frame, DLE. Fino a `attempts` tentativi interi se manca un DLE.
- * Se all'STX risponde un altro STX (collisione) vince l'adattatore: il suo frame va a
- * `onCollision` e il nostro riparte dopo. libnodave nodave.c `_daveSendDialog2`; doc/MPI.html.
+ * PC → adattatore: STX, DLE, frame, DLE. Fino a `attempts` tentativi interi se manca un DLE o
+ * arriva un NAK. Se all'STX risponde un altro STX (collisione) vince l'adattatore: il suo frame
+ * va a `onCollision` e il nostro riparte dopo. libnodave nodave.c `_daveSendDialog2`; doc/MPI.html.
  */
 async function transmit(
   line: Line,
   payload: Uint8Array,
   timeoutMs: number,
-  onCollision?: (frame: Uint8Array) => void,
-  attempts = ATTEMPTS,
+  o: TransmitOptions = {},
 ): Promise<void> {
   const frame = encodeMpiFrame(payload);
   const dleMs = dleWaitMs(timeoutMs);
+  const attempts = o.attempts ?? ATTEMPTS;
   for (let n = 1; ; n++) {
     let collided: Uint8Array | undefined;
+    let onWire = false;
+    let nak = false;
     try {
       line.write(STX);
       let r = await line.next(dleMs, 'DLE dopo STX');
-      if (r === 'STX' && onCollision) {
+      if (r === 'STX' && o.onCollision) {
         collided = await receiveFrame(line, timeoutMs);
       } else {
         if (r !== 'DLE') throw new S7Error('MPI_FRAME', `dopo STX arrivato ${describe(r)}`);
         line.write(frame);
+        onWire = true;
         r = await line.next(dleMs, 'DLE dopo il frame');
+        nak = r === 'NAK';
         if (r !== 'DLE') throw new S7Error('MPI_FRAME', `dopo il frame arrivato ${describe(r)}`);
         return;
       }
     } catch (e) {
-      if (line.error || n >= attempts || !(e instanceof S7Error)) throw e;
+      const unsure = o.data && onWire && !nak;
+      if (line.error || n >= attempts || !(e instanceof S7Error) || unsure) throw e;
       line.clear();
     }
-    if (collided && onCollision) {
-      onCollision(collided); // fuori dal try: un suo errore non si ritenta
+    if (collided && o.onCollision) {
+      o.onCollision(collided); // fuori dal try: un suo errore non si ritenta
       n--;
     }
   }
 }
 
-/** Adattatore → PC, dopo il suo STX già letto: DLE, frame, DLE. */
+/**
+ * Adattatore → PC, dopo il suo STX già letto: DLE, frame, DLE. Un frame rovinato si scarta senza
+ * DLE: l'adattatore riparte con uno STX e si risponde di nuovo, fino a `ATTEMPTS` volte.
+ */
 async function receiveFrame(line: Line, timeoutMs: number): Promise<Uint8Array> {
-  line.write(DLE);
-  const f = await line.next(timeoutMs, 'frame dell’adattatore');
-  if (typeof f === 'string') throw new S7Error('MPI_FRAME', `atteso un frame, arrivato ${f}`);
-  line.write(DLE);
-  return f;
+  for (let n = 1; ; n++) {
+    line.expectFrame();
+    line.write(DLE);
+    const f = await line.next(timeoutMs, 'frame dell’adattatore');
+    if (f instanceof Uint8Array) {
+      line.write(DLE);
+      return f;
+    }
+    if (f !== 'STX' || n >= ATTEMPTS) {
+      throw new S7Error('MPI_FRAME', `atteso un frame, arrivato ${f}`);
+    }
+  }
 }
 
 /** Un telegramma dall'adattatore: STX, poi `receiveFrame`. */
@@ -361,19 +402,22 @@ async function readPartners(line: Line, t: number): Promise<number[]> {
 
 /** Chiusura verso l'adattatore, un solo tentativo e risposta ignorata (come nella fonte). */
 async function disconnectAdapter(line: Line, t: number): Promise<void> {
-  await transmit(line, CMD_DISCONNECT, t, undefined, 1);
+  await transmit(line, CMD_DISCONNECT, t, { attempts: 1 });
   await receive(line, t);
 }
 
+/** Apre la porta; riceve il tempo massimo (una porta occupata da noi stessi si aspetta fin lì). */
+export type SerialOpener = (timeoutMs?: number) => Promise<Transport>;
+
 async function openLine(
-  transport: () => Promise<Transport>,
+  transport: SerialOpener,
   timeoutMs: number,
   signal: AbortSignal | undefined,
 ): Promise<Line> {
   if (signal?.aborted) throw new S7Error('ABORTED', 'operazione annullata');
   let timer: ReturnType<typeof setTimeout> | undefined;
   let late = false;
-  const opening = transport();
+  const opening = transport(timeoutMs);
   try {
     const t = await Promise.race([
       opening,
@@ -399,7 +443,7 @@ async function openLine(
 
 /** Apre la linea e la passa a `body`; un errore o l'annullamento chiudono la porta. */
 async function withLine<T>(
-  transport: () => Promise<Transport>,
+  transport: SerialOpener,
   timeoutMs: number,
   signal: AbortSignal | undefined,
   body: (line: Line) => Promise<T>,
@@ -411,6 +455,7 @@ async function withLine<T>(
     return await body(line);
   } catch (e) {
     line.fail(e instanceof Error ? e : new S7Error('MPI_FRAME', String(e)));
+    await line.closed; // la porta è libera quando l'errore arriva
     throw signal?.aborted ? new S7Error('ABORTED', 'operazione annullata') : e;
   } finally {
     signal?.removeEventListener('abort', onAbort);
@@ -430,6 +475,8 @@ class MpiAdapterLink implements PduLink {
   readonly #t: number;
   readonly #cpu: number;
   readonly #cn: number;
+  readonly #mode: ConnectionMode;
+  readonly #pduLength: () => number;
   #cn2 = 0;
   /** Numero del prossimo telegramma dati: 00..FF, poi da 01 (lo 0 solo la prima volta). */
   #nr = 0;
@@ -445,8 +492,17 @@ class MpiAdapterLink implements PduLink {
   #closeCb: ((err?: Error) => void) | undefined;
   #closedErr: Error | undefined;
 
-  constructor(line: Line, variant: Variant, cpu: number, timeoutMs: number) {
+  constructor(
+    line: Line,
+    variant: Variant,
+    cpu: number,
+    timeoutMs: number,
+    mode: ConnectionMode,
+    pduLength: () => number,
+  ) {
     this.#line = line;
+    this.#mode = mode;
+    this.#pduLength = pduLength;
     this.variant = variant;
     this.#cpu = cpu;
     this.#t = timeoutMs;
@@ -515,6 +571,8 @@ class MpiAdapterLink implements PduLink {
 
   sendPdu(s7: Uint8Array): void {
     if (this.#closed || this.#closing) throw new S7Error('CLOSED', 'collegamento MPI chiuso');
+    // secondo controllo, come `guardedSender` su ISO-on-TCP: il primo è in `S7Connection`
+    assertOutgoingPdu(s7, this.#mode, this.#pduLength());
     const nr = this.#nr;
     this.#nr = nr === 0xff ? 1 : nr + 1;
     this.#outbox.push(Uint8Array.of(...this.#header(), T_DATA, nr, ...s7));
@@ -533,15 +591,18 @@ class MpiAdapterLink implements PduLink {
     if (this.#closedErr) cb(this.#closedErr);
   }
 
-  /** Disconnessione dalla CPU e dall'adattatore (un tentativo ciascuna), poi la porta. */
+  /**
+   * Disconnessione dalla CPU e dall'adattatore (un tentativo ciascuna), poi la porta. Si risolve
+   * a porta chiusa davvero, anche dopo un errore.
+   */
   async close(): Promise<void> {
-    if (this.#closed) return;
-    if (!this.#closing) {
+    if (!this.#closed && !this.#closing) {
       this.#closing = true;
       this.#outbox.length = 0;
       this.#line.poke();
     }
     await this.#run;
+    await this.#line.closed;
   }
 
   async #loop(): Promise<void> {
@@ -558,10 +619,13 @@ class MpiAdapterLink implements PduLink {
         if (item instanceof Uint8Array) {
           throw new S7Error('MPI_FRAME', `frame MPI senza STX: ${hex(item)}`);
         }
-        if (item === 'DLE') continue; // DLE in più fuori sequenza: niente da fare
+        if (item === 'DLE' || item === 'NAK') continue; // fuori sequenza: niente da fare
         const out = this.#acks.shift() ?? this.#outbox.shift();
         if (out) {
-          await transmit(line, out, this.#t, (f) => this.#incoming(f));
+          await transmit(line, out, this.#t, {
+            onCollision: (f) => this.#incoming(f),
+            data: out[this.#hdrLen] === T_DATA,
+          });
           // ogni telegramma dati riceve un B0 (doc/MPI.html, «Payload»): metà timeout, così
           // il silenzio dell'adattatore si vede prima del timeout della richiesta S7
           if (out[this.#hdrLen] === T_DATA) this.#ackDeadline = Date.now() + this.#t / 2;
@@ -582,7 +646,9 @@ class MpiAdapterLink implements PduLink {
   async #disconnect(): Promise<void> {
     const line = this.#line;
     try {
-      await transmit(line, Uint8Array.of(...this.#header(), T_DISCONNECT), this.#t, undefined, 1);
+      await transmit(line, Uint8Array.of(...this.#header(), T_DISCONNECT), this.#t, {
+        attempts: 1,
+      });
       await receive(line, this.#t); // risposta non controllata dalla fonte
       await disconnectAdapter(line, this.#t);
     } catch {
@@ -631,12 +697,12 @@ class MpiAdapterLink implements PduLink {
  * A ogni apertura: porta, init dell'adattatore (con `auto` prima v1 e poi v2), connessione.
  * Le opzioni fuori campo danno RangeError subito, senza aprire la porta.
  */
-export function mpiAdapterLink(transport: () => Promise<Transport>, o: MpiOptions): PduLinkFactory {
+export function mpiAdapterLink(transport: SerialOpener, o: MpiOptions): PduLinkFactory {
   checkOptions(o);
-  return ({ timeoutMs, signal }) =>
+  return ({ timeoutMs, signal, mode = 'read-only', pduLength = () => 240 }) =>
     withLine(transport, timeoutMs, signal, async (line) => {
       const variant = await initAdapter(line, o, timeoutMs);
-      const link = new MpiAdapterLink(line, variant, o.cpuAddress, timeoutMs);
+      const link = new MpiAdapterLink(line, variant, o.cpuAddress, timeoutMs, mode, pduLength);
       await link.connect();
       return link;
     });
@@ -644,7 +710,7 @@ export function mpiAdapterLink(transport: () => Promise<Transport>, o: MpiOption
 
 /** Indirizzi delle stazioni attive sul bus MPI (per «Cerca»), poi l'adattatore si chiude. */
 export async function listMpiNodes(
-  transport: () => Promise<Transport>,
+  transport: SerialOpener,
   o: Omit<MpiOptions, 'cpuAddress'> & { timeoutMs?: number; signal?: AbortSignal },
 ): Promise<number[]> {
   checkOptions(o);
@@ -658,6 +724,7 @@ export async function listMpiNodes(
       // la risposta alla chiusura non conta
     }
     line.fail(new S7Error('CLOSED', 'connessione chiusa'));
+    await line.closed;
     return nodes;
   });
 }

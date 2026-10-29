@@ -108,6 +108,9 @@ const deviceShape = {
             highestAddress: z.union(MPI_HIGHEST_ADDRESSES.map((n) => z.literal(n))),
             busSpeed: z.enum(MPI_BUS_SPEEDS),
             variant: z.enum(['auto', 'v1', 'v2']),
+          }).refine((l) => l.localAddress !== l.cpuAddress, {
+            message: 'L’indirizzo MPI della CPU deve essere diverso da quello dell’adattatore',
+            path: ['cpuAddress'],
           }),
         ])
         .optional(),

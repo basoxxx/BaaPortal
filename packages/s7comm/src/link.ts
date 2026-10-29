@@ -17,8 +17,16 @@ export interface PduLink {
   close(): Promise<void>;
 }
 
-/** Apre un link pronto a portare PDU (handshake del link compreso). */
-export type PduLinkFactory = (o: { timeoutMs: number; signal?: AbortSignal }) => Promise<PduLink>;
+/**
+ * Apre un link pronto a portare PDU (handshake del link compreso). `mode` e `pduLength` servono
+ * al secondo controllo dentro il link (default: sola lettura, 240).
+ */
+export type PduLinkFactory = (o: {
+  timeoutMs: number;
+  signal?: AbortSignal;
+  mode?: ConnectionMode;
+  pduLength?: () => number;
+}) => Promise<PduLink>;
 
 const SRC_REF = 0x0100; // proto §2.2, §14
 const TPDU_SIZE = 0x0a; // 1024
@@ -64,8 +72,8 @@ export function guardedSender(
 
 /**
  * Byte di linea per i link che non portano TPKT (adattatore MPI): STX, DLE e frame. Le PDU S7
- * dentro i frame sono già passate da `assertOutgoingPdu` in `S7Connection`, unico chiamante
- * di `PduLink.sendPdu`; il resto sono comandi dell'adattatore, senza PDU.
+ * dentro i frame sono passate due volte da `assertOutgoingPdu` (in `S7Connection` e in
+ * `MpiAdapterLink.sendPdu`); il resto sono comandi dell'adattatore, senza PDU.
  */
 export function lineWriter(transport: Transport): (bytes: Uint8Array) => void {
   return (bytes) => deliver(transport, bytes.slice());

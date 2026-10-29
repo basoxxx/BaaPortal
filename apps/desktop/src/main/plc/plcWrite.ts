@@ -76,7 +76,8 @@ export type PlcWriteConnectFn = (
 
 /** Il collegamento del ripristino: il client di scrittura più SZL, lista dei job e `_DELE` degli SDB. */
 export type RestoreClient = WriteClient &
-  Pick<S7WriteClient, 'readSzl' | 'readJobList' | 'deleteSystemBlock'>;
+  Pick<S7WriteClient, 'readSzl' | 'readJobList' | 'deleteSystemBlock'> &
+  Partial<Pick<S7WriteClient, 'listBlocks'>>;
 export type PlcRestoreConnectFn = (
   o: Omit<ConnectOptions, 'transport' | 'mode'>,
 ) => Promise<RestoreClient>;
@@ -803,9 +804,16 @@ export class PlcWriteService {
         );
       }
       // la lista degli SDB può essere cambiata (altro PG) dopo la preparazione: si rilegge prima di scrivere
-      const live = await this.o.service.read?.(owner, async (run) =>
-        (await run((x) => x.listBlocks('SDB'))).map((e) => e.number),
-      );
+      // Con l'adattatore MPI la sorveglianza è ferma (una sessione per porta): si rilegge qui.
+      const live =
+        target.access.link?.kind === 'mpi' && c.listBlocks
+          ? await c.listBlocks('SDB').then(
+              (l) => ({ ok: true as const, value: l.map((e) => e.number) }),
+              () => undefined,
+            )
+          : await this.o.service.read?.(owner, async (run) =>
+              (await run((x) => x.listBlocks('SDB'))).map((e) => e.number),
+            );
       if (!live || !live.ok) {
         return fin(
           'Elenco degli SDB della CPU non rileggibile. La CPU è rimasta in STOP, nulla è stato scritto',

@@ -319,6 +319,11 @@ describe('finestra «Dispositivi accessibili»: adattatore MPI', () => {
     await user.type(within(dlg).getByLabelText('Indirizzo MPI della CPU'), '127');
     expect(within(dlg).getByRole('alert')).toHaveTextContent('tra 0 e 126');
     expect(within(dlg).getByRole('button', { name: 'Collega' })).toBeDisabled();
+    // stesso indirizzo dell'adattatore (0): messaggio e Collega disattivo
+    await user.clear(within(dlg).getByLabelText('Indirizzo MPI della CPU'));
+    await user.type(within(dlg).getByLabelText('Indirizzo MPI della CPU'), '0');
+    expect(within(dlg).getByRole('alert')).toHaveTextContent('diverso da quello del PG/PC');
+    expect(within(dlg).getByRole('button', { name: 'Collega' })).toBeDisabled();
     await user.clear(within(dlg).getByLabelText('Indirizzo MPI della CPU'));
     await user.type(within(dlg).getByLabelText('Indirizzo MPI della CPU'), '2');
     expect(within(dlg).getByRole('button', { name: 'Collega' })).toBeEnabled();

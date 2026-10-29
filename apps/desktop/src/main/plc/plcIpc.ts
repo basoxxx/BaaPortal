@@ -1,6 +1,5 @@
 import type { IpcMainInvokeEvent } from 'electron';
-import { listMpiNodes } from '@baaportal/s7comm';
-import { listSerialPorts, openSerial } from '@baaportal/s7comm/node';
+import { listMpiNodesSerial, listSerialPorts } from '@baaportal/s7comm/node';
 import {
   MPI_BUS_SPEEDS,
   MPI_HIGHEST_ADDRESSES,
@@ -49,6 +48,7 @@ type Handle = (
 ) => void;
 
 const TYPES = ['PG', 'OP', 'S7_BASIC'];
+const MPI_SAME_ADDRESS = 'L’indirizzo MPI della CPU deve essere diverso da quello dell’adattatore';
 
 function int(v: unknown, min: number, max: number): v is number {
   return typeof v === 'number' && Number.isInteger(v) && v >= min && v <= max;
@@ -85,6 +85,8 @@ export function parsePlcAccess(raw: unknown): PlcAccess | string {
   if (r['link'] !== undefined) {
     const link = parseLink(r['link']);
     if (typeof link === 'string') return link;
+    // non in `parseLink`: «Cerca» non ha ancora un indirizzo della CPU
+    if (link.kind === 'mpi' && link.localAddress === link.cpuAddress) return MPI_SAME_ADDRESS;
     out.link = link;
   }
   return out;
@@ -132,14 +134,14 @@ function parseLink(raw: unknown): PlcLink | string {
 /** «Cerca» sul bus MPI: apre l'adattatore, legge i nodi attivi e lo chiude. Mai eccezioni. */
 export async function mpiNodes(
   raw: unknown,
-  list: typeof listMpiNodes = listMpiNodes,
+  list: typeof listMpiNodesSerial = listMpiNodesSerial,
 ): Promise<PlcMpiNodesResult> {
   const link = parseLink(raw);
   if (typeof link === 'string') return { ok: false, error: link };
   if (link.kind !== 'mpi') return { ok: false, error: 'Tipo di collegamento non valido' };
   try {
     const nodes = await list(
-      openSerial({ path: link.port, baudRate: link.baudRate, parity: link.parity }),
+      { path: link.port, baudRate: link.baudRate, parity: link.parity },
       {
         localAddress: link.localAddress,
         highestAddress: link.highestAddress,

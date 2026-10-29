@@ -1409,6 +1409,7 @@
     "mpiLocal": "Indirizzo MPI del PG/PC",
     "mpiCpu": "Indirizzo MPI della CPU",
     "mpiAddressInvalid": "L'indirizzo MPI deve essere un numero tra 0 e 126.",
+    "mpiAddressSame": "L'indirizzo MPI della CPU deve essere diverso da quello del PG/PC.",
     "mpiSearch": "Cerca",
     "mpiSearching": "Ricerca dei nodi sul bus MPI…",
     "mpiNoNodes": "Nessun altro nodo trovato sul bus MPI.",

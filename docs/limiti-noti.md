@@ -193,7 +193,8 @@ Si crea solo con _Funzioni sperimentali_ attive. Il testo SCL si traduce in AWL 
 - **HSA nella variante v2.** Si scrive il valore scelto (31 di serie); libnodave usa sempre 15. Se un adattatore v2 non si inizializza, provare HSA 15.
 - **Variante v3** (quella di STEP 7, frame `7E` con CRC16): non fatta. Un adattatore che parla solo v3 non risponde.
 - **Cloni USB-COM** non verificati: funzionano solo se parlano lo stesso protocollo del PC Adapter seriale.
-- **Una connessione alla volta** per adattatore. La PDU proposta è di 240 byte.
+- **Una connessione alla volta** per adattatore (e per porta, in tutta l'app). Un'operazione con collegamento proprio (scrittura, download, ripristino, osservazione, stack, caricamento, backup) ferma la sorveglianza, che si riapre alla fine; intanto le letture della finestra (tabelle di controllo, elenco blocchi, diagnostica) danno «Porta MPI occupata» e una seconda operazione aspetta la porta fino al suo timeout, poi «già usata da un altro collegamento di BaaPortal». Due finestre online sulla stessa porta: la seconda non si collega. La PDU proposta è di 240 byte.
+- **Ritrasmissioni.** Un byte di rumore fuori da un frame si scarta, un frame con BCC sbagliato si scarta senza DLE (l'adattatore lo rimanda), un NAK fa rimandare il telegramma (fino a 3 volte). Un telegramma dati (una PDU) già trasmesso senza DLE di risposta non si rimanda mai, perché la CPU potrebbe eseguire due volte una scrittura: il collegamento cade.
 - **Non supportati:** PC Adapter USB Siemens, CP 5611/5711, PPI (S7-200).
 
 ## Simulatore (piano 2A)

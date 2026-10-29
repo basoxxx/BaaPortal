@@ -102,7 +102,7 @@ export class S7Connection {
   #pduLength: number;
   #amq = 1;
   #closed = false;
-  #closing = false;
+  #closingDone: Promise<void> | undefined;
   #lastRef = 0;
   #current: Pending | undefined;
   readonly #queue: Pending[] = [];
@@ -190,7 +190,12 @@ export class S7Connection {
     // I controlli del link ISO vedono la connessione solo dopo che esiste.
     const ref: { conn?: S7Connection } = {};
     const link = o.link
-      ? await o.link({ timeoutMs, signal: o.signal })
+      ? await o.link({
+          timeoutMs,
+          signal: o.signal,
+          mode,
+          pduLength: () => (ref.conn ? ref.conn.#pduLength : proposed),
+        })
       : await IsoTcpLink.open({
           host: o.host,
           port: o.port ?? DEFAULT_PORT,
@@ -448,13 +453,14 @@ export class S7Connection {
     }
   }
 
+  /** Si risolve a link chiuso davvero (con l'adattatore MPI: porta seriale libera). */
   close(): Promise<void> {
-    if (this.#closed || this.#closing) return Promise.resolve();
-    this.#closing = true;
+    if (this.#closingDone) return this.#closingDone;
+    if (this.#closed) return this.#link.close().catch(() => undefined);
     // Chiusura ordinata del link (DR su ISO-on-TCP), poi le promesse in sospeso.
-    void this.#link.close().catch(() => undefined);
+    this.#closingDone = this.#link.close().catch(() => undefined);
     this.#fail(new S7Error('CLOSED', 'connessione chiusa'));
-    return Promise.resolve();
+    return this.#closingDone;
   }
 
   // ---- apertura ----------------------------------------------------------------------------

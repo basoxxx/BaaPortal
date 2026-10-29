@@ -266,8 +266,9 @@ export function AccessibleDevicesDialog({ onClose }: { onClose(): void }) {
   const mpiLocalN = toInt(mpiLocal);
   const mpiCpuBad = mpiCpuN === null || mpiCpuN > 126;
   const mpiLocalBad = mpiLocalN === null || mpiLocalN > 126;
+  const mpiSame = !mpiCpuBad && !mpiLocalBad && mpiCpuN === mpiLocalN;
   const mpiLink: MpiLink | null =
-    mpi.port === '' || mpiCpuN === null || mpiCpuBad || mpiLocalN === null || mpiLocalBad
+    mpi.port === '' || mpiCpuN === null || mpiCpuBad || mpiLocalN === null || mpiLocalBad || mpiSame
       ? null
       : { ...mpi, cpuAddress: mpiCpuN, localAddress: mpiLocalN };
   const ready = linkKind === 'mpi' ? mpiLink !== null && !mpiSearching : accessOk;
@@ -520,6 +521,10 @@ export function AccessibleDevicesDialog({ onClose }: { onClose(): void }) {
               {mpiCpuBad || mpiLocalBad ? (
                 <span role="alert" className="baa-field-error">
                   {t('accessDevices.mpiAddressInvalid')}
+                </span>
+              ) : mpiSame ? (
+                <span role="alert" className="baa-field-error">
+                  {t('accessDevices.mpiAddressSame')}
                 </span>
               ) : null}
               <button

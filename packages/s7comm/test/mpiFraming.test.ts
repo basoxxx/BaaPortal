@@ -56,40 +56,54 @@ describe('framing del PC Adapter MPI', () => {
     '%s: il decoder ridà il payload anche a pezzi da 1 byte',
     (_n, payload, wire) => {
       const d = new MpiFrameDecoder();
+      d.expectFrame();
       const got = [];
       for (const b of fromHex(wire)) got.push(...d.push(Uint8Array.of(b)));
       expect(got).toEqual([fromHex(payload)]);
     },
   );
 
-  it('STX e DLE isolati sono segnali; più frame nello stesso blocco', () => {
+  it('fuori da un frame STX, DLE e NAK sono segnali e il resto è rumore', () => {
     const d = new MpiFrameDecoder();
-    const chunk = new Uint8Array([
-      0x10,
-      0x02,
-      ...fromHex('010d0210031d'),
-      0x10,
-      ...encodeMpiFrame(Uint8Array.of(0x01, 0x10)),
+    // senza expectFrame un byte che non è un segnale (anche 0x00, come l'inizio di un payload) si scarta
+    expect(d.push(Uint8Array.of(0x00, 0xff, 0x10, 0x41, 0x15, 0x02))).toEqual([
+      'DLE',
+      'NAK',
+      'STX',
     ]);
-    expect(d.push(chunk)).toEqual(['DLE', 'STX', fromHex('010d02'), 'DLE', Uint8Array.of(1, 16)]);
+    d.expectFrame();
+    expect(d.push(encodeMpiFrame(Uint8Array.of(0x01, 0x10)))).toEqual([Uint8Array.of(1, 16)]);
+    // dopo il frame si torna a riposo: i byte di un altro frame non danno payload
+    expect(d.push(fromHex('010d0210031d'))).toEqual(['STX', 'DLE']);
   });
 
-  it('un BCC sbagliato dà MPI_FRAME', () => {
+  it('un BCC sbagliato scarta il frame senza errori; il successivo passa', () => {
     const d = new MpiFrameDecoder();
-    expect(() => d.push(fromHex('010d0210031e'))).toThrowError(
-      expect.objectContaining({ code: 'MPI_FRAME' }),
-    );
+    d.expectFrame();
+    expect(d.push(fromHex('010d0210031e'))).toEqual([]);
+    d.expectFrame();
+    expect(d.push(fromHex('010d0210031d'))).toEqual([fromHex('010d02')]);
   });
 
-  it('DLE seguito da un byte che non è DLE né ETX dà MPI_FRAME', () => {
-    expect(() => new MpiFrameDecoder().push(fromHex('011005'))).toThrowError(
-      expect.objectContaining({ code: 'MPI_FRAME' }),
-    );
+  it('DLE seguito da un byte strano: frame scartato e il byte rivale da solo (STX)', () => {
+    const d = new MpiFrameDecoder();
+    d.expectFrame();
+    expect(d.push(fromHex('011002'))).toEqual(['STX']);
   });
 
-  it('un frame senza fine oltre il limite dà MPI_FRAME', () => {
-    expect(() => new MpiFrameDecoder().push(new Uint8Array(5000).fill(0x41))).toThrowError(
-      expect.objectContaining({ code: 'MPI_FRAME' }),
-    );
+  it('uno STX al posto del frame atteso è un segnale (l’altro lato riparte)', () => {
+    const d = new MpiFrameDecoder();
+    d.expectFrame();
+    expect(d.push(Uint8Array.of(0x02))).toEqual(['STX']);
+  });
+
+  it('un frame senza fine oltre il limite si scarta, poi reset torna a riposo', () => {
+    const d = new MpiFrameDecoder();
+    d.expectFrame();
+    expect(d.push(new Uint8Array(5000).fill(0x41))).toEqual([]);
+    d.expectFrame();
+    d.push(Uint8Array.of(0x01));
+    d.reset();
+    expect(d.push(fromHex('0d0210031d'))).toEqual(['STX', 'DLE']);
   });
 });

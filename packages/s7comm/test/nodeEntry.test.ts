@@ -9,8 +9,9 @@ describe('punti di ingresso', () => {
       'connectTcp',
       'connectTestTcp',
       'connectWriteTcp',
+      'listMpiNodesSerial',
       'listSerialPorts',
-      'openSerial',
+      'mpiSerialLink',
       'openTcp',
       'probePort',
     ]);
@@ -20,5 +21,12 @@ describe('punti di ingresso', () => {
   it('nessun punto di ingresso esporta il trasporto TCP grezzo', () => {
     expect('tcpTransport' in node).toBe(false);
     expect('tcpTransport' in core).toBe(false);
+  });
+
+  it('nessun punto di ingresso esporta la porta seriale grezza', () => {
+    for (const k of ['openSerial', 'serialTransport', 'SerialPort']) {
+      expect(k in node).toBe(false);
+      expect(k in core).toBe(false);
+    }
   });
 });

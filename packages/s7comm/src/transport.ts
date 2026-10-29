@@ -8,7 +8,8 @@ export interface Transport {
   send(bytes: Uint8Array): void;
   onData(cb: (chunk: Uint8Array) => void): void;
   onClose(cb: (err?: Error) => void): void;
-  close(): void;
+  /** Può restituire una promessa che si risolve a trasporto chiuso davvero (porta seriale). */
+  close(): void | Promise<void>;
 }
 
 export type TransportFactory = (
