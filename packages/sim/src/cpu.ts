@@ -242,7 +242,7 @@ export class SimCpu {
           number: req.number,
           ...(req.last ? { last: true } : {}),
           steps: [],
-          seen: new Set<number>(),
+          seen: new Map<number, number>(),
         }
       : undefined;
   }

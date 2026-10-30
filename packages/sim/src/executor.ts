@@ -43,8 +43,8 @@ export interface MonitorRequest {
 /** Registro dell'osservazione condiviso dai contesti di esecuzione del ciclo. */
 export interface MonitorSink extends MonitorRequest {
   steps: MonitorStep[];
-  /** Offset già registrati nel ciclo: solo la prima esecuzione conta. */
-  seen: Set<number>;
+  /** Offset già registrati nel ciclo → posizione in `steps` (con `last` si aggiorna lì). */
+  seen: Map<number, number>;
   /** Classe di priorità che per prima è entrata nel blocco nel ciclo: le altre non si registrano. */
   prio?: number;
 }
@@ -134,7 +134,6 @@ function restore(st: ExecState, s: Saved): void {
 /** Registra lo stato del blocco osservato; solo la prima esecuzione dell'offset nel ciclo. */
 function recordStep(mon: MonitorSink, st: ExecState, at: number): void {
   if (mon.seen.has(at) && !mon.last) return;
-  mon.seen.add(at);
   const { regs } = st;
   const step = {
     offset: at,
@@ -147,9 +146,9 @@ function recordStep(mon: MonitorSink, st: ExecState, at: number): void {
     db: regs.db,
     di: regs.di,
   };
-  const prev = mon.last ? mon.steps.findIndex((x) => x.offset === at) : -1;
-  if (prev >= 0) mon.steps[prev] = step;
-  else mon.steps.push(step);
+  const prev = mon.seen.get(at);
+  if (prev !== undefined) mon.steps[prev] = step;
+  else mon.seen.set(at, mon.steps.push(step) - 1);
 }
 
 /** Ogni quante istruzioni si controlla il tempo di ciclo (Global Constraints, piano 2A). */
