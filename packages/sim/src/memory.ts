@@ -45,6 +45,11 @@ export class SimMemory {
   readonly physIn: Uint8Array;
   readonly physOut: Uint8Array;
   dbs = new Map<number, SimDb>();
+  /**
+   * Byte di periferia raggiungibili (1 = un modulo presente li copre), dalla configurazione hardware;
+   * senza configurazione tutto il campo di I/O della CPU.
+   */
+  periphery: { in: Uint8Array; out: Uint8Array } | undefined;
 
   constructor(sizes: MemorySizes) {
     this.I = new Uint8Array(sizes.inputs);
@@ -116,11 +121,18 @@ export class SimMemory {
       default:
         throw new SimError('MC7_NON_ESEGUIBILE', `area ${area}`);
     }
-    if (!Number.isInteger(byteOffset) || byteOffset < 0 || byteOffset + length > arr.length)
+    const io = area === 'PI' ? this.periphery?.in : area === 'PQ' ? this.periphery?.out : undefined;
+    const missing = io && io.subarray(byteOffset, byteOffset + length).includes(0);
+    if (
+      !Number.isInteger(byteOffset) ||
+      byteOffset < 0 ||
+      byteOffset + length > arr.length ||
+      missing
+    )
       throw new SimError(
         'AREA_LUNGHEZZA',
         `${area} byte ${byteOffset} lunghezza ${length}`,
-        // Periferia oltre il campo di I/O della CPU: è l'evento di OB122, non di OB121.
+        // Periferia oltre il campo di I/O o senza modulo: è l'evento di OB122, non di OB121.
         area === 'PI' || area === 'PQ' ? { periphery: { byte: byteOffset, width: length } } : {},
       );
     return arr.subarray(byteOffset, byteOffset + length);

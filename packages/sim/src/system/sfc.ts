@@ -524,21 +524,76 @@ const wrUsmsg: SystemHandler = (call) => {
 // ---- Indirizzi e set di dati (SFC 5, 49, 58, 59) ---------------------------------------------------
 
 /**
- * Manuale, 15.1 «GADR_LGC» e 15.2 «LGC_GADR»; 7.7 «WR_REC» e 7.8 «RD_REC». Senza un modulo
- * configurato: 16#8099 posto connettore non configurato (SFC 5), 16#8090 indirizzo logico non
- * valido (SFC 49, 58, 59). Da verificare su CPU reale.
+ * Manuale, 15.1 «GADR_LGC» e 15.2 «LGC_GADR»; 7.7 «WR_REC» e 7.8 «RD_REC». I moduli sono quelli
+ * presenti della configurazione hardware. 16#8099 posto non configurato, 16#809A SUBADDR fuori dal
+ * modulo (SFC 5); 16#8090 indirizzo logico non valido (SFC 49, 58, 59); 16#80B0 il modulo non
+ * conosce il set di dati (SFC 58, 59: la CPU simulata non ha set di dati, ⚠️). AREA di SFC 49: 1 =
+ * rack S7-300, 2 = periferia decentrata (⚠️ per una stazione RACK è il numero della stazione). Da
+ * verificare su CPU reale.
  */
 const SLOT_NOT_CONFIGURED = 0x8099;
+const BAD_SUBADDR = 0x809a;
 const BAD_LADDR = 0x8090;
+const NO_RECORD = 0x80b0;
+const IOID_IN = 0x54;
+const IOID_OUT = 0x55;
 
-const gadrLgc: SystemHandler = (call) => call.ret(SLOT_NOT_CONFIGURED);
-const lgcGadr: SystemHandler = (call) => call.ret(BAD_LADDR);
+/** Modulo e area (ingressi o uscite) che contengono l'indirizzo logico. */
+function moduleAt(call: SystemCall, ioid: number, laddr: number) {
+  for (const m of call.services.modules()) {
+    const r = ioid === IOID_IN ? m.inputs : ioid === IOID_OUT ? m.outputs : undefined;
+    if (r && laddr >= r.start && laddr < r.start + r.bytes) return { m, r };
+  }
+  return undefined;
+}
+
+const gadrLgc: SystemHandler = (call) => {
+  const subnet = call.param('SUBNETID').read('B');
+  const rack = call.param('RACK').read('W');
+  const slot = call.param('SLOT').read('W');
+  const sub = call.param('SUBADDR').read('W');
+  const [ioid, laddr] = [call.param('IOID'), call.param('LADDR')];
+  ioid.bytes(1, 'write');
+  laddr.bytes(2, 'write');
+  // SUBNETID 0 = rack centrale; altrimenti RACK è il numero della stazione (⚠️).
+  const m = call.services
+    .modules()
+    .find((x) =>
+      subnet === 0
+        ? x.station === undefined && x.rack === rack && x.slot === slot
+        : x.station === rack && x.slot === slot,
+    );
+  if (!m) return call.ret(SLOT_NOT_CONFIGURED);
+  const r = m.inputs ?? m.outputs!;
+  if (sub >= r.bytes) return call.ret(BAD_SUBADDR);
+  ioid.write('B', m.inputs ? IOID_IN : IOID_OUT);
+  laddr.write('W', r.start + sub);
+  call.ret(0);
+};
+
+const lgcGadr: SystemHandler = (call) => {
+  const hit = moduleAt(call, call.param('IOID').read('B'), call.param('LADDR').read('W'));
+  const out = ['AREA', 'RACK', 'SLOT', 'SUBADDR'].map((n) => call.param(n));
+  out[0]!.bytes(1, 'write');
+  for (const p of out.slice(1)) p.bytes(2, 'write');
+  if (!hit) return call.ret(BAD_LADDR);
+  const { m, r } = hit;
+  const laddr = call.param('LADDR').read('W');
+  out[0]!.write('B', m.station === undefined ? 1 : 2);
+  out[1]!.write('W', m.station ?? m.rack);
+  out[2]!.write('W', m.slot);
+  out[3]!.write('W', laddr - r.start);
+  call.ret(0);
+};
 
 /** ⚠️ REQ = 0: nessun trasferimento, BUSY = 0 e RET_VAL 0. */
 const dataRecord: SystemHandler = (call) => {
   const req = call.param('REQ').read('X');
+  const ioid = call.param('IOID').read('B');
+  const laddr = call.param('LADDR').read('W');
   call.param('BUSY').write('X', 0);
-  call.ret(req ? BAD_LADDR : 0);
+  if (!req) return call.ret(0);
+  call.ret(moduleAt(call, ioid, laddr) ? NO_RECORD : BAD_LADDR);
 };
 
 export const SFC_TABLE: Record<number, SystemHandler> = {

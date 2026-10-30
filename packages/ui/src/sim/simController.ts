@@ -1,13 +1,14 @@
 import type { StoreApi } from 'zustand/vanilla';
-import { findCpu } from '@baaportal/catalog';
+import { findCpu, findIoModule } from '@baaportal/catalog';
 import {
   findDevice,
   findWatchTable,
   watchResolverFor,
+  type HwModule,
   type PlcDevice,
   type WatchTable,
 } from '@baaportal/project';
-import type { MonitorRequest, SimCpuProps } from '@baaportal/sim';
+import type { MonitorRequest, SimCpuProps, SimIoModule } from '@baaportal/sim';
 import type { BaaBridge } from '../bridge';
 import { t } from '../i18n';
 import { hashOf } from '../project/compile/compileActions';
@@ -49,6 +50,36 @@ export function simPropsOf(dev: PlcDevice): SimCpuProps {
     retentivity: { ...p.retentivity },
     cyclicInterruptMs: p.cyclicInterrupts.ob35Ms,
   };
+}
+
+/**
+ * Moduli di I/O della configurazione hardware (rack e stazioni ET 200) per il simulatore; vuoto se
+ * non ce n'è nessuno (progetti senza configurazione: tutto il campo della CPU).
+ */
+export function simIoOf(dev: PlcDevice): SimIoModule[] {
+  const out: SimIoModule[] = [];
+  const add = (m: HwModule, station?: number) => {
+    const type = findIoModule(m.orderNumber);
+    if (!type) return;
+    const range = (start: number | undefined, bytes: number) =>
+      start !== undefined && bytes > 0 ? { start, bytes } : undefined;
+    const inputs = range(m.inputStart, type.inputBytes);
+    const outputs = range(m.outputStart, type.outputBytes);
+    if (!inputs && !outputs) return;
+    out.push({
+      id: m.id,
+      name: m.name,
+      rack: m.rack,
+      slot: m.slot,
+      ...(station !== undefined ? { station } : {}),
+      ...(inputs ? { inputs } : {}),
+      ...(outputs ? { outputs } : {}),
+    });
+  };
+  for (const m of dev.hardware?.modules ?? []) add(m);
+  for (const st of dev.hardware?.stations ?? [])
+    for (const m of st.modules) add(m, st.address ?? 0);
+  return out;
 }
 
 /**
@@ -133,6 +164,7 @@ export class SimController {
       session = await (this.deps.start ?? SimSession.start)({
         cpuTypeId: dev.cpu.typeId,
         props: simPropsOf(dev),
+        io: simIoOf(dev),
       });
     } catch (e) {
       if (gen === this.generation) {
@@ -184,6 +216,7 @@ export class SimController {
         ...(this.inputsInFlight > 0 ? {} : { inputs: n.inputs }),
         outputs: n.outputs,
         forces: n.forces,
+        pulled: n.pulled,
       });
     });
     session.onFail((e) => {
@@ -240,6 +273,17 @@ export class SimController {
       if (this.session === s) this.push('error', 'simInputsFailed', { message: errorText(e) });
     } finally {
       if (this.session === s) this.inputsInFlight--;
+    }
+  }
+
+  /** Estrae o reinserisce un modulo della configurazione (OB82, OB86 per una stazione). */
+  async setModulePresent(id: string, present: boolean): Promise<void> {
+    const s = this.session;
+    if (!s) return;
+    try {
+      await s.request({ op: 'module', id, present });
+    } catch (e) {
+      if (this.session === s) this.push('error', 'simInterruptFailed', { message: errorText(e) });
     }
   }
 

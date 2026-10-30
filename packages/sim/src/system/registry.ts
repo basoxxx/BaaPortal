@@ -100,6 +100,7 @@ function standaloneServices(ctx: ExecContext): SystemServices {
     faults: () => masks,
     onFault: (e) => maskedFault(masks, e),
     userMessage: () => undefined,
+    modules: () => [],
   };
 }
 

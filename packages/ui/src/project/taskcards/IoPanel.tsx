@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { parseAddress } from '@baaportal/s7-types';
 import { findDevice, type PlcDevice } from '@baaportal/project';
 import { useAppStore, useServices } from '../../state/AppContext';
-import { simControllerFor } from '../../sim/simController';
+import { simControllerFor, simIoOf } from '../../sim/simController';
 import type { WriteItemReq } from '../../sim/protocol';
 
 type Dir = 'inputs' | 'outputs';
@@ -385,6 +385,45 @@ function ForceTable() {
   );
 }
 
+/** Moduli della configurazione hardware: estrai e reinserisci (OB82, OB86 per le stazioni ET 200). */
+function Modules() {
+  const { t } = useTranslation();
+  const { store } = useServices();
+  const sim = useAppStore((s) => s.sim);
+  const project = useAppStore((s) => s.doc?.project ?? null);
+  const dev = project && sim.deviceId ? findDevice(project, sim.deviceId) : undefined;
+  const mods = dev ? simIoOf(dev) : [];
+  if (mods.length === 0) return null;
+  const ctrl = simControllerFor(store);
+  const range = (a: string, r?: { start: number; bytes: number }) =>
+    r ? `${a} ${r.start}..${r.start + r.bytes - 1}` : '';
+  return (
+    <div data-testid="io-modules">
+      <h4>{t('ioPanel.modules')}</h4>
+      <ul className="baa-io-forces">
+        {mods.map((m) => {
+          const out = sim.pulled.includes(m.id);
+          return (
+            <li key={m.id} data-testid={`module-${m.id}`} data-pulled={out}>
+              {m.station !== undefined
+                ? t('ioPanel.moduleStation', { station: m.station, slot: m.slot })
+                : t('ioPanel.moduleRack', { rack: m.rack, slot: m.slot })}{' '}
+              {m.name} {[range('I', m.inputs), range('Q', m.outputs)].filter(Boolean).join(', ')}{' '}
+              <button
+                type="button"
+                data-testid={`module-toggle-${m.id}`}
+                onClick={() => void ctrl.setModulePresent(m.id, out)}
+              >
+                {t(out ? 'ioPanel.modulePlug' : 'ioPanel.modulePull')}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 export function IoPanel() {
   const { t } = useTranslation();
   const phase = useAppStore((s) => s.sim.phase);
@@ -395,6 +434,7 @@ export function IoPanel() {
       <AnalogInput />
       <ByteGroup dir="outputs" />
       <ForceTable />
+      <Modules />
       <FaultSimulation />
     </div>
   );

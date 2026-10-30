@@ -1511,6 +1511,11 @@
     "openDiag": "Open Online & diagnostics"
   },
   "ioPanel": {
+    "modules": "Configured modules",
+    "moduleRack": "Rack {{rack}}, slot {{slot}}:",
+    "moduleStation": "Station {{station}}, slot {{slot}}:",
+    "modulePull": "Remove",
+    "modulePlug": "Insert",
     "force": "Force",
     "forceAddress": "Operand (I, Q, M)",
     "forceValue": "Value",

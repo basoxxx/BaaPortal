@@ -1511,6 +1511,11 @@
     "openDiag": "Apri Online e diagnostica"
   },
   "ioPanel": {
+    "modules": "Moduli della configurazione",
+    "moduleRack": "Rack {{rack}}, posto {{slot}}:",
+    "moduleStation": "Stazione {{station}}, posto {{slot}}:",
+    "modulePull": "Estrai",
+    "modulePlug": "Inserisci",
     "force": "Forzamento",
     "forceAddress": "Operando (I, Q, M)",
     "forceValue": "Valore",

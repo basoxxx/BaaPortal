@@ -247,7 +247,7 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§4.1 per la semantica). T
 - **Confronti:** forzano OR = 0. Conseguenza: in `A a; A b; O; L; L; ==I; A c` l'`O` pendente è perso dal confronto e `A c` si combina in AND con il risultato.
 - **`T STW`** non segue MCR (scrive anche con MCR spento).
 - **`BTI`/`BTD`:** si controlla solo il bit di segno e le cifre > 9 (`BCD_NON_VALIDO`).
-- **Immagine di processo** = tutto l'intervallo di I/O del catalogo della CPU (nessuna configurazione dell'area dell'immagine).
+- **Immagine di processo:** le dimensioni di I e Q sono quelle del catalogo della CPU. Con una configurazione hardware (2.1) la periferia e l'aggiornamento delle immagini valgono solo nei byte dei moduli presenti; un'area di immagine parziale configurabile (CPU più recenti) non c'è.
 - **Watchdog di OB100:** il simulatore applica `maxCycleMs` (e il limite di 10 000 000 istruzioni) anche a OB100; su una CPU vera OB100 non ha il limite del tempo di ciclo.
 - **Limite di istruzioni:** 10 000 000 per ciclo, indipendente dall'orologio; scelta del simulatore.
 - **PQ → Q:** una scrittura diretta nella periferia (PQ o `P` da puntatore) scrive anche in Q se l'indirizzo vi cade; non verificato su una CPU.
@@ -262,7 +262,7 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§10–§13). Come per il 
 - **Temporizzatori S5:** MCR non li influenza; SS con riavvio a Q = 1 resta a 1 fino a `R`; SF con RLO = 1 subito dopo `R` dà Q = 1; il valore residuo da fermo resta quello dello stop; parola di stato di avvio/`R`/`FR` /FC 0, OR 0, STA = RLO, RLO invariato. Tutto non verificato.
 - **Parametro formale TIMER/COUNTER:** il numero si legge dalla voce grezza della lista dei puntatori (`[n >> 8, n & 255, 0, 0]`); il formato è stato verificato su una sola sorgente.
 - **Lettura di T e C dal server S7:** T come parola `LC` (BCD con base), C come parola BCD, 2 byte big-endian; formato sul filo non verificato. Le scritture sulle aree T e C sono rifiutate.
-- **OB82 e OB86 solo da `raiseInterrupt`:** il simulatore non usa la configurazione hardware (6A/6B); il pannello del piano 2C li offre come «simula guasto».
+- **OB82 e OB86 dalla configurazione (2.1):** estrarre/inserire un modulo nel pannello I/O dà OB82 (rack) o OB86 (stazione ET 200) entrante/uscente; da verificare su CPU reale. Non ci sono OB83 né guasti di rack/espansioni, e i dati di diagnostica del modulo (set 0/1) non sono simulati.
 - **OB82/OB86 mancanti → OB85:** il manuale è ambiguo; se manca anche OB85 la CPU va in STOP (`OB_NON_CARICATO`).
 - **OB80 annidato in OB82/OB86:** se il tempo di ciclo si supera dentro un OB della classe 26, OB80 si annida nella stessa classe; una CPU vera lo metterebbe in coda.
 - **OB35, latenza:** si controlla all'inizio del ciclo e ogni 1024 istruzioni (tick), non a ogni istruzione: la latenza arriva fino a 1024 istruzioni.

@@ -144,6 +144,8 @@ export interface SimUiState {
   outputs: Uint8Array;
   /** Tabella di forzamento della CPU simulata (LED FRCE acceso se non è vuota). */
   forces: WriteItemReq[];
+  /** Moduli della configurazione estratti dal pannello I/O (id). */
+  pulled: string[];
   /** Un «Carica nel dispositivo» è in corso su questa sessione. */
   downloading: boolean;
   /** Byte aggiunti a mano nel pannello I/O («+ byte»): solo per questa simulazione, non nel progetto. */
@@ -183,6 +185,7 @@ export const SIM_OFF: SimUiState = {
   inputs: new Uint8Array(0),
   outputs: new Uint8Array(0),
   forces: [],
+  pulled: [],
   downloading: false,
   ioExtra: { inputs: [], outputs: [] },
   loaded: {},

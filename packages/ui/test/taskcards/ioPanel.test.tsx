@@ -168,4 +168,39 @@ describe('pannello I/O del simulatore', () => {
     await app.user.click(screen.getByTestId('force-clear'));
     expect(setForce).toHaveBeenLastCalledWith([]);
   });
+
+  it('Moduli della configurazione: estrai e inserisci', async () => {
+    const app = await renderApp({ view: 'project', withProject: true, withPlc: true });
+    const dev = findDevice(app.store.getState().doc!.project, PLC)!;
+    dev.hardware = {
+      modules: [
+        {
+          id: 'm1',
+          rack: 0,
+          slot: 4,
+          orderNumber: '6ES7 321-1BL00-0AA0',
+          name: 'DI32',
+          comment: '',
+          inputStart: 0,
+        },
+      ],
+    };
+    act(() => app.store.getState().setTaskCard('test'));
+    act(() =>
+      app.store.getState().setSim({
+        phase: 'on',
+        deviceId: PLC,
+        mode: 'RUN',
+        inputs: new Uint8Array(8),
+        outputs: new Uint8Array(8),
+      }),
+    );
+    const c = simControllerFor(app.store);
+    const toggle = vi.spyOn(c, 'setModulePresent').mockResolvedValue();
+    expect(screen.getByTestId('module-m1')).toHaveTextContent('Rack 0, posto 4: DI32 I 0..3');
+    await app.user.click(screen.getByTestId('module-toggle-m1'));
+    expect(toggle).toHaveBeenCalledWith('m1', false);
+    act(() => app.store.getState().setSim({ pulled: ['m1'] }));
+    expect(screen.getByTestId('module-toggle-m1')).toHaveTextContent('Inserisci');
+  });
 });

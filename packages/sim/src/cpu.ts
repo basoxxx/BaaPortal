@@ -53,6 +53,18 @@ export interface ForceEntry {
 
 const FORCE_BYTES = { X: 1, B: 1, W: 2, D: 4 } as const;
 
+/** Modulo di I/O della configurazione hardware, con i suoi byte nell'area di periferia. */
+export interface SimIoModule {
+  id: string;
+  name: string;
+  rack: number;
+  slot: number;
+  /** Numero della stazione ET 200 (indirizzo PROFIBUS); assente nel rack centrale. */
+  station?: number;
+  inputs?: { start: number; bytes: number };
+  outputs?: { start: number; bytes: number };
+}
+
 /** Proprietà della CPU che servono al simulatore (stessa forma di `CpuProperties`, senza dipendere da `project`). */
 export interface SimCpuProps {
   maxCycleMs: number;
@@ -71,6 +83,11 @@ export interface SimCpuOptions {
   now?: () => number;
   /** Limite di istruzioni per ciclo (predefinito `MAX_INSTRUCTIONS`; più basso nei test). */
   maxInstructions?: number;
+  /**
+   * Moduli di I/O della configurazione hardware. Con almeno un modulo, la periferia e l'aggiornamento
+   * delle immagini di processo valgono solo per i loro byte; senza, per tutto il campo della CPU.
+   */
+  io?: readonly SimIoModule[];
 }
 
 /** OB in esecuzione, con la sua classe di priorità. */
@@ -141,7 +158,10 @@ export class SimCpu {
   readonly timers: TimerBank;
   readonly counters: CounterBank;
 
-  private readonly props: SimCpuProps;
+  private props: SimCpuProps;
+  /** Moduli della configurazione hardware e quelli estratti dal pannello (`setModulePresent`). */
+  readonly io: readonly SimIoModule[];
+  private readonly pulled = new Set<string>();
   private readonly cpuTypeId: string;
   /** Orologio di sistema: quello iniettato più il tempo di SFC 47 (WAIT), mai indietro. */
   private now: () => number;
@@ -221,11 +241,14 @@ export class SimCpu {
         return (top.faults ??= { prg: 0, acc: 0, prgErr: 0, accErr: 0 });
       },
       onFault: (e, st) => this.syncFault(e, st),
+      modules: () => this.presentModules(),
       userMessage: (eventId, detail) =>
         void this.record({ time: this.now(), code: 'MESSAGGIO_UTENTE', eventId, detail }),
     };
     this.maxInstructions = o.maxInstructions;
     this.memory = new SimMemory(memorySizesFor(o.cpuTypeId));
+    this.io = o.io?.filter((m) => m.inputs || m.outputs) ?? [];
+    this.updatePeriphery();
     this.counters = new CounterBank(findCpu(o.cpuTypeId)?.limits.counters ?? DEFAULT_COUNTER_COUNT);
     this.timers = new TimerBank(findCpu(o.cpuTypeId)?.limits.timers ?? DEFAULT_TIMER_COUNT, () =>
       this.now(),
@@ -267,6 +290,63 @@ export class SimCpu {
   onEvent(cb: (e: SimEvent) => void): () => void {
     this.listeners.add(cb);
     return () => this.listeners.delete(cb);
+  }
+
+  /** Il modulo è presente (non estratto dal pannello). */
+  modulePresent(id: string): boolean {
+    return this.io.some((m) => m.id === id) && !this.pulled.has(id);
+  }
+
+  /**
+   * Estrae o reinserisce un modulo (pannello I/O). I suoi byte di periferia diventano irraggiungibili
+   * (OB122) e i suoi ingressi non si aggiornano più nella PII. Evento entrante all'estrazione, uscente
+   * al reinserimento: OB86 per un modulo di una stazione ET 200 (guasto della stazione), OB82 nel
+   * rack centrale (⚠️ la S7-300 non ha l'allarme di estrazione OB83). In STOP nessun OB.
+   */
+  setModulePresent(id: string, present: boolean): void {
+    const m = this.io.find((x) => x.id === id);
+    if (!m) throw new RangeError(`modulo ${id} non configurato`);
+    if (present === !this.pulled.has(id)) return;
+    if (present) this.pulled.delete(id);
+    else this.pulled.add(id);
+    this.updatePeriphery();
+    const address = m.inputs?.start ?? m.outputs?.start ?? 0;
+    this.raiseInterrupt(m.station !== undefined ? 86 : 82, { address, coming: !present });
+  }
+
+  /** Moduli presenti con il loro indirizzo (SFC 5, 49, 58, 59). */
+  presentModules(): SimIoModule[] {
+    return this.io.filter((m) => !this.pulled.has(m.id));
+  }
+
+  private updatePeriphery(): void {
+    const mem = this.memory;
+    if (this.io.length === 0) {
+      mem.periphery = undefined;
+      return;
+    }
+    const p = { in: new Uint8Array(mem.physIn.length), out: new Uint8Array(mem.physOut.length) };
+    for (const m of this.presentModules()) {
+      if (m.inputs) p.in.fill(1, m.inputs.start, m.inputs.start + m.inputs.bytes);
+      if (m.outputs) p.out.fill(1, m.outputs.start, m.outputs.start + m.outputs.bytes);
+    }
+    mem.periphery = p;
+  }
+
+  /** PII dagli ingressi fisici: solo i byte dei moduli presenti, se c'è una configurazione. */
+  private readInputs(): void {
+    const m = this.memory;
+    const io = m.periphery?.in;
+    if (!io) return m.I.set(m.physIn);
+    for (let i = 0; i < m.I.length; i++) if (io[i]) m.I[i] = m.physIn[i]!;
+  }
+
+  /** Uscite ai moduli dalla PIQ: solo i byte dei moduli presenti (gli altri restano a 0). */
+  private writeOutputs(): void {
+    const m = this.memory;
+    const io = m.periphery?.out;
+    if (!io) return m.physOut.set(m.Q);
+    for (let i = 0; i < m.Q.length; i++) m.physOut[i] = io[i] ? m.Q[i]! : 0;
   }
 
   /** Tabella di forzamento attiva (LED FRCE). */
@@ -443,9 +523,8 @@ export class SimCpu {
     const start = this.now();
     this.watchdog = start;
     this.overrun = false;
-    const m = this.memory;
     this.updateClock(start);
-    m.I.set(m.physIn);
+    this.readInputs();
     // Forzamento S7-300: ingressi (e merker, ⚠️) all'inizio del ciclo; il programma può sovrascriverli.
     this.applyForce('I');
     this.applyForce('M');
@@ -461,7 +540,7 @@ export class SimCpu {
       if (!this.program.get('OB', 1)) {
         // Senza OB1 il ciclo gira a vuoto: le immagini di processo si aggiornano lo stesso.
         this.applyForce('Q');
-        m.physOut.set(m.Q);
+        this.writeOutputs();
         return { ran: true, ok: true, elapsedMs: 0 };
       }
       this.runOb(
@@ -487,7 +566,7 @@ export class SimCpu {
     }
     // Uscite forzate nella PIQ prima del trasferimento ai moduli.
     this.applyForce('Q');
-    m.physOut.set(m.Q);
+    this.writeOutputs();
     this.firstCycle = false;
     const s = this.st;
     s.last = elapsedMs;

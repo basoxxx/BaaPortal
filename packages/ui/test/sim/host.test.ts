@@ -440,4 +440,27 @@ describe('SimHost: blocchi cancellati e controlli', () => {
     await f.advance(300);
     expect(f.of('status').at(-1)!.outputs[4]).toBe(0);
   });
+
+  it('io della configurazione: uscite solo ai moduli, estrazione nello status, id sconosciuto rifiutato', async () => {
+    const f = fake();
+    await f.host.handle({
+      op: 'start',
+      cpuTypeId: 'cpu-315-2-pn-dp',
+      props: PROPS,
+      io: [{ id: 'do', name: 'DO', rack: 0, slot: 4, outputs: { start: 4, bytes: 1 } }],
+    });
+    await f.host.handle({ op: 'download', files: [ob1(['\tSET;\n\t= Q 4.0;\n\t= Q 8.0;'])] });
+    await f.host.handle({ op: 'mode', to: 'RUN' });
+    await f.advance(300);
+    let st = f.of('status').at(-1)!;
+    expect([st.outputs[4], st.outputs[8]]).toEqual([1, 0]);
+    await f.host.handle({ op: 'module', id: 'do', present: false });
+    await f.advance(300);
+    st = f.of('status').at(-1)!;
+    expect(st.pulled).toEqual(['do']);
+    expect(st.outputs[4]).toBe(0);
+    await expect(f.host.handle({ op: 'module', id: 'x', present: false })).rejects.toThrow(
+      /non configurato/,
+    );
+  });
 });

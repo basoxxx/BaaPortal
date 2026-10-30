@@ -1,4 +1,11 @@
-import type { DiagEntry, MonitorRequest, MonitorStep, SimCpuProps, SimMode } from '@baaportal/sim';
+import type {
+  DiagEntry,
+  MonitorRequest,
+  MonitorStep,
+  SimCpuProps,
+  SimIoModule,
+  SimMode,
+} from '@baaportal/sim';
 
 /**
  * Operando già risolto (la risoluzione di simboli e formati è del renderer): area, DB, byte, bit
@@ -31,7 +38,7 @@ export const INTERRUPT_OBS = [82, 86] as const;
 export type WriteResult = { ok: true } | { error: string };
 
 export type SimRequest =
-  | { op: 'start'; cpuTypeId: string; props: SimCpuProps }
+  | { op: 'start'; cpuTypeId: string; props: SimCpuProps; io?: SimIoModule[] }
   /**
    * Carica i blocchi dati. Con `keep` (l'elenco di tutti i blocchi del progetto, tipo e numero; i DB
    * di istanza come `DB`), dopo il caricamento l'ospite cancella dalla CPU i blocchi che non vi
@@ -52,6 +59,8 @@ export type SimRequest =
   /** Lettura una tantum (runtime HMI): la risposta è un `WatchValue` per voce. */
   | { op: 'read'; items: WatchItem[] }
   | { op: 'write'; items: WriteItemReq[] }
+  /** Estrae (`present: false`) o reinserisce un modulo della configurazione: OB82/OB86. */
+  | { op: 'module'; id: string; present: boolean }
   /** Tabella di forzamento intera (solo I, Q, M); vuota = forzamento terminato. */
   | { op: 'force'; items: WriteItemReq[] }
   | { op: 'stop' };
@@ -81,6 +90,8 @@ export type SimNotice =
       outputs: Uint8Array;
       /** Tabella di forzamento attiva (LED FRCE acceso se non è vuota). */
       forces: WriteItemReq[];
+      /** Moduli estratti dal pannello (id). */
+      pulled: string[];
     }
   | { kind: 'monitor'; block: MonitorRequest; steps: MonitorStep[] }
   | { kind: 'watch'; values: WatchValue[] }

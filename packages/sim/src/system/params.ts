@@ -5,6 +5,7 @@ import type { Location } from '../operands';
 import { readBits, writeBits } from '../operands';
 import { SimError } from '../errors';
 import type { SfbState } from './sfb';
+import type { SimIoModule } from '../cpu';
 
 export type Size = 'X' | 'B' | 'W' | 'D';
 
@@ -95,6 +96,8 @@ export interface SystemServices {
   faults(): FaultMasks;
   /** Gestore degli errori sincroni (maschere, OB121/OB122): MSK_FLT lo installa nel contesto se manca. */
   readonly onFault: (e: SimError, st: ExecState) => boolean;
+  /** Moduli di I/O presenti della configurazione hardware (SFC 5, 49, 58, 59). */
+  modules(): readonly SimIoModule[];
   /** Voce utente nel buffer di diagnostica (SFC 52 WR_USMSG). */
   userMessage(eventId: number, detail: string): void;
 }

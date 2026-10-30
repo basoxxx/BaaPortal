@@ -131,6 +131,12 @@ export class SimHost {
           );
         checkSizes(req.items);
         return req.items.map((it) => this.writeOne(cpu, it));
+      case 'module':
+        if (typeof req.id !== 'string' || typeof req.present !== 'boolean')
+          throw new RangeError('richiesta di modulo non valida');
+        cpu.setModulePresent(req.id, req.present);
+        this.sendStatus();
+        return undefined;
       case 'force':
         if (req.items.length > MAX_WATCH_ITEMS)
           throw new RangeError(`troppe voci da forzare: ${req.items.length}`);
@@ -151,7 +157,12 @@ export class SimHost {
   private async start(req: Extract<SimRequest, { op: 'start' }>): Promise<void> {
     if (this.cpu) throw new Error('simulazione già avviata');
     this.minCycleMs = req.props.minCycleMs;
-    const cpu = new SimCpu({ cpuTypeId: req.cpuTypeId, props: req.props, now: this.env.now });
+    const cpu = new SimCpu({
+      cpuTypeId: req.cpuTypeId,
+      props: req.props,
+      now: this.env.now,
+      ...(req.io ? { io: req.io } : {}),
+    });
     cpu.onEvent((e) => {
       if (e.type === 'mode') {
         this.sendStatus(); // subito a ogni cambio di modo
@@ -297,6 +308,7 @@ export class SimHost {
       inputs: cpu.memory.physIn.slice(),
       outputs: cpu.memory.physOut.slice(),
       forces: cpu.forceTable.map((f) => ({ ...f, data: f.data.slice() })),
+      pulled: cpu.io.filter((m) => !cpu.modulePresent(m.id)).map((m) => m.id),
     });
   }
 
