@@ -1,7 +1,7 @@
 // Editor SCL: evidenziazione, completamento e diagnostiche (funzioni pure).
 import { Text } from '@codemirror/state';
 import { describe, expect, it } from 'vitest';
-import { makeCtx } from '../../awl/test/ctx';
+import { el, emptyIface, m, makeCtx } from '../../awl/test/ctx';
 import {
   sclComplete,
   sclLintDiagnostics,
@@ -49,6 +49,23 @@ describe('SCL: evidenziazione', () => {
     ]);
   });
 
+  it('durate e date come costanti', () => {
+    expect(
+      kinds(
+        't := T#5s + TIME#1m; d := D#2024-01-01; x := TOD#12:00:00 + S5T#2s; z := DT#2024-01-01-12:00:00;',
+      )
+        .filter(([, k]) => k === 'constant')
+        .map(([t]) => t),
+    ).toEqual([
+      'T#5s',
+      'TIME#1m',
+      'D#2024-01-01',
+      'TOD#12:00:00',
+      'S5T#2s',
+      'DT#2024-01-01-12:00:00',
+    ]);
+  });
+
   it('TRUE e i parametri per nome di una chiamata', () => {
     expect(kinds('"Fc"(in := TRUE);').filter(([, k]) => k !== 'operator')).toEqual([
       ['"Fc"', 'symbol'],
@@ -78,6 +95,39 @@ describe('SCL: completamento', () => {
   it('chiamate con i parametri', () => {
     expect(applied('Calc', 'Calcola(…)')).toBe('"Calcola"(A := , R => )');
     expect(applied('"Nastro_', 'Nastro_DB(…)')).toBe('"Nastro_DB"(Vel := , Buf := , Ok => )');
+  });
+
+  it('dentro le parentesi di una chiamata: i parametri non ancora dati', () => {
+    expect(labels('"Calcola"(')).toEqual(expect.arrayContaining(['A', 'R']));
+    expect(labels('"Calcola"(A := 1, ')).toContain('R');
+    expect(labels('"Calcola"(A := 1, ')).not.toContain('A');
+    expect(applied('"Calcola"(A := 1, ', 'R')).toBe('"Calcola"(A := 1, R => ');
+    expect(applied('Calcola(', 'A')).toBe('Calcola(A := ');
+    expect(labels('"Nastro_DB"(V')).toContain('Vel');
+    expect(labels('#Sub(')).toEqual(expect.arrayContaining(['Vel', 'Buf', 'Ok']));
+    expect(labels('"Calcola"(A := Con')).toContain('Contatore');
+    expect(labels('"Calcola"(A := Con')).not.toContain('R');
+    expect(labels('x := INT_TO_DINT(')).not.toContain('A');
+  });
+
+  it('membri dopo un indice variabile', () => {
+    const c = makeCtx(
+      'FB',
+      emptyIface({
+        static: [
+          m('a', {
+            kind: 'array',
+            dims: [{ lo: 1, hi: 3 }],
+            element: { kind: 'struct', members: [m('x', el('Int'))] },
+          }),
+        ],
+      }),
+    );
+    const at = (text: string) => sclComplete(text, text.length, c);
+    expect(at('#a[#i].').options.map((o) => o.label)).toEqual(['x']);
+    expect(at('y := #a[#b[#i] + 1].').options.map((o) => o.label)).toEqual(['x']);
+    const r = at('#a[#i + 1].x');
+    expect(r.from).toBe('#a[#i + 1].'.length);
   });
 
   it('niente nei commenti e nelle stringhe', () => {

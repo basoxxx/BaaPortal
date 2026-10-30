@@ -10,7 +10,7 @@ import {
   type Completion,
 } from '@baaportal/awl';
 import { KEYWORDS, lex, sclToAwl, type Tok } from '@baaportal/scl';
-import type { TypedMember } from '@baaportal/s7-types';
+import { formatType, sameName, type TypedMember } from '@baaportal/s7-types';
 import { decorateRanges, visibleHighlight } from '../awl/awlExtensions';
 
 export type SclKind =
@@ -40,6 +40,7 @@ const KIND: Partial<Record<Tok['kind'], SclKind>> = {
   int: 'constant',
   real: 'constant',
   string: 'constant',
+  time: 'constant',
   op: 'operator',
 };
 
@@ -119,11 +120,99 @@ function operandStart(s: string): number {
   while (i > 0) {
     const c = s[i - 1]!;
     if (c === '"') i = s.lastIndexOf('"', i - 2);
-    else if (/[A-Za-z0-9_#.[\]]/.test(c)) i--;
+    else if (c === ']') i = openBracket(s, i - 1);
+    else if (/[A-Za-z0-9_#.]/.test(c)) i--;
     else break;
     if (i < 0) return 0;
   }
   return i;
+}
+
+/** La `[` che apre la `]` in `close` (gli indici possono essere espressioni: `[#i + 1]`). */
+function openBracket(s: string, close: number): number {
+  let depth = 0;
+  for (let k = close; k >= 0; k--) {
+    if (s[k] === ']') depth++;
+    else if (s[k] === '[' && --depth === 0) return k;
+  }
+  return -1;
+}
+
+/** Gli indici di un operando come `[0]`: il completamento dei membri non guarda il loro valore. */
+const plainIndices = (op: string): string => {
+  let out = '';
+  for (let k = 0, depth = 0; k < op.length; k++) {
+    const c = op[k]!;
+    if (c === '[' && depth++ === 0) out += '[0';
+    else if (c === ']' && --depth === 0) out += ']';
+    else if (depth === 0) out += c;
+  }
+  return out;
+};
+
+/** L'interfaccia del blocco chiamato da `t` (`"Fc"`, `Fc`, `"Inst_DB"`, `#multi`). */
+function calleeIface(ctx: AwlContext, t: Tok): AwlBlockInfo['iface'] {
+  if (t.kind === 'local') {
+    const own = ctx.owner;
+    const m =
+      own.kind === 'FB'
+        ? own.iface.static.find((x) => sameName(x.name, t.text.slice(1)))
+        : undefined;
+    return m?.type.kind === 'named' ? ctx.block({ name: m.type.name })?.iface : undefined;
+  }
+  if (t.kind !== 'symbol' && t.kind !== 'id') return undefined;
+  const b = ctx.block({ name: t.text.replace(/^"|"$/g, '') });
+  if (b?.kind === 'IDB') return b.instanceOf ? ctx.block({ name: b.instanceOf })?.iface : undefined;
+  return b && b.kind !== 'DB' ? b.iface : undefined;
+}
+
+/**
+ * Dentro le parentesi di una chiamata, dopo `(` o `,`: i parametri del blocco chiamato non ancora
+ * dati, con `:=` (ingressi e ingressi/uscite) o `=>` (uscite).
+ */
+function callParams(
+  text: string,
+  offset: number,
+  ctx: AwlContext,
+): { from: number; options: Completion[] } | undefined {
+  const toks = lex(text.slice(0, offset), { errors: [] }).slice(0, -1);
+  const last = toks.at(-1);
+  const partial = last?.kind === 'id' && last.from + last.text.length === offset ? last.text : '';
+  const end = toks.length - (partial ? 1 : 0);
+  if (!['(', ','].includes(toks[end - 1]?.text ?? '')) return undefined;
+  let open = -1;
+  for (let k = end - 1, depth = 0; k >= 0 && open < 0; k--) {
+    if (toks[k]!.text === ')') depth++;
+    else if (toks[k]!.text === '(' && depth-- === 0) open = k;
+  }
+  const callee = open > 0 ? toks[open - 1]! : undefined;
+  const iface = callee && calleeIface(ctx, callee);
+  if (!iface) return undefined;
+  const given = new Set<string>();
+  for (let k = open + 1, depth = 0; k < end; k++) {
+    const t = toks[k]!.text;
+    if (t === '(' || t === '[') depth++;
+    else if (t === ')' || t === ']') depth--;
+    else if (
+      depth === 0 &&
+      toks[k]!.kind === 'id' &&
+      [':=', '=>'].includes(toks[k + 1]?.text ?? '')
+    )
+      given.add(norm(t));
+  }
+  const of = (ms: readonly TypedMember[], arrow: string) =>
+    ms.map((m): Completion => ({
+      label: m.name,
+      kind: 'param',
+      detail: formatType(m.type),
+      apply: `${m.name} ${arrow} `,
+    }));
+  const options = [
+    ...of(iface.input, ':='),
+    ...of(iface.inOut, ':='),
+    ...of(iface.output, '=>'),
+  ].filter((o) => !given.has(norm(o.label)) && norm(o.label).startsWith(norm(partial)));
+  return { from: offset - partial.length, options };
 }
 
 /** I parametri di una chiamata: `"Fc"(in := , out => )`. */
@@ -165,7 +254,8 @@ const norm = (s: string) => s.toLowerCase();
 
 /**
  * Completamento SCL in `offset`: variabili dell'interfaccia (con o senza `#`), tag e DB (`"…"`),
- * membri dopo `"DB".` e `#s.`, chiamate di blocchi con i loro parametri, parole chiave.
+ * membri dopo `"DB".` e `#s.` (anche dopo un indice variabile, `#a[#i].`), chiamate di blocchi con
+ * i loro parametri, dentro le parentesi di una chiamata i parametri non ancora dati, parole chiave.
  */
 export function sclComplete(
   text: string,
@@ -179,12 +269,34 @@ export function sclComplete(
     if (last.kind === 'comment' && !last.text.endsWith('*)')) return none;
     if (last.kind === 'string' && !(last.text.length > 1 && last.text.endsWith("'"))) return none;
   }
+  const params = callParams(text, offset, ctx);
+  const rest = operandOptions(text, offset, ctx);
+  if (!params?.options.length) return rest;
+  return {
+    from: params.from,
+    options: [...params.options, ...(rest.from === params.from ? rest.options : [])],
+  };
+}
+
+/** Il completamento dell'operando che finisce in `offset`. */
+function operandOptions(
+  text: string,
+  offset: number,
+  ctx: AwlContext,
+): { from: number; options: Completion[] } {
+  const none = { from: offset, options: [] };
   const lineStart = text.lastIndexOf('\n', offset - 1) + 1;
   const s = text.slice(lineStart, offset);
   const start = operandStart(s);
   const op = s.slice(start);
   const base = lineStart + start;
   if (/^\d/.test(op)) return none;
+  if (op.includes('[')) {
+    // dopo un indice (anche variabile): i membri dell'elemento
+    const plain = plainIndices(op);
+    const r = completeOperand(ctx, plain, 0);
+    return { from: base + op.length - (plain.length - r.from), options: r.options };
+  }
   const r = completeOperand(ctx, op, base);
   // Un nome scritto senza `#` o virgolette: anche variabili locali, chiamate e parole chiave.
   if (/^[A-Za-z_]?[A-Za-z0-9_]*$/.test(op)) {
