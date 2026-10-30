@@ -228,10 +228,10 @@ test('FC scritto nel programma: compila, errore apposta, il clic porta al segmen
 test('compila solo modifiche: un blocco; cambia un tag e li ricompila entrambi', async () => {
   const file = join(tmp, 'solo.baap');
   writeFixtureProject(file, (dev) => {
-    dev.blocks = [
-      createCodeBlock({ kind: 'FC', number: 1, name: 'Uno', language: 'AWL' }),
-      createCodeBlock({ kind: 'FC', number: 2, name: 'Due', language: 'AWL' }),
-    ];
+    const uno = createCodeBlock({ kind: 'FC', number: 1, name: 'Uno', language: 'AWL' });
+    // "Uno" usa il tag: cambiarne l'indirizzo deve ricompilarlo (un blocco vecchio non va caricato).
+    uno.networks[0]!.source = 'A "Pulsante"\n= %Q0.1';
+    dev.blocks = [uno, createCodeBlock({ kind: 'FC', number: 2, name: 'Due', language: 'AWL' })];
     dev.tagTables[0]!.tags.push({
       id: crypto.randomUUID(),
       name: 'Pulsante',
@@ -255,7 +255,7 @@ test('compila solo modifiche: un blocco; cambia un tag e li ricompila entrambi',
   await expect(rows(page).first()).toHaveAttribute('data-block', 'Due');
   await expect(rows(page).first()).toHaveAttribute('data-status', 'ok');
 
-  // Cambia l'indirizzo del tag: cambia il contesto e tutti i blocchi si ricompilano.
+  // Cambia l'indirizzo del tag: si ricompilano i blocchi che lo usano, qui entrambi.
   await treeNode(page, 'Tabella delle variabili standard').dblclick();
   const cell = page
     .getByRole('grid')
