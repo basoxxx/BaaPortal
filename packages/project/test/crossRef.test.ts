@@ -231,3 +231,27 @@ describe('xrefOperandAt', () => {
     expect(xrefOperandAt(dev, ob.id, 'NOT', 1, 'international')).toBeUndefined();
   });
 });
+
+describe('crossReferences: DB aperto, indiretti, richiami calcolati', () => {
+  it('segue OPN DB/DI, segnala [AR1,P#…] e UC calcolati', () => {
+    const dev = makeDevice();
+    dev.blocks.push(createGlobalDb({ number: 7, name: 'Dati', newId: () => id('d') }));
+    code(dev, 'OB', 1, 'Main', 'AWL', [
+      `OPN DB 7
+L DBW 4
+OPN DI 7
+T DIW 6
+L DBW [AR1,P#2.0]
+CC [MW 10]
+CALL FC 9
+L DBW 8`,
+    ]);
+    const x = crossReferences(dev);
+    const keys = x.map((o) => o.key);
+    expect(keys).toContain('%DB7.DBW4');
+    expect(keys).toContain('%DB7.DBW6');
+    expect(keys).toContain('%DBW8');
+    expect(x.find((o) => o.type === 'indiretto')?.uses).toHaveLength(1);
+    expect(callGraph(dev, x).computed).toHaveLength(1);
+  });
+});

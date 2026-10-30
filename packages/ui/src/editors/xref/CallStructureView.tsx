@@ -87,6 +87,18 @@ export function CallStructureView({ editor }: { editor: EditorRef }) {
           </ul>
         </section>
       ) : null}
+      {mode === 'calls' && g.computed.length > 0 ? (
+        <section>
+          <h4>{t('callTree.computed')}</h4>
+          <ul className="baa-calls-tree" data-testid="calls-computed">
+            {g.computed.map((e, i) => (
+              <li key={i}>
+                {e.caller} · {e.use.instruction} {e.callee} ({e.use.network}:{e.use.line})
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </div>
   );
 }

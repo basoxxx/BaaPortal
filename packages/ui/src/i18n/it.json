@@ -2038,6 +2038,7 @@
     "noOb": "Nessun OB nel programma.",
     "empty": "Nessun blocco nel programma.",
     "unreferenced": "Blocchi non usati",
+    "computed": "Richiami calcolati (destinazione non nota)",
     "recursion": "ricorsione",
     "open": "Apri il blocco",
     "expand": "Espandi {{name}}",

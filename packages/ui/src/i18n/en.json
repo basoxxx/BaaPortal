@@ -2038,6 +2038,7 @@
     "noOb": "No OB in the program.",
     "empty": "No blocks in the program.",
     "unreferenced": "Unused blocks",
+    "computed": "Computed calls (target unknown)",
     "recursion": "recursion",
     "open": "Open the block",
     "expand": "Expand {{name}}",
