@@ -1,6 +1,8 @@
 import { mapOperands } from '@baaportal/ladfbd';
 import {
   kopSources,
+  renameSymbolInCode,
+  renameSymbolInWatchRows,
   type Block,
   type CodeBlock,
   type KopOperandRef,
@@ -20,6 +22,13 @@ const key = (h: Hit): string => {
   if ('tableId' in l) parts.push(l.field, l.tableId, l.tagId);
   return JSON.stringify(parts);
 };
+
+/** Rimette gli a capo di `original` riga per riga (misti compresi); le righe in più prendono il più usato. */
+function withEndings(text: string, original: string): string {
+  const ends = original.match(/\r\n|\r|\n/g) ?? [];
+  let i = 0;
+  return text.replace(/\n/g, () => ends[i++] ?? lineEndingOf(original));
+}
 
 const nameKey = (s: string): string => s.normalize('NFC').toLowerCase();
 
@@ -48,6 +57,7 @@ export function replaceInProject(
   o: FindOptions,
   replacement: string,
   only?: Hit[],
+  updateRefs = false,
 ): { project: Project; replaced: number; skipped: number } {
   const scanned = scanProject(p, o);
   if (!Array.isArray(scanned)) return { project: p, replaced: 0, skipped: 0 };
@@ -94,6 +104,8 @@ export function replaceInProject(
   }
 
   let replaced = 0;
+  /** Variabili rinominate: i loro riferimenti nel codice che il testo trovato non ha già cambiato. */
+  const renames: { deviceId: string; from: string; to: string }[] = [];
   const taken = new Map<string, Set<string>>();
   for (const list of groups.values()) {
     const l = list[0]!.loc;
@@ -116,6 +128,9 @@ export function replaceInProject(
           }
           set.delete(nameKey(tag.name));
           set.add(nameKey(next));
+        }
+        if (l.field === 'name' && updateRefs && next !== tag.name) {
+          renames.push({ deviceId: d.id, from: tag.name, to: next });
         }
         tag[l.field] = next;
         break;
@@ -159,7 +174,7 @@ export function replaceInProject(
         const n = b.networks[l.networkIndex]!;
         // Il testo SCL si cerca e si scrive com'è (vedi findInProject).
         const m = b.language === 'SCL' ? 'international' : mnemonic;
-        n.source = storedText(applyAll(list[0]!.text, list), m, lineEndingOf(n.source));
+        n.source = withEndings(storedText(applyAll(list[0]!.text, list), m, '\n'), n.source);
         break;
       }
       case 'networkTitle':
@@ -177,6 +192,11 @@ export function replaceInProject(
         break;
     }
     replaced += count;
+  }
+  // Dopo tutte le sostituzioni (gli offset dei risultati valgono sul testo di partenza).
+  for (const r of renames) {
+    renameSymbolInCode(dev(r.deviceId), r.from, r.to);
+    renameSymbolInWatchRows(dev(r.deviceId), r.from, r.to);
   }
   return { project, replaced, skipped };
 }

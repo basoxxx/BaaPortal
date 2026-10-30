@@ -3,6 +3,7 @@ import { findDevice, findSource, kopElemAt, type ObjectRef } from '@baaportal/pr
 import { flushDetachedEdits, flushPendingEdits } from '../flushPendingEdits';
 import { displayText } from '../editors/awl/awlExtensions';
 import { currentMnemonic } from '../editors/awl/mnemonicPreference';
+import { t } from '../i18n';
 import type { AppState } from '../state/store';
 import { findInProject } from './findInProject';
 import { replaceInProject } from './replaceInProject';
@@ -99,7 +100,13 @@ export function replaceHits(store: Store, only?: Hit[]): void {
   const out = s.find.outcome;
   if (!s.doc || out?.kind !== 'hits' || out.project !== s.doc.project) return;
   if (out.options.mnemonic !== currentMnemonic()) return;
-  const result = replaceInProject(s.doc.project, out.options, s.find.replacement, only ?? out.hits);
+  const result = replaceInProject(
+    s.doc.project,
+    out.options,
+    s.find.replacement,
+    only ?? out.hits,
+    s.find.updateRefs,
+  );
   if (result.replaced > 0) {
     s.edit('history.replace', (draft) => {
       // Solo i dispositivi toccati: la cronologia non tiene copie del resto.
@@ -129,6 +136,26 @@ export function replaceHits(store: Store, only?: Hit[]): void {
     )
       store.getState().patchFind({ selected: after.selected + 1 });
   }
+}
+
+/** Seleziona il testo trovato nel campo di titolo o commento, appena l'editor del blocco è montato. */
+function selectInField(hit: Hit, tries = 20): void {
+  const l = hit.loc;
+  if (l.kind === 'network' || l.kind === 'source' || l.kind === 'tag') return;
+  const n = l.networkIndex !== undefined ? ` ${l.networkIndex + 1}` : '';
+  const label =
+    l.kind === 'blockTitle'
+      ? t('block.title')
+      : l.kind === 'blockComment'
+        ? t('block.comment')
+        : `${t(l.kind === 'networkTitle' ? 'block.networkTitle' : 'block.networkComment')}${n}`;
+  const el = [...document.querySelectorAll('input, textarea')].find(
+    (x) => x.getAttribute('aria-label') === label,
+  ) as HTMLInputElement | HTMLTextAreaElement | undefined;
+  if (el) {
+    el.focus();
+    el.setSelectionRange(l.from, l.to);
+  } else if (tries > 0) setTimeout(() => selectInField(hit, tries - 1), 50);
 }
 
 /** Porta l'editor sul risultato: seleziona il testo, o la riga della variabile. */
@@ -186,4 +213,5 @@ export function openHit(store: Store, hit: Hit): void {
     ...(l.kind === 'network' ? { range: { from: l.from, to: l.to } } : {}),
     ...(elemId ? { elemId } : {}),
   });
+  selectInField(hit);
 }

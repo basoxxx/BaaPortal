@@ -341,11 +341,11 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
 
 ### Trova e sostituisci
 
-- **Rinominare una variabile** con Sostituisci non aggiorna i suoi riferimenti nel codice.
+- **Rinominare una variabile** con Sostituisci aggiorna anche i riferimenti nel codice (casella _Aggiorna i riferimenti_, acceso di serie), con le regole della rinomina; i risultati nel codice che il testo trovato già cambia restano com'erano.
 - **Blocchi protetti.** L'interfaccia dei blocchi protetti non viene cercata.
 - **Sorgenti.** Si cercano nel testo salvato, senza conversione della mnemonica.
-- **Reti con ritorni a capo misti** possono non tornare identiche byte per byte.
-- **Titoli e commenti.** Un clic su un risultato in un titolo o commento apre il blocco senza selezionare il testo.
+- **Reti con ritorni a capo misti:** dopo Sostituisci ogni riga tiene il suo a capo; se il testo sostitutivo aggiunge righe, quelle nuove prendono l'a capo più usato.
+- **Titoli e commenti.** Un clic su un risultato in un titolo o commento apre il blocco e seleziona il testo nel campo (se il campo si monta entro un secondo; altrimenti si apre soltanto).
 - **Espressioni regolari** con corrispondenza di lunghezza zero: ignorate.
 
 ### Impostazioni e compilazione

@@ -99,6 +99,34 @@ describe('replaceInProject', () => {
     );
   });
 
+  it('rinominando una variabile si aggiornano anche i riferimenti nel codice, se richiesto', () => {
+    const p = withBlocks([block('A', ['A "Valve"'])], (d) => {
+      const t = createTagTable('T');
+      t.tags.push({
+        id: '3',
+        name: 'Valve',
+        type: 'Bool',
+        address: '%M1.0',
+        hmi: false,
+        comment: '',
+      });
+      d.tagTables.push(t);
+    });
+    const hits = findInProject(p, opts('Valve')) as Hit[];
+    const tagHit = hits.filter((h) => h.loc.kind === 'tag');
+    expect(hits.length).toBeGreaterThan(tagHit.length);
+    const off = replaceInProject(p, opts('Valve'), 'Pump', tagHit);
+    expect(src(off.project, 0)).toBe('A "Valve"');
+    const on = replaceInProject(p, opts('Valve'), 'Pump', tagHit, true);
+    expect(src(on.project, 0)).toBe('A "Pump"');
+  });
+
+  it('a capo misti: ogni riga tiene il suo', () => {
+    const p = withBlocks([block('A', ['L MW10\r\nL MW10\nL MW10\r\n'])]);
+    const r = replaceInProject(p, opts('MW10'), 'MW12');
+    expect(src(r.project, 0)).toBe('L MW12\r\nL MW12\nL MW12\r\n');
+  });
+
   it('il progetto di partenza non è mutato', () => {
     const p = deepFreeze(withBlocks([block('A', ['L MW10'])]));
     const r = replaceInProject(p, opts('MW10'), 'MW12');
