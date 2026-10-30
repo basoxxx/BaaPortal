@@ -10,6 +10,7 @@ import {
   type SourceUnit,
 } from '@baaportal/importers';
 import {
+  createNamer,
   createTagTable,
   findDevice,
   kopSources,
@@ -43,6 +44,8 @@ export interface Step7Item {
   replaces?: string;
   /** Oggetto nuovo col nome di un altro oggetto o simbolo (`FC3`): non si può importare. */
   nameTakenBy?: string;
+  /** Sostituisce un oggetto con un altro numero ma lo stesso nome: si può anche rinumerare. */
+  canRenumber?: boolean;
   /** Blocco SCL: errori della compilazione del testo importato. */
   sclErrors?: { line: number; message: string }[];
 }
@@ -103,7 +106,9 @@ export function planStep7Import(
       name: unit.name,
       ...(unit.number === undefined ? {} : { number: unit.number }),
       file,
-      ...(old ? { replaces: old.name } : {}),
+      ...(old
+        ? { replaces: old.name, ...(!sameName(old.name, unit.name) ? { canRenumber: true } : {}) }
+        : {}),
       ...(owner ? { nameTakenBy: owner } : {}),
     };
   });
@@ -158,6 +163,47 @@ export const defaultSelection = (plan: Step7Plan): Set<string> =>
       .map((i) => i.key),
   );
 
+/** Cosa fare di un'unità che sostituirebbe un oggetto: sostituirlo (predefinito), importarla con un altro nome o con un altro numero. */
+export type Step7Choice = 'replace' | 'rename' | 'renumber';
+
+const MAX_NUMBER: Record<string, number> = { OB: 255 };
+const familyOf = (kind: string) => (kind === 'IDB' ? 'DB' : kind);
+
+/** Le unità scelte, con nome e numero liberi per quelle da rinominare o rinumerare. */
+function withChoices(
+  dev: PlcDevice,
+  units: SourceUnit[],
+  choices: ReadonlyMap<string, Step7Choice>,
+): SourceUnit[] {
+  const namer = createNamer([
+    ...symbolNames(dev),
+    ...units.filter((u) => u.name !== '').map((u) => u.name),
+  ]);
+  const taken = new Set<string>();
+  const freeNumber = (kind: string): number | undefined => {
+    const fam = familyOf(kind);
+    const used = new Set<number>(
+      fam === 'UDT'
+        ? dev.udts.map((u) => u.number)
+        : dev.blocks.filter((b) => familyOf(b.kind) === fam).map((b) => b.number),
+    );
+    for (let n = 1; n <= (MAX_NUMBER[fam] ?? 65535); n++) {
+      if (!used.has(n) && !taken.has(`${fam}${n}`)) {
+        taken.add(`${fam}${n}`);
+        return n;
+      }
+    }
+    return undefined;
+  };
+  return units.map((u) => {
+    const choice = choices.get(unitKey(u));
+    if (!choice || choice === 'replace' || !findExisting(dev, u)) return u;
+    const number = freeNumber(u.kind);
+    if (number === undefined) return u;
+    return { ...u, number, ...(choice === 'rename' ? { name: namer(u.name) } : {}) } as SourceUnit;
+  });
+}
+
 export interface Step7Result {
   created: number;
   replaced: number;
@@ -176,12 +222,17 @@ export function applyStep7Plan(
   dev: PlcDevice,
   plan: Step7Plan,
   selected: ReadonlySet<string>,
+  choices: ReadonlyMap<string, Step7Choice> = new Map(),
 ): Step7Result {
   const blocked = new Set(plan.items.filter((i) => i.nameTakenBy).map((i) => i.key));
   const units = plan.read.units
     .map((u) => u.unit)
     .filter((u) => selected.has(unitKey(u)) && !blocked.has(unitKey(u)));
-  const { created, replaced } = applySource(dev, { units }, newId);
+  const { created, replaced } = applySource(
+    dev,
+    { units: withChoices(dev, units, choices) },
+    newId,
+  );
   const result: Step7Result = {
     created: created.length,
     replaced: replaced.length,
@@ -241,7 +292,14 @@ export async function pickStep7Files(
     });
     return null;
   }
-  if (paths.length === 0) return null;
+  return paths.length === 0 ? null : readPaths(ctx, paths);
+}
+
+async function readPaths(
+  ctx: Step7Ctx,
+  paths: string[],
+): Promise<{ name: string; bytes: Uint8Array }[]> {
+  const { store, bridge } = ctx;
   const out: { name: string; bytes: Uint8Array }[] = [];
   for (const path of paths) {
     const name = baseName(path);
@@ -258,19 +316,39 @@ export async function pickStep7Files(
   return out;
 }
 
+/** Sceglie una cartella e legge i file di STEP 7 che contiene (primo livello); null se annullato. */
+export async function pickStep7Folder(
+  ctx: Step7Ctx,
+): Promise<{ name: string; bytes: Uint8Array }[] | null> {
+  const { store, bridge } = ctx;
+  let paths: string[] | null;
+  try {
+    paths = await bridge.showSelectFolderFiles([...STEP7_EXTENSIONS]);
+  } catch (e) {
+    store.getState().pushMessage({
+      severity: 'error',
+      textKey: 'messages.fileDialogFailed',
+      params: { message: errorText(e) },
+    });
+    return null;
+  }
+  return paths && (await readPaths(ctx, paths));
+}
+
 /** Applica in un solo passo annullabile e scrive il riepilogo in Informazioni. */
 export function runStep7Import(
   store: StoreApi<AppState>,
   deviceId: string,
   plan: Step7Plan,
   selected: ReadonlySet<string>,
+  choices: ReadonlyMap<string, Step7Choice> = new Map(),
 ): Step7Result | null {
   flushPendingEdits();
   let result: Step7Result | null = null;
   try {
     store.getState().edit('history.importStep7', (p) => {
       const dev = findDevice(p, deviceId);
-      if (dev) result = applyStep7Plan(dev, plan, selected);
+      if (dev) result = applyStep7Plan(dev, plan, selected, choices);
     });
   } catch (e) {
     // Un'eccezione dentro `edit` lascia il progetto com'era.

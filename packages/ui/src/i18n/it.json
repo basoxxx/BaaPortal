@@ -266,6 +266,7 @@
     "replaceWith": "Sostituisci con",
     "matchCase": "Maiuscole/minuscole",
     "wholeWord": "Parola intera",
+    "updateRefs": "Aggiorna i riferimenti",
     "regex": "Espressione regolare",
     "scope": "Ambito",
     "scopeActive": "Editor attivo",
@@ -1352,6 +1353,13 @@
     }
   },
   "step7": {
+    "pickFolder": "Scegli una cartella…",
+    "choice": {
+      "replace": "Sostituisci",
+      "rename": "Rinomina",
+      "renumber": "Rinumera",
+      "label": "Cosa fare di {{name}}"
+    },
     "menu": "Importa da STEP 7…",
     "title": "Importa da STEP 7",
     "filter": "Esportazioni di STEP 7 (*.awl, *.scl, *.sdf, *.seq, *.dif, *.asc)",

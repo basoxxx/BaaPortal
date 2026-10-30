@@ -146,6 +146,8 @@ export interface BaaBridge {
   showOpenProjectDialog(): Promise<string | null>; // filtro *.baap
   showSaveProjectDialog(suggestedName: string): Promise<string | null>;
   showSelectFolderDialog(): Promise<string | null>;
+  /** Sceglie una cartella e ne elenca i file con le estensioni date (primo livello, al massimo 500); null se annullato. */
+  showSelectFolderFiles(extensions: string[]): Promise<string[] | null>;
   showOpenFileDialog(opts: { filters: FileFilter[]; multi?: boolean }): Promise<string[]>; // [] se annullato
   showSaveFileDialog(opts: { defaultName: string; filters: FileFilter[] }): Promise<string | null>;
   readFile(path: string): Promise<Uint8Array>;

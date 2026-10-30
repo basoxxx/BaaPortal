@@ -134,6 +134,37 @@ describe('parseStep7Symbols', () => {
 });
 
 describe('parseSclSource', () => {
+  it('dichiarazioni su più righe e più dichiarazioni sulla stessa riga', () => {
+    const src = `FUNCTION_BLOCK "Multi"
+VAR_INPUT
+  A,
+  B : INT;
+  Lista :
+    ARRAY[1..3]
+    OF BOOL;
+END_VAR
+VAR
+  X : INT; Y : REAL; // due
+END_VAR
+BEGIN
+  X := A;
+END_FUNCTION_BLOCK
+`;
+    const r = parseSclSource(src);
+    if (!r.ok) throw new Error(JSON.stringify(r.errors));
+    const fb = r.source.units[0];
+    if (fb?.kind !== 'FB') throw new Error('unità');
+    expect(fb.block.interface.input.map((m) => [m.name, m.type])).toEqual([
+      ['A', 'Int'],
+      ['B', 'Int'],
+      ['Lista', 'Array[1..3] of Bool'],
+    ]);
+    expect(fb.block.interface.static.map((m) => [m.name, m.type, m.comment])).toEqual([
+      ['X', 'Int', ''],
+      ['Y', 'Real', 'due'],
+    ]);
+  });
+
   it('interfaccia dalle sezioni VAR, corpo come testo SCL, CONST spostata con avviso', () => {
     const r = parseSclSource(text('conveyor.scl'));
     if (!r.ok) throw new Error(JSON.stringify(r.errors));

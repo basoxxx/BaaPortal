@@ -26,6 +26,8 @@ const bridge: RawBridge = {
   showOpenProjectDialog: () => ipcRenderer.invoke('dialog:open-project'),
   showSaveProjectDialog: (name) => ipcRenderer.invoke('dialog:save-project', name),
   showSelectFolderDialog: () => ipcRenderer.invoke('dialog:select-folder'),
+  showSelectFolderFiles: (extensions) =>
+    ipcRenderer.invoke('dialog:select-folder-files', extensions),
   showOpenFileDialog: (opts) => ipcRenderer.invoke('dialog:open-file', opts),
   showSaveFileDialog: (opts) => ipcRenderer.invoke('dialog:save-file', opts),
   readFile: (path) => ipcRenderer.invoke('fs:read', path),

@@ -8,8 +8,10 @@ import { sourceErrorKey } from '../navigation/sourceActions';
 import {
   defaultSelection,
   pickStep7Files,
+  pickStep7Folder,
   planStep7Import,
   runStep7Import,
+  type Step7Choice,
   type Step7Item,
   type Step7Plan,
 } from '../navigation/step7Import';
@@ -23,20 +25,22 @@ export function Step7ImportDialog({ deviceId, onClose }: { deviceId: string; onC
   const [plan, setPlan] = useState<Step7Plan | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  const [choices, setChoices] = useState<Map<string, Step7Choice>>(new Map());
 
   const errorText = (e: SourceError) =>
     t(OWN_CODES.has(e.code) ? `step7.err.${e.code}` : sourceErrorKey(e.code), e.params ?? {});
 
-  const pick = async () => {
+  const pick = async (folder = false) => {
     setBusy(true);
     try {
-      const files = await pickStep7Files({ store, bridge });
+      const files = await (folder ? pickStep7Folder : pickStep7Files)({ store, bridge });
       const doc = store.getState().doc;
       const dev = doc && findDevice(doc.project, deviceId);
       if (!files || !dev) return;
       const next = planStep7Import(dev, files);
       setPlan(next);
       setSelected(defaultSelection(next));
+      setChoices(new Map());
     } finally {
       setBusy(false);
     }
@@ -44,7 +48,7 @@ export function Step7ImportDialog({ deviceId, onClose }: { deviceId: string; onC
 
   const ok = () => {
     if (!plan || selected.size === 0) return;
-    runStep7Import(store, deviceId, plan, selected);
+    runStep7Import(store, deviceId, plan, selected, choices);
     onClose();
   };
 
@@ -93,6 +97,14 @@ export function Step7ImportDialog({ deviceId, onClose }: { deviceId: string; onC
       <p>{t('step7.intro')}</p>
       <button type="button" data-testid="step7-pick" disabled={busy} onClick={() => void pick()}>
         {t('step7.pick')}
+      </button>{' '}
+      <button
+        type="button"
+        data-testid="step7-pick-folder"
+        disabled={busy}
+        onClick={() => void pick(true)}
+      >
+        {t('step7.pickFolder')}
       </button>
       {plan ? (
         <>
@@ -162,6 +174,21 @@ export function Step7ImportDialog({ deviceId, onClose }: { deviceId: string; onC
                     <td>{i.file}</td>
                     <td>
                       {state(i)}
+                      {i.replaces !== undefined && i.kind !== 'rename' && i.kind !== 'tags' ? (
+                        <select
+                          aria-label={t('step7.choice.label', { name: i.name })}
+                          value={choices.get(i.key) ?? 'replace'}
+                          onChange={(e) =>
+                            setChoices((c) => new Map(c).set(i.key, e.target.value as Step7Choice))
+                          }
+                        >
+                          <option value="replace">{t('step7.choice.replace')}</option>
+                          <option value="rename">{t('step7.choice.rename')}</option>
+                          {i.canRenumber ? (
+                            <option value="renumber">{t('step7.choice.renumber')}</option>
+                          ) : null}
+                        </select>
+                      ) : null}
                       {i.sclErrors ? (
                         <span title={i.sclErrors.map((e) => `${e.line}: ${e.message}`).join('\n')}>
                           {' '}

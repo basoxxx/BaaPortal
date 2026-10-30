@@ -266,6 +266,7 @@
     "replaceWith": "Replace with",
     "matchCase": "Match case",
     "wholeWord": "Whole word",
+    "updateRefs": "Update references",
     "regex": "Regular expression",
     "scope": "Scope",
     "scopeActive": "Active editor",
@@ -1352,6 +1353,13 @@
     }
   },
   "step7": {
+    "pickFolder": "Choose a folder…",
+    "choice": {
+      "replace": "Replace",
+      "rename": "Rename",
+      "renumber": "Renumber",
+      "label": "What to do with {{name}}"
+    },
     "menu": "Import from STEP 7…",
     "title": "Import from STEP 7",
     "filter": "STEP 7 exports (*.awl, *.scl, *.sdf, *.seq, *.dif, *.asc)",

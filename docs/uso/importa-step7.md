@@ -11,12 +11,12 @@ Guida breve all'importazione da STEP 7 V5.5 (tappa 7C): portare in BaaPortal un 
 ## Importare
 
 1. Nell'albero del progetto, tasto destro sul PLC: _Importa da STEP 7…_.
-2. _Scegli file…_: si possono scegliere più file insieme, anche di tipi diversi (tutti quelli di una cartella con Ctrl+A).
+2. _Scegli file…_: si possono scegliere più file insieme, anche di tipi diversi (tutti quelli di una cartella con Ctrl+A). _Scegli una cartella…_ legge in un colpo i file STEP 7 del primo livello di una cartella (non le sottocartelle), al massimo 500.
 3. L'anteprima elenca i file con gli errori e gli avvisi (riga per riga) e le voci da importare:
    - gli **oggetti** delle sorgenti, con «nuovo» o «sostituisce …» se nel PLC c'è già un oggetto con lo stesso nome o numero;
    - i **nomi dei blocchi** presi dai simboli (`"Motore" FB 10` rinomina l'FB 10 del PLC);
    - la **tabella delle variabili** coi simboli degli operandi.
-4. Si spuntano le voci da importare (gli oggetti che sostituiscono qualcosa partono non spuntati) e si preme _Importa_. Tutto è un solo passo da annullare con Ctrl+Z; il riepilogo va in _Informazioni_.
+4. Si spuntano le voci da importare (gli oggetti che sostituiscono qualcosa partono non spuntati). Per un oggetto che sostituirebbe qualcosa si sceglie nel menu accanto allo stato: _Sostituisci_, _Rinomina_ (nome e numero liberi, es. `Axis_1`) o _Rinumera_ (stesso nome, numero libero; solo se l'oggetto esistente ha un nome diverso). Poi si preme _Importa_. Tutto è un solo passo da annullare con Ctrl+Z; il riepilogo va in _Informazioni_.
 
 ## Come si legge
 
