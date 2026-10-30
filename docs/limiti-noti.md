@@ -2,22 +2,25 @@
 
 Qui si elencano i limiti conosciuti di BaaPortal: cose che oggi mancano, sono incomplete o restano da verificare. La lista si aggiorna alla fine di ogni piano. **Alla fine di tutte le tappe si riguarda punto per punto insieme all'utente**, per decidere che cosa sistemare.
 
+## Stato alla 2.0
+
+La versione 2.0 chiude le tappe 1–7 della roadmap e l'HMI di base (tappa 8). Restano fuori, per scelta: il caricamento nella CPU e la lettura dalla CPU della configurazione hardware e di rete (blocchi SDB, formato non documentato), la lettura dei progetti `.s7p` (formato non documentato), l'adattatore MPI v3 e gli adattatori USB Siemens (protocolli chiusi), le funzioni complete di WinCC e le estensioni della tappa 9, che si fanno su richiesta. Nulla è ancora stato provato su una CPU reale: le prove sono in `docs/uso/prove-cpu.md` e, finché non si fanno, la tappa 1 resta formalmente aperta. Le voci «mai provato su una CPU reale» qui sotto restano tutte da verificare.
+
 Per ogni voce si indica che cosa succede oggi. "Errore chiaro" vuol dire che BaaPortal si ferma e lo dice: non produce mai codice sbagliato senza avvisare.
 
 ## Mancanze aperte
 
 - **Stato della tappa 1.** Tutti i punti della spec §9 sono fatti (piani 1A–1F) tranne uno: la conformità su CPU reale, che resta **in sospeso**. La spec §6 dice che la tappa 1 non si chiude senza i test di conformità su CPU reale: la tappa 1 resta quindi **formalmente aperta** e si chiude solo quando quelle prove saranno fatte.
-- **Prove di conformità su una CPU reale.** Ora esistono i mezzi (carica nel dispositivo ed esecuzione, piano 1D-bis), ma le prove restano **in sospeso**: non c'è una S7-300 non in produzione. Le farà l'amico dell'utente a prodotto finito. I blocchi compilati da BaaPortal non sono mai stati caricati né eseguiti su una CPU. Il simulatore della tappa 2 controllerà la coerenza interna, ma non sostituisce questa verifica (spec §10). Il punto di decisione della spec §11 resta aperto.
+- **Prove di conformità su una CPU reale.** Ora esistono i mezzi (carica nel dispositivo ed esecuzione, piano 1D-bis), ma le prove restano **in sospeso**: non c'è una S7-300 non in produzione. Le farà l'amico dell'utente a prodotto finito. I blocchi compilati da BaaPortal non sono mai stati caricati né eseguiti su una CPU. Il simulatore della tappa 2 controlla la coerenza interna, ma non sostituisce questa verifica (spec §10). Il punto di decisione della spec §11 resta aperto.
 - **Provenienza 1D-bis.** Scrittura di variabili, carica nel dispositivo e STOP/avvio esistono e sono verificati contro il finto PLC e contro i byte delle catture pubbliche (`cisa/snap7.pcap` per scrittura, stop e avvio a freddo; la cattura del download di un blocco). Il giro completo «la CPU accetta ed esegue un blocco compilato da BaaPortal» non è mai stato provato su una CPU reale (spec §10). Il riavvio a caldo è verificato solo in parte. Dopo i piani 3B e 3C sono fatti nell'app, ma **mai provati su una CPU reale**: `_DELE` (cancella blocchi), `_GARB` (comprimi), `_MODU` (copia RAM→ROM), STOP e avvio (RUN, con avviamento a caldo), impostazione dell'orologio e l'interfaccia online. **Non sono fatti**: MRES da remoto (pulsante disabilitato, vedi «Caricamento e confronto (piano 3B)»), l'avviamento a freddo dall'interfaccia e la forzatura (vedi «Osservazione online, stack e ripristino (piano 3D)»).
 
 ## Online (piano 3A)
 
 - **Sola lettura.** Il solo collegamento (sorveglianza, LED) è in sola lettura. Le scritture sono del piano 3B, sotto.
 - **Mai provato su una CPU reale.** Il collegamento è provato solo contro il PLC di prova (server S7 locale con CPU simulata). Non è stato provato né su una CPU reale, né su un CP 343-1, né su un gateway RFC 1006.
-- **Ricerca limitata.** La ricerca trova solo dispositivi con un indirizzo IPv4 nella stessa sottorete dell'interfaccia scelta. Non c'è DCP, quindi una CPU senza indirizzo IP non compare; il DCP arriva nella tappa 6.
-- **MPI/DP.** Solo attraverso un gateway RFC 1006.
+- **Ricerca limitata.** La ricerca trova solo dispositivi con un indirizzo IPv4 nella stessa sottorete dell'interfaccia scelta. Non c'è DCP (piano 6C, fuori dalla 2.0), quindi una CPU senza indirizzo IP non compare.
+- **MPI/DP.** Attraverso un gateway RFC 1006 o con l'adattatore MPI seriale (piano 3M, sperimentale, sotto).
 - **Sonda provata solo in locale.** La sonda di rete è stata provata solo su loopback (127.0.0.1), mai su una rete vera.
-- **Eventi di ricerca: risolto.** Se la pagina viene ricaricata o il renderer cade durante una ricerca, la ricerca si interrompe e nessun evento arriva alla pagina nuova.
 - **Campi di rack e slot.** Rack da 0 a 7 e slot da 0 a 31.
 - **Impostazioni di accesso salvate nel progetto.** Indirizzo, porta, rack e slot restano nel file del progetto, nelle proprietà della CPU; non sono impostazioni dell'utente.
 
@@ -62,14 +65,12 @@ Per ogni voce si indica che cosa succede oggi. "Errore chiaro" vuol dire che Baa
 - **Numero di richieste nella conferma.** È un massimo calcolato per PDU 240, non il numero esatto.
 - **Backup: il ripristino è del 3D (sperimentale).** Non si sa se i DB caricati hanno i valori attuali o quelli iniziali (§19.4).
 - **Il modo del backup è riletto all'inizio** sul collegamento online; se la lettura non riesce, nel file c'è `UNKNOWN`.
-- **Lettura di un `.baapbak`: risolto nel 3D.** La lettura non si fida più delle dimensioni dichiarate nello zip (vedi «Osservazione online, stack e ripristino (piano 3D)»).
 - **Niente messaggi push.** Il buffer si aggiorna ogni secondo, solo con l'editor aperto.
 - **`_DELE` usa 'A'.** Vedi «Caricamento e confronto (piano 3B)».
 - **Impostazione dell'ora con protezione di livello 3.** Anche la risposta `0xD0A1` è un'ipotesi (§12.0).
 - **Il numero di richieste nella conferma è un massimo solo se la CPU concorda una PDU di almeno 240 byte.** Con una PDU più piccola le richieste possono essere di più.
 - **Più tabelle online osservano insieme.** Le loro richieste si uniscono in un solo giro di letture per PLC (operandi uguali letti una volta) e il limite di 200 righe vale per l'insieme: le righe oltre il limite, in ordine di accensione, danno un errore di riga e un avviso. Una tabella che non è più aperta in un riquadro smette di interrogare. Sul simulatore resta una sola tabella osservata (vedi «Tabelle di controllo»).
 - **Il backup si ferma se il collegamento online finisce** (offline, perso, finestra chiusa): errore «Collegamento online finito: backup interrotto», nessun file. Se finisce mentre il file si sta già scrivendo, il backup è salvato.
-- **I file `.baapbak` non compaiono nell'albero.** Restano così anche dopo il 3D: si aprono con la finestra dei file (vedi 3D).
 - **I record di diagnostica più corti di 20 byte si scartano.**
 - **Il pulsante si chiama «Osserva tutto»,** il nome del 2C, e non «Controlla tutto» come in TIA.
 
@@ -214,8 +215,6 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§4.1 per la semantica). T
 ### Mancanze
 
 - **Nessuna CPU reale per confermare la semantica** (spec §10). Il simulatore controlla la coerenza interna con i manuali pubblici, ma nessun risultato è stato confrontato con una S7-300 vera.
-- **Temporizzatori, contatori, SFC/SFB e OB di errore: risolti dal piano 2B** (vedi la sezione «Simulatore (piano 2B)» qui sotto).
-- **Interfaccia: piano 2C.** Il pacchetto non ha pannelli; li offre il piano 2C (vedi «Strumenti di test (piano 2C)» sotto).
 - **Il tempo di ciclo non è quello di una CPU vera.** Dipende dal computer e dall'orologio iniettato.
 - **ENT e LEAVE rifiutati** (`ISTRUZIONE_NON_S7300`): sono delle CPU a 4 accumulatori.
 
@@ -255,7 +254,7 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§10–§13). Come per il 
 - **Temporizzatori S5:** MCR non li influenza; SS con riavvio a Q = 1 resta a 1 fino a `R`; SF con RLO = 1 subito dopo `R` dà Q = 1; il valore residuo da fermo resta quello dello stop; parola di stato di avvio/`R`/`FR` /FC 0, OR 0, STA = RLO, RLO invariato. Tutto non verificato.
 - **Parametro formale TIMER/COUNTER:** il numero si legge dalla voce grezza della lista dei puntatori (`[n >> 8, n & 255, 0, 0]`); il formato è stato verificato su una sola sorgente.
 - **Lettura di T e C dal server S7:** T come parola `LC` (BCD con base), C come parola BCD, 2 byte big-endian; formato sul filo non verificato. Le scritture sulle aree T e C sono rifiutate.
-- **OB82 e OB86 solo da `raiseInterrupt`:** non c'è una configurazione hardware (tappa 6); il pannello del piano 2C li offre come «simula guasto».
+- **OB82 e OB86 solo da `raiseInterrupt`:** il simulatore non usa la configurazione hardware (6A/6B); il pannello del piano 2C li offre come «simula guasto».
 - **OB82/OB86 mancanti → OB85:** il manuale è ambiguo; se manca anche OB85 la CPU va in STOP (`OB_NON_CARICATO`).
 - **OB80 annidato in OB82/OB86:** se il tempo di ciclo si supera dentro un OB della classe 26, OB80 si annida nella stessa classe; una CPU vera lo metterebbe in coda.
 - **OB35, latenza:** si controlla all'inizio del ciclo e ogni 1024 istruzioni (tick), non a ogni istruzione: la latenza arriva fino a 1024 istruzioni.
@@ -283,14 +282,14 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§10–§13). Come per il 
 
 Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simulatore.md`. Come per i piani 2A e 2B, nessuna è confermata da una CPU reale.
 
-- **Nessun PLC vero fino alla tappa 3.** Pannello CPU, pannello I/O, osservazione e tabelle di controllo funzionano solo sul simulatore; il collegamento a un PLC reale usa lo stesso `watch`/`write` nella tappa 3 (le tabelle online arrivano con il 3C).
+- **Pannello I/O solo sul simulatore.** Pannello CPU, osservazione e tabelle di controllo funzionano anche online (piani 3A–3D, con i limiti scritti nelle loro sezioni); il pannello I/O simula gli ingressi e resta del simulatore.
 - **Il tempo di ciclo del Worker non è quello di una CPU vera.** Dipende dal computer.
 - **Osservazione del programma.**
   - Rileva solo la prima esecuzione di ogni riga nel ciclo (in AWL, KOP e FUP; nei blocchi SCL l'ultima, vedi «SCL in prova»); non c'è l'opzione per scegliere.
   - I blocchi importati e non ricompilati non si possono osservare (mancano le righe del compilatore).
   - Gli editor nelle finestre staccate non vengono osservati.
   - Il tasto esadecimale/decimale non viene salvato e torna esadecimale a ogni simulazione.
-- **Nessun FORCE.** Il pannello I/O simula gli ingressi fisici e non forza valori; il forzamento è della tappa 7.
+- **Nessun FORCE.** Il pannello I/O simula gli ingressi fisici e non forza valori; il forzamento non è fatto (vedi «Forzamento» nel piano 3D).
 - **Blocchi cancellati.** «Carica nel dispositivo» cancella dalla CPU simulata i blocchi (compresi i DB) non più nel progetto; un blocco cancellato che era in osservazione smette di essere osservato. Anche i DB creati dal programma con SFC 22 (CREAT_DB) vengono cancellati da un nuovo caricamento.
 - **Byte aggiunti a mano nel pannello I/O** («+ byte») durano solo la sessione di simulazione e non sono salvati nel progetto.
 - **Tabelle di controllo.**
@@ -449,7 +448,7 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
 - **Campi traducibili:** titoli e commenti di blocchi, segmenti, membri (interfacce, DB, UDT), variabili e costanti; etichette di testo delle schermate HMI. Non si traducono i commenti dei moduli hardware, delle tabelle di controllo, dei metadati del progetto né i commenti dentro il codice AWL o SCL; le tabelle di controllo, i nomi e i gruppi restano come sono.
 - **Una lingua mostrata alla volta, per tutto il progetto** (impostazione salvata nel file). Con una traduzione mostrata i campi sono di sola lettura: non si scrive nella traduzione dall'editor, ma dalla tabella dei testi. Gli editor che mostrano la traduzione sono: blocchi (intestazione e segmenti), interfacce e DB, variabili, costanti e runtime HMI. L'editor delle schermate HMI, il confronto, le liste degli Strumenti e la ricerca restano nella lingua di modifica; la stampa e il PDF usano la lingua mostrata (anche per i commenti dei segmenti e dei membri), mentre la lingua del documento (`lang`) segue l'interfaccia.
 - **Tabella dei testi:** 300 righe al massimo per volta (si restringe col filtro); niente ricerca e sostituzione, né traduzione automatica, né stato di revisione. Un testo vuoto nella lingua di modifica non compare: non c'è nulla da tradurre. Se il testo di modifica cambia, le traduzioni restano e non sono segnate come da rivedere.
-- **Importazione:** per chiave. I testi vuoti non cancellano; per togliere una traduzione si svuota la cella nella tabella. Il file csv è letto con il separatore trovato nell'intestazione.
+- **Importazione:** per chiave. Un testo più lungo di 100 000 caratteri si scarta (il file del progetto non lo accetterebbe), come le chiavi e le lingue sconosciute. I testi vuoti non cancellano; per togliere una traduzione si svuota la cella nella tabella. Il file csv è letto con il separatore trovato nell'intestazione.
 - **Guida in linea:** il testo è in italiano (come i documenti in `docs/uso`) anche con l'interfaccia in inglese. Le pagine sono quelle dei documenti d'uso e dei limiti noti, incluse nella build. Il sottoinsieme di Markdown è: titoli, paragrafi, elenchi (anche annidati), tabelle, codice, grassetto, corsivo e collegamenti tra pagine; citazioni, immagini e HTML non sono letti (l'HTML resta testo) e gli indirizzi web non si aprono. F1 in un editor senza pagina propria (variabili, tipi, sorgenti AWL, AWL stesso: non c'è una pagina dedicata all'AWL) apre l'indice; per un blocco AWL apre la pagina dei riferimenti. F1 non si apre con una finestra di dialogo già aperta.
 
 ## Vista dispositivi (piano 6A)
@@ -464,7 +463,7 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
 ## Vista di rete (piano 6B)
 
 - **Non si carica nella CPU e non si legge dalla CPU.** Sottoreti, indirizzi MPI/PROFIBUS/IP, nomi PROFINET e stazioni ET 200 finiscono anch'essi negli SDB, non documentati: si modificano e si salvano nel progetto e basta. Non si legge nemmeno la configurazione reale dal PLC. Per configurare la rete reale serve STEP 7 o TIA Portal.
-- **Interfacce dedotte dal tipo di CPU.** X1 MPI per le CPU senza DP, X1 MPI e X2 DP per le DP, X1 MPI/DP e X2 PN per le PN/DP, X1 MPI/DP, X2 DP e X3 PN per le 319-3 PN/DP (manuale delle CPU 31x 03/2011). Le porte dello switch integrato (P1, P2) non ci sono; dei CP solo il CP 343-1 e il CP 343-1 Lean (Industrial Ethernet). Mancano CP 342-5, CP 343-2 e i ruoli master/slave dell'interfaccia DP: la CPU è sempre master DP o controller IO delle sue stazioni.
+- **Interfacce dedotte dal tipo di CPU.** X1 MPI per le CPU senza DP, X1 MPI e X2 DP per le DP (ma X1 MPI/DP per la 317-2 DP e la 317F-2 DP), X1 MPI/DP e X2 PN per le PN/DP, X1 MPI/DP, X2 DP e X3 PN per le 319-3 PN/DP (manuale delle CPU 31x 03/2011). Le porte dello switch integrato (P1, P2) non ci sono; dei CP solo il CP 343-1 e il CP 343-1 Lean (Industrial Ethernet). Mancano CP 342-5, CP 343-2 e i ruoli master/slave dell'interfaccia DP: la CPU è sempre master DP o controller IO delle sue stazioni.
 - **ET 200 di base.** Solo IM151-1 Standard (DP), IM151-3 PN (PROFINET IO) e IM 153-1 (ET 200M, DP), con numeri d'articolo da manuali pubblici non verificati su moduli reali. Nella ET 200S solo i moduli elettronici 2DI/4DI DC24V e 2DO/4DO DC24V/0.5A, un byte ciascuno: mancano i moduli di potenza PM-E (e il loro controllo dei gruppi di potenziale), i moduli analogici e la compressione degli indirizzi. Nella ET 200M solo le SM S7-300 del catalogo; mancano PS e IM ridondanti, CP e FM. Non si controlla il numero massimo di byte di I/O della stazione né lo spostamento dei moduli fra posti (si toglie e si reinserisce).
 - **Indirizzi I/O delle stazioni.** All'inserimento il modulo prende il primo indirizzo libero (da 0 per i digitali, da 256 per gli analogici) nello spazio della CPU; nelle proprietà si cambia. Le sovrapposizioni con il rack e l'elenco di assegnazione li contano come i moduli centrali.
 - **Controlli di rete semplificati.** Si controllano indirizzi doppi o fuori campo sulla sottorete (0–126, non oltre l'indirizzo più alto), IP non validi o doppi (con la maschera: né indirizzo di rete né broadcast), maschera e router, velocità non ammesse, interfacce non collegate (avviso) e stazioni senza la CPU sulla stessa sottorete (avviso). Non si controllano: i nomi PROFINET (formato e doppioni), il router nella stessa sottorete, le velocità che la singola CPU supporta, i tempi di aggiornamento e i parametri del bus (profilo, tempi). I problemi di rete si vedono nella vista di rete, non nell'elenco dei problemi del PLC.
@@ -484,7 +483,7 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
 
 - **Niente `.s7p`.** Il progetto di STEP 7 non si legge: il formato non è documentato e lavoriamo in clean-room. Si importano le esportazioni standard: sorgenti AWL e SCL e tabella dei simboli (`.sdf`, `.seq`, `.dif`, `.asc`). Configurazione hardware, rete, tabelle di controllo (VAT), testi multilingua e blocchi senza sorgente non arrivano; un blocco KOP/FUP arriva solo come AWL dalla sua sorgente generata.
 - **Formati dei simboli non verificati su file reali.** I lettori seguono le descrizioni pubbliche dei formati e sono provati su file scritti a mano. SDF: campi tra virgolette separati da virgole, nell'ordine simbolo, indirizzo, tipo, commento. ASC: `126,` e colonne fisse (simbolo nelle prime 24 colonne), con un ripiego per colonne di larghezza diversa. SEQ: `126,` e campi separati da tabulazioni, in qualsiasi ordine (l'indirizzo si riconosce; il simbolo è il primo degli altri). DIF: celle stringa e numero fra `BOT` ed `EOD`. Un'esportazione reale con un'altra disposizione potrebbe dare righe scartate (segnalate con il numero di riga): va provata con file veri.
-- **Simboli dei blocchi:** OB, FB, FC, DB e UDT danno nome e numero; VAT, SFC e SFB si leggono ma non hanno effetto. Il nome dato da un simbolo che è già usato da un altro oggetto non si applica (avviso in Informazioni).
+- **Simboli dei blocchi:** OB, FB, FC, DB e UDT danno nome e numero; VAT, SFC e SFB si leggono ma non hanno effetto. Il nome dato da un simbolo che è già usato da un altro oggetto non si applica (avviso in Informazioni). Un oggetto nuovo col nome di un altro blocco, UDT o simbolo (per esempio `FUNCTION "Motore"` numerato FC 10 dai simboli, con un FC3 "Motore" nel progetto) non si importa: l'anteprima dice «nome già usato da FC3» e la voce non si può scegliere. Lo stesso vale per _Genera blocchi dalla sorgente_, che si ferma con un errore.
 - **SCL:** solo la sintassi di STEP 7 (non quella di TIA). Gli attributi tra graffe (`{ S7_m_c := 'true' }`) si tolgono senza avviso; `CONST` e `LABEL` vanno come commento nel codice; le dichiarazioni devono stare una per riga con `END_VAR` sulla sua riga, come nelle sorgenti generate da STEP 7. Il codice si importa senza modifiche e la compilazione segnala ciò che il sottoinsieme SCL di BaaPortal non ha.
 - **Sostituzione per nome o numero, non per contenuto:** un oggetto con lo stesso nome o numero è «sostituisce …» anche se è identico; non c'è _Rinomina_ né _Rinumera_ come nell'inserimento dalla libreria, solo importa o salta.
 - **Cartelle:** si scelgono più file nel dialogo; una cartella intera non si sceglie come tale (Ctrl+A nel dialogo).
@@ -493,6 +492,7 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
 ## HMI di base (1.9)
 
 - **Non è WinCC.** Mancano: allarmi e messaggi, ricette, curve e archivi, script, utenti e password, testi multilingua per allarmi e messaggi (le etichette si traducono con i testi di progetto), grafica (immagini, forme, oggetti animati), modelli e faceplate, livelli e finestre a comparsa, schermata iniziale configurabile (il runtime parte dalla schermata aperta nell'editor), caricamento su pannelli reali (Comfort, Basic, OP/TP), importazione da WinCC o WinCC flexible. Allineamento e distribuzione automatici degli oggetti non ci sono.
+- **Testi degli oggetti:** testo, variabile e valore di un oggetto al massimo 1000 caratteri (oltre, il campo dà errore e non si salva).
 - **Runtime solo dentro BaaPortal**, a tutta finestra, sul PC: non c'è un runtime separato da installare né un avvio automatico.
 - **Scritture online:** una conferma sola all'avvio in scrittura, poi nessuna (vedi `docs/uso/hmi.md`). Il runtime tiene aperto un collegamento `online-write` finché il permesso vale: occupa un collegamento PG della CPU in più per tutto quel tempo. Con l'adattatore MPI invece apre e chiude il collegamento a ogni scrittura (connessione e verifica della CPU ogni volta: più lento) e intanto la lettura dei valori si ferma, con «Valori in pausa» nella barra. Una scrittura mentre un'altra operazione di scrittura è in corso sulla stessa CPU è rifiutata con un messaggio, tranne lo 0 di un pulsante a impulsi, che aspetta fino a 2 s e poi scrive comunque. Un solo runtime aperto alla volta nell'app. **Mai provato su una CPU reale.**
 - **Impulso e caduta del PC o della rete:** lo 0 del rilascio si ritenta e, alla chiusura, ricarica, caduta del renderer, fine del collegamento online o uscita, lo scrive il processo principale; ma se si spegne o si blocca il PC, o la rete verso la CPU cade, col pulsante premuto il bit resta a 1. Il processo principale non scrive lo 0 da solo dopo un tempo massimo. All'uscita dall'app (anche chiudendo la finestra) l'app aspetta lo 0 fino a 15 s; se non riesce, l'avviso «forse rimasti a 1» compare al prossimo avvio. L'elenco si conserva sul PC, non nella CPU: un altro PC o un altro programma che riporta il bit a 0 non lo toglie. Non usare i pulsanti a impulsi per movimenti pericolosi: consenso, finecorsa e tempo massimo o watchdog vanno nel programma del PLC. «Commuta» parte dall'ultimo valore letto: se il PLC lo ha cambiato nel frattempo, la commutazione può scrivere lo stesso valore.
