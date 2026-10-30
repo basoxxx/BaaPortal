@@ -104,6 +104,7 @@ const bridge: RawBridge = {
   updateLater: (version) => ipcRenderer.invoke('update:later', version),
   updateOpenNotes: (version) => ipcRenderer.invoke('update:openNotes', version),
   onUpdateEvent: (cb) => subscribe<[UpdateEvent]>('update:event', cb),
+  printDocument: (req) => ipcRenderer.invoke('print:document', req),
   testOverrides: () => ipcRenderer.invoke('app:test-overrides'),
 };
 

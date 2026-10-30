@@ -25,7 +25,7 @@ export const MENUS: MenuDef[] = [
       'project.retrieve',
       'sep',
       'project.print',
-      'project.printPreview',
+      'project.exportPdf',
       'sep',
       'project.exit',
     ],

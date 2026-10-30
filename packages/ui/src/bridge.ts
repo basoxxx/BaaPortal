@@ -119,6 +119,24 @@ export type KitStartResult =
   | { ok: true; savedTo: string | null; summary: KitSummary; saveError?: string }
   | { ok: false; error: string };
 
+export interface PrintRequest {
+  /** Documento HTML completo (da `buildPrintDocument`). */
+  html: string;
+  /** `pdf`: finestra «Salva con nome» e file; `print`: finestra di stampa del sistema. */
+  mode: 'pdf' | 'print';
+  paper: 'A4' | 'Letter';
+  landscape: boolean;
+  /** Testo del piè di pagina (nome del progetto). */
+  title: string;
+  defaultName: string;
+}
+
+export type PrintResult =
+  | { status: 'saved'; path: string }
+  | { status: 'printed' }
+  | { status: 'cancelled' }
+  | { status: 'error'; message: string };
+
 export interface BaaBridge {
   platform: 'win32' | 'darwin' | 'linux';
   appVersion(): Promise<string>;
@@ -237,5 +255,7 @@ export interface BaaBridge {
   updateLater(version: string): Promise<void>;
   updateOpenNotes(version: string): Promise<void>;
   onUpdateEvent(cb: (e: UpdateEvent) => void): () => void;
+  /** Stampa o salva in PDF un documento HTML in una finestra nascosta e isolata; mai eccezioni. */
+  printDocument(req: PrintRequest): Promise<PrintResult>;
   testOverrides(): Promise<{ recoveryIntervalMs?: number }>; // sempre {} nelle build pacchettizzate
 }

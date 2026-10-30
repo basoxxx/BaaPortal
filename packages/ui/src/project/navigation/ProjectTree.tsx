@@ -562,6 +562,17 @@ export function ProjectTree() {
       ...generateItems,
       ...tagIoItems,
       ...compileItems,
+      ...(['plc', 'folder', 'group', 'block', 'udt', 'tagTable', 'watchTable'].includes(parsed.kind)
+        ? [
+            {
+              id: 'print',
+              label: t('commands.project.print'),
+              separator: true,
+              run: () =>
+                store.getState().openDialog({ kind: 'print', nodeIds: inNodes, mode: 'print' }),
+            },
+          ]
+        : []),
       ...(parsed.kind === 'block' || parsed.kind === 'plc'
         ? [
             {

@@ -17,6 +17,7 @@ import { applyDisplaySettings, useSettings } from './settings/settings';
 import { AddBlockDialog } from './project/dialogs/AddBlockDialog';
 import { AddDeviceDialog } from './project/dialogs/AddDeviceDialog';
 import { ImportTagsReport } from './project/dialogs/ImportTagsReport';
+import { PrintDialog } from './print/PrintDialog';
 import { KitDialog } from './project/dialogs/KitDialog';
 import { DetachedWindows } from './project/workarea/DetachedWindow';
 import { UpdateNotice } from './update/UpdateNotice';
@@ -65,6 +66,9 @@ function Shell() {
         <DownloadPreviewDialog plan={dialog.plan} onClose={close} />
       ) : null}
       {dialog?.kind === 'restore' ? <RestoreDialog onClose={close} /> : null}
+      {dialog?.kind === 'print' ? (
+        <PrintDialog nodeIds={dialog.nodeIds} mode={dialog.mode} onClose={close} />
+      ) : null}
       {dialog?.kind === 'collectKit' ? <KitDialog onClose={close} /> : null}
       {dialog?.kind === 'addBlock' ? (
         <AddBlockDialog

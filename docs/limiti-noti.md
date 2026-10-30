@@ -428,6 +428,16 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
 - **Elenco di assegnazione:** vale ciò che vedono i riferimenti incrociati, quindi non compaiono gli accessi indiretti, le periferiche (PI, PQ) e i DB. Le righe sono solo i byte usati o con un tag; un tag con tipo più largo del suo indirizzo (o a indirizzo non valido) segna solo ciò che l'indirizzo copre. Per T e C ogni riga raggruppa otto elementi. I limiti sono quelli del catalogo (`cpu.limits`); senza CPU nel catalogo non c'è alcun limite.
 - **Risorse:** la memoria di caricamento è la dimensione del file del blocco compilato, quella di lavoro la lunghezza della sezione MC7: sono stime, STEP 7 conta anche altre parti (interfaccia, simboli) in modo diverso. I dati locali sono quelli scritti nell'intestazione del blocco compilato; per un blocco importato e non modificato, quelli dei byte originali. I blocchi che non si compilano sono «da compilare» e rendono parziale il percorso che li contiene; SFC, SFB e blocchi mancanti contano zero. Il limite è `localDataBytesPerClass` del catalogo (32 KB per classe di priorità), non quello per blocco; il percorso è il più costoso tra i richiami scritti, ricorsioni tagliate. Si compila tutto il programma a ogni modifica mentre la scheda è aperta.
 
+## Stampa e PDF (piano 7D)
+
+- **KOP e FUP escono come AWL generato**, non come grafico: i componenti dell'editor sono interattivi e un rendering statico (SVG) non c'è ancora.
+- **Niente anteprima di stampa** nell'app: si vede il risultato salvando il PDF. La voce _Anteprima di stampa_ del menu è stata sostituita da _Esporta in PDF_.
+- **Un PLC per documento.** Una selezione che attraversa più PLC stampa il primo; i blocchi di sistema e le sorgenti AWL esterne non sono stampati (di un DB di istanza si riportano il FB e i valori cambiati).
+- **Blocchi know-how protetti:** si riporta solo l'interfaccia, il codice no.
+- **Numeri di pagina** dal piè di pagina di Chromium (solo nel PDF); nella stampa di sistema dipendono dal driver. Intestazione e piè di pagina non sono personalizzabili.
+- **Il documento è fatto di testo del progetto**: viene caricato in una finestra senza JavaScript, in sandbox e con CSP che vieta ogni risorsa esterna. Un progetto altrui non può eseguire codice né leggere file tramite la stampa.
+- **Riferimenti incrociati** nel documento: solo gli usi nei blocchi stampati.
+
 ## Fuori dal codice, in sospeso per l'utente
 
 - Controlli a mano dei piani 1B (Windows e Mac), 1C e 1F. Le liste sono nei piani; per la 1F: xlsx in Excel e LibreOffice, xlsx di TIA Portal, Archivia/Ritira con percorsi accentati e con spazi, scala a 125%.

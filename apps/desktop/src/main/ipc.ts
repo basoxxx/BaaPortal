@@ -20,6 +20,7 @@ import { isTrustedFrame, type FrameLike, type TrustOptions } from './trust';
 import { deleteRecovery, listRecovery, readRecovery, writeRecovery } from './recoveryStore';
 import { parseOpenOptions, parseSaveOptions } from './fileDialogOptions';
 import { registerKit } from './kit';
+import { PRINT_WINDOW_OPTIONS, printDocument, type PrintWindow } from './printDocument';
 import { createConfirm, e2eOpenPath, e2eSavePath } from './plc/confirm';
 import { registerPlc } from './plc/plcIpc';
 import { fileJobStore } from './plc/tisJobs';
@@ -205,6 +206,20 @@ export function registerIpc(
   );
 
   registerKit(handle);
+  handle('print:document', (e, raw) =>
+    printDocument(raw, {
+      createWindow: () => new BrowserWindow({ ...PRINT_WINDOW_OPTIONS }) as unknown as PrintWindow,
+      pickSavePath: async (defaultName) => {
+        const hooked = e2eSavePath();
+        if (hooked) return hooked;
+        const win = BrowserWindow.fromWebContents(e.sender);
+        const opts = { defaultPath: defaultName, filters: [{ name: 'PDF', extensions: ['pdf'] }] };
+        const r = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts);
+        return r.canceled || !r.filePath ? null : r.filePath;
+      },
+      write: writeFileAtomic,
+    }),
+  );
   const plc = registerPlc(
     handle,
     createConfirm(dialog, (o) => BrowserWindow.fromWebContents(o as WebContents)),

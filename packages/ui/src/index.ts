@@ -21,6 +21,8 @@ export type {
   KitProgress,
   KitSummary,
   KitStartResult,
+  PrintRequest,
+  PrintResult,
 } from './bridge';
 export type {
   PlcAccess,

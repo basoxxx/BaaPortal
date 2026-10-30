@@ -41,7 +41,7 @@ export type CommandId =
   | 'project.archive'
   | 'project.retrieve'
   | 'project.print'
-  | 'project.printPreview'
+  | 'project.exportPdf'
   | 'project.exit'
   | 'edit.undo'
   | 'edit.redo'
@@ -132,6 +132,15 @@ function focusedBlock(s: AppState) {
   const e = wa.editors.find((x) => x.key === wa.panes[wa.focusedPane]);
   return e?.kind === 'block' ? { deviceId: e.deviceId, blockId: e.objectId } : undefined;
 }
+/** Stampa la selezione dell'albero (senza, tutto il PLC): apre la finestra di stampa. */
+const printRun =
+  (mode: 'print' | 'pdf'): Command['run'] =>
+  ({ store }) => {
+    const s = store.getState();
+    const dev = targetPlcId(s);
+    const nodeIds = s.selection ? [s.selection] : dev ? [`plc:${dev}`] : [];
+    s.openDialog({ kind: 'print', nodeIds, mode });
+  };
 const always = () => true;
 const never = () => false;
 const noop = () => {};
@@ -227,8 +236,13 @@ const list: Command[] = [
     isEnabled: always,
     run: async ({ service }) => void (await service.retrieve()),
   }),
-  def('project.print', { icon: 'print' }),
-  def('project.printPreview'),
+  def('project.print', {
+    icon: 'print',
+    shortcut: 'Mod+P',
+    isEnabled: hasPlc,
+    run: printRun('print'),
+  }),
+  def('project.exportPdf', { isEnabled: hasPlc, run: printRun('pdf') }),
   def('project.exit', { isEnabled: always, run: ({ service }) => service.handleCloseRequest() }),
   def('edit.undo', {
     icon: 'undo',
