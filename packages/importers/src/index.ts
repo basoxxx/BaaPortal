@@ -9,3 +9,4 @@ export * from './tags/rows';
 export * from './tags/xlsx';
 export * from './xlsx/ooxml';
 export * from './watch/csv';
+export * from './texts/texts';

@@ -15,6 +15,7 @@ import {
 } from './model';
 import { HMI_FORMATS, HMI_MAX_SIZE, HMI_OBJECT_KINDS } from './hmi';
 import type { HmiFormat, HmiObjectKind } from './model';
+import { liveTexts } from './texts';
 import { MPI_BUS_SPEEDS, MPI_HIGHEST_ADDRESSES } from './plcAccess';
 
 export type BaapErrorCode =
@@ -50,11 +51,27 @@ const projectV1Schema = z.object({
   formatVersion: z.literal(1),
   meta: z.object(metaShape).strict(),
 });
+// Testi di progetto (7D, facoltativi). I tag di lingua sono anche chiavi di oggetto: restano regolari.
+const langTag = z
+  .string()
+  .max(20)
+  .regex(/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/);
+const languagesSchema = obj({
+  editing: langTag,
+  others: z.array(langTag).max(20),
+  display: langTag.optional(),
+}).refine((l) => {
+  const all = [l.editing, ...l.others];
+  return new Set(all).size === all.length && (!l.display || all.includes(l.display));
+});
+const textsSchema = z.record(str.max(1000), z.record(langTag, str.max(100_000)));
 const projectSchema = (version: 2 | 3 | 4) =>
   obj({
     formatVersion: z.literal(version),
     meta: obj(metaShape),
     devices: z.array(obj({ id, name: str })),
+    languages: languagesSchema.optional(),
+    texts: textsSchema.optional(),
   });
 
 const manifestSchema = z.object({ formatVersion: z.number() });
@@ -326,7 +343,8 @@ function toJson(value: unknown): Uint8Array {
 const deviceDir = (deviceId: string) => `plc/${deviceId}`;
 
 export function writeBaap(project: Project, opts: { appVersion: string }): Uint8Array {
-  const { devices, library, ...projectRest } = project;
+  const { devices, library, texts: _texts, ...projectRest } = project;
+  const texts = liveTexts(project);
   const files: Record<string, Uint8Array> = {
     [MANIFEST_FILE]: toJson({
       format: 'baaportal-project',
@@ -335,6 +353,7 @@ export function writeBaap(project: Project, opts: { appVersion: string }): Uint8
     }),
     [PROJECT_FILE]: toJson({
       ...projectRest,
+      ...(texts ? { texts } : {}),
       devices: devices.map((d) => ({ ...d.listExtras, id: d.id, name: d.name })),
     }),
   };

@@ -24,3 +24,4 @@ export * from './hardware';
 export * from './library';
 export * from './iecLibrary';
 export * from './hmi';
+export * from './texts';

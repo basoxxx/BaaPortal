@@ -355,10 +355,27 @@ export interface Library {
   groups: string[];
 }
 
+/**
+ * Lingue dei testi di progetto (7D). Il testo nei campi del modello è sempre quello della lingua
+ * di modifica; le altre stanno in `Project.texts`. `display`: lingua mostrata e stampata per i commenti.
+ */
+export interface ProjectLanguages {
+  editing: string;
+  others: string[];
+  display?: string;
+}
+
+/** Traduzioni: chiave `dispositivo/oggetto/campo` (vedi `textKey`) → lingua → testo. */
+export type ProjectTexts = Record<string, Record<string, string>>;
+
 export interface Project {
   formatVersion: 4;
   meta: ProjectMeta;
   devices: PlcDevice[];
+  /** Lingue dei testi (facoltativo: assente nei file precedenti). */
+  languages?: ProjectLanguages;
+  /** Testi tradotti (facoltativo). */
+  texts?: ProjectTexts;
   /** Libreria di progetto (facoltativa: assente nei file scritti prima della tappa 7B). */
   library?: Library;
 }
