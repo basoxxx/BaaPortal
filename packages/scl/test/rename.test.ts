@@ -1,6 +1,6 @@
 // Rinomina nel testo SCL: nomi che non sono identificatori e locali con il nome di un blocco.
 import { describe, expect, it } from 'vitest';
-import { renameInScl, sclRenameSkipped } from '../src/index.js';
+import { renameInScl, renumberInScl, sclRenameSkipped } from '../src/index.js';
 
 describe('renameInScl', () => {
   it('una variabile con un nome non identificatore: il testo resta com è e lo si segnala', () => {
@@ -39,6 +39,18 @@ describe('renameInScl', () => {
     );
     expect(renameInScl(src, { kind: 'symbol', oldName: 'Calcola' }, 'Calc')).toBe(
       'Calc(A := 1);\n#Calcola := Calcola + 1;',
+    );
+  });
+});
+
+describe('renumberInScl', () => {
+  it('riscrive le chiamate e gli accessi ai DB, non le variabili locali con nomi come DI1, DB1, FC1', () => {
+    const map: Record<string, number> = { DB1: 7, DB5: 6, FC1: 2, FB1: 9 };
+    const to = (f: string, n: number) => map[`${f}${n}`];
+    const src =
+      'IF DI1 THEN x := DB1; END_IF;\nFC1 := FB1;\nFC1(a := 1);\nFB1();\nDB1(a := 1);\n#y := DB5.DW0;';
+    expect(renumberInScl(src, to).source).toBe(
+      'IF DI1 THEN x := DB1; END_IF;\nFC1 := FB1;\nFC2(a := 1);\nFB9();\nDB7(a := 1);\n#y := DB6.DW0;',
     );
   });
 });

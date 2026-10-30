@@ -7,6 +7,7 @@ import {
   createNamer,
   type LibraryItem,
   type NewId,
+  type Block,
   type ObjectRef,
   type PlcDevice,
   type TagTable,
@@ -35,11 +36,60 @@ export interface Conflict {
   callers: string[];
   /** Il codice del modello ha riferimenti ai blocchi che non si riscrivono con un numero nuovo. */
   indirect: boolean;
+  /** I blocchi del modello che si riferiscono a questo col numero (`FB1 Motore`). */
+  usedBy: string[];
   /** Tag e costanti: indirizzo (o valore) nel modello e, se c'è, del tag o costante del PLC. */
   symbol?: { at: string; existing?: string };
 }
 
 const family = (k: string) => (k === 'IDB' ? 'DB' : k);
+const keyOf = (b: { kind: string; number: number }) => `${family(b.kind)}${b.number}`;
+const labelOf = (b: { kind: string; number: number; name: string }) => `${keyOf(b)} ${b.name}`;
+const sameInPlc = (dev: PlcDevice, b: { kind: string; name: string }) =>
+  dev.blocks.find((x) => family(x.kind) === family(b.kind) && sameName(x.name, b.name));
+
+/** Per ogni blocco del modello, i blocchi (`FC5`) a cui il suo codice si riferisce col numero. */
+function numberRefs(dev: PlcDevice, item: LibraryItem): Map<string, Set<string>> {
+  return new Map(
+    item.blocks.map((b) => {
+      const keys = new Set<string>();
+      // Con `undefined` non si riscrive niente: si raccolgono solo i numeri.
+      renumberInCode({ ...dev, blocks: [b], watchTables: [] }, (f, n) => {
+        keys.add(`${f}${n}`);
+        return undefined;
+      });
+      keys.delete(keyOf(b));
+      return [b.id, keys];
+    }),
+  );
+}
+
+/**
+ * I blocchi del modello che non entrano perché si riferiscono col numero a un blocco saltato che nel
+ * PLC non ha un blocco con lo stesso nome (il numero punterebbe a un altro blocco), anche a catena:
+ * id del blocco → il blocco saltato (`FC5 Helper`).
+ */
+export function skipCascade(
+  dev: PlcDevice,
+  item: LibraryItem,
+  skipped: ReadonlySet<string>,
+): Map<string, string> {
+  const refs = numberRefs(dev, item);
+  const out = new Map<string, string>();
+  const dangling = (b: LibraryItem['blocks'][number]) =>
+    (skipped.has(b.id) || out.has(b.id)) && !sameInPlc(dev, b);
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const gone of item.blocks.filter(dangling)) {
+      for (const b of item.blocks) {
+        if (skipped.has(b.id) || out.has(b.id) || !refs.get(b.id)!.has(keyOf(gone))) continue;
+        out.set(b.id, labelOf(gone));
+        changed = true;
+      }
+    }
+  }
+  return out;
+}
 
 /** Gli oggetti del PLC che un oggetto del modello sostituirebbe: stesso nome o stesso numero. */
 function clashes(
@@ -73,6 +123,7 @@ export function findConflicts(dev: PlcDevice, item: LibraryItem): Conflict[] {
   const symbols = symbolNames(dev);
   const taken = (name: string, list: string[]) => list.some((n) => sameName(n, name));
   const out: Conflict[] = [];
+  const refs = numberRefs(dev, item);
   // Basta un riferimento indiretto in tutto il modello: non si sa a quale blocco punta.
   const indirect =
     renumberInCode({ ...dev, blocks: item.blocks, watchTables: [] }, () => undefined).length > 0;
@@ -91,7 +142,7 @@ export function findConflicts(dev: PlcDevice, item: LibraryItem): Conflict[] {
       .map((k) => `${k} ${graph!.blocks.get(k)?.name ?? ''}`.trim());
   };
   const push = (
-    c: Omit<Conflict, 'options' | 'callers' | 'indirect'>,
+    c: Omit<Conflict, 'options' | 'callers' | 'indirect' | 'usedBy'> & { usedBy?: string[] },
     replaceable: boolean,
     o: { name: string; number?: number; kind?: string } = c,
   ) => {
@@ -100,6 +151,7 @@ export function findConflicts(dev: PlcDevice, item: LibraryItem): Conflict[] {
       ...c,
       callers: replaceable ? callersOf(c.kind, o) : [],
       indirect: indirect && c.kind === 'block' && c.numberTaken,
+      usedBy: c.usedBy ?? [],
       options: [
         'rename',
         ...(c.numberTaken && !c.nameTaken ? (['renumber'] as const) : []),
@@ -134,9 +186,10 @@ export function findConflicts(dev: PlcDevice, item: LibraryItem): Conflict[] {
         id: b.id,
         kind: 'block',
         name: b.name,
-        label: `${family(b.kind)}${b.number}`,
+        label: keyOf(b),
         nameTaken: taken(b.name, symbols),
         numberTaken,
+        usedBy: item.blocks.filter((x) => refs.get(x.id)!.has(keyOf(b))).map(labelOf),
       },
       byObject(b.name),
       b,
@@ -167,6 +220,7 @@ export function findConflicts(dev: PlcDevice, item: LibraryItem): Conflict[] {
       numberTaken: false,
       callers: [],
       indirect: false,
+      usedBy: [],
       symbol: { at: e.at, ...(same ? { existing: same.at } : {}) },
       options: [
         'rename',
@@ -189,10 +243,15 @@ export function findConflicts(dev: PlcDevice, item: LibraryItem): Conflict[] {
 
 /**
  * La scelta proposta: rinumerare se si scontra solo il numero, altrimenti rinominare. Con riferimenti
- * indiretti nel codice un numero nuovo non è sicuro: si salta.
+ * indiretti nel codice un numero nuovo non è sicuro: si salta, ma non un blocco che il modello usa
+ * col numero (saltarlo farebbe saltare anche chi lo usa).
  */
 export const defaultResolution = (c: Conflict): Resolution =>
-  c.indirect ? 'skip' : c.options.includes('renumber') ? 'renumber' : 'rename';
+  c.indirect && c.usedBy.length === 0
+    ? 'skip'
+    : c.options.includes('renumber')
+      ? 'renumber'
+      : 'rename';
 
 /**
  * Inserisce il modello nel PLC (da usare dentro `edit`). Rinomine e numeri nuovi si fanno prima su una
@@ -229,10 +288,12 @@ export function insertLibraryItem(
     ...scratch.udts.map((o) => ({ kind: 'udt' as const, o })),
     ...scratch.blocks.map((o) => ({ kind: 'block' as const, o })),
   ];
+  for (const { o } of objects) if (choice(o.id) === 'skip') skip.add(o.id);
+  for (const id of skipCascade(dev, item, skip).keys()) skip.add(id);
   for (const { kind, o } of objects) {
     const r = choice(o.id);
-    if (r === 'skip') skip.add(o.id);
-    else if (r === 'rename') {
+    if (skip.has(o.id)) continue;
+    if (r === 'rename') {
       renameWithReferences(scratch, { kind, deviceId: scratch.id, id: o.id }, namer(o.name));
     } else if (r === 'replace') {
       for (const id of clashes(dev, kind, o)) {
@@ -272,19 +333,18 @@ export function insertLibraryItem(
       }
     }
   }
-  // I numeri che l'incolla darà ai blocchi, decisi qui: i riferimenti per numero li seguono.
+  // I numeri che l'incolla darà ai blocchi, decisi qui: i riferimenti per numero li seguono. Prima
+  // quelli con il numero libero nel PLC, che lo tengono; poi gli altri prendono i numeri rimasti.
   const sim: PlcDevice = { ...dev, blocks: [...dev.blocks] };
   const numbers = new Map<string, number>(); // `FC1` del modello → numero nel PLC
-  const keyOf = (b: { kind: string; number: number }) => `${family(b.kind)}${b.number}`;
+  const placed = scratch.blocks.filter((b) => !skip.has(b.id));
+  const keeps = (b: Block) => blockNumber(dev, b, cpu) === b.number;
   for (const b of scratch.blocks) {
-    if (skip.has(b.id)) {
-      // Saltato: il codice usa il blocco del PLC con lo stesso nome, se c'è.
-      const same = dev.blocks.find(
-        (x) => family(x.kind) === family(b.kind) && sameName(x.name, b.name),
-      );
-      if (same) numbers.set(keyOf(b), same.number);
-      continue;
-    }
+    // Saltato: il codice usa il blocco del PLC con lo stesso nome, se c'è.
+    const same = skip.has(b.id) && sameInPlc(dev, b);
+    if (same) numbers.set(keyOf(b), same.number);
+  }
+  for (const b of [...placed.filter(keeps), ...placed.filter((x) => !keeps(x))]) {
     const n = blockNumber(sim, b, cpu);
     if (n === null) continue;
     numbers.set(keyOf(b), n);

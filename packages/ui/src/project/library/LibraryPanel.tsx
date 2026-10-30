@@ -34,6 +34,7 @@ import {
   defaultResolution,
   findConflicts,
   insertLibraryItem,
+  skipCascade,
   type Conflict,
   type Resolution,
 } from './libraryInsert';
@@ -145,6 +146,11 @@ function itemText(item: LibraryItem, mnemonic: ReturnType<typeof useMnemonic>[0]
 /** Ciò che si trascina da una riga della libreria (per spostarla in un'altra cartella). */
 let internalDrag: { key: string; itemId: string } | null = null;
 
+const blockLabel = (item: LibraryItem, id: string) => {
+  const b = item.blocks.find((x) => x.id === id)!;
+  return `${b.kind === 'IDB' ? 'DB' : b.kind}${b.number} ${b.name}`;
+};
+
 /** Cosa comporta la scelta fatta per uno scontro, e gli avvisi che valgono comunque. */
 function conflictNote(c: Conflict, r: Resolution | undefined, t: TFunction): string {
   const notes: string[] = [];
@@ -162,11 +168,14 @@ function conflictNote(c: Conflict, r: Resolution | undefined, t: TFunction): str
 function ConflictDialog({
   item,
   conflicts,
+  cascade,
   onCancel,
   onOk,
 }: {
   item: LibraryItem;
   conflicts: Conflict[];
+  /** I blocchi che non entrano perché usano col numero un blocco saltato: id → blocco saltato. */
+  cascade(skipped: ReadonlySet<string>): Map<string, string>;
   onCancel(): void;
   onOk(choices: Map<string, Resolution>): void;
 }) {
@@ -222,6 +231,16 @@ function ConflictDialog({
           ))}
         </tbody>
       </table>
+      {[
+        ...cascade(new Set(conflicts.filter((c) => choices.get(c.id) === 'skip').map((c) => c.id))),
+      ].map(([id, target]) => (
+        <p key={id}>
+          {t('library.cascadeSkip', {
+            block: blockLabel(item, id),
+            target,
+          })}
+        </p>
+      ))}
     </Dialog>
   );
 }
@@ -242,6 +261,7 @@ export function LibraryTree({ view }: { view: LibraryView }) {
     item: LibraryItem;
     deviceId: string;
     conflicts: Conflict[];
+    cascade(skipped: ReadonlySet<string>): Map<string, string>;
   } | null>(null);
   const [viewing, setViewing] = useState<LibraryItem | null>(null);
   const [dropOn, setDropOn] = useState<string | null>(null);
@@ -274,7 +294,10 @@ export function LibraryTree({ view }: { view: LibraryView }) {
     if (!dev) return;
     const conflicts = findConflicts(dev, item);
     if (conflicts.length === 0) doInsert(item, dev.id, new Map());
-    else setPending({ item, deviceId: dev.id, conflicts });
+    else {
+      const cascade = (skipped: ReadonlySet<string>) => skipCascade(dev, item, skipped);
+      setPending({ item, deviceId: dev.id, conflicts, cascade });
+    }
   };
 
   /** Nuovo modello dagli oggetti del progetto (con le dipendenze) nella cartella data. */
@@ -587,6 +610,7 @@ export function LibraryTree({ view }: { view: LibraryView }) {
         <ConflictDialog
           item={pending.item}
           conflicts={pending.conflicts}
+          cascade={pending.cascade}
           onCancel={() => setPending(null)}
           onOk={(choices) => {
             setPending(null);

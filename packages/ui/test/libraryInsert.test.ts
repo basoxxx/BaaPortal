@@ -19,6 +19,7 @@ import {
   defaultResolution,
   findConflicts,
   insertLibraryItem,
+  skipCascade,
   type Resolution,
 } from '../src/project/library/libraryInsert';
 
@@ -313,15 +314,62 @@ describe('inserimento: i riferimenti seguono rinomine e numeri nuovi', () => {
     expect(block(d, 'Scl').networks[0]!.source).toBe(`FC${fcN}();\n#x := DB${dbN}.DW0;`);
   });
 
-  it('un riferimento indiretto: avviso e si propone Salta', () => {
+  it('un riferimento indiretto: avviso e si propone Salta, ma Rinumera se il modello usa il blocco col numero', () => {
+    const named = absolute('CALL "Calc"\nOPN DB [MW 10]');
+    const n = findConflicts(named.d, named.item).find((x) => x.name === 'Calc')!;
+    expect(n).toMatchObject({ indirect: true, usedBy: [] });
+    expect(defaultResolution(n)).toBe('skip');
     const { item, d } = absolute('CALL FC 1\nOPN DB [MW 10]');
     const c = findConflicts(d, item).find((x) => x.name === 'Calc')!;
-    expect(c).toMatchObject({ indirect: true });
-    expect(defaultResolution(c)).toBe('skip');
+    expect(c).toMatchObject({ indirect: true, usedBy: ['FB1 Motore'] });
+    expect(defaultResolution(c)).toBe('renumber');
     const plain = absolute('CALL FC 1');
     const p = findConflicts(plain.d, plain.item).find((x) => x.name === 'Calc')!;
     expect(p).toMatchObject({ indirect: false });
     expect(defaultResolution(p)).toBe('renumber');
+  });
+
+  it('Salta un blocco usato col numero e senza omonimo nel PLC: salta anche chi lo usa, a catena', () => {
+    const { item, d } = absolute('CALL FC 1\nOPN DB [MW 10]');
+    const s = device('SRC2');
+    const top = createCodeBlock({ kind: 'FC', number: 9, name: 'Top', language: 'AWL', newId });
+    top.networks[0]!.source = 'CALL FB 1, DB 3';
+    const free = createCodeBlock({ kind: 'FC', number: 8, name: 'Free', language: 'AWL', newId });
+    s.blocks.push(top, free);
+    item.blocks.push(...structuredClone(s.blocks));
+    const calc = item.blocks.find((b) => b.name === 'Calc')!;
+    const ids = (m: Map<string, string>) =>
+      [...m].map(([id, to]) => `${item.blocks.find((b) => b.id === id)!.name} → ${to}`);
+    expect(ids(skipCascade(d, item, new Set([calc.id])))).toEqual([
+      'Motore → FC1 Calc',
+      'Top → FB1 Motore',
+    ]);
+    insertLibraryItem(d, item, new Map([[calc.id, 'skip']]), cpu, newId);
+    expect(blocks(d)).toEqual(['FC1 Other', 'FC8 Free']);
+    // Con un omonimo nel PLC il codice usa quello: niente catena.
+    d.blocks[d.blocks.length - 1]!.name = 'Calc';
+    expect(skipCascade(d, item, new Set([calc.id])).size).toBe(0);
+  });
+
+  it('un blocco con il numero libero nel PLC non cambia numero, anche dopo uno rinumerato', () => {
+    const s = device('SRC');
+    const b = createCodeBlock({ kind: 'FC', number: 2, name: 'B', language: 'AWL', newId });
+    const a = createCodeBlock({ kind: 'FC', number: 1, name: 'A', language: 'AWL', newId });
+    const m = createCodeBlock({ kind: 'FC', number: 9, name: 'M', language: 'AWL', newId });
+    m.networks[0]!.source = 'CALL FC 1\nCALL FC 2';
+    s.blocks.push(b, a, m);
+    const item = createLibraryItem(
+      s,
+      [b, a, m].map((x) => ({ kind: 'block' as const, deviceId: s.id, id: x.id })),
+      { newId },
+    )!;
+    expect(item.blocks.map((x) => x.name)).toEqual(['B', 'A', 'M']);
+    const d = device('PLC');
+    d.blocks.push(createCodeBlock({ kind: 'FC', number: 2, name: 'P2', language: 'AWL', newId }));
+    expect(findConflicts(d, item).map((c) => c.name)).toEqual(['B']);
+    insertLibraryItem(d, item, new Map(), cpu, newId);
+    expect(blocks(d)).toEqual(['FC1 A', 'FC2 P2', 'FC3 B', 'FC9 M']);
+    expect(block(d, 'M').networks[0]!.source).toBe('CALL FC 1\nCALL FC 3');
   });
 
   it('Sostituisci: si dice quali blocchi del PLC chiamano quello sostituito', () => {

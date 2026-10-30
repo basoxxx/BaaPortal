@@ -2027,6 +2027,7 @@
     "symbolUseExisting": "Not inserted: the template code uses the PLC one ({{at}}).",
     "replaceCallers": "Called in the PLC by: {{names}}.",
     "indirectRefs": "The template code opens or calls blocks indirectly: with a new number it may point to another block.",
+    "cascadeSkip": "“{{block}}” is not inserted: it refers by number to {{target}}, which is skipped and has no block with the same name in the PLC.",
     "newGlobal": "New global library…",
     "openGlobal": "Open global library…",
     "readOnly": "read-only",

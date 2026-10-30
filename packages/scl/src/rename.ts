@@ -162,11 +162,15 @@ export function renumberInScl(
   toks.forEach((t, i) => {
     if (t.kind !== 'id' || toks[i - 1]?.text === '.') return;
     if (t.text.toUpperCase() === 'WORD_TO_BLOCK_DB') unsafe = true;
-    const m = /^(FB|FC|DB|DI)(\d+)$/i.exec(t.text);
+    const m = /^(FB|FC|DB)(\d+)$/i.exec(t.text);
     if (!m) return;
-    const kind = m[1]!.toUpperCase();
+    const kind = m[1]!.toUpperCase() as BlockFamily;
+    // Senza `#` `DB1`, `FC1` sono anche nomi di variabili locali: è un blocco solo come chiamata
+    // `FC1(…)`, `DB1(…)` o accesso `DB1.DW0`.
+    const next = toks[i + 1]?.text;
+    if (next !== '(' && !(kind === 'DB' && next === '.')) return;
     const n = Number(m[2]);
-    const to = renumber(kind === 'DI' ? 'DB' : (kind as BlockFamily), n);
+    const to = renumber(kind, n);
     if (to === undefined || to === n) return;
     out += source.slice(pos, t.from) + m[1] + String(to);
     pos = t.from + t.text.length;
