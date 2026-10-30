@@ -17,7 +17,7 @@ Per ogni voce si indica che cosa succede oggi. "Errore chiaro" vuol dire che Baa
 - **Ricerca limitata.** La ricerca trova solo dispositivi con un indirizzo IPv4 nella stessa sottorete dell'interfaccia scelta. Non c'è DCP, quindi una CPU senza indirizzo IP non compare; il DCP arriva nella tappa 6.
 - **MPI/DP.** Solo attraverso un gateway RFC 1006.
 - **Sonda provata solo in locale.** La sonda di rete è stata provata solo su loopback (127.0.0.1), mai su una rete vera.
-- **Eventi di ricerca.** Gli eventi della ricerca non hanno una protezione contro un renderer sostituito: se la pagina viene ricaricata durante una ricerca, gli eventi restano indirizzati alla finestra.
+- **Eventi di ricerca: risolto.** Se la pagina viene ricaricata o il renderer cade durante una ricerca, la ricerca si interrompe e nessun evento arriva alla pagina nuova.
 - **Campi di rack e slot.** Rack da 0 a 7 e slot da 0 a 31.
 - **Impostazioni di accesso salvate nel progetto.** Indirizzo, porta, rack e slot restano nel file del progetto, nelle proprietà della CPU; non sono impostazioni dell'utente.
 

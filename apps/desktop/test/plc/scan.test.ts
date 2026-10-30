@@ -34,7 +34,7 @@ class FakeOwner implements ScanOwner {
   events: PlcScanEvent[] = [];
   sentAfterDestroy = 0;
   private destroyed = false;
-  private listeners = new Set<() => void>();
+  private listeners = new Map<string, Set<() => void>>();
   isDestroyed() {
     return this.destroyed;
   }
@@ -42,15 +42,19 @@ class FakeOwner implements ScanOwner {
     if (this.destroyed) this.sentAfterDestroy++;
     this.events.push(e);
   }
-  once(_e: 'destroyed', cb: () => void) {
-    this.listeners.add(cb);
+  once(e: string, cb: () => void) {
+    if (!this.listeners.has(e)) this.listeners.set(e, new Set());
+    this.listeners.get(e)!.add(cb);
   }
-  removeListener(_e: 'destroyed', cb: () => void) {
-    this.listeners.delete(cb);
+  removeListener(e: string, cb: () => void) {
+    this.listeners.get(e)?.delete(cb);
+  }
+  fire(e: string) {
+    for (const cb of [...(this.listeners.get(e) ?? [])]) cb();
   }
   destroy() {
     this.destroyed = true;
-    for (const cb of [...this.listeners]) cb();
+    this.fire('destroyed');
   }
 }
 
@@ -388,6 +392,24 @@ describe('ScanService', () => {
     await sleep(80);
     expect(owner.events).toEqual([]);
     expect(owner.sentAfterDestroy).toBe(0);
+  });
+
+  it('pagina ricaricata o renderer caduto → ricerca interrotta, nessun evento alla pagina nuova', async () => {
+    for (const e of ['did-navigate', 'render-process-gone']) {
+      const owner = new FakeOwner();
+      const signals: AbortSignal[] = [];
+      const svc = make((_h, s) => {
+        signals.push(s);
+        return new Promise((res) => setTimeout(() => res(true), 20));
+      });
+      svc.start(owner, iface.address);
+      await waitFor(() => signals.length > 0);
+      const before = owner.events.length;
+      owner.fire(e);
+      expect(signals.every((s) => s.aborted)).toBe(true);
+      await sleep(80);
+      expect(owner.events).toHaveLength(before);
+    }
   });
 
   it('cancelAll (uscita dall’app) interrompe tutto e aspetta', async () => {

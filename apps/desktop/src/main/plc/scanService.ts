@@ -2,12 +2,16 @@ import type { FoundDevice, NetInterface, PlcScanEvent, PlcScanStartResult } from
 import { hostsToScan, listInterfaces } from './interfaces';
 import { createIdentify, createProbe, scanSubnet, type IdentifyFn, type ProbeFn } from './scan';
 
+/** La pagina finisce: finestra distrutta, pagina ricaricata (un nuovo renderer) o renderer caduto. */
+const GONE = ['destroyed', 'did-navigate', 'render-process-gone'] as const;
+type GoneEvent = (typeof GONE)[number];
+
 /** Quanto serve di una finestra: abbastanza per i test senza Electron. */
 export interface ScanOwner {
   isDestroyed(): boolean;
   send(channel: string, event: PlcScanEvent): void;
-  once(event: 'destroyed', cb: () => void): unknown;
-  removeListener(event: 'destroyed', cb: () => void): unknown;
+  once(event: GoneEvent, cb: () => void): unknown;
+  removeListener(event: GoneEvent, cb: () => void): unknown;
 }
 
 type ScanBody = PlcScanEvent extends infer E
@@ -34,8 +38,8 @@ interface Run {
 
 /**
  * Una ricerca di dispositivi accessibili per finestra. Una nuova ricerca interrompe la
- * precedente, la finestra distrutta o l'uscita dall'app (`cancelAll`) la interrompono; nessun
- * evento va a una finestra distrutta.
+ * precedente, la finestra distrutta o ricaricata, il renderer caduto o l'uscita dall'app
+ * (`cancelAll`) la interrompono; nessun evento va a una finestra distrutta o a una pagina nuova.
  */
 export class ScanService {
   private readonly runs = new Map<ScanOwner, Run>();
@@ -67,11 +71,16 @@ export class ScanService {
     const hosts = hostsToScan(iface.address, iface.netmask, this.maxHosts);
     const scanId = this.nextId++;
     const ctl = new AbortController();
+    // Dopo la fine della pagina nessun evento: andrebbe al renderer nuovo, che non l'ha chiesta.
+    let gone = false;
     const emit = (event: ScanBody): void => {
-      if (!owner.isDestroyed()) owner.send('plc:scanEvent', { scanId, ...event });
+      if (!gone && !owner.isDestroyed()) owner.send('plc:scanEvent', { scanId, ...event });
     };
-    const onGone = (): void => ctl.abort();
-    owner.once('destroyed', onGone);
+    const onGone = (): void => {
+      gone = true;
+      ctl.abort();
+    };
+    for (const e of GONE) owner.once(e, onGone);
 
     let found = 0;
     let lastProgress = 0;
@@ -105,7 +114,7 @@ export class ScanService {
       } catch (err) {
         emit({ kind: 'error', error: err instanceof Error ? err.message : String(err) });
       } finally {
-        owner.removeListener('destroyed', onGone);
+        for (const e of GONE) owner.removeListener(e, onGone);
         if (this.runs.get(owner)?.id === scanId) this.runs.delete(owner);
       }
     })();
