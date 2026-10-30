@@ -457,8 +457,15 @@ export class S7Connection {
   close(): Promise<void> {
     if (this.#closingDone) return this.#closingDone;
     if (this.#closed) return this.#link.close().catch(() => undefined);
-    // Chiusura ordinata del link (DR su ISO-on-TCP), poi le promesse in sospeso.
-    this.#closingDone = this.#link.close().catch(() => undefined);
+    // Chiusura ordinata del link (DR su ISO-on-TCP), poi le promesse in sospeso. `#closingDone`
+    // si fissa prima di chiamare il link: un close() rientrante (dal registratore, durante il DR)
+    // deve trovarlo già impostato, altrimenti richiama il link all'infinito.
+    let done!: () => void;
+    this.#closingDone = new Promise<void>((r) => (done = r));
+    void this.#link
+      .close()
+      .catch(() => undefined)
+      .then(() => done());
     this.#fail(new S7Error('CLOSED', 'connessione chiusa'));
     return this.#closingDone;
   }
