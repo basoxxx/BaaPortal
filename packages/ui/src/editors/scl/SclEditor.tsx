@@ -15,6 +15,7 @@ import { CommittedEditor, type CommittedEditorHandle } from '../awl/CommittedEdi
 import { sourceCodec } from '../source/sourceExtensions';
 import { offsetOfLineCol } from '../../project/navigation/sourceActions';
 import { sclHighlight, sclLintDiagnostics, type SclProblem } from './sclExtensions';
+import { sclMonitorExtension, setSclMonitor, type SclMonitor } from './sclMonitor';
 
 const CHECK_DELAY_MS = 250;
 const TRIGGERS = new Set(['"', '#', '.']);
@@ -35,6 +36,12 @@ export interface SclEditorProps {
   check?: (text: string) => SclProblem[];
   complete?: (offset: number, text: string) => { from: number; options: Completion[] };
   onCommit(text: string): void;
+  /** Testo mostrato a ogni modifica (anche non confermato). */
+  onChange?(text: string): void;
+  /** Osservazione del programma: valori a fine riga (`null` o assente: nessuno). */
+  monitor?: SclMonitor | null;
+  /** Righe visibili (da 1; `0, 0` se nessuna), per la finestra dell'osservazione sulla CPU. */
+  onVisibleLines?(first: number, last: number): void;
   'aria-label': string;
   readOnly?: boolean;
   ref?: React.Ref<CommittedEditorHandle>;
@@ -51,6 +58,7 @@ export function SclEditor(p: SclEditorProps): React.JSX.Element {
   const [problems, setProblems] = useState<SclProblem[]>([]);
   const [text, setText] = useState<string | null>(null);
   const shown = text ?? p.value;
+  const visible = useRef<[number, number] | null>(null);
 
   // Il controllo gira 250 ms dopo l'ultima modifica, sul testo mostrato.
   useEffect(() => {
@@ -84,6 +92,10 @@ export function SclEditor(p: SclEditorProps): React.JSX.Element {
     };
     return [
       sclHighlight(),
+      sclMonitorExtension((first, last) => {
+        visible.current = [first, last];
+        latest.current.onVisibleLines?.(first, last);
+      }),
       lintGutter(),
       autocompletion({ override: [source], activateOnTyping: false }),
       // Dopo `"`, `#` e `.` si propone il completamento, come in AWL.
@@ -101,6 +113,15 @@ export function SclEditor(p: SclEditorProps): React.JSX.Element {
       }),
     ];
   }, []);
+
+  useEffect(() => {
+    core.current?.getView()?.dispatch({ effects: setSclMonitor.of(p.monitor ?? null) });
+  }, [p.monitor]);
+  // chi arriva dopo (osservazione accesa più tardi) riceve subito le righe visibili
+  const onVisible = p.onVisibleLines;
+  useEffect(() => {
+    if (visible.current) onVisible?.(...visible.current);
+  }, [onVisible]);
 
   useImperativeHandle(
     p.ref,
@@ -126,7 +147,10 @@ export function SclEditor(p: SclEditorProps): React.JSX.Element {
         codec={sourceCodec}
         extensions={extensions}
         onCommit={p.onCommit}
-        onChange={setText}
+        onChange={(v) => {
+          setText(v);
+          p.onChange?.(v);
+        }}
         aria-label={p['aria-label']}
         {...(p.readOnly ? { readOnly: true } : {})}
       />

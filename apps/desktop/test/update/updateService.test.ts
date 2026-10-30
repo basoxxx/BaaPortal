@@ -555,6 +555,27 @@ describe('macOS: scaricamento', () => {
   });
 });
 
+describe('macOS: DMG pronto', () => {
+  it('i controlli automatici ripartono; avvisano solo di una versione più nuova del DMG', async () => {
+    const m = make({
+      platform: 'darwin',
+      macDownload: async (a) => ({ path: `/d/${a.version}.dmg`, reused: false }),
+    });
+    await m.svc.setPrefs(PREFS_ON);
+    await m.clock.advance(10 * SEC);
+    await m.svc.download();
+    expect(m.events.at(-1)).toMatchObject({ type: 'macReady', version: '0.12.1' });
+    await m.clock.advance(7 * HOUR);
+    expect(m.updater.checks).toBe(2);
+    expect(m.events.at(-1)).toMatchObject({ type: 'checking', manual: false });
+    expect(m.svc.state()).toMatchObject({ type: 'macReady', version: '0.12.1' });
+    m.updater.version = '0.12.2';
+    await m.clock.advance(7 * HOUR);
+    expect(m.updater.checks).toBe(3);
+    expect(m.events.at(-1)).toEqual({ type: 'available', version: '0.12.2', manual: false });
+  });
+});
+
 describe('macOS', () => {
   it('mai downloadUpdate né quitAndInstall; autoInstallOnAppQuit falso', async () => {
     const m = make({ platform: 'darwin' });

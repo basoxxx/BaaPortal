@@ -151,6 +151,8 @@ export class SimCpu {
   private ob35Running = false;
   /** Allarmi di diagnostica e guasti in attesa (`raiseInterrupt`). */
   private pending: HwInterrupt[] = [];
+  /** Errori di tempo (OB80) ritardati da SFC 41 DIS_AIRT: girano alla fine del ritardo. */
+  private pendingTime: ((ctx: ExecContext) => void)[] = [];
   /** Osservazione di un blocco (`setMonitor`); `undefined` = nessuna, costo zero nell'esecutore. */
   private monitor: MonitorSink | undefined;
 
@@ -240,7 +242,7 @@ export class SimCpu {
           number: req.number,
           ...(req.last ? { last: true } : {}),
           steps: [],
-          seen: new Set<number>(),
+          seen: new Map<number, number>(),
         }
       : undefined;
   }
@@ -291,6 +293,7 @@ export class SimCpu {
     this.record({ time: t0, code: 'AVVIO' });
     this.warmRestart();
     this.pending = [];
+    this.pendingTime = [];
     this.startUpInfo = ob100StartInfo(this.stamp(t0));
     if (this.program.get('OB', 100)) {
       const t = this.now();
@@ -521,6 +524,7 @@ export class SimCpu {
     if (this._mode !== 'RUN' || prio >= PRIORITY.ASYNC_ERROR) return;
     // SFC 41 DIS_AIRT: gli allarmi aspettano (non si perdono) la fine dell'OB o SFC 42.
     if (this.running.some((r) => (r.airt ?? 0) > 0)) return;
+    while (this.pendingTime.length > 0) this.pendingTime.shift()!(ctx);
     while (this.pending.length > 0) this.hwInterrupt(ctx, this.pending.shift()!, t);
     const iv = this.props.cyclicInterruptMs;
     if (!(iv > 0) || t < this.ob35Due) return;
@@ -581,6 +585,11 @@ export class SimCpu {
     t: number,
     reason: string,
   ): void {
+    // SFC 41 DIS_AIRT ritarda anche gli OB di errore asincrono (OB80): l'errore aspetta, non si perde.
+    if (this.running.some((r) => (r.airt ?? 0) > 0) && this.program.get('OB', 80)) {
+      this.pendingTime.push((c) => this.timeError(c, fltId, eventId, errorInfo, ref, t, reason));
+      return;
+    }
     if (!this.program.get('OB', 80) || this.inOb(80))
       throw new SimError('TEMPO_CICLO_SUPERATO', reason, { eventId });
     this.record({ time: t, code: 'OB_RICHIAMATO', eventId, detail: `OB80: ${reason}` });
@@ -691,6 +700,7 @@ export class SimCpu {
     // In STOP le uscite della periferia sono disattivate.
     this.memory.physOut.fill(0);
     this.pending = [];
+    this.pendingTime = [];
     this.setMode('STOP');
   }
 

@@ -17,7 +17,7 @@ Per ogni voce si indica che cosa succede oggi. "Errore chiaro" vuol dire che Baa
 - **Ricerca limitata.** La ricerca trova solo dispositivi con un indirizzo IPv4 nella stessa sottorete dell'interfaccia scelta. Non c'è DCP, quindi una CPU senza indirizzo IP non compare; il DCP arriva nella tappa 6.
 - **MPI/DP.** Solo attraverso un gateway RFC 1006.
 - **Sonda provata solo in locale.** La sonda di rete è stata provata solo su loopback (127.0.0.1), mai su una rete vera.
-- **Eventi di ricerca.** Gli eventi della ricerca non hanno una protezione contro un renderer sostituito: se la pagina viene ricaricata durante una ricerca, gli eventi restano indirizzati alla finestra.
+- **Eventi di ricerca: risolto.** Se la pagina viene ricaricata o il renderer cade durante una ricerca, la ricerca si interrompe e nessun evento arriva alla pagina nuova.
 - **Campi di rack e slot.** Rack da 0 a 7 e slot da 0 a 31.
 - **Impostazioni di accesso salvate nel progetto.** Indirizzo, porta, rack e slot restano nel file del progetto, nelle proprietà della CPU; non sono impostazioni dell'utente.
 
@@ -61,14 +61,14 @@ Per ogni voce si indica che cosa succede oggi. "Errore chiaro" vuol dire che Baa
 - **Scritture da tabella in più richieste.** Se una fallisce, le precedenti restano scritte. L'«esito sconosciuto» riguarda tutta la richiesta in corso (fino a 20 righe); le righe successive dicono «Non scritto», e un rifiuto della CPU dice «Rifiutato dalla CPU».
 - **Numero di richieste nella conferma.** È un massimo calcolato per PDU 240, non il numero esatto.
 - **Backup: il ripristino è del 3D (sperimentale).** Non si sa se i DB caricati hanno i valori attuali o quelli iniziali (§19.4).
-- **Il backup registra il modo visto per ultimo dalla sorveglianza,** non quello riletto all'inizio.
+- **Il modo del backup è riletto all'inizio** sul collegamento online; se la lettura non riesce, nel file c'è `UNKNOWN`.
 - **Lettura di un `.baapbak`: risolto nel 3D.** La lettura non si fida più delle dimensioni dichiarate nello zip (vedi «Osservazione online, stack e ripristino (piano 3D)»).
 - **Niente messaggi push.** Il buffer si aggiorna ogni secondo, solo con l'editor aperto.
 - **`_DELE` usa 'A'.** Vedi «Caricamento e confronto (piano 3B)».
 - **Impostazione dell'ora con protezione di livello 3.** Anche la risposta `0xD0A1` è un'ipotesi (§12.0).
 - **Il numero di richieste nella conferma è un massimo solo se la CPU concorda una PDU di almeno 240 byte.** Con una PDU più piccola le richieste possono essere di più.
 - **Più tabelle online osservano insieme.** Le loro richieste si uniscono in un solo giro di letture per PLC (operandi uguali letti una volta) e il limite di 200 righe vale per l'insieme: le righe oltre il limite, in ordine di accensione, danno un errore di riga e un avviso. Una tabella che non è più aperta in un riquadro smette di interrogare. Sul simulatore resta una sola tabella osservata (vedi «Tabelle di controllo»).
-- **Il backup continua sul suo collegamento** anche se il collegamento online cade o si va offline: lo ferma solo _Interrompi_.
+- **Il backup si ferma se il collegamento online finisce** (offline, perso, finestra chiusa): errore «Collegamento online finito: backup interrotto», nessun file. Se finisce mentre il file si sta già scrivendo, il backup è salvato.
 - **I file `.baapbak` non compaiono nell'albero.** Restano così anche dopo il 3D: si aprono con la finestra dei file (vedi 3D).
 - **I record di diagnostica più corti di 20 byte si scartano.**
 - **Il pulsante si chiama «Osserva tutto»,** il nome del 2C, e non «Controlla tutto» come in TIA.
@@ -171,7 +171,7 @@ Si crea solo con _Funzioni sperimentali_ attive; un blocco FUP già esistente si
 - **Osservazione della vista FUP** con gli stessi dati del KOP: il bordo inferiore di ogni elemento è verde (1), blu tratteggiato (0) o grigio punteggiato (non elaborato), senza bordo se fuori dalla finestra o in attesa; un'entrata mostra il segnale del suo operando, gli altri elementi la loro uscita. I riquadri `&` comuni e i fili non hanno colore; un elemento ripetuto (ramo a T) ha lo stesso stato in ogni copia.
 - **Aspetto chiaro/scuro** non controllato a mano.
 
-## SCL in prova (1.0.0, esteso in 1.1, 1.3 e 1.4)
+## SCL in prova (1.0.0, esteso in 1.1, 1.3, 1.4 e 1.6)
 
 Si crea solo con _Funzioni sperimentali_ attive. Il testo SCL si traduce in AWL (pacchetto `scl`), che si compila come gli altri blocchi.
 
@@ -188,8 +188,11 @@ Si crea solo con _Funzioni sperimentali_ attive. Il testo SCL si traduce in AWL 
 - **FOR.** Il valore finale si calcola una volta sola. Al limite del tipo il ciclo esce e la variabile resta all'ultimo valore eseguito. Modificare la variabile dentro il ciclo non è controllato. EXIT esce dal ciclo più interno; CONTINUE passa all'incremento (FOR), alla condizione (WHILE, REPEAT).
 - **Parentesi più del minimo.** Un AND dentro un OR va sempre fra parentesi, quindi il limite di 7 parentesi aperte di AWL («Espressione troppo annidata») può arrivare prima che in STEP 7.
 - **Errori (1.4).** Si riportano fino a 50 errori: dopo un errore il parser riparte dal `;` dell'istruzione o dalla fine del costrutto (`END_…`), e un errore nell'intestazione di IF, CASE, FOR, WHILE o UNTIL salta il resto di quella riga e legge comunque il corpo. Un `;` mancante alla fine della riga si segnala sulla riga dove manca. Dopo un errore di sintassi qualche errore successivo può esserne la conseguenza (per esempio un nome nel corpo di un FOR con l'intestazione sbagliata). Sulla riga di un errore del lexer (carattere non valido, costante sbagliata, simbolo senza la virgoletta di chiusura) non si riportano altri errori di sintassi. Gli errori del controllo AWL sul codice generato compaiono nell'editor alla riga SCL (colonna 1) solo se il traduttore non ne ha trovati; quelli della compilazione MC7 restano nei messaggi di compilazione.
-- **Editor (1.4).** Evidenziazione, completamento (variabili, tag, DB e loro membri, chiamate con i parametri, parole chiave) ed errori sottolineati mentre si scrive. Niente osservazione. Il completamento non propone i parametri dentro le parentesi di una chiamata già scritta, né i membri dopo un indice variabile. La scrittura negli ingressi di una FC non è controllata.
+- **Editor (1.4).** Evidenziazione, completamento (variabili, tag, DB e loro membri, chiamate con i parametri, parole chiave) ed errori sottolineati mentre si scrive. Il completamento non propone i parametri dentro le parentesi di una chiamata già scritta, né i membri dopo un indice variabile. La scrittura negli ingressi di una FC non è controllata.
 - **Rinomina (1.4).** Tag, costanti, blocchi, DB, membri di DB e UDT, variabili e parametri dell'interfaccia si aggiornano anche nel testo SCL, sui token: commenti e stringhe restano come sono. Un parametro si rinomina solo nelle chiamate di quel blocco (`"Fc"(…)`, `Fc(…)`, `"Inst_DB"(…)`, `#multi(…)`). Nel codice di una FC il suo nome usato come valore di ritorno (`Fc := …`) non si rinomina col blocco. `Nome(…)` senza `#` è sempre la chiamata di un blocco: rinominare una variabile `Nome` non la tocca. Una variabile o un parametro rinominati con un nome che non è un identificatore SCL (spazi, accenti: `Motor Speed`, `Velocità`) non si aggiornano nel testo SCL, che resterebbe sbagliato fra virgolette (un simbolo globale): il nome vecchio resta, dà errore di compilazione e un avviso nei messaggi elenca i blocchi da correggere a mano. I membri si scrivono fra virgolette (`#s."Motor Speed"`).
+- **Osservazione (1.6), ricavata dall'AWL generato.** Sul simulatore e sulla CPU, a fine riga SCL compare il valore preso da una sola istruzione dell'AWL generato, quella che lo porta (mai da una riga intermedia): per `x := …` ACCU1 (RLO per BOOL) alla `T`/`=` che scrive `x`; per IF/ELSIF, WHILE e UNTIL il risultato della condizione all'istruzione che la chiude, subito prima del salto (il salto rimette RLO a 1); per CASE il selettore (il primo `L` dei confronti, o la `T` nella TEMP se è un'espressione); per FOR la variabile al controllo in cima al ciclo, quindi a fine ciclo il primo valore oltre il limite (`FOR i := 1 TO 3` mostra 4). Formati: BOOL TRUE/FALSE, REAL in virgola mobile, INT/DINT con segno, BYTE/WORD/DWORD in esadecimale (il tasto esadecimale/decimale cambia INT/DINT e mostra 16#…). Più istruzioni sulla stessa riga danno più valori, in ordine; `–` per quella non eseguita. Righe senza valore (chiamate, EXIT, RETURN, etichette di CASE) dicono solo se sono state eseguite, dalla loro prima istruzione. Niente nome della variabile accanto al valore, niente valori dei parametri delle chiamate né degli operandi dentro un'espressione.
+- **Osservazione, cicli.** Per un blocco SCL il simulatore registra l'ultima esecuzione di ogni istruzione nel ciclo (come la CPU, proto §18.4.1), quindi dentro FOR, WHILE e REPEAT si vedono i valori dell'ultimo giro. Ogni riga ha la sua ultima esecuzione: se l'IF di un ciclo è vero in un giro e falso nell'ultimo, la condizione mostra FALSE e il ramo il valore scritto nel giro in cui è passato.
+- **Osservazione, righe grigie e «?».** Una riga la cui istruzione decisiva è stata chiesta e non eseguita è grigia, con «non elaborato». Senza dati (fuori dalla finestra della CPU, finestra appena cambiata, nessun risultato, risposta parziale) la riga mostra «?» con «fuori dalla finestra di osservazione o in attesa» nel testo, mai un valore inventato. Online la finestra parte dalla prima istruzione AWL delle righe SCL visibili ed è lunga quanto la PDU concede (con 240 byte qualche decina di istruzioni, cioè poche righe SCL: ogni riga ne genera diverse); le righe dopo restano «?». Un indice variabile fuori dai limiti salta la scrittura: la riga risulta non elaborata. Il testo non confermato sospende l'osservazione, come in AWL; dopo la conferma serve ricompilare e ricaricare.
 
 ## Adattatore MPI (piano 3M)
 
@@ -263,7 +266,7 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§10–§13). Come per il 
 - **Codici RET_VAL delle SFC non verificati:** 16#8091 per aree sovrapposte di BLKMOV/FILL potrebbe essere inventato; 16#8080 (SET_CLK), 16#80A1/16#80B1/16#80B2 (SFC 22–24), 16#0081/16#8082/16#8083 (RDSYSST) e i 16#8xyy generali (22 lettura, 23 scrittura, 24 ANY non valido, 28/29 allineamento, 3A DB) sono dedotti. Per i 16#8xyy il numero del parametro `x` conta IN, OUT, IN_OUT **escludendo RET_VAL**: potrebbe non corrispondere alla CPU vera.
 - **DEL_DB** di un DB aperto o richiamato: il DB sparisce subito, senza controlli.
 - **Compilatore e SFC:** il compilatore MC7 non sa passare DATE_AND_TIME, SSL_HEADER e le strutture di RD_SINFO a SFC 0, 1, 6 e 51 da AWL; si provano con liste di puntatori scritte a mano.
-- **SFC 6, 13–15, 41–43 (da verificare su CPU reale):** SFC 13, 14 e 15 rispondono sempre «nessuno slave DP» (16#8090; SFC 13 con REQ = 0 dà 16#7000), perché la CPU simulata non ha periferia decentrata; il 16#8080 di EN_AIRT senza ritardi e il 16#7000 sono dedotti. DIS_AIRT ritarda OB35, OB82 e OB86 ma non l'OB80 del tempo di ciclo. RD_SINFO dà i dati di avvio dell'ultimo avvio a caldo anche senza OB100.
+- **SFC 6, 13–15, 41–43 (da verificare su CPU reale):** SFC 13, 14 e 15 rispondono sempre «nessuno slave DP» (16#8090; SFC 13 con REQ = 0 dà 16#7000), perché la CPU simulata non ha periferia decentrata; il 16#8080 di EN_AIRT senza ritardi e il 16#7000 sono dedotti. DIS_AIRT ritarda OB35, OB80, OB82 e OB86; senza OB80 caricato un errore di tempo dà STOP subito, anche con il ritardo. RD_SINFO dà i dati di avvio dell'ultimo avvio a caldo anche senza OB100.
 - **SFC 64 TIME_TCK** conta dal primo RUN della CPU simulata, non dall'accensione; SFC 47 WAIT non attende davvero ma somma il tempo all'orologio; RDSYSST è sempre sincrona (BUSY 0).
 - **Stato degli SFB 0–5 fuori dal DB di istanza** (memorie dei fronti, istanti di avvio): la CPU non lo azzera con il download di un DB ma solo con STOP→RUN e MRES; le uscite cambiano solo alla chiamata.
 - **SFB 3 TP:** un fronte di IN esattamente alla fine dell'impulso si perde (dipende da quando si chiama l'SFB).
@@ -281,7 +284,7 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
 - **Nessun PLC vero fino alla tappa 3.** Pannello CPU, pannello I/O, osservazione e tabelle di controllo funzionano solo sul simulatore; il collegamento a un PLC reale usa lo stesso `watch`/`write` nella tappa 3 (le tabelle online arrivano con il 3C).
 - **Il tempo di ciclo del Worker non è quello di una CPU vera.** Dipende dal computer.
 - **Osservazione del programma.**
-  - Rileva solo la prima esecuzione di ogni riga nel ciclo; non c'è l'opzione «ultima esecuzione».
+  - Rileva solo la prima esecuzione di ogni riga nel ciclo (in AWL, KOP e FUP; nei blocchi SCL l'ultima, vedi «SCL in prova»); non c'è l'opzione per scegliere.
   - I blocchi importati e non ricompilati non si possono osservare (mancano le righe del compilatore).
   - Gli editor nelle finestre staccate non vengono osservati.
   - Il tasto esadecimale/decimale non viene salvato e torna esadecimale a ogni simulazione.
@@ -388,8 +391,8 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
 
 ### Prestazioni e struttura
 
-- **Ricompilazione grossolana.** Qualsiasi modifica a variabili, costanti, UDT o interfacce ricompila tutti i blocchi, anche in modalità _solo modifiche_.
-- **Impronte senza cache.** Le impronte delle dipendenze si ricalcolano a ogni compilazione; su progetti molto grandi il costo cresce.
+- **Ricompilazione per dipendenze, prudente.** In modalità _solo modifiche_ una modifica a variabili, costanti, UDT o interfacce ricompila solo i blocchi che le nominano, anche a catena (un UDT dentro un UDT, l'FB di un DB di istanza, una multi-istanza). Il riconoscimento è per parola, sul testo di tutto il blocco: un nome che compare anche in un commento o un `FC 1` dentro `FC 10` fanno ricompilare un blocco in più, mai uno in meno. Cambiare la CPU o i blocchi importati ricompila tutto. I blocchi importati (con i byte originali) dipendono ancora da tutto il contesto, come prima.
+- **Impronte di fedeltà senza cache.** Le chiavi di compilazione sono in cache per dispositivo e per oggetto; le impronte delle dipendenze dei blocchi importati (regola F) si ricalcolano ancora a ogni compilazione.
 - **Pacchetto `s7comm` intero nel renderer.** L'interfaccia include tutto il pacchetto solo per leggere lo zip del kit. Non è un percorso di scrittura; basterebbe un'esportazione separata per il kit.
 
 ### Altro
@@ -410,7 +413,7 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
 - **Controllo a mano durante uno scaricamento:** non mostra nulla (nessun «aggiornato» né altro avviso); lo scaricamento prosegue e il suo avanzamento resta visibile.
 - **Release non ancora completa:** fra la pubblicazione di una release e il caricamento di `latest*.yml` da parte della CI, o se il lavoro di una piattaforma fallisce, i controlli su quella release falliscono. Quello automatico tace; quello a mano mostra «La release non ha il file di aggiornamento».
 - **Da prova a stabile su GitHub:** cambiare una release da pre-release a stabile non cambia il canale delle build già fatte; serve rifarle con workflow_dispatch.
-- **macOS, DMG pronto:** finché l'app non viene riavviata, i controlli automatici non ripartono.
+- **macOS, DMG pronto:** i controlli automatici continuano; avvisano solo di una versione più nuova di quella del DMG, che resta pronto altrimenti.
 - **Installazione fallita dopo «Non salvare»:** la copia di recupero era già stata cancellata (`beforeWindowClose`).
 - **Installazione fallita:** se l'installatore non parte, l'app riabilita le operazioni online e mostra l'errore; la finestra di salvataggio e l'offline erano già stati eseguiti.
 
@@ -427,6 +430,16 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
 - **Ricalcolo:** tutto si ricalcola a ogni modifica del progetto mentre la scheda è aperta; su programmi molto grandi può essere lento.
 - **Elenco di assegnazione:** vale ciò che vedono i riferimenti incrociati, quindi non compaiono gli accessi indiretti, le periferiche (PI, PQ) e i DB. Le righe sono solo i byte usati o con un tag; un tag con tipo più largo del suo indirizzo (o a indirizzo non valido) segna solo ciò che l'indirizzo copre. Per T e C ogni riga raggruppa otto elementi. I limiti sono quelli del catalogo (`cpu.limits`); senza CPU nel catalogo non c'è alcun limite.
 - **Risorse:** la memoria di caricamento è la dimensione del file del blocco compilato, quella di lavoro la lunghezza della sezione MC7: sono stime, STEP 7 conta anche altre parti (interfaccia, simboli) in modo diverso. I dati locali sono quelli scritti nell'intestazione del blocco compilato; per un blocco importato e non modificato, quelli dei byte originali. I blocchi che non si compilano sono «da compilare» e rendono parziale il percorso che li contiene; SFC, SFB e blocchi mancanti contano zero. Il limite è `localDataBytesPerClass` del catalogo (32 KB per classe di priorità), non quello per blocco; il percorso è il più costoso tra i richiami scritti, ricorsioni tagliate. Si compila tutto il programma a ogni modifica mentre la scheda è aperta.
+
+## Stampa e PDF (piano 7D)
+
+- **KOP e FUP escono come AWL generato**, non come grafico: i componenti dell'editor sono interattivi e un rendering statico (SVG) non c'è ancora.
+- **Niente anteprima di stampa** nell'app: si vede il risultato salvando il PDF. La voce _Anteprima di stampa_ del menu è stata sostituita da _Esporta in PDF_.
+- **Un PLC per documento.** Una selezione che attraversa più PLC stampa il primo; i blocchi di sistema e le sorgenti AWL esterne non sono stampati (di un DB di istanza si riportano il FB e i valori cambiati).
+- **Blocchi know-how protetti:** si riporta solo l'interfaccia, il codice no.
+- **Numeri di pagina** dal piè di pagina di Chromium (solo nel PDF); nella stampa di sistema dipendono dal driver. Intestazione e piè di pagina non sono personalizzabili.
+- **Il documento è fatto di testo del progetto**: viene caricato in una finestra senza JavaScript, in sandbox e con CSP che vieta ogni risorsa esterna. Un progetto altrui non può eseguire codice né leggere file tramite la stampa.
+- **Riferimenti incrociati** nel documento: solo gli usi nei blocchi stampati.
 
 ## Fuori dal codice, in sospeso per l'utente
 

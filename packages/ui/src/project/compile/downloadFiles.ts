@@ -2,7 +2,7 @@ import type { StoreApi } from 'zustand/vanilla';
 import { findDevice, type PlcDevice } from '@baaportal/project';
 import type { BaaBridge } from '../../bridge';
 import type { AppState } from '../../state/store';
-import { compileProgram, contextHashOf, hashOf } from './compileActions';
+import { compileProgram, contextHashOf, hashOf, type CompileContext } from './compileActions';
 
 /** Un blocco pronto da caricare: il compilato è quello del contenuto e del contesto di adesso. */
 export interface PreparedBlock {
@@ -17,7 +17,7 @@ export type PreparedBlocks =
   | { status: 'aborted' }
   | { status: 'errors'; errors: number }
   | { status: 'stale'; count: number }
-  | { status: 'ok'; dev: PlcDevice; context: string; blocks: PreparedBlock[] };
+  | { status: 'ok'; dev: PlcDevice; context: CompileContext; blocks: PreparedBlock[] };
 
 /**
  * Parte comune dei caricamenti (simulatore e PLC vero): compila le modifiche e prende i compilati

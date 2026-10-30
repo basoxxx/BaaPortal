@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { createStore } from 'zustand/vanilla';
 import type { AppState } from '../../src/state/store';
 import type { Timers } from '../../src/online/diagController';
@@ -31,8 +31,21 @@ async function setup() {
     ok: true,
     values: items.map((i) => ({ bytes: Uint8Array.of((i as { byte: number }).byte) })),
   });
-  return { hub: new WatchOnlineHub(store, bridge, timers), bridge, store, messages };
+  const hub = new WatchOnlineHub(store, bridge, timers);
+  // Ogni tabella aperta in un test si ferma alla fine: altrimenti il suo timer scatta dopo la
+  // chiusura dell'ambiente (document non c'è più) e diventa un errore non gestito.
+  const client = hub.client.bind(hub);
+  hub.client = () => {
+    const c = client();
+    live.push(c);
+    return c;
+  };
+  return { hub, bridge, store, messages };
 }
+const live: { stop(): void }[] = [];
+afterEach(() => {
+  for (const c of live.splice(0)) c.stop();
+});
 
 describe('WatchOnlineHub: un solo giro per tutte le tabelle', () => {
   it('unisce le richieste, legge una volta gli operandi uguali e dà a ogni tabella i suoi valori', async () => {

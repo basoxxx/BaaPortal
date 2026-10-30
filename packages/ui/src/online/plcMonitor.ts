@@ -22,19 +22,27 @@ export const PLC_MONITOR_PERIOD_MS = 250;
 /** PDU supposta prima della start (la CPU concede 240 byte, di solito); `start` dà il limite vero. */
 const DEFAULT_PDU = 240;
 
+/** Prima riga visibile dentro una rete lunga (SCL: la prima riga AWL delle righe SCL in vista). */
+export type WindowFrom = { network: number; line: number };
+
 /**
- * Finestra di osservazione: le istruzioni delle reti visibili, dalla prima, al massimo `maxLines`.
- * `saz` è l'offset dell'istruzione dopo l'ultima scelta, oppure la lunghezza MC7.
+ * Finestra di osservazione: le istruzioni delle reti visibili, dalla prima (o da `from`), al
+ * massimo `maxLines`. `saz` è l'offset dell'istruzione dopo l'ultima scelta, oppure la lunghezza MC7.
  */
 export function windowFor(
   lineMap: readonly LineMapRow[],
   visibleNetworks: readonly number[],
   maxLines: number,
   mc7Length?: number,
+  from?: WindowFrom,
 ): { offsets: number[]; saz: number } {
   const all = [...new Set(lineMap.map((r) => r.offset))].sort((a, b) => a - b);
   const shown = new Set(visibleNetworks);
-  const want = [...new Set(lineMap.filter((r) => shown.has(r.network)).map((r) => r.offset))]
+  const after = (r: LineMapRow) =>
+    !from || r.network > from.network || (r.network === from.network && r.line >= from.line);
+  const want = [
+    ...new Set(lineMap.filter((r) => shown.has(r.network) && after(r)).map((r) => r.offset)),
+  ]
     .sort((a, b) => a - b)
     .slice(0, Math.max(0, maxLines));
   const last = want.at(-1);
@@ -97,6 +105,7 @@ export class PlcMonitorController {
   private starting = false;
   private edited = false;
   private visible: number[] | null = null;
+  private from: WindowFrom | undefined;
   private pduLength = 240;
   private sentKey = '';
   /** Offset della finestra chiesta alla CPU (le righe grigie quando non arrivano risultati). */
@@ -129,6 +138,7 @@ export class PlcMonitorController {
     if (this.store.getState().online.status !== 'on') return;
     this.spec = { deviceId, blockId };
     this.edited = false;
+    this.from = undefined;
     this.blockedKey = undefined;
     this.patch({
       monitor: { deviceId, blockId, reason: 'stale' },
@@ -159,15 +169,21 @@ export class PlcMonitorController {
     }
   }
 
-  /** Reti visibili del blocco (indici da 0); la finestra segue, al più una volta ogni 250 ms. */
-  setVisible(blockId: string, networks: number[]): void {
+  /**
+   * Reti visibili del blocco (indici da 0) e, in una rete lunga, la prima riga in vista; la finestra
+   * segue, al più una volta ogni 250 ms.
+   */
+  setVisible(blockId: string, networks: number[], from?: WindowFrom): void {
     if (this.spec?.blockId !== blockId) return;
     const same =
       this.visible &&
       this.visible.length === networks.length &&
-      this.visible.every((n, i) => n === networks[i]);
+      this.visible.every((n, i) => n === networks[i]) &&
+      this.from?.network === from?.network &&
+      this.from?.line === from?.line;
     if (same) return;
     this.visible = networks;
+    this.from = from;
     this.sync();
     this.scheduleWindow();
   }
@@ -244,7 +260,10 @@ export class PlcMonitorController {
       return;
     }
     // Nessuna riga in vista: non c'è un job da tenere, e non si dice «osservazione attiva»
-    if (this.visible !== null && windowFor(input.lineMap, this.visible, 1).offsets.length === 0) {
+    if (
+      this.visible !== null &&
+      windowFor(input.lineMap, this.visible, 1, undefined, this.from).offsets.length === 0
+    ) {
       this.dropRemote();
       this.setMonitor('noVisible');
       return;
@@ -286,10 +305,11 @@ export class PlcMonitorController {
   ): { req: PlcStatusRequest; key: string; clipped: boolean } | undefined {
     // Senza reti visibili note (la vista non ha ancora riferito) non si parte.
     if (!input.signature || this.visible === null) return undefined;
-    const w = windowFor(input.lineMap, this.visibleOf(), max, input.signature.mc7Length);
+    const w = windowFor(input.lineMap, this.visibleOf(), max, input.signature.mc7Length, this.from);
     if (w.offsets.length === 0) return undefined;
     const mask = this.mask();
-    const total = windowFor(input.lineMap, this.visibleOf(), Infinity).offsets.length;
+    const total = windowFor(input.lineMap, this.visibleOf(), Infinity, undefined, this.from).offsets
+      .length;
     return {
       clipped: total > w.offsets.length,
       req: {

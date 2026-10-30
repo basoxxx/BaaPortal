@@ -94,7 +94,11 @@ describe('sclToAwl: AWL generato', () => {
   it('mappa delle righe verso il testo SCL', () => {
     const out = sclToAwl('x := y;\n\na := b;', ctx, TEMP_END);
     expect(out.lines[0]).toEqual({ line: 0, sclLine: 1 });
-    expect(out.lines.at(-1)).toEqual({ line: out.source.split('\n').length - 1, sclLine: 3 });
+    expect(out.lines.at(-1)).toEqual({
+      line: out.source.split('\n').length - 1,
+      sclLine: 3,
+      value: 'INT',
+    });
   });
 
   it('7 parentesi booleane annidate vanno ancora', () => {

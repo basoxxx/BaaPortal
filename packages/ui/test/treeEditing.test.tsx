@@ -424,6 +424,7 @@ describe('gruppi e menu contestuale', () => {
       'Genera sorgente dai blocchi',
       'Compila',
       'Esporta blocco compilato (.blk)…',
+      'Stampa…',
       'Riferimenti incrociati',
       'Struttura di richiamo',
       'Elenco di assegnazione',

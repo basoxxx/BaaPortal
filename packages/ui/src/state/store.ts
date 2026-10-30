@@ -24,6 +24,7 @@ export type DialogState =
   | { kind: 'addDevice' }
   | { kind: 'addBlock'; deviceId: string }
   | { kind: 'collectKit' }
+  | { kind: 'print'; nodeIds: string[]; mode: 'print' | 'pdf' }
   | { kind: 'settings' }
   | { kind: 'accessibleDevices' }
   | { kind: 'download'; plan: DownloadPlan }

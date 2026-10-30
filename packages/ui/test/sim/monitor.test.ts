@@ -187,6 +187,27 @@ describe('osservazione del programma', () => {
     expect(st(s).sim.loaded).toEqual({});
   });
 
+  it("blocco SCL: si chiede l'ultima esecuzione nel ciclo (i cicli mostrano l'ultimo giro)", async () => {
+    await initI18n('it');
+    const s = setup();
+    const scl = createCodeBlock({ kind: 'FC', number: 6, name: 'S', language: 'SCL' });
+    scl.networks[0]!.source = 'MW20 := 1;';
+    st(s).edit('history.addBlock', (p) => void findDevice(p, DEV)!.blocks.push(scl));
+    await commands['online.simulation'].run(s.ctx);
+    open(s, scl.id);
+    await commands['online.download'].run(s.ctx);
+    await commands['online.monitor'].run(s.ctx);
+    await vi.waitFor(() =>
+      expect(s.monitorReqs().at(-1)).toEqual({
+        op: 'monitor',
+        block: { kind: 'FC', number: 6, last: true },
+      }),
+    );
+    // la notifica del blocco osservato passa (stessa chiave della richiesta)
+    st(s).setSim({ monitorSteps: null });
+    await vi.waitFor(() => expect(st(s).sim.monitorSteps).not.toBeNull());
+  });
+
   it("riquadri divisi: «Osserva» prende il blocco del riquadro con il fuoco; l'altro riquadro non lo ferma", async () => {
     await initI18n('it');
     const s = setup();

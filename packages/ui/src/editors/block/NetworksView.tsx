@@ -4,6 +4,7 @@ import { checkBlockCode, completeAt, type AwlDiagnostic, type Mnemonic } from '@
 import { findCpu } from '@baaportal/catalog';
 import { current } from 'immer';
 import { emptyNetwork, networkStatus, type LadNetwork } from '@baaportal/ladfbd';
+import { sclLineStatus } from '@baaportal/scl';
 import {
   createAwlContext,
   findDevice,
@@ -20,6 +21,8 @@ import { ContextMenu } from '../../components/ContextMenu';
 import { AwlEditor, type AwlEditorHandle } from '../awl/AwlEditor';
 import { SclEditor } from '../scl/SclEditor';
 import { sclComplete, sclProblems } from '../scl/sclExtensions';
+import type { SclMonitor } from '../scl/sclMonitor';
+import { sourceCodec } from '../source/sourceExtensions';
 import { displayText } from '../awl/awlExtensions';
 import { monitorLinesByNetwork, monitorLinesFromPlc } from '../awl/monitorExtension';
 import { plcMonitorFor } from '../../online/plcMonitor';
@@ -146,6 +149,16 @@ export function NetworksView({ deviceId, blockId }: Props) {
       }),
     [blockNets, monShown, kop, plcLinesShown, plcUnsure],
   );
+  // Osservazione di un blocco SCL (un solo testo, segmento 0): i valori per riga SCL.
+  const sclLines = kop?.[0]?.scl?.lines;
+  const sclMonitor = useMemo((): SclMonitor | null => {
+    const m = monShown?.get(0);
+    if (!isScl || !m || !sclLines) return null;
+    const nullUnknown = plcLinesShown !== null && plcUnsure;
+    return { status: sclLineStatus(sclLines, m.cells, { nullUnknown }), hex: m.hex };
+  }, [isScl, monShown, sclLines, plcLinesShown, plcUnsure]);
+  const [sclView, setSclView] = useState<[number, number] | null>(null);
+  const onSclVisible = useCallback((a: number, b: number) => setSclView([a, b]), []);
   const drafts = useRef(new Map<string, Draft>());
   /** Il testo non confermato sospende l'osservazione finché c'è (poi vale il confronto delle impronte). */
   const markEdited = useCallback(() => {
@@ -165,7 +178,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
   const plcOn = plcMon !== null;
   const netCount = block?.networks.length ?? 0;
   useEffect(() => {
-    if (!plcOn) return;
+    if (!plcOn || isScl) return;
     const ctrl = plcMonitorFor(store, bridge);
     const all = Array.from({ length: netCount }, (_, i) => i);
     const els = root.current?.querySelectorAll<HTMLElement>('[data-net]');
@@ -187,7 +200,17 @@ export function NetworksView({ deviceId, blockId }: Props) {
     });
     els.forEach((el) => io.observe(el));
     return () => io.disconnect();
-  }, [plcOn, netCount, store, bridge, blockId]);
+  }, [plcOn, isScl, netCount, store, bridge, blockId]);
+  // SCL: la finestra parte dalla prima riga AWL delle righe SCL visibili.
+  useEffect(() => {
+    if (!plcOn || !isScl) return;
+    const ctrl = plcMonitorFor(store, bridge);
+    if (!sclView || !sclLines) return ctrl.setVisible(blockId, [0]);
+    const [a, b] = sclView;
+    const own = sclLines.filter((l) => l.sclLine >= a && l.sclLine <= b).map((l) => l.line);
+    if (own.length === 0) ctrl.setVisible(blockId, []);
+    else ctrl.setVisible(blockId, [0], { network: 0, line: Math.min(...own) });
+  }, [plcOn, isScl, sclView, sclLines, store, bridge, blockId]);
   const handles = useRef(new Map<string, AwlEditorHandle>());
   // Le diagnostiche di ogni segmento: un segmento che non cambia tiene lo stesso array, e il suo editor non ricalcola.
   // Chiavi per id del segmento: se un segmento viene inserito o tolto, i problemi restano ai loro segmenti.
@@ -554,7 +577,19 @@ export function NetworksView({ deviceId, blockId }: Props) {
                 aria-label={`${t('block.source')} ${i + 1}`}
                 // Il testo SCL è solo nel segmento 0 (vedi kopSources).
                 {...(scl && i === 0 ? scl : {})}
-                onCommit={(v) => editNetwork(n.id, 'source', v)}
+                onCommit={(v) => {
+                  drafts.current.delete(n.id);
+                  editNetwork(n.id, 'source', v);
+                  markEdited();
+                }}
+                onChange={(text) => {
+                  // come in AWL: il testo non confermato sospende l'osservazione
+                  if (text === sourceCodec.toShown(n.source)) drafts.current.delete(n.id);
+                  else drafts.current.set(n.id, { base: n.source, mnemonic, text });
+                  markEdited();
+                }}
+                {...(i === 0 ? { monitor: sclMonitor } : {})}
+                {...(i === 0 && plcOn ? { onVisibleLines: onSclVisible } : {})}
                 ref={(h) => {
                   if (h) handles.current.set(n.id, h);
                   else handles.current.delete(n.id);

@@ -9,6 +9,8 @@ import type {
   KitStartOptions,
   KitStartResult,
   KitSummary,
+  PrintRequest,
+  PrintResult,
 } from '../src/bridge';
 import type {
   NetInterface,
@@ -548,6 +550,12 @@ export class FakeBridge implements BaaBridge {
   }
   emitUpdateEvent(e: UpdateEvent): void {
     for (const cb of [...this.updateCbs]) cb(e);
+  }
+  printRequests: PrintRequest[] = [];
+  printResult: PrintResult = { status: 'saved', path: '/tmp/doc.pdf' };
+  async printDocument(req: PrintRequest) {
+    this.printRequests.push(req);
+    return this.printResult;
   }
   async testOverrides() {
     return this.testOverridesValue;
