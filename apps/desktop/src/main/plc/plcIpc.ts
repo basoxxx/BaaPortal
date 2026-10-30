@@ -21,6 +21,7 @@ import type {
   PlcReadWatchResult,
   PlcWriteVarsResult,
   PlcHmiArmResult,
+  PlcHmiStuckEntry,
   PlcStatusStartResult,
   PlcStatusWindowResult,
   PlcStatusReadResult,
@@ -33,6 +34,7 @@ import { BlockStatusService } from './blockStatus';
 import { memoryJobStore, type TisJobStore } from './tisJobs';
 import { BackupService, type PickBackupPath } from './backup';
 import type { ConfirmFn } from './confirm';
+import type { HmiStuckStore } from './hmiStuck';
 import type { RestoreFileIo } from './plcWrite';
 import { readStacks } from './stacks';
 import { readDiagnostics } from './diagnostics';
@@ -168,9 +170,12 @@ export function registerPlc(
   appVersion: () => string = () => '',
   jobs: TisJobStore = memoryJobStore(),
   restoreFile?: RestoreFileIo,
+  stuck?: HmiStuckStore,
 ): {
   closeAll(): Promise<void>;
   writing(): boolean;
+  /** Un impulso HMI premuto o il suo 0 ancora in corso (l'uscita aspetta di più). */
+  releasing(): boolean;
   busy(): boolean;
   /** Annulla `closeAll`: scritture, ripristini, caricamenti e backup possono ripartire. */
   resume(): void;
@@ -178,6 +183,7 @@ export function registerPlc(
 } {
   const status = new BlockStatusService({ service, jobs, blocked: (a) => writes.restoringOn(a) });
   if (restoreFile) writes.setRestoreFile(restoreFile);
+  if (stuck) writes.stuck = stuck;
   writes.beforeRestore = (owner) => status.stopForCpu(owner);
   handle('plc:connect', async (e, raw): Promise<PlcConnectResult> => {
     const access = parsePlcAccess(raw);
@@ -226,6 +232,9 @@ export function registerPlc(
   handle('plc:hmiWrite', (e, token, items, jog): Promise<PlcWriteVarsResult> =>
     writes.hmiWrite(e.sender, token, items, jog),
   );
+  // Impulsi forse rimasti a 1 (0 automatico non riuscito): l'elenco e la presa visione.
+  handle('plc:hmiStuck', (): PlcHmiStuckEntry[] => stuck?.list() ?? []);
+  handle('plc:hmiStuckAck', (_e, keys) => stuck?.ack(keys));
   // Osservazione del blocco: bersaglio e CPU li decide il servizio; qui solo la forma della richiesta.
   handle('plc:statusStart', (e, raw): Promise<PlcStatusStartResult> => status.start(e.sender, raw));
   handle('plc:statusWindow', (e, raw): PlcStatusWindowResult => status.window(e.sender, raw));
@@ -276,6 +285,7 @@ export function registerPlc(
       ]);
     },
     writing: () => writes.writing(),
+    releasing: () => writes.releasing(),
     // Operazioni che un aggiornamento non deve interrompere: scrittura, ripristino, caricamento dalla CPU, backup.
     // Le osservazioni invece si fermano in modo pulito (`closeAll`).
     resume: () => {

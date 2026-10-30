@@ -23,6 +23,7 @@ import type {
   PlcWriteVarItem,
   PlcWriteVarsResult,
   PlcHmiArmResult,
+  PlcHmiStuckEntry,
   PlcAccess,
   PlcBlockRef,
   PlcBlocksResult,
@@ -218,6 +219,13 @@ export interface BaaBridge {
    * `jog`: pressione di un pulsante a impulsi (il processo principale ricorda il bit fino allo 0).
    */
   plcHmiWrite(token: string, items: PlcWriteVarItem[], jog?: boolean): Promise<PlcWriteVarsResult>;
+  /**
+   * Pulsanti a impulsi il cui 0 automatico non è riuscito (anche in una sessione precedente):
+   * restano finché `plcHmiStuckAck` non li dà per visti o uno 0 riuscito non li toglie.
+   */
+  plcHmiStuck(): Promise<PlcHmiStuckEntry[]>;
+  plcHmiStuckAck(keys: string[]): Promise<void>;
+  onPlcHmiStuck(cb: (list: PlcHmiStuckEntry[]) => void): () => void;
   /** Elenco dei blocchi della CPU collegata (sola lettura); mai eccezioni: l'esito dice tutto. */
   plcBlocks(): Promise<PlcBlocksResult>;
   /** Carica un solo blocco OB, FB, FC o DB dalla CPU collegata (sola lettura); mai eccezioni. */

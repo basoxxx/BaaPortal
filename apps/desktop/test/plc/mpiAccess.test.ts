@@ -61,6 +61,7 @@ const { connectOptions } = await import('../../src/main/plc/access');
 const { PlcService, connectMessage, MPI_PAUSED } = await import('../../src/main/plc/plcService');
 const { mpiNodes, parsePlcAccess } = await import('../../src/main/plc/plcIpc');
 const { PlcWriteService } = await import('../../src/main/plc/plcWrite');
+const { readWatch } = await import('../../src/main/plc/watchOnline');
 const { BlockStatusService } = await import('../../src/main/plc/blockStatus');
 const { memoryJobStore } = await import('../../src/main/plc/tisJobs');
 const { readStacks } = await import('../../src/main/plc/stacks');
@@ -251,6 +252,12 @@ describe('una sola sessione dell’adattatore per porta MPI', () => {
       ok: false,
       error: MPI_PAUSED,
     });
+    // e la lettura dei valori (tabelle, runtime HMI) lo dice: `paused`
+    expect(await readWatch(service, o, [{ area: 'M', size: 'B', byte: 0 }])).toEqual({
+      ok: false,
+      error: MPI_PAUSED,
+      paused: true,
+    });
     await status.stop(o);
     await monitorOk();
 
@@ -281,5 +288,33 @@ describe('una sola sessione dell’adattatore per porta MPI', () => {
     expect(serial.refused).toBe(0);
     expect(a.events).toEqual([]);
     await service.closeAll();
+  });
+
+  it('runtime HMI in scrittura su MPI: nessun collegamento fisso, la lettura dei valori riprende fra le scritture', async () => {
+    const cpu = new FakeCpu();
+    serial.cpu = cpu;
+    const service = new PlcService({ intervalMs: 20, connectTimeoutMs: 1000 });
+    const o = owner();
+    expect(await service.connect(o, { ...TCP, host: '', link: LINK })).toMatchObject({ ok: true });
+    const writes = new PlcWriteService({ service, confirm: async () => true });
+    const values = () => readWatch(service, o, [{ area: 'M', size: 'B', byte: 0 }]);
+    const arm = await writes.hmiArm(o);
+    if (!arm.ok) throw new Error(JSON.stringify(arm));
+    expect(await values()).toMatchObject({ ok: true });
+    const bit = { area: 'M' as const, size: 'X' as const, byte: 0, bit: 2 };
+    const w = (v: number, jog?: boolean) =>
+      writes.hmiWrite(o, arm.token, [{ target: bit, data: Uint8Array.of(v) }], jog);
+    expect(await w(1, true)).toEqual({ ok: true, results: [{ ok: true }] });
+    expect(await values()).toEqual({ ok: true, values: [{ bytes: Uint8Array.of(0b100) }] });
+    expect(await w(0)).toEqual({ ok: true, results: [{ ok: true }] });
+    expect(await values()).toEqual({ ok: true, values: [{ bytes: Uint8Array.of(0) }] });
+    // chiusura con un impulso premuto: lo 0 su un collegamento aperto apposta
+    expect(await w(1, true)).toMatchObject({ ok: true });
+    await writes.hmiDisarm(o, arm.token);
+    expect(await values()).toEqual({ ok: true, values: [{ bytes: Uint8Array.of(0) }] });
+    expect(o.events.filter((e) => e.kind === 'lost')).toEqual([]);
+    expect(serial.refused).toBe(0);
+    await service.closeAll();
+    expect(serial.open.size).toBe(0);
   });
 });

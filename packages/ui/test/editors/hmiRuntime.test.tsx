@@ -8,6 +8,8 @@ import {
   type HmiObject,
 } from '@baaportal/project';
 import { focusOpenRuntime } from '../../src/editors/hmi/HmiRuntime';
+import type { PlcHmiArmResult, PlcHmiStuckEntry } from '../../src/online/plcTypes';
+import { renderApp } from '../renderApp';
 import { PLC, setupOnline } from '../online/downloadHelpers';
 
 let n = 0;
@@ -253,5 +255,64 @@ describe('runtime HMI: rilascio dei pulsanti a impulsi', () => {
     fireEvent.click(close);
     await waitFor(() => expect(screen.queryByTestId('hmi-runtime')).toBeNull());
     expect(focusOpenRuntime()).toBe(false);
+  });
+});
+
+describe('runtime HMI: permessi, pause e impulsi forse rimasti a 1', () => {
+  it('editor chiuso durante la conferma: il permesso arrivato dopo si revoca subito', async () => {
+    const app = await openOnline();
+    let answer!: (r: PlcHmiArmResult) => void;
+    app.bridge.plcHmiArm = () => new Promise<PlcHmiArmResult>((r) => (answer = r));
+    await app.user.click(screen.getByLabelText('Consenti scritture nella CPU'));
+    await app.user.click(screen.getByRole('button', { name: 'Avvia runtime HMI' }));
+    await waitFor(() => expect(answer).toBeTypeOf('function'));
+    act(() => {
+      const st = app.store.getState();
+      st.closeEditor(st.workArea.panes[0]!);
+    });
+    await waitFor(() => expect(screen.queryByTestId('hmi-canvas')).toBeNull());
+    await act(async () => answer({ ok: true, token: 'tardi' }));
+    await waitFor(() => expect(app.bridge.plcHmiDisarmTokens).toEqual(['tardi']));
+    expect(screen.queryByTestId('hmi-runtime')).toBeNull();
+  });
+
+  it('porta MPI usata da altri: «valori in pausa» finché la lettura non riprende', async () => {
+    const app = await openOnline();
+    const live = app.bridge.plcReadWatchImpl;
+    app.bridge.plcReadWatchImpl = () => ({ ok: false, error: 'porta occupata', paused: true });
+    await app.user.click(screen.getByRole('button', { name: 'Avvia runtime HMI' }));
+    await waitFor(() =>
+      expect(rt().getByTestId('hmi-runtime-paused')).toHaveTextContent('Valori in pausa'),
+    );
+    app.bridge.plcReadWatchImpl = live;
+    await waitFor(() => expect(rt().getByTestId('hmi-runtime-paused')).toBeEmptyDOMElement());
+    expect(rt().getByRole('img', { name: 'Motore ON' })).toBeInTheDocument();
+  });
+
+  const ENTRY: PlcHmiStuckEntry = {
+    key: 'k1',
+    address: 'M0.2',
+    cpu: 'CPU 315-2 PN/DP (192.0.2.1)',
+    at: '2026-10-30T10:00:00.000Z',
+  };
+
+  it('avviso degli impulsi rimasti dalla sessione precedente: resta finché non si conferma', async () => {
+    const app = await renderApp({ configure: (b) => (b.plcHmiStuckList = [ENTRY]) });
+    const notice = await screen.findByTestId('hmi-stuck-notice');
+    expect(notice).toHaveAttribute('role', 'alert');
+    expect(notice).toHaveTextContent('forse rimasti a 1');
+    expect(notice).toHaveTextContent('M0.2 (CPU CPU 315-2 PN/DP (192.0.2.1)');
+    await app.user.click(within(notice).getByRole('button', { name: 'Ho controllato' }));
+    expect(screen.queryByTestId('hmi-stuck-notice')).toBeNull();
+    expect(app.bridge.plcHmiStuckAcks).toEqual([['k1']]);
+  });
+
+  it('un rilascio fallito nel processo principale arriva subito come avviso', async () => {
+    const app = await renderApp();
+    expect(screen.queryByTestId('hmi-stuck-notice')).toBeNull();
+    act(() => app.bridge.emitPlcHmiStuck([ENTRY]));
+    expect(await screen.findByTestId('hmi-stuck-notice')).toHaveTextContent('M0.2');
+    act(() => app.bridge.emitPlcHmiStuck([])); // uno 0 riuscito lo toglie
+    expect(screen.queryByTestId('hmi-stuck-notice')).toBeNull();
   });
 });

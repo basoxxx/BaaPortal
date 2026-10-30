@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useId,
   useMemo,
   useRef,
@@ -265,6 +266,13 @@ export function HmiScreenEditor({ editor }: { editor: EditorRef }) {
     insert(kind, snap(e.clientX - r.left, e.altKey), snap(e.clientY - r.top, e.altKey));
   };
 
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const start = async () => {
     setNotice('');
     if (!source) return;
@@ -277,6 +285,11 @@ export function HmiScreenEditor({ editor }: { editor: EditorRef }) {
     if (source === 'plc' && allowWrite) {
       // La conferma è nativa, nel processo principale: il token vale finché il runtime resta aperto.
       const r = await whileArming(() => bridge.plcHmiArm());
+      // Editor chiuso durante la conferma: nessun runtime userà il permesso, si revoca subito.
+      if (!mounted.current) {
+        if (r.ok) void bridge.plcHmiDisarm(r.token);
+        return;
+      }
       if (!r.ok) {
         if (!('cancelled' in r)) setNotice(r.error);
         return;

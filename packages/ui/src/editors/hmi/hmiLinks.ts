@@ -12,6 +12,8 @@ export interface HmiLinkState {
   running: boolean;
   /** Ultimi valori per chiave (vedi `targetKey`); `null` finché non ne arriva uno. */
   values: Record<string, WatchValue> | null;
+  /** PLC: la lettura è ferma perché un'altra operazione usa la porta MPI (valori non aggiornati). */
+  paused?: boolean;
 }
 
 export interface HmiLink {

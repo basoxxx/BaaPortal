@@ -2137,7 +2137,13 @@
       "writeFailed": "Write failed: {{message}}",
       "badValue": "Value not valid for the tag format",
       "noScreen": "The screen no longer exists.",
-      "stuck": "Jog output may have stayed at 1: {{address}}. Check it on the machine."
+      "stuck": "Jog output may have stayed at 1: {{address}}. Check it on the machine.",
+      "paused": "Values paused: the MPI port is in use by another operation."
+    },
+    "stuckNotice": {
+      "title": "Jog buttons may have stayed at 1: the automatic 0 failed. Check the outputs on the machine.",
+      "item": "{{address}} (CPU {{cpu}}, {{time}})",
+      "ack": "I have checked"
     }
   }
 }

@@ -170,3 +170,28 @@ button.baa-hmi-button:disabled {
   justify-content: center;
   overflow: auto;
 }
+.baa-hmi-runtime-paused {
+  padding: 2px 8px;
+  background: #8a5a00;
+  color: #fff;
+  font-weight: 600;
+}
+/* Sopra tutto, anche sopra il runtime a tutta finestra: un bit forse rimasto a 1. */
+.baa-hmi-stuck-notice {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10000;
+  max-width: min(720px, calc(100vw - 32px));
+  padding: 10px 16px;
+  background: #b3261e;
+  color: #fff;
+  font-weight: 600;
+  border-radius: 0 0 6px 6px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 40%);
+}
+.baa-hmi-stuck-notice p,
+.baa-hmi-stuck-notice ul {
+  margin: 0 0 6px;
+}

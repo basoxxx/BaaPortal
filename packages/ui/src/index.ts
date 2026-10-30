@@ -79,4 +79,5 @@ export type {
   PlcWriteVarItem,
   PlcWriteVarsResult,
   PlcHmiArmResult,
+  PlcHmiStuckEntry,
 } from './online/plcTypes';

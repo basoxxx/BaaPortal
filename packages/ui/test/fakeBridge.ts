@@ -42,6 +42,7 @@ import type {
   PlcWriteVarItem,
   PlcWriteVarsResult,
   PlcHmiArmResult,
+  PlcHmiStuckEntry,
   PlcStatusRequest,
   PlcStatusStartResult,
   PlcStatusWindowResult,
@@ -367,6 +368,25 @@ export class FakeBridge implements BaaBridge {
   async plcHmiArm(): Promise<PlcHmiArmResult> {
     this.plcHmiArmCalls++;
     return this.plcHmiArmResult;
+  }
+  /** Impulsi forse rimasti a 1: `plcHmiStuckList` risponde, `emitPlcHmiStuck` li spinge. */
+  plcHmiStuckList: PlcHmiStuckEntry[] = [];
+  plcHmiStuckAcks: string[][] = [];
+  private stuckCbs = new Set<(list: PlcHmiStuckEntry[]) => void>();
+  async plcHmiStuck(): Promise<PlcHmiStuckEntry[]> {
+    return this.plcHmiStuckList;
+  }
+  async plcHmiStuckAck(keys: string[]): Promise<void> {
+    this.plcHmiStuckAcks.push(keys);
+  }
+  onPlcHmiStuck(cb: (list: PlcHmiStuckEntry[]) => void) {
+    this.stuckCbs.add(cb);
+    return () => {
+      this.stuckCbs.delete(cb);
+    };
+  }
+  emitPlcHmiStuck(list: PlcHmiStuckEntry[]): void {
+    for (const cb of [...this.stuckCbs]) cb(list);
   }
   async plcHmiDisarm(token: string): Promise<void> {
     this.plcHmiDisarmCalls++;

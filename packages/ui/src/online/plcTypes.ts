@@ -276,7 +276,9 @@ export type PlcWatchValue = { bytes: Uint8Array } | { error: string };
 
 /** Esito di `plcReadWatch`: un valore per operando, nell'ordine; errore solo per il giro intero. */
 export type PlcReadWatchResult =
-  { ok: true; values: PlcWatchValue[] } | { ok: false; error: string };
+  | { ok: true; values: PlcWatchValue[] }
+  /** `paused`: la porta MPI è usata da un'altra operazione, i valori riprendono dopo. */
+  | { ok: false; error: string; paused?: true };
 
 /** Un valore da scrivere: l'operando e i byte grezzi (la dimensione dell'operando). */
 export interface PlcWriteVarItem {
@@ -291,6 +293,18 @@ export type PlcWriteVarsResult =
   | { ok: false; cancelled: true };
 
 /** Esito di `plcHmiArm`: la conferma unica delle scritture di un runtime HMI, con il suo token. */
+/** Un pulsante a impulsi il cui 0 automatico non è riuscito: il bit può essere rimasto a 1. */
+export interface PlcHmiStuckEntry {
+  /** CPU e bit (serve a toglierlo quando uno 0 riesce). */
+  key: string;
+  /** L'operando, p. es. `M3.2`. */
+  address: string;
+  /** La CPU, come nelle conferme. */
+  cpu: string;
+  /** Quando (ISO 8601). */
+  at: string;
+}
+
 export type PlcHmiArmResult =
   { ok: true; token: string } | { ok: false; error: string } | { ok: false; cancelled: true };
 

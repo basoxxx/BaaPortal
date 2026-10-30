@@ -237,7 +237,8 @@ if (!app.requestSingleInstanceLock()) {
     () => ipc.interruptWrites(),
   );
   // Prima di uscire si chiude il collegamento online (al massimo 1 s), poi si esce davvero. Con una
-  // scrittura nella CPU in corso si ferma prima del blocco successivo (al massimo 15 s).
+  // scrittura nella CPU in corso si ferma prima del blocco successivo, e un pulsante HMI a impulsi
+  // premuto torna a 0 anche su un collegamento nuovo (al massimo 15 s).
   app.on('before-quit', (e) => {
     // Anche l'uscita (Cmd+Q) chiede prima di interrompere una scrittura in corso.
     if (writeGuard?.needsConfirm()) {
@@ -253,7 +254,9 @@ if (!app.requestSingleInstanceLock()) {
     if (online.closed) return;
     e.preventDefault();
     online.closed = true;
-    const cap = new Promise<void>((r) => setTimeout(r, ipc.writing() ? 15000 : 1000));
+    const cap = new Promise<void>((r) =>
+      setTimeout(r, ipc.writing() || ipc.releasing() ? 15000 : 1000),
+    );
     void Promise.race([ipc.closeOnline().catch(() => undefined), cap]).finally(() => app.quit());
   });
 

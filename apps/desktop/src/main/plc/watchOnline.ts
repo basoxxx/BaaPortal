@@ -1,6 +1,6 @@
 import type { ReadItem, WriteItem } from '@baaportal/s7comm';
 import type { PlcReadWatchResult, PlcWatchTarget, PlcWatchValue } from '@baaportal/ui';
-import type { PlcOwner, PlcService } from './plcService';
+import { MPI_PAUSED, type PlcOwner, type PlcService } from './plcService';
 
 /** Al più tanti operandi per giro (10 richieste read var da 20 item). */
 export const ONLINE_MAX_ITEMS = 200;
@@ -175,7 +175,8 @@ export async function readWatch(
   if (valid.length === 0) return { ok: true, values };
   const items = valid.map((v) => toReadItem(v.target));
   const r = await service.read(owner, (run) => run((c) => c.readItems(items)), deadlineMs);
-  if (!r.ok) return { ok: false, error: r.error };
+  if (!r.ok)
+    return { ok: false, error: r.error, ...(r.error === MPI_PAUSED ? { paused: true } : {}) };
   if (r.value.length !== valid.length) {
     return { ok: false, error: 'La CPU ha risposto con un numero di valori inatteso' };
   }

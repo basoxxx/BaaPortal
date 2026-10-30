@@ -23,6 +23,7 @@ import { registerKit } from './kit';
 import { PRINT_WINDOW_OPTIONS, printDocument, type PrintWindow } from './printDocument';
 import { createConfirm, e2eOpenPath, e2eSavePath } from './plc/confirm';
 import { registerPlc } from './plc/plcIpc';
+import { HmiStuckStore } from './plc/hmiStuck';
 import { fileJobStore } from './plc/tisJobs';
 import { loadUpdater } from './update/updaterPort';
 import { registerUpdate } from './update/updateIpc';
@@ -65,6 +66,8 @@ export function registerIpc(
 ): {
   closeOnline(): Promise<void>;
   writing(): boolean;
+  /** Un impulso HMI premuto o il suo 0 ancora in corso: l'uscita aspetta di più. */
+  releasing(): boolean;
   busy(): boolean;
   interruptWrites(): void;
   resume(): void;
@@ -255,6 +258,21 @@ export function registerIpc(
       size: async (path) => (await stat(path)).size,
       read: (path) => readFile(path),
     },
+    new HmiStuckStore(join(app.getPath('userData'), 'hmi-stuck.json'), (list, added) => {
+      const w = getWindow();
+      if (!w || w.isDestroyed()) return; // senza finestra resta su disco: lo mostra il prossimo avvio
+      w.webContents.send('plc:hmiStuck', list);
+      if (added) {
+        void dialog.showMessageBox(w, {
+          type: 'warning',
+          title: 'Runtime HMI',
+          message: `${added.address} può essere rimasto a 1`,
+          detail: `Lo 0 automatico del pulsante a impulsi non è riuscito (CPU ${added.cpu}). Controllare l'uscita sulla macchina.`,
+          buttons: ['OK'],
+          noLink: true,
+        });
+      }
+    }),
   );
 
   // Aggiornamenti: il servizio esiste solo nelle build pacchettizzate (electron-updater non si carica altrove).
@@ -326,6 +344,7 @@ export function registerIpc(
   return {
     closeOnline: () => plc.closeAll(),
     writing: () => plc.writing(),
+    releasing: () => plc.releasing(),
     busy: () => plc.busy(),
     interruptWrites: () => plc.interruptWrites(),
     resume: () => plc.resume(),

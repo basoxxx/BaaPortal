@@ -264,6 +264,13 @@ export function HmiRuntime(p: {
         <span role="status" data-testid="hmi-runtime-status">
           {lost ? t('hmi.runtime.lost') : message}
         </span>
+        <span
+          className={st.paused ? 'baa-hmi-runtime-paused' : undefined}
+          role="status"
+          data-testid="hmi-runtime-paused"
+        >
+          {st.paused && !lost ? t('hmi.runtime.paused') : ''}
+        </span>
         <button ref={closeRef} type="button" className="baa-panel-btn" onClick={() => void close()}>
           {t('hmi.runtime.close')}
         </button>

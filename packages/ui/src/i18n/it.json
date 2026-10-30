@@ -2137,7 +2137,13 @@
       "writeFailed": "Scrittura non riuscita: {{message}}",
       "badValue": "Valore non valido per il formato della variabile",
       "noScreen": "La schermata non esiste più.",
-      "stuck": "Uscita a impulsi forse rimasta a 1: {{address}}. Controllarla sulla macchina."
+      "stuck": "Uscita a impulsi forse rimasta a 1: {{address}}. Controllarla sulla macchina.",
+      "paused": "Valori in pausa: la porta MPI è usata da un'altra operazione."
+    },
+    "stuckNotice": {
+      "title": "Pulsanti a impulsi forse rimasti a 1: lo 0 automatico non è riuscito. Controllare le uscite sulla macchina.",
+      "item": "{{address}} (CPU {{cpu}}, {{time}})",
+      "ack": "Ho controllato"
     }
   }
 }

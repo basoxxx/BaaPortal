@@ -1,4 +1,7 @@
 import { EventEmitter } from 'node:events';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const electronApp = vi.hoisted(() => ({ isPackaged: false }));
 vi.mock('electron', () => ({ app: electronApp }));
@@ -8,7 +11,13 @@ import { connectWriteTcp } from '@baaportal/s7comm/node';
 import type { PlcAccess, PlcWatchTarget } from '@baaportal/ui';
 import type { ConfirmFn, WriteConfirmTexts } from '../../src/main/plc/confirm';
 import { PlcService, type PlcOwner } from '../../src/main/plc/plcService';
-import { PlcWriteService, type PlcWriteOwner } from '../../src/main/plc/plcWrite';
+import { HmiStuckStore } from '../../src/main/plc/hmiStuck';
+import {
+  PlcWriteService,
+  type HmiStuckLog,
+  type PlcWriteOwner,
+  type WriteClient,
+} from '../../src/main/plc/plcWrite';
 
 class FakeOwner extends EventEmitter implements PlcWriteOwner, PlcOwner {
   isDestroyed(): boolean {
@@ -35,6 +44,8 @@ describe('scritture del runtime HMI contro il PLC di prova', () => {
   let confirm: ReturnType<typeof vi.fn<ConfirmFn>>;
   let owner: FakeOwner;
   let connects: number;
+  /** Se c'è, ogni scrittura aspetta che si risolva (o fallisce se è rifiutata). */
+  let gate: Promise<void> | undefined;
   const access = (): PlcAccess => ({
     host: '127.0.0.1',
     port: plc.port,
@@ -48,12 +59,19 @@ describe('scritture del runtime HMI contro il PLC di prova', () => {
     service = new PlcService({ intervalMs: 50, readTimeoutMs: 500 });
     confirm = vi.fn<ConfirmFn>(async () => true);
     connects = 0;
+    gate = undefined;
     writes = new PlcWriteService({
       service,
       confirm,
-      connect: (o) => {
+      connect: async (o) => {
         connects++;
-        return connectWriteTcp(o);
+        const c = await connectWriteTcp(o);
+        const write = c.writeItems.bind(c);
+        (c as { writeItems: WriteClient['writeItems'] }).writeItems = async (items) => {
+          if (gate) await gate;
+          return write(items);
+        };
+        return c;
       },
     });
     owner = new FakeOwner();
@@ -236,5 +254,121 @@ describe('scritture del runtime HMI contro il PLC di prova', () => {
     expect(cpu.memory.M[3]).toBe(0);
     answer(false);
     await other;
+  });
+
+  // In Electron, chiudendo la finestra: 'destroyed' del webContents, poi 'window-all-closed' e
+  // solo allora 'before-quit' (→ `abortAll`). Con Cmd+Q l'ordine è l'inverso.
+  it.each([
+    ['finestra distrutta, poi uscita', true],
+    ['uscita, poi finestra distrutta', false],
+  ])("%s: l'uscita aspetta lo 0 dell'impulso premuto", async (_name, destroyedFirst) => {
+    const token = await arm();
+    await writes.hmiWrite(owner, token, W(BIT, 1), true);
+    expect(writes.releasing()).toBe(true);
+    let open!: () => void;
+    gate = new Promise((r) => (open = r));
+    if (destroyedFirst) owner.emit('destroyed');
+    let quit = false;
+    const q = writes.abortAll().then(() => (quit = true));
+    if (!destroyedFirst) owner.emit('destroyed');
+    await new Promise((r) => setTimeout(r, 50));
+    expect(quit).toBe(false);
+    expect(writes.releasing()).toBe(true);
+    open();
+    await q;
+    expect(cpu.memory.M[3]).toBe(0);
+    expect(writes.releasing()).toBe(false);
+  });
+
+  it('pressione rifiutata con certezza dalla CPU: il bit non resta fra quelli da riportare a 0', async () => {
+    const token = await arm();
+    const r = await writes.hmiWrite(
+      owner,
+      token,
+      W({ area: 'DB', db: 99, byte: 0, bit: 0, size: 'X' }, 1),
+      true,
+    );
+    expect(r).toMatchObject({ ok: true, results: [{ ok: false }] });
+    expect(writes.releasing()).toBe(false);
+  });
+
+  it('esito sconosciuto della pressione: il bit resta da riportare a 0', async () => {
+    const token = await arm();
+    gate = Promise.reject(new Error('caduto'));
+    gate.catch(() => undefined);
+    const r = await writes.hmiWrite(owner, token, W(BIT, 1), true);
+    expect(r).toMatchObject({ ok: true, results: [{ ok: false, error: /^Esito sconosciuto/ }] });
+    expect(writes.releasing()).toBe(true);
+    gate = undefined;
+  });
+
+  it('0 automatico non riuscito: nel registro (CPU, indirizzo, ora); uno 0 riuscito dopo lo toglie', async () => {
+    const added: Parameters<HmiStuckLog['add']>[0][] = [];
+    const cleared: string[] = [];
+    writes.stuck = {
+      add: async (e) => void added.push(e),
+      clear: async (k) => void cleared.push(k),
+    };
+    const token = await arm();
+    await writes.hmiWrite(owner, token, W(BIT, 1), true);
+    gate = Promise.reject(new Error('rete caduta'));
+    gate.catch(() => undefined);
+    await writes.hmiDisarm(owner, token);
+    expect(cpu.memory.M[3]).toBe(0b100);
+    expect(added).toEqual([
+      {
+        key: expect.stringContaining('127.0.0.1'),
+        address: 'M 3.2',
+        cpu: expect.stringContaining('127.0.0.1'),
+        at: expect.stringMatching(/^\d{4}-\d\d-\d\dT/),
+      },
+    ]);
+    gate = undefined;
+    const again = await arm();
+    expect(await writes.hmiWrite(owner, again, W(BIT, 0))).toMatchObject({ ok: true });
+    expect(cpu.memory.M[3]).toBe(0);
+    expect(cleared).toEqual([added[0]!.key]);
+  });
+});
+
+describe('registro degli impulsi forse rimasti a 1', () => {
+  let dir: string;
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'baa-hmi-stuck-'));
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+  const E = (key: string) => ({ key, address: 'M3.2', cpu: 'CPU', at: '2026-10-30T10:00:00.000Z' });
+
+  it('resta su disco fino alla presa visione o a uno 0 riuscito; avvisa a ogni cambio', async () => {
+    const path = join(dir, 'sub', 'hmi-stuck.json');
+    const seen: [number, string | undefined][] = [];
+    const a = new HmiStuckStore(path, (l, added) => seen.push([l.length, added?.key]));
+    await a.add(E('x'));
+    await a.add(E('y'));
+    await a.add(E('x')); // la stessa voce non si ripete
+    expect(JSON.parse(await readFile(path, 'utf8'))).toHaveLength(2);
+    const b = new HmiStuckStore(path, () => undefined); // prossimo avvio
+    expect(b.list().map((e) => e.key)).toEqual(['y', 'x']);
+    await b.clear('y');
+    await b.ack(['x', 42]);
+    expect(new HmiStuckStore(path, () => undefined).list()).toEqual([]);
+    expect(seen).toEqual([
+      [1, 'x'],
+      [2, 'y'],
+      [2, 'x'],
+    ]);
+  });
+
+  it('file rovinato o voci strane: si riparte senza quelle', async () => {
+    const path = join(dir, 'hmi-stuck.json');
+    const { writeFile } = await import('node:fs/promises');
+    await writeFile(path, JSON.stringify([E('ok'), { key: 1 }, null]));
+    expect(new HmiStuckStore(path, () => undefined).list().map((e) => e.key)).toEqual(['ok']);
+    await writeFile(path, '{');
+    const warn = vi.fn();
+    expect(new HmiStuckStore(path, () => undefined, warn).list()).toEqual([]);
+    expect(warn).toHaveBeenCalledOnce();
   });
 });

@@ -21,6 +21,7 @@ import type {
   PlcRestoreResult,
   PlcWriteProgress,
   PlcHmiArmResult,
+  PlcHmiStuckEntry,
   PlcWatchTarget,
   PlcWriteVarsResult,
   RestoreOutcomeRow,
@@ -81,6 +82,15 @@ interface HmiSession {
 }
 
 const heldKey = (t: PlcWatchTarget): string => JSON.stringify([t.area, t.db, t.byte, t.bit]);
+
+/** Il registro degli impulsi forse rimasti a 1 (`hmiStuck.ts`); `key` è CPU più bit. */
+export interface HmiStuckLog {
+  add(e: PlcHmiStuckEntry): Promise<void>;
+  clear(key: string): Promise<void>;
+}
+
+/** Esito di una richiesta che può essere arrivata alla CPU: l'unico che non esclude la scrittura. */
+const UNKNOWN_OUTCOME = 'Esito sconosciuto: la CPU potrebbe averlo scritto';
 
 export type WriteClient = Pick<
   S7WriteClient,
@@ -319,6 +329,10 @@ export class PlcWriteService {
   private restoreFileIo?: RestoreFileIo;
   /** Runtime HMI in scrittura confermati, per token (uno per avvio del runtime). */
   private readonly hmi = new Map<string, HmiSession>();
+  /** Fine di permessi già tolti da `hmi` con gli 0 ancora da scrivere: l'uscita li aspetta. */
+  private readonly ending = new Set<Promise<void>>();
+  /** Dove finiscono gli impulsi non riportati a 0 (lo imposta `plcIpc`). */
+  stuck?: HmiStuckLog;
 
   constructor(private readonly o: PlcWriteOptions) {
     this.connectFn = o.connect ?? ((a) => connectWriteTcp(a));
@@ -359,6 +373,14 @@ export class PlcWriteService {
   }
 
   /**
+   * Un impulso HMI premuto o uno 0 ancora da scrivere: all'uscita il rilascio può volere un
+   * collegamento nuovo (connessione e verifica della CPU), quindi più del secondo solito.
+   */
+  releasing(): boolean {
+    return this.ending.size > 0 || [...this.hmi.values()].some((s) => s.held.size > 0);
+  }
+
+  /**
    * Uscita dall'app: ferma ogni scrittura prima del passo successivo e aspetta che chiuda il
    * collegamento. Quelle ancora alla finestra di conferma vengono annullate senza attendere.
    */
@@ -390,8 +412,10 @@ export class PlcWriteService {
       op.aborted = true;
       if (op.stage === 'running') running.push(op.settled);
     }
-    // Uscendo, i pulsanti a impulsi ancora premuti tornano a 0 prima che i collegamenti chiudano.
-    running.push(...[...this.hmi.keys()].map((t) => this.hmiEnd(t, "uscita dall'app")));
+    // Uscendo, i pulsanti a impulsi ancora premuti tornano a 0 prima che i collegamenti chiudano,
+    // anche quelli di un runtime già finito (la finestra si distrugge prima di `before-quit`).
+    for (const t of [...this.hmi.keys()]) void this.hmiEnd(t, "uscita dall'app");
+    running.push(...this.ending);
     await Promise.all(running);
   }
 
@@ -559,7 +583,16 @@ export class PlcWriteService {
           confirmLabel: 'Comanda',
         }));
         if (!('c' in p)) return p.result;
-        return this.writeAll(owner, op, p.c, items);
+        const target = this.o.service.target(owner);
+        const r = await this.writeAll(owner, op, p.c, items);
+        // Uno 0 riuscito in un bit toglie anche da qui un impulso forse rimasto a 1.
+        if (target && r.ok) {
+          for (const [i, x] of parsed.entries()) {
+            const one = { ok: true as const, results: [r.results[i]!] };
+            if (x.target.size === 'X') await this.cleared(target, x, one);
+          }
+        }
+        return r;
       },
     );
   }
@@ -593,6 +626,10 @@ export class PlcWriteService {
         op.stage = 'running';
         const c = await this.open(target);
         if (typeof c === 'string') return { ok: false, error: c };
+        // MPI: la porta è una sola; tenerla aperta fermerebbe la lettura dei valori per tutto il
+        // runtime. La CPU è verificata, il collegamento si riapre a ogni richiesta (`hmiRun`).
+        const mpi = target.access.link?.kind === 'mpi';
+        if (mpi) await c.close().catch(() => undefined);
         const token = randomUUID();
         const end = (why: string) => (): void => void this.hmiEnd(token, why);
         const gone = end('pagina chiusa o ricaricata');
@@ -602,7 +639,7 @@ export class PlcWriteService {
           owner,
           target,
           held: new Map(),
-          client: c,
+          ...(mpi ? {} : { client: c }),
           chain: Promise.resolve(),
           dispose: () => {
             for (const e of GONE) owner.removeListener(e, gone);
@@ -652,7 +689,7 @@ export class PlcWriteService {
     const one = parsed.length === 1 ? parsed[0]! : undefined;
     const bit = one?.target.size === 'X' ? one : undefined;
     if (bit && bit.data[0] === 0 && s.held.has(heldKey(bit.target))) {
-      return this.hmiRelease(s, bit.target);
+      return this.cleared(s.target, bit, await this.hmiRelease(s, bit.target));
     }
     if (jog === true && !bit) return { ok: false, error: 'Pulsante a impulsi senza un bit' };
     const items = parsed.map((x) => toWriteItem(x.target, x.data));
@@ -663,10 +700,31 @@ export class PlcWriteService {
       async (op) => {
         op.stage = 'running';
         // Prima della richiesta: anche con l'esito sconosciuto il bit può essere a 1.
-        if (jog === true && bit) s.held.set(heldKey(bit.target), bit.target);
-        return this.hmiRun(s, (c) => this.writeAll(owner, op, c, items, () => this.hmiDrop(s, c)));
+        const k = bit && heldKey(bit.target);
+        const press = jog === true && k !== undefined && !s.held.has(k);
+        if (press) s.held.set(k, bit!.target);
+        const r = await this.hmiRun(s, (c) =>
+          this.writeAll(owner, op, c, items, () => this.hmiDrop(s, c)),
+        );
+        // Niente scritto di sicuro (rifiuto della CPU, collegamento non aperto): lo 0 di dopo
+        // potrebbe disfare un 1 messo apposta da un altro pulsante sullo stesso bit.
+        const x = r.ok ? r.results[0] : undefined;
+        if (press && (!r.ok || (x && !x.ok && x.error !== UNKNOWN_OUTCOME))) s.held.delete(k);
+        return bit ? this.cleared(s.target, bit, r) : r;
       },
     );
+  }
+
+  /** Uno 0 scritto in un bit lo toglie dal registro degli impulsi forse rimasti a 1. */
+  private async cleared(
+    target: Target,
+    bit: { target: PlcWatchTarget; data: Uint8Array },
+    r: PlcWriteVarsResult,
+  ): Promise<PlcWriteVarsResult> {
+    if (bit.data[0] === 0 && r.ok && r.results[0]?.ok) {
+      await this.stuck?.clear(stuckKey(target, bit.target)).catch(() => undefined);
+    }
+    return r;
   }
 
   /** Lo 0 di un pulsante a impulsi premuto: aspetta (non rifiuta) le altre scritture sulla CPU. */
@@ -711,6 +769,12 @@ export class PlcWriteService {
       } catch (err) {
         this.hmiDrop(s, c);
         throw err;
+      } finally {
+        // MPI: porta libera fra una richiesta e l'altra, così la lettura dei valori riprende.
+        if (s.target.access.link?.kind === 'mpi' && s.client === c) {
+          s.client = undefined;
+          await c.close().catch(() => undefined);
+        }
       }
     };
     const p = s.chain.then(run, run);
@@ -736,6 +800,7 @@ export class PlcWriteService {
     s.dispose();
     const run = async (): Promise<void> => {
       for (const t of s.held.values()) {
+        const key = stuckKey(s.target, t);
         try {
           if (!s.client) {
             const c = await this.open(s.target);
@@ -745,18 +810,39 @@ export class PlcWriteService {
           const [rc] = await s.client.writeItems([toWriteItem(t, Uint8Array.of(0))]);
           if (rc?.returnCode !== 0xff) throw new Error(rc?.name ?? 'esito mancante');
           console.warn(`[runtime HMI] ${why}: ${addressName(t)} riportato a 0`);
+          await this.stuck?.clear(key).catch(() => undefined);
         } catch (err) {
           if (s.client) this.hmiDrop(s, s.client);
           console.warn(
             `[runtime HMI] ${why}: ${addressName(t)} non riportato a 0 (${errText(err)}), può essere rimasto a 1`,
           );
+          // Registro su disco e avviso: il messaggio in console non lo vede nessuno.
+          await this.stuck
+            ?.add({
+              key,
+              address: addressName(t),
+              cpu: cpuName(s.target),
+              at: new Date(this.now()).toISOString(),
+            })
+            .catch((e: unknown) =>
+              console.warn(`[runtime HMI] registro non salvato: ${errText(e)}`),
+            );
         }
       }
       s.held.clear();
-      if (s.client) this.hmiDrop(s, s.client);
+      // Atteso: con l'adattatore MPI la chiusura è anche la ripresa della lettura dei valori.
+      const c = s.client;
+      s.client = undefined;
+      await c?.close().catch(() => undefined);
     };
-    s.chain = s.chain.then(run, run);
-    await s.chain;
+    const done = s.chain.then(run, run);
+    s.chain = done;
+    this.ending.add(done);
+    try {
+      await done;
+    } finally {
+      this.ending.delete(done);
+    }
   }
 
   /**
@@ -798,7 +884,7 @@ export class PlcWriteService {
           const error =
             e instanceof S7Error && e.code === 'CPU_ERROR'
               ? `Rifiutato dalla CPU: ${e.message}`
-              : 'Esito sconosciuto: la CPU potrebbe averlo scritto';
+              : UNKNOWN_OUTCOME;
           for (let j = 0; j < group.length; j++) results.push({ ok: false, error });
           failed = true;
           broken = !(e instanceof S7Error && e.code === 'CPU_ERROR');
@@ -1381,6 +1467,10 @@ function parseRestoreRequest(raw: unknown): { token: string; restart: boolean } 
 }
 
 type Target = NonNullable<ReturnType<PlcService['target']>>;
+
+/** Chiave del registro degli impulsi forse rimasti a 1: la CPU e il bit. */
+const stuckKey = (target: Target, t: PlcWatchTarget): string =>
+  `${cpuKey(target.access)}|${heldKey(t)}`;
 
 function fail(error: string): PlcDownloadResult {
   return { ok: false, loaded: [], deleted: [], error };
