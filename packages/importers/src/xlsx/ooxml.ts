@@ -83,12 +83,17 @@ function parseXml(xml: string): XmlNode {
 const elements = (n: XmlNode, name?: string): XmlNode[] =>
   n.children.filter((c): c is XmlNode => typeof c !== 'string' && (!name || c.name === name));
 
+/** `_x000D_` e simili (OOXML §22.4.2.4): i caratteri che l'XML non conserva, come il `\r`. */
+const unescapeXlsx = (s: string): string =>
+  s.replace(/_x([0-9A-Fa-f]{4})_/g, (_, h: string) => String.fromCharCode(parseInt(h, 16)));
+
 /** Testo di un `<si>` o `<is>`: tutti i `<t>` (anche nei `<r>`), esclusa la fonetica `<rPh>`. */
 function richText(n: XmlNode): string {
   let out = '';
   for (const c of n.children) {
     if (typeof c === 'string') continue;
-    if (c.name === 't') out += c.children.filter((x) => typeof x === 'string').join('');
+    if (c.name === 't')
+      out += unescapeXlsx(c.children.filter((x) => typeof x === 'string').join(''));
     else if (c.name !== 'rPh') out += richText(c);
   }
   return out;
@@ -269,6 +274,9 @@ const INVALID_XML = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff]/g;
 const esc = (s: string): string =>
   s
     .replace(INVALID_XML, '')
+    // Un `_x000D_` scritto davvero si protegge; il `\r` si scrive come lo vuole OOXML (l'XML lo perderebbe).
+    .replace(/_x([0-9A-Fa-f]{4})_/g, '_x005F_x$1_')
+    .replace(/\r/g, '_x000D_')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -285,20 +293,40 @@ function columnName(index: number): string {
   return s;
 }
 
+/** Larghezza di ogni colonna in caratteri: la riga più lunga (le prime 200 righe), fra 8 e 60. */
+function columnWidths(rows: string[][]): number[] {
+  const widths: number[] = [];
+  for (const cells of rows.slice(0, 200)) {
+    cells.forEach((v, c) => {
+      const longest = Math.max(...v.split(/\r?\n/).map((l) => l.length));
+      widths[c] = Math.max(widths[c] ?? 0, longest);
+    });
+  }
+  return widths.map((w) => Math.min(60, Math.max(8, w + 2)));
+}
+
 function sheetXml(rows: string[][]): string {
   const body = rows
     .map((cells, r) => {
+      // Prima riga: intestazione in grassetto (stile 1).
+      const style = r === 0 ? ' s="1"' : '';
       const cs = cells
         .map((v, c) =>
           v === ''
             ? ''
-            : `<c r="${columnName(c)}${r + 1}" t="inlineStr"><is><t xml:space="preserve">${esc(v)}</t></is></c>`,
+            : `<c r="${columnName(c)}${r + 1}"${style} t="inlineStr"><is><t xml:space="preserve">${esc(v)}</t></is></c>`,
         )
         .join('');
       return `<row r="${r + 1}">${cs}</row>`;
     })
     .join('');
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${body}</sheetData></worksheet>`;
+  const cols = columnWidths(rows)
+    .map((w, c) => `<col min="${c + 1}" max="${c + 1}" width="${w}" customWidth="1"/>`)
+    .join('');
+  // Intestazione bloccata: la prima riga resta in vista scorrendo.
+  const view =
+    '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>';
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${rows.length > 0 ? view : ''}${cols === '' ? '' : `<cols>${cols}</cols>`}<sheetData>${body}</sheetData></worksheet>`;
 }
 
 export function writeXlsx(sheets: Sheet[]): Uint8Array {
@@ -344,11 +372,11 @@ export function writeXlsx(sheets: Sheet[]): Uint8Array {
     'xl/styles.xml':
       head +
       '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-      '<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>' +
+      '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts>' +
       '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>' +
       '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
       '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
-      '<cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>' +
+      '<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs>' +
       '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>' +
       '</styleSheet>',
   };

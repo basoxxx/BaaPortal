@@ -315,14 +315,14 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
 
 ### Importa/esporta variabili (csv e xlsx)
 
-- **Costanti in csv.** Il csv ha un solo foglio, quindi le costanti non si esportano: per averle si usa xlsx.
-- **xlsx scritto in forma minima.** Nessuna formattazione (larghezze, colori, stili); il file si apre ma è spartano.
-- **csv, virgolette non chiuse.** Una virgoletta aperta e mai chiusa inghiotte il resto del file in un solo errore `RIGA_ILLEGGIBILE`.
+- **Costanti in csv.** Il csv ha un solo foglio: esportando una tabella con costanti, accanto a `nome.csv` si scrive `nome_costanti.csv`. Importando `nome.csv` se ne cerca uno accanto con quel nome; un csv con la colonna `Value` e senza `Logical Address` si legge come costanti. Il file delle costanti scelto da solo importa solo le costanti.
+- **xlsx scritto in forma minima.** Solo l'intestazione in grassetto e bloccata, e le larghezze delle colonne (dalle prime 200 righe, fra 8 e 60 caratteri); nessun colore, filtro o altro stile.
+- **csv, virgolette non chiuse.** Una virgoletta aperta e mai chiusa dà un errore `RIGA_ILLEGGIBILE` sulla riga dove comincia il record; la lettura riparte dalla riga dopo (la virgoletta aperta non si cerca di chiudere altrove).
 - **csv, formule.** In esportazione una cella che inizia con `=`, `+`, `-`, `@`, tab o a capo (dopo eventuali apici) riceve un apice davanti (`'=1+1`), così Excel non la legge come formula. In importazione, a una cella che inizia con uno o più apici seguiti da uno di quei caratteri se ne toglie uno; `'ciao` resta com'è. Un file di altra origine con una cella `'=x` volutamente con l'apice la perde.
 - **xlsx, limite di dimensione.** Il file compresso può arrivare a 50 MB. Si gonfiano solo le voci che servono (cartella di lavoro, relazioni, stringhe condivise, tipi di contenuto e i fogli referenziati); ogni voce e il totale non possono superare 200 MB, altrimenti errore chiaro «troppo grande». Il limite per voce si fida della dimensione dichiarata nell'intestazione dello zip, e la misura reale viene ricontrollata dopo l'estrazione.
 - **Valori delle costanti importate.** Non vengono controllati rispetto al loro tipo, come nell'editor a griglia.
 - **xlsx, DOCTYPE.** Un DOCTYPE con sottoinsieme interno non si legge (errore chiaro).
-- **xlsx, ritorni a capo.** Un `\r` dentro un testo non torna identico dopo l'esportazione e la rilettura.
+- **xlsx, ritorni a capo.** Un `\r` si scrive come `_x000D_` (OOXML) e torna identico alla rilettura; anche un `_x000D_` scritto davvero nel testo si protegge. Un altro programma che non conosce quella forma mostrerebbe il testo letterale.
 - **Nomi unici per CPU.** L'importazione scarta un nome già presente in un'altra tabella (`NOME_IN_ALTRA_TABELLA`); un doppione creato a mano fra tabelle (variabili, costanti, blocchi, UDT) è segnalato dal controllo del progetto come `NAME_DUPLICATE` su ogni occorrenza.
 - **Nome file.** In esportazione un'estensione digitata che non è `csv` né `xlsx` (fino a 4 caratteri con almeno una lettera, come `x.txt`) è sostituita: `x.xlsx`. Un punto nel nome (`v1.2`) resta e si aggiunge l'estensione.
 

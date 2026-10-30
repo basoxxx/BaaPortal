@@ -1,6 +1,12 @@
 import type { TagTable } from '@baaportal/project';
-import { TAG_COLUMNS } from './columns';
-import { buildTagRows, toLogicalAddress, type ParsedTags } from './rows';
+import { CONSTANT_COLUMNS, TAG_COLUMNS } from './columns';
+import {
+  buildConstantRows,
+  buildTagRows,
+  columnIndex,
+  toLogicalAddress,
+  type ParsedTags,
+} from './rows';
 
 export interface CsvRecord {
   /** Numero di riga nel file (1 = prima riga) dove il record inizia. */
@@ -34,14 +40,22 @@ export function detectSeparator(text: string): string {
 
 /** Legge un csv (RFC 4180) in record; ignora le righe vuote. */
 export function parseCsv(input: string, separator: string): CsvRecord[] {
-  const text = input.charCodeAt(0) === 0xfeff ? input.slice(1) : input;
+  return parseFrom(input.charCodeAt(0) === 0xfeff ? input.slice(1) : input, separator, 1);
+}
+
+/**
+ * Come `parseCsv`, con la prima riga di `text` numerata `firstLine`. Un record con le virgolette
+ * mai chiuse è illeggibile solo nella sua riga: la lettura riparte dalla riga dopo.
+ */
+function parseFrom(text: string, separator: string, firstLine: number): CsvRecord[] {
   const out: CsvRecord[] = [];
+  let recordStart = 0;
   let cells: string[] = [];
   let field = '';
   let quoted = false;
   let fieldWasQuoted = false;
-  let line = 1;
-  let startLine = 1;
+  let line = firstLine;
+  let startLine = firstLine;
 
   const endRecord = (unreadable: boolean): void => {
     cells.push(field);
@@ -78,10 +92,18 @@ export function parseCsv(input: string, separator: string): CsvRecord[] {
       endRecord(false);
       line++;
       startLine = line;
+      recordStart = i + 1;
     } else field += ch;
   }
-  if (quoted) endRecord(true);
-  else if (field !== '' || cells.length > 0 || fieldWasQuoted) endRecord(false);
+  if (quoted) {
+    // Il resto del file non si inghiotte: errore su questa riga, poi si riparte dalla successiva.
+    out.push({ line: startLine, cells: [], unreadable: true });
+    const eol = /\r\n|\r|\n/.exec(text.slice(recordStart));
+    if (eol) {
+      const rest = text.slice(recordStart + eol.index + eol[0].length);
+      out.push(...parseFrom(rest, separator, startLine + 1));
+    }
+  } else if (field !== '' || cells.length > 0 || fieldWasQuoted) endRecord(false);
   return out;
 }
 
@@ -89,10 +111,14 @@ export function parseTagsCsv(text: string): ParsedTags {
   const records = parseCsv(text, detectSeparator(text.replace(/^\ufeff/, '')));
   const [header, ...rows] = records;
   if (!header) return { tags: [], constants: [], errors: [] };
-  return buildTagRows(
-    header.cells,
-    rows.map((r) => ({ ...r, cells: r.cells.map(unescapeFormula) })),
-  );
+  const body = rows.map((r) => ({ ...r, cells: r.cells.map(unescapeFormula) }));
+  // Un csv con la colonna Value e senza l'indirizzo è il file delle costanti (`…_costanti.csv`).
+  const cols = columnIndex(header.cells);
+  if (cols.has('value') && !cols.has('logical address')) {
+    const p = buildConstantRows(header.cells, body);
+    return { ...p, errors: p.errors.map((e) => ({ ...e, sheet: 'constants' as const })) };
+  }
+  return buildTagRows(header.cells, body);
 }
 
 // Protezione dalle formule (OWASP, CSV injection): una cella che comincia con =, +, -, @, tab o CR
@@ -124,5 +150,17 @@ export function tagsToCsv(table: TagTable): string {
       ].map(escapeFormula),
     );
   }
+  return '\ufeff' + lines.map((l) => l.map((v) => quote(v, sep)).join(sep)).join('\r\n') + '\r\n';
+}
+
+/** Le costanti utente di una tabella in csv (il csv ha un solo foglio: stanno in un file a parte). */
+export function constantsToCsv(table: TagTable): string {
+  const sep = ';';
+  const lines: string[][] = [
+    [...CONSTANT_COLUMNS],
+    ...table.constants.map((c) =>
+      [c.name, table.name, c.type, c.value, c.comment].map(escapeFormula),
+    ),
+  ];
   return '\ufeff' + lines.map((l) => l.map((v) => quote(v, sep)).join(sep)).join('\r\n') + '\r\n';
 }

@@ -29,6 +29,12 @@ describe('tabelle variabili xlsx', () => {
     ]);
   });
 
+  it('un \\r dentro un testo torna identico', () => {
+    const t = { ...table, tags: [{ ...table.tags[0]!, comment: 'a\r\nb\rc _x000D_ d' }] };
+    const back = parseTagsXlsx(tagsToXlsx(t));
+    expect(back.tags[0]!.comment).toBe('a\r\nb\rc _x000D_ d');
+  });
+
   it('foglio "Constants" accettato come "User Constants"', () => {
     const bytes = writeXlsx([
       { name: 'PLC Tags', rows: [['Name', 'Data Type', 'Logical Address']] },
