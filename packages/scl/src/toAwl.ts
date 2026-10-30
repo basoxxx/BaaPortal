@@ -503,9 +503,9 @@ class Gen {
             fail(e, `${e.op} si usa con BOOL, BYTE, WORD o DWORD, c'è ${t}: usa ${t}_TO_…`);
           return t;
         }
-        if (t === 'BOOL') fail(e, `L'operatore ${e.op} non si usa con BOOL: usa AND, OR, XOR, NOT`);
-        if (isBits(t) && !(e.op === '=' || e.op === '<>'))
-          fail(e, `Con ${t} si usano solo = e <> e AND, OR, XOR, NOT`);
+        if (t === 'BOOL' && !(e.op === '=' || e.op === '<>'))
+          fail(e, `L'operatore ${e.op} non si usa con BOOL: usa =, <>, AND, OR, XOR, NOT`);
+        if (isBits(t) && !cmp) fail(e, `Con ${t} si usano solo i confronti e AND, OR, XOR, NOT`);
         if (t === 'S5TIME' && !(e.op === '=' || e.op === '<>'))
           fail(e, 'Con S5TIME si usano solo = e <>: per i calcoli usa TIME');
         if ((t === 'DATE' || t === 'TOD' || t === 'CHAR') && !cmp)
@@ -627,9 +627,18 @@ class Gen {
     });
   }
 
+  /**
+   * WORD e DWORD si confrontano senza segno: col bit alto invertito in entrambi i lati l'ordine
+   * con segno di `<I`/`<D` è quello senza segno (BYTE sta già fra 0 e 255).
+   */
   private compare(e: Extract<Expr, { k: 'bin' }>): void {
     const ty = this.pair(e) as Num;
     this.operands(e, ty);
+    const flip =
+      e.op === '=' || e.op === '<>'
+        ? undefined
+        : { WORD: 'XOW W#16#8000', DWORD: 'XOD DW#16#80000000' }[ty as string];
+    if (flip) this.emit(flip, 'TAK', flip, 'TAK');
     this.emit(`${CMP[e.op]}${SUFFIX[ty]}`);
   }
 
@@ -873,9 +882,16 @@ class Gen {
       case 'neg':
       case 'not':
         return { ...e, e: this.hoist(e.e) };
-      case 'bin':
+      case 'bin': {
         if (e.op in CMP && this.isStrCmp(e)) return this.strCompare(e);
-        return { ...e, l: this.hoist(e.l), r: this.hoist(e.r) };
+        const h = { ...e, l: this.hoist(e.l), r: this.hoist(e.r) };
+        // BOOL: a <> b è a XOR b, a = b è NOT (a XOR b)
+        if ((e.op === '=' || e.op === '<>') && this.pair(e) === 'BOOL') {
+          const x: Expr = { ...h, op: 'XOR' };
+          return e.op === '=' ? { k: 'not', e: x, line: e.line, col: e.col } : x;
+        }
+        return h;
+      }
       case 'call': {
         if (e.name === 'LEN') return e;
         if (!CONV[e.name]) return this.hoist(this.blockCall(e));
