@@ -462,6 +462,16 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
 - **Librerie globali:** chiudendo l'app o il progetto non si chiede di salvare una libreria globale modificata; non si ricordano le librerie aperte tra un avvio e l'altro. Si copiano modelli dalle globali alla libreria di progetto, non tra due globali. Le tabelle di controllo si aggiungono solo con _Aggiungi la selezione_ (dall'albero non si trascinano).
 - **Libreria standard IEC:** senza STRING (niente funzioni sulle stringhe), `MUX` con quattro ingressi fissi e `K` di tipo INT. `F_TRIG` non dà l'impulso al primo ciclo con `CLK = 0` (M parte da 0 e ricorda il CLK precedente). ENO segue il bit BR alla fine del blocco.
 
+## HMI di base (1.9)
+
+- **Non è WinCC.** Mancano: allarmi e messaggi, ricette, curve e archivi, script, utenti e password, testi multilingua, grafica (immagini, forme, oggetti animati), modelli e faceplate, livelli e finestre a comparsa, schermata iniziale configurabile (il runtime parte dalla schermata aperta nell'editor), caricamento su pannelli reali (Comfort, Basic, OP/TP), importazione da WinCC o WinCC flexible. Allineamento e distribuzione automatici degli oggetti non ci sono.
+- **Runtime solo dentro BaaPortal**, a tutta finestra, sul PC: non c'è un runtime separato da installare né un avvio automatico.
+- **Scritture online:** una conferma sola all'avvio in scrittura, poi nessuna (vedi `docs/uso/hmi.md`). Ogni scrittura apre e chiude un collegamento `online-write` (con la verifica della CPU): un pulsante ha la latenza di un collegamento nuovo, decine o centinaia di millisecondi, e una scrittura mentre un'altra operazione di scrittura è in corso sulla stessa CPU è rifiutata con un messaggio. **Mai provato su una CPU reale.**
+- **Impulso e caduta del collegamento:** se il collegamento cade col pulsante premuto il bit resta a 1. «Commuta» parte dall'ultimo valore letto: se il PLC lo ha cambiato nel frattempo, la commutazione può scrivere lo stesso valore.
+- **Letture:** al più 200 variabili per giro online, condivise con le tabelle di controllo aperte; PQ non si legge online; timer e contatori si mostrano come parola grezza nel formato scelto, ma non si scrivono.
+- **Formati:** INT, DINT, REAL, HEX, BOOL; niente STRING, CHAR, TIME, S5TIME, date, scala lineare né decimali fissi.
+- **Libreria e progetto:** le schermate non entrano nei modelli della libreria e non si copiano fra PLC dall'albero (gli oggetti sì, con copia e incolla). Una versione precedente di BaaPortal apre il progetto e conserva le schermate, ma non le mostra.
+
 ## Fuori dal codice, in sospeso per l'utente
 
 - Controlli a mano dei piani 1B (Windows e Mac), 1C e 1F. Le liste sono nei piani; per la 1F: xlsx in Excel e LibreOffice, xlsx di TIA Portal, Archivia/Ritira con percorsi accentati e con spazi, scala a 125%.

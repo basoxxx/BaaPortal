@@ -115,7 +115,7 @@ La ditta per ora non ha una CPU S7-300; un amico che userà BaaPortal ce l'ha. I
 
 ## Tappe 8 e 9
 
-- **Tappa 8 (HMI)**: progetto separato, con il suo documento di progetto, dopo la tappa 7.
+- **Tappa 8 (HMI)**: progetto separato, con il suo documento di progetto, dopo la tappa 7. **Stato: HMI di base (1.9)**: schermate per PLC (testo, campo di I/O, pulsante, lampada, barra, cambio schermata) con editor e runtime nella finestra, sul simulatore e online (sola lettura predefinita, scritture con una conferma all'avvio). Guida: `docs/uso/hmi.md`; mancanze in `docs/limiti-noti.md`.
 - **Tappa 9 (estensioni)**: GRAPH, PID, punti di arresto, S7-400, gateway proprietari. Si pianificano su richiesta.
 
 ## Ordine
