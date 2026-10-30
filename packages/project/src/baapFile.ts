@@ -117,6 +117,22 @@ const deviceShape = {
     }).optional(),
   }),
   groups: obj({ blocks: z.array(str), tags: z.array(str), types: z.array(str) }),
+  // Configurazione hardware (tappa 6A, facoltativa: i file precedenti non ce l'hanno). Posti e
+  // indirizzi si controllano in checkDevice, qui solo la forma.
+  hardware: obj({
+    modules: z.array(
+      obj({
+        id,
+        rack: z.number().int().min(0).max(3),
+        slot: z.number().int().min(1).max(11),
+        orderNumber: str,
+        name: str,
+        comment: str,
+        inputStart: z.number().int().min(0).optional(),
+        outputStart: z.number().int().min(0).optional(),
+      }),
+    ),
+  }).optional(),
   // Ordine degli oggetti: gli id dei file elencati.
   tagTables: z.array(id),
   udts: z.array(id),
@@ -313,6 +329,7 @@ function checkUniqueIds(device: PlcDevice): void {
     collectMemberIds(u.members, add);
   }
   for (const x of device.sources) add(x.id);
+  for (const m of device.hardware?.modules ?? []) add(m.id);
   for (const w of device.watchTables) {
     add(w.id);
     for (const r of w.rows) add(r.id);

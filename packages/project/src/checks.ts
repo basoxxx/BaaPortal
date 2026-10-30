@@ -13,6 +13,7 @@ import {
 import type { CpuType } from '@baaportal/catalog';
 import { findSystemFb, systemFbMembers, toTypedMembers, typeResolver } from './members';
 import { watchResolverFor } from './watchOperand';
+import { checkHardware, ioCoverage, type HwIssueCode } from './hardware';
 import type {
   Block,
   CodeBlock,
@@ -45,7 +46,9 @@ export type DiagnosticCode =
   | 'PROPERTY_INVALID'
   | 'CPU_UNKNOWN'
   | 'WATCH_NAME_DUPLICATE'
-  | 'WATCH_OPERAND_INVALID';
+  | 'WATCH_OPERAND_INVALID'
+  | 'IO_NOT_CONFIGURED'
+  | HwIssueCode;
 
 export interface Diagnostic {
   severity: 'error' | 'warning';
@@ -130,6 +133,8 @@ interface Ctx {
   fbByName: Map<string, CodeBlock>;
   isFb: (name: string) => boolean;
   symbols: Map<string, number>;
+  /** Copertura di I e Q da parte dei moduli configurati; undefined senza configurazione hardware. */
+  ioCovered?: (area: 'I' | 'Q', byte: number) => boolean;
 }
 
 const add = (ctx: Ctx, d: Diagnostic): void => {
@@ -314,6 +319,18 @@ function checkTag(ctx: Ctx, table: TagTable, tag: Tag, placed: Placed[]): void {
   }
   if (ctx.cpu && !addressInLimits(a.address, ctx.cpu)) {
     add(ctx, { severity: 'error', code: 'ADDRESS_OUT_OF_RANGE', ref, field: 'address' });
+  }
+  // I/Q senza modulo nel rack: solo un avviso, il programma resta valido.
+  const area = a.address.area;
+  const io = area === 'I' || area === 'PI' ? 'I' : area === 'Q' || area === 'PQ' ? 'Q' : undefined;
+  if (io && ctx.ioCovered) {
+    const r = addressBitRange(a.address);
+    for (let b = r.from >> 3; b <= r.to >> 3; b++) {
+      if (!ctx.ioCovered(io, b)) {
+        add(ctx, { severity: 'warning', code: 'IO_NOT_CONFIGURED', ref, field: 'address' });
+        break;
+      }
+    }
   }
   placed.push({ tag, ...addressBitRange(a.address) });
 }
@@ -830,6 +847,7 @@ export function checkDevice(device: PlcDevice, cpu: CpuType | undefined): Diagno
       fbByName.has(nameKey(name)) ||
       (!udtByName.has(nameKey(name)) && findSystemFb(name) !== undefined),
     symbols,
+    ioCovered: ioCoverage(device),
   };
   if (!cpu) {
     add(ctx, {
@@ -839,6 +857,17 @@ export function checkDevice(device: PlcDevice, cpu: CpuType | undefined): Diagno
     });
   }
   checkProperties(ctx);
+  // Configurazione hardware: un problema per modulo, sul dispositivo (proprietà `hardware.<id>`).
+  for (const h of checkHardware(device, cpu)) {
+    add(ctx, {
+      severity: 'error',
+      code: h.code,
+      ref: { kind: 'device', deviceId: device.id },
+      field: 'property',
+      property: `hardware.${h.moduleId}`,
+      ...(h.area ? { params: { area: h.area, ...(h.other ? { other: h.other } : {}) } } : {}),
+    });
+  }
   checkTagTables(ctx);
   checkUdts(ctx);
   checkBlocks(ctx);

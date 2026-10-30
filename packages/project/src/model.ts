@@ -252,8 +252,29 @@ export interface PlcDevice {
   watchTables: WatchTable[];
   /** Percorsi di gruppo, es. 'A' e 'A/B'. */
   groups: { blocks: string[]; tags: string[]; types: string[] };
+  /** Configurazione hardware (tappa 6A); assente nei progetti che non l'hanno mai aperta. */
+  hardware?: DeviceHardware;
   /** Chiavi sconosciute della voce del dispositivo in project.json: si riscrivono com'erano. */
   listExtras?: Record<string, unknown>;
+}
+
+/**
+ * Modulo in un posto del rack S7-300. La CPU sta sempre nel posto 2 del rack 0 e non è elencata.
+ * Gli indirizzi iniziali ci sono solo se il modulo occupa byte di ingresso o di uscita.
+ */
+export interface HwModule {
+  id: string;
+  rack: number;
+  slot: number;
+  orderNumber: string;
+  name: string;
+  comment: string;
+  inputStart?: number;
+  outputStart?: number;
+}
+
+export interface DeviceHardware {
+  modules: HwModule[];
 }
 
 export interface Project {
