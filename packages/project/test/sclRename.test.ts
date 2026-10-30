@@ -54,6 +54,31 @@ describe('rinomina nel testo SCL', () => {
     expect(net(code(d, 'Main'))).toBe('"Calc"(A := "Valori".A);\nCalc(A := Calcola);');
   });
 
+  it('il nome della FC come valore di ritorno nel suo codice segue la rinomina', () => {
+    const d = makeDevice();
+    const fc = withFc(d);
+    fc.interface.returnType = 'Int';
+    setScl(fc, 'Calcola := A + 1;\n#Calcola := Calcola * 2;\n"Dati".A := Calcola(A := 1);');
+    setScl(code(d, 'Main'), 'Calcola := 1;');
+    renameWithReferences(d, { kind: 'block', deviceId: d.id, id: fc.id }, 'Calc');
+    expect(net(fc)).toBe('Calc := A + 1;\n#Calc := Calc * 2;\n"Dati".A := Calc(A := 1);');
+    // in un altro blocco `Calcola` senza `(` è una variabile locale
+    expect(net(code(d, 'Main'))).toBe('Calcola := 1;');
+    // un nome che non è un identificatore: RET_VAL
+    renameWithReferences(d, { kind: 'block', deviceId: d.id, id: fc.id }, 'Calc 2');
+    expect(net(fc)).toBe(
+      'RET_VAL := A + 1;\n#RET_VAL := RET_VAL * 2;\n"Dati".A := "Calc 2"(A := 1);',
+    );
+    // una variabile col nome della FC la nasconde: resta com è
+    const g = withFc(d);
+    g.name = 'G';
+    g.number = 2;
+    g.interface.temp.push({ id: 'g-t', name: 'G', type: 'Int', comment: '' });
+    setScl(g, 'G := 1;');
+    renameWithReferences(d, { kind: 'block', deviceId: d.id, id: g.id }, 'H');
+    expect(net(g)).toBe('G := 1;');
+  });
+
   it('una variabile: #A e A nel suo blocco, non i membri né gli altri blocchi', () => {
     const d = makeDevice();
     const fc = withFc(d);

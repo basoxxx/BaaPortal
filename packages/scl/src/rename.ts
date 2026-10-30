@@ -12,6 +12,12 @@ const ARROWS = [':=', '=>'];
 export type SclRenameOptions = {
   /** Con `callParam` di un FB: i DB di istanza con cui lo si chiama, `"Inst_DB"(…)`. */
   instanceDbs?: string[];
+  /**
+   * Con `symbol`: il testo è il codice della FC rinominata, senza variabili col suo nome. Il nome
+   * usato come valore di ritorno (`Fc := …`, `#Fc`) la segue (`RET_VAL` se il nome nuovo non è un
+   * identificatore SCL).
+   */
+  ownFc?: boolean;
 };
 
 /**
@@ -96,6 +102,10 @@ function sclEdits(
         // la chiamata di una FC senza virgolette: `Fc(…)`
         else if (t.kind === 'id' && at(i + 1) === '(' && sameName(t.text, target.oldName))
           edits.set(t, bare);
+        else if (opts.ownFc && t.kind !== 'symbol' && isLocal(i, target.oldName)) {
+          const name = IDENT.test(newName) ? newName : 'RET_VAL';
+          edits.set(t, t.kind === 'local' ? `#${name}` : name);
+        }
         break;
       case 'local':
         // `Nome(…)` senza `#` chiama un blocco (come in sclToAwl), anche se c'è un locale `Nome`.
