@@ -2019,8 +2019,14 @@
       "rename": "Rinomina",
       "renumber": "Rinumera",
       "replace": "Sostituisci",
-      "skip": "Salta"
+      "skip": "Salta",
+      "useExisting": "Usa la variabile del PLC",
+      "useExistingConstant": "Usa la costante del PLC"
     },
+    "symbolRename": "Entra con un altro nome ({{at}}); il codice del modello la segue.",
+    "symbolUseExisting": "Non entra: il codice del modello usa quella del PLC ({{at}}).",
+    "replaceCallers": "Nel PLC lo chiamano: {{names}}.",
+    "indirectRefs": "Il codice del modello apre o chiama blocchi in modo indiretto: con un numero nuovo potrebbe puntare a un altro blocco.",
     "newGlobal": "Nuova libreria globale…",
     "openGlobal": "Apri libreria globale…",
     "readOnly": "sola lettura",

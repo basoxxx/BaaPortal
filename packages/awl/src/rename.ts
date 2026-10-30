@@ -141,6 +141,10 @@ export function renameInSource(
       for (const op of walk(top)) pathEdits(op, target, newName, edits);
     for (const p of st.params ?? []) paramEdit(st, p, target, newName, edits);
   }
+  return applyEdits(source, edits);
+}
+
+function applyEdits(source: string, edits: Edit[]): string {
   if (edits.length === 0) return source;
   edits.sort((a, b) => a.start - b.start);
   let out = '';
@@ -151,4 +155,51 @@ export function renameInSource(
     pos = e.end;
   }
   return out + source.slice(pos);
+}
+
+/** Famiglia di numerazione: i DB di istanza (e il registro DI) contano come DB. */
+export type BlockFamily = 'FB' | 'FC' | 'DB';
+/** Il numero nuovo di un blocco; undefined se resta com'è. */
+export type Renumber = (family: BlockFamily, n: number) => number | undefined;
+
+/**
+ * Riscrive i riferimenti assoluti ai blocchi (`CALL FB 1, DB 2`, `UC FC 3`, `OPN DI 4`, `DB5.DBW 0`,
+ * `P#DB5.DBX0.0`) con i numeri di `renumber`. `unsafe`: il testo apre o chiama blocchi in modo
+ * indiretto (`OPN DB [MW 10]`) o ha righe non analizzabili (`UC FC [MW 10]`), che non si riscrivono.
+ */
+export function renumberInSource(
+  source: string,
+  renumber: Renumber,
+  mnemonic: Mnemonic,
+): { source: string; unsafe: boolean } {
+  const { statements, errors } = parseDetailed(source, mnemonic);
+  let unsafe = errors.length > 0;
+  const edits: Edit[] = [];
+  // Il numero è la prima sequenza di cifre del testo dell'operando, da `skip` in poi.
+  const renumbered = (r: Range, family: BlockFamily, n: number, skip = 0) => {
+    const to = renumber(family, n);
+    if (to === undefined || to === n) return;
+    const m = /\d+/.exec(source.slice(r.from.offset + skip, r.to.offset));
+    if (m) {
+      const start = r.from.offset + skip + m.index;
+      edits.push({ start, end: start + m[0].length, text: String(to) });
+    }
+  };
+  for (const st of statements) {
+    for (const top of operandsOf(st)) {
+      for (const op of walk(top)) {
+        if (op.kind === 'block' && op.blockKind !== 'SFB' && op.blockKind !== 'SFC') {
+          renumbered(op.range, op.blockKind === 'DI' ? 'DB' : op.blockKind, op.number);
+        } else if (op.kind === 'address' && op.db !== undefined) {
+          renumbered(op.range, 'DB', op.db);
+        } else if (op.kind === 'constant') {
+          const p = /^P#DB(\d+)\./i.exec(op.text);
+          if (p) renumbered(op.range, 'DB', Number(p[1]), 4);
+        } else if (op.kind === 'indirect' && (op.area === 'DB' || op.area === 'DI') && !op.size) {
+          unsafe = true;
+        }
+      }
+    }
+  }
+  return { source: applyEdits(source, edits), unsafe };
 }

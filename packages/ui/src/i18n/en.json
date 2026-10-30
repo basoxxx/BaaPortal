@@ -2019,8 +2019,14 @@
       "rename": "Rename",
       "renumber": "Renumber",
       "replace": "Replace",
-      "skip": "Skip"
+      "skip": "Skip",
+      "useExisting": "Use the PLC tag",
+      "useExistingConstant": "Use the PLC constant"
     },
+    "symbolRename": "Inserted under another name ({{at}}); the template code follows it.",
+    "symbolUseExisting": "Not inserted: the template code uses the PLC one ({{at}}).",
+    "replaceCallers": "Called in the PLC by: {{names}}.",
+    "indirectRefs": "The template code opens or calls blocks indirectly: with a new number it may point to another block.",
     "newGlobal": "New global library…",
     "openGlobal": "Open global library…",
     "readOnly": "read-only",

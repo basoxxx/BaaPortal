@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { findCpu } from '@baaportal/catalog';
 import { generateAwlSource } from '@baaportal/importers';
 import {
@@ -144,6 +145,20 @@ function itemText(item: LibraryItem, mnemonic: ReturnType<typeof useMnemonic>[0]
 /** Ciò che si trascina da una riga della libreria (per spostarla in un'altra cartella). */
 let internalDrag: { key: string; itemId: string } | null = null;
 
+/** Cosa comporta la scelta fatta per uno scontro, e gli avvisi che valgono comunque. */
+function conflictNote(c: Conflict, r: Resolution | undefined, t: TFunction): string {
+  const notes: string[] = [];
+  if (c.symbol && r === 'rename') notes.push(t('library.symbolRename', { at: c.symbol.at }));
+  if (c.symbol && r === 'useExisting') {
+    notes.push(t('library.symbolUseExisting', { at: c.symbol.existing ?? '' }));
+  }
+  if (r === 'replace' && c.callers.length > 0) {
+    notes.push(t('library.replaceCallers', { names: c.callers.join(', ') }));
+  }
+  if (c.indirect) notes.push(t('library.indirectRefs'));
+  return notes.join(' ');
+}
+
 function ConflictDialog({
   item,
   conflicts,
@@ -193,11 +208,16 @@ function ConflictDialog({
                 >
                   {c.options.map((o) => (
                     <option key={o} value={o}>
-                      {t(`library.resolution.${o}`)}
+                      {t(
+                        o === 'useExisting' && c.kind === 'constant'
+                          ? 'library.resolution.useExistingConstant'
+                          : `library.resolution.${o}`,
+                      )}
                     </option>
                   ))}
                 </select>
               </td>
+              <td>{conflictNote(c, choices.get(c.id), t)}</td>
             </tr>
           ))}
         </tbody>

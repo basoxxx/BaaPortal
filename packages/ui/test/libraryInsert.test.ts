@@ -1,15 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { findCpu } from '@baaportal/catalog';
 import {
+  callGraph,
+  compileDevice,
+  convertBlockToGraphic,
   createCodeBlock,
+  createGlobalDb,
+  createInstanceDb,
   createLibraryItem,
   createPlcDevice,
   createUdt,
   createWatchTable,
   type CodeBlock,
   type PlcDevice,
+  type TagTable,
 } from '@baaportal/project';
 import {
+  defaultResolution,
   findConflicts,
   insertLibraryItem,
   type Resolution,
@@ -149,5 +156,179 @@ describe('inserimento di un modello nel PLC', () => {
     insert(d);
     expect(blocks(d)).toEqual(['FB1 Motore', 'FC1 Calc_1']);
     expect(d.watchTables.map((w) => w.name)).toEqual(['Controllo', 'Controllo_1']);
+  });
+});
+
+describe('inserimento: i riferimenti seguono rinomine e numeri nuovi', () => {
+  /** FC3 «Calc» con `A "Start"` e la tabella «IO» con `Start` su I 1.0. */
+  const tagItem = () => {
+    const s = device('SRC');
+    const table = { id: newId(), name: 'IO', group: '', constants: [], tags: [] } as TagTable;
+    table.tags.push({
+      id: newId(),
+      name: 'Start',
+      type: 'Bool',
+      address: 'I 1.0',
+      hmi: false,
+      comment: '',
+    });
+    s.tagTables.push(table);
+    const fc = createCodeBlock({ kind: 'FC', number: 3, name: 'Calc', language: 'AWL', newId });
+    fc.networks[0]!.source = 'A "Start"\n= M 0.0';
+    s.blocks.push(fc);
+    const refs = [
+      { kind: 'block' as const, deviceId: s.id, id: fc.id },
+      { kind: 'tagTable' as const, deviceId: s.id, id: table.id },
+    ];
+    return createLibraryItem(s, refs, { newId })!;
+  };
+  const withStart = (type: string) => {
+    const d = device('PLC');
+    d.tagTables[0]!.tags.push({
+      id: newId(),
+      name: 'Start',
+      type,
+      address: 'I 0.0',
+      hmi: false,
+      comment: '',
+    });
+    return d;
+  };
+
+  it('un tag con il nome preso si rinomina e il codice del modello lo segue', () => {
+    const d = withStart('Bool');
+    const item = tagItem();
+    const c = findConflicts(d, item).find((x) => x.name === 'Start')!;
+    expect(c).toMatchObject({ kind: 'tag', options: ['rename', 'useExisting'] });
+    expect(c.symbol).toEqual({ at: 'I 1.0', existing: 'I 0.0' });
+    insertLibraryItem(d, item, new Map(), cpu, newId);
+    const io = d.tagTables.find((t) => t.name === 'IO')!;
+    expect(io.tags.map((t) => `${t.name} ${t.address}`)).toEqual(['Start_1 I 1.0']);
+    expect(block(d, 'Calc').networks[0]!.source).toBe('A "Start_1"\n= M 0.0');
+  });
+
+  it('«usa la variabile del PLC»: il tag del modello non entra e il codice usa quello del PLC', () => {
+    const d = withStart('Bool');
+    const item = tagItem();
+    const c = findConflicts(d, item).find((x) => x.name === 'Start')!;
+    insertLibraryItem(d, item, new Map([[c.id, 'useExisting']]), cpu, newId);
+    expect(d.tagTables.find((t) => t.name === 'IO')!.tags).toEqual([]);
+    expect(block(d, 'Calc').networks[0]!.source).toBe('A "Start"\n= M 0.0');
+  });
+
+  it('con un tipo diverso «usa la variabile del PLC» non si offre', () => {
+    const d = withStart('Int');
+    const c = findConflicts(d, tagItem()).find((x) => x.name === 'Start')!;
+    expect(c.options).toEqual(['rename']);
+    // Anche se chiesta, la scelta non valida diventa una rinomina.
+    insertLibraryItem(d, tagItem(), new Map([[c.id, 'useExisting']]), cpu, newId);
+    expect(block(d, 'Calc').networks[0]!.source).toBe('A "Start_1"\n= M 0.0');
+  });
+
+  /** FB1 «Motore» che chiama FC1 «Calc» per numero; il PLC ha già FC1 «Other». */
+  const absolute = (code: string) => {
+    const s = device('SRC');
+    const fc = createCodeBlock({ kind: 'FC', number: 1, name: 'Calc', language: 'AWL', newId });
+    const fb = createCodeBlock({ kind: 'FB', number: 1, name: 'Motore', language: 'AWL', newId });
+    fb.networks[0]!.source = code;
+    s.blocks.push(fc, fb);
+    const item = createLibraryItem(s, [{ kind: 'block', deviceId: s.id, id: fb.id }], { newId })!;
+    const d = device('PLC');
+    d.blocks.push(
+      createCodeBlock({ kind: 'FC', number: 1, name: 'Other', language: 'AWL', newId }),
+    );
+    return { item, d };
+  };
+
+  it('Rinumera: le CALL scritte col numero seguono il blocco; il codice compila e chiama Calc', () => {
+    const { item, d } = absolute('CALL FC 1');
+    expect(item.blocks.map((b) => b.name).sort()).toEqual(['Calc', 'Motore']);
+    insertLibraryItem(d, item, new Map(), cpu, newId);
+    expect(block(d, 'Calc').number).toBe(2);
+    expect(block(d, 'Motore').networks[0]!.source).toBe('CALL FC 2');
+    const motore = block(d, 'Motore');
+    const { results } = compileDevice(d, cpu, [motore.id]);
+    expect(results[0]!.diagnostics.filter((x) => x.severity === 'error')).toEqual([]);
+    const graph = callGraph(d);
+    const callees = graph.calls
+      .get(`FB${motore.number}`)!
+      .map((e) => graph.blocks.get(e.callee)?.name);
+    expect(callees).toEqual(['Calc']);
+  });
+
+  it('Rinumera: CALL FB/DB, UC/CC, OPN, DBn.DBX, puntatori, KOP e SCL', () => {
+    const s = device('SRC');
+    const fc = createCodeBlock({ kind: 'FC', number: 1, name: 'Calc', language: 'AWL', newId });
+    const fb = createCodeBlock({ kind: 'FB', number: 2, name: 'Asse', language: 'AWL', newId });
+    const awl = createCodeBlock({ kind: 'FB', number: 1, name: 'Motore', language: 'AWL', newId });
+    awl.networks[0]!.source = [
+      'CALL FB 2, DB 5',
+      'UC FC 1',
+      'CC FC 1',
+      'OPN DB 5',
+      'A DB5.DBX 0.0',
+      'L P#DB5.DBX0.0 BYTE 2',
+      'CALL FC 7',
+    ].join('\n');
+    const kop = createCodeBlock({ kind: 'FC', number: 3, name: 'Kop', language: 'AWL', newId });
+    kop.networks[0]!.source = 'CALL FC 1\nNOP 0';
+    const scl = createCodeBlock({ kind: 'FC', number: 4, name: 'Scl', language: 'SCL', newId });
+    scl.networks[0]!.source = 'FC1();\n#x := DB5.DW0;';
+    const idb = createInstanceDb({ number: 5, name: 'AsseDB', instanceOf: 'Asse', newId });
+    s.blocks.push(fc, fb, awl, kop, scl, idb);
+    expect(convertBlockToGraphic(kop, s, 'KOP', newId)).toEqual([]);
+    const item = createLibraryItem(
+      s,
+      [awl, kop, scl, fc, fb, idb].map((b) => ({
+        kind: 'block' as const,
+        deviceId: s.id,
+        id: b.id,
+      })),
+      { newId },
+    )!;
+    const d = device('PLC');
+    d.blocks.push(
+      createCodeBlock({ kind: 'FC', number: 1, name: 'PFC', language: 'AWL', newId }),
+      createCodeBlock({ kind: 'FB', number: 2, name: 'PFB', language: 'AWL', newId }),
+      createGlobalDb({ number: 5, name: 'PDB', newId }),
+    );
+    insertLibraryItem(d, item, new Map(), cpu, newId);
+    const fcN = block(d, 'Calc').number;
+    const fbN = block(d, 'Asse').number;
+    const dbN = d.blocks.find((b) => b.name === 'AsseDB')!.number;
+    expect([fcN, fbN, dbN]).toEqual([2, 3, 1]);
+    expect(block(d, 'Motore').networks[0]!.source).toBe(
+      [
+        `CALL FB ${fbN}, DB ${dbN}`,
+        `UC FC ${fcN}`,
+        `CC FC ${fcN}`,
+        `OPN DB ${dbN}`,
+        `A DB${dbN}.DBX 0.0`,
+        `L P#DB${dbN}.DBX0.0 BYTE 2`,
+        'CALL FC 7',
+      ].join('\n'),
+    );
+    expect(block(d, 'Kop').networks[0]!.source).toContain(`CALL %FC${fcN};`);
+    expect(JSON.stringify(block(d, 'Kop').networks[0]!.lad)).toContain(`"instance":"%FC${fcN}"`);
+    expect(block(d, 'Scl').networks[0]!.source).toBe(`FC${fcN}();\n#x := DB${dbN}.DW0;`);
+  });
+
+  it('un riferimento indiretto: avviso e si propone Salta', () => {
+    const { item, d } = absolute('CALL FC 1\nOPN DB [MW 10]');
+    const c = findConflicts(d, item).find((x) => x.name === 'Calc')!;
+    expect(c).toMatchObject({ indirect: true });
+    expect(defaultResolution(c)).toBe('skip');
+    const plain = absolute('CALL FC 1');
+    const p = findConflicts(plain.d, plain.item).find((x) => x.name === 'Calc')!;
+    expect(p).toMatchObject({ indirect: false });
+    expect(defaultResolution(p)).toBe('renumber');
+  });
+
+  it('Sostituisci: si dice quali blocchi del PLC chiamano quello sostituito', () => {
+    const d = device('PLC');
+    d.blocks.push(createCodeBlock({ kind: 'FC', number: 1, name: 'Calc', language: 'AWL', newId }));
+    (d.blocks.find((b) => b.name === 'Main') as CodeBlock).networks[0]!.source = 'CALL "Calc"';
+    const c = findConflicts(d, source()).find((x) => x.name === 'Calc')!;
+    expect(c.callers).toEqual(['OB1 Main']);
   });
 });
