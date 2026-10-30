@@ -159,7 +159,10 @@
     "watchImported": "Import from \"{{name}}\": {{count}} rows added to table \"{{table}}\", {{skipped}} skipped{{detail}}.",
     "watchImportFailed": "Could not import a watch table from \"{{name}}\": {{message}}",
     "watchSharedLimit": "The watch tables watched together exceed the limit of {{max}} rows on the PLC: the extra rows are not read (row error).",
-    "libraryInserted": "“{{name}}” inserted from the library: {{count}} objects."
+    "libraryInserted": "“{{name}}” inserted from the library: {{count}} objects.",
+    "textsExported": "Project texts exported to \"{{path}}\".",
+    "textsImported": "Texts imported: {{applied}} applied, {{skipped}} skipped (unknown key or language).",
+    "textsIoFailed": "Project texts: {{message}}"
   },
   "commands": {
     "project.new": "New…",
@@ -221,7 +224,8 @@
     "tools.collectCpuData": "Collect CPU data (read-only)…",
     "edit.compileFull": "Compile → Software (full compile)",
     "online.restore": "Restore backup to device… (experimental)",
-    "help.checkUpdates": "Check for updates…"
+    "help.checkUpdates": "Check for updates…",
+    "options.projectTexts": "Project texts…"
   },
   "menu": {
     "project": "Project",
@@ -582,7 +586,10 @@
     "hmiPaste": "Paste HMI objects",
     "hmiMove": "Move HMI objects",
     "hmiResize": "Resize HMI objects",
-    "hmiEdit": "Edit HMI screen"
+    "hmiEdit": "Edit HMI screen",
+    "projectLanguages": "Project languages",
+    "editTranslation": "Edit translation",
+    "importTexts": "Import project texts"
   },
   "inspector": {
     "tab": {
@@ -2145,5 +2152,38 @@
       "item": "{{address}} (CPU {{cpu}}, {{time}})",
       "ack": "I have checked"
     }
+  },
+  "texts": {
+    "title": "Project texts",
+    "close": "Close",
+    "editing": "Editing language",
+    "others": "Other languages (comma separated)",
+    "display": "Displayed language",
+    "langInvalid": "Invalid languages: use codes such as it-IT or en-US, without repeats.",
+    "hint": "Titles and comments are written in the editing language. With another language displayed, editors and printouts use the translations (the editing-language text where missing) and the fields are read-only.",
+    "filter": "Filter by object or text",
+    "exportXlsx": "Export xlsx…",
+    "exportCsv": "Export csv…",
+    "import": "Import…",
+    "col": {
+      "object": "Object",
+      "field": "Field"
+    },
+    "field": {
+      "title": "Title",
+      "comment": "Comment",
+      "text": "Text"
+    },
+    "truncated": "Showing {{shown}} of {{total}} rows: narrow down with the filter.",
+    "empty": "No titles or comments to translate.",
+    "noColumns": "The Key column or the project language columns are missing.",
+    "viewBanner": "Viewing the {{lang}} language: titles and comments are read-only. Change the displayed language in Options → Project texts."
+  },
+  "help": {
+    "title": "BaaPortal help",
+    "contents": "Help contents",
+    "search": "Search the help",
+    "results": "Results",
+    "noResults": "No results."
   }
 }

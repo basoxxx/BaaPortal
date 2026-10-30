@@ -24,7 +24,14 @@ function sample(): Project {
         group: '',
         constants: [],
         tags: [
-          { id: 'g1', name: 'Start', type: 'Bool', address: '%I0.0', hmi: true, comment: 'Avvio; "marcia"' },
+          {
+            id: 'g1',
+            name: 'Start',
+            type: 'Bool',
+            address: '%I0.0',
+            hmi: true,
+            comment: 'Avvio; "marcia"',
+          },
           { id: 'g2', name: 'Stop', type: 'Bool', address: '%I0.1', hmi: true, comment: '=1+1' },
         ],
       },
@@ -36,11 +43,7 @@ function sample(): Project {
 
 describe.each([
   ['csv', (p: Project) => textsToCsv(p), (x: string, l: string[]) => parseTextsCsv(x, l)],
-  [
-    'xlsx',
-    (p: Project) => textsToXlsx(p),
-    (x: Uint8Array, l: string[]) => parseTextsXlsx(x, l),
-  ],
+  ['xlsx', (p: Project) => textsToXlsx(p), (x: Uint8Array, l: string[]) => parseTextsXlsx(x, l)],
 ] as const)('testi di progetto in %s', (_name, write, read) => {
   it('esporta e reimporta le traduzioni, formule comprese', () => {
     const p = sample();

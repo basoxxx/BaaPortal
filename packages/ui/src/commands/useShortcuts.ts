@@ -12,6 +12,7 @@ const GLOBAL_IN_FIELD = new Set([
   'Mod+M',
   'Mod+L',
   'Shift+F11',
+  'F1',
 ]);
 
 /** Esegue il comando associato al tasto premuto; true se un comando è partito. */

@@ -23,6 +23,8 @@ import { DetachedWindows } from './project/workarea/DetachedWindow';
 import { UpdateNotice } from './update/UpdateNotice';
 import { HmiStuckNotice } from './editors/hmi/HmiStuckNotice';
 import { PortalView } from './portal/PortalView';
+import { ProjectTextsDialog } from './dialogs/ProjectTextsDialog';
+import { HelpDialog } from './help/HelpDialog';
 import { ProjectView } from './project/ProjectView';
 import { loadLayout, saveLayout } from './project/layoutStorage';
 import { AppProvider, useAppStore, useServices, type AppServices } from './state/AppContext';
@@ -62,6 +64,8 @@ function Shell() {
       {view === 'portal' ? <PortalView /> : <ProjectView />}
       {dialog?.kind === 'addDevice' ? <AddDeviceDialog onClose={close} /> : null}
       {dialog?.kind === 'settings' ? <SettingsDialog onClose={close} /> : null}
+      {dialog?.kind === 'projectTexts' ? <ProjectTextsDialog onClose={close} /> : null}
+      {dialog?.kind === 'help' ? <HelpDialog page={dialog.page} onClose={close} /> : null}
       {dialog?.kind === 'accessibleDevices' ? <AccessibleDevicesDialog onClose={close} /> : null}
       {dialog?.kind === 'download' ? (
         <DownloadPreviewDialog plan={dialog.plan} onClose={close} />

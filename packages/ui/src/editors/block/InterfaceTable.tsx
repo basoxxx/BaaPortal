@@ -19,6 +19,7 @@ import {
   diagnosticText,
   useDeviceDiagnostics,
 } from '../../state/diagnostics';
+import { useShownTexts } from '../../state/shownText';
 import { normalizeType } from '../tags/tagRows';
 import { isLockedImport } from './readOnlyImport';
 import {
@@ -113,6 +114,7 @@ export function InterfaceTable({ deviceId, target, label, valueHeaderKey }: Prop
   const { store } = useServices();
   const device = useAppStore((s) => (s.doc ? findDevice(s.doc.project, deviceId) : undefined));
   const diagnostics = useDeviceDiagnostics(deviceId);
+  const tx = useShownTexts();
   const owner = useMemo(
     () => (device ? ownerOf(device, target) : undefined),
     [device, target.kind, target.id],
@@ -151,7 +153,17 @@ export function InterfaceTable({ deviceId, target, label, valueHeaderKey }: Prop
           readOnly: true,
           editable: { name: false, type: false, initial: false, comment: false },
         }))
-      : built;
+      : tx.lang
+        ? // Si guarda una traduzione: i commenti sono quelli tradotti e non si modificano.
+          built.map((r) => ({
+            ...r,
+            comment:
+              r.kind === 'member' && r.memberId
+                ? tx.shown(deviceId, r.memberId, 'comment', r.comment)
+                : r.comment,
+            editable: { ...r.editable, comment: false },
+          }))
+        : built;
     const next = new Map<string, InterfaceRow>();
     const out = fresh.map((r) => {
       const old = prevRows.current.get(r.key);
@@ -161,7 +173,7 @@ export function InterfaceTable({ deviceId, target, label, valueHeaderKey }: Prop
     });
     prevRows.current = next;
     return out;
-  }, [owner, device, expanded, locked]);
+  }, [owner, device, expanded, locked, tx, deviceId]);
   const byKey = useMemo(() => new Map(rows.map((r) => [r.key, r])), [rows]);
   const slots = useMemo(
     () => (ownerKind && !locked ? addSlots(rows, ownerKind, expanded) : []),

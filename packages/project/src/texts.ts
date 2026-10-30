@@ -70,7 +70,7 @@ function memberEntries(
 }
 
 /** Tutti i testi traducibili dei PLC (solo quelli non vuoti), in ordine di albero. */
-export function listTextEntries(p: Project): TextEntry[] {
+export function listTextEntries(p: Pick<Project, 'devices'>): TextEntry[] {
   const out: TextEntry[] = [];
   for (const dev of p.devices) {
     const add = (ownerId: string, object: string, field: TextField, source: string) => {

@@ -1,0 +1,55 @@
+.baa-dialog:has(.baa-texts) {
+  width: min(1100px, 96vw);
+  height: 80vh;
+}
+.baa-texts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  min-height: 0;
+}
+.baa-texts-langs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.baa-texts-langs label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.baa-texts-tools {
+  display: flex;
+  gap: 8px;
+}
+.baa-texts-tools input {
+  flex: 1;
+}
+.baa-texts-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.baa-texts-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.baa-texts-table th,
+.baa-texts-table td {
+  padding: 2px 6px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--baa-border);
+}
+.baa-texts-table td input {
+  width: 100%;
+}
+.baa-texts-hint {
+  margin: 0;
+  color: var(--baa-text-muted, inherit);
+}
+.baa-texts-error {
+  margin: 0;
+  color: var(--baa-error, #b00020);
+}

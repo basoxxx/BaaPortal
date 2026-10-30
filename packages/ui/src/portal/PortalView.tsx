@@ -62,8 +62,7 @@ export function PortalView() {
     id,
     icon,
     label: t(`portal.action.${id}`),
-    disabled:
-      id === 'migrate' || id === 'help' || ((id === 'close' || id === 'firstSteps') && !doc),
+    disabled: id === 'migrate' || ((id === 'close' || id === 'firstSteps') && !doc),
   }));
   // Il portale non ha la barra dei menu: la raccolta dati CPU si apre anche da qui.
   startItems.push({ id: 'collectCpu', icon: 'portalOnline', label: t('portal.action.collectCpu') });
@@ -96,6 +95,7 @@ export function PortalView() {
           current={portal === 'start' ? startAction : null}
           onSelect={(id) => {
             if (id === 'close') void service.close();
+            else if (id === 'help') store.getState().openDialog({ kind: 'help' });
             else if (id === 'uploadDevice')
               store.getState().openDialog({ kind: 'accessibleDevices' });
             else if (id === 'collectCpu') store.getState().openDialog({ kind: 'collectKit' });

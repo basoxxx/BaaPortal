@@ -159,7 +159,10 @@
     "watchImported": "Importazione da \"{{name}}\": {{count}} righe aggiunte alla tabella \"{{table}}\", scartate {{skipped}}{{detail}}.",
     "watchImportFailed": "Impossibile importare la tabella di controllo da \"{{name}}\": {{message}}",
     "watchSharedLimit": "Le tabelle di controllo osservate insieme superano il limite di {{max}} righe sul PLC: le righe in più non vengono lette (errore sulla riga).",
-    "libraryInserted": "«{{name}}» inserito dalla libreria: {{count}} oggetti."
+    "libraryInserted": "«{{name}}» inserito dalla libreria: {{count}} oggetti.",
+    "textsExported": "Testi di progetto esportati in \"{{path}}\".",
+    "textsImported": "Testi importati: {{applied}} applicati, {{skipped}} scartati (chiave o lingua sconosciuta).",
+    "textsIoFailed": "Testi di progetto: {{message}}"
   },
   "commands": {
     "project.new": "Nuovo…",
@@ -221,7 +224,8 @@
     "tools.collectCpuData": "Raccolta dati CPU (sola lettura)…",
     "edit.compileFull": "Compila → Software (compilazione completa)",
     "online.restore": "Ripristina backup nel dispositivo… (sperimentale)",
-    "help.checkUpdates": "Controlla aggiornamenti…"
+    "help.checkUpdates": "Controlla aggiornamenti…",
+    "options.projectTexts": "Testi di progetto…"
   },
   "menu": {
     "project": "Progetto",
@@ -582,7 +586,10 @@
     "hmiPaste": "Incolla oggetti HMI",
     "hmiMove": "Sposta oggetti HMI",
     "hmiResize": "Ridimensiona oggetti HMI",
-    "hmiEdit": "Modifica schermata HMI"
+    "hmiEdit": "Modifica schermata HMI",
+    "projectLanguages": "Lingue del progetto",
+    "editTranslation": "Modifica traduzione",
+    "importTexts": "Importa testi di progetto"
   },
   "inspector": {
     "tab": {
@@ -2145,5 +2152,38 @@
       "item": "{{address}} (CPU {{cpu}}, {{time}})",
       "ack": "Ho controllato"
     }
+  },
+  "texts": {
+    "title": "Testi di progetto",
+    "close": "Chiudi",
+    "editing": "Lingua di modifica",
+    "others": "Altre lingue (separate da virgola)",
+    "display": "Lingua mostrata",
+    "langInvalid": "Lingue non valide: usa codici come it-IT o en-US, senza ripetizioni.",
+    "hint": "Titoli e commenti si scrivono nella lingua di modifica. Con un'altra lingua mostrata, gli editor e la stampa usano le traduzioni (dove mancano, il testo della lingua di modifica) e i campi sono di sola lettura.",
+    "filter": "Filtra per oggetto o testo",
+    "exportXlsx": "Esporta xlsx…",
+    "exportCsv": "Esporta csv…",
+    "import": "Importa…",
+    "col": {
+      "object": "Oggetto",
+      "field": "Campo"
+    },
+    "field": {
+      "title": "Titolo",
+      "comment": "Commento",
+      "text": "Testo"
+    },
+    "truncated": "Mostrate {{shown}} righe di {{total}}: restringi con il filtro.",
+    "empty": "Nessun titolo o commento da tradurre.",
+    "noColumns": "Mancano la colonna Key o le colonne delle lingue del progetto.",
+    "viewBanner": "Si sta guardando la lingua {{lang}}: titoli e commenti sono di sola lettura. Cambia la lingua mostrata da Opzioni → Testi di progetto."
+  },
+  "help": {
+    "title": "Guida di BaaPortal",
+    "contents": "Indice della guida",
+    "search": "Cerca nella guida",
+    "results": "Risultati",
+    "noResults": "Nessun risultato."
   }
 }

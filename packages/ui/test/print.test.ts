@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  setLanguages,
+  setTranslation,
+  textKey,
   createCodeBlock,
   createProject,
   createTagTable,
@@ -138,5 +141,26 @@ describe('buildPrintDocument', () => {
     expect(one.blocks).toEqual([d.blocks[0]!.id]);
     expect(selectionFromNodes(project, [ids.folder(d.id, 'types')])!.udts).toHaveLength(1);
     expect(selectionFromNodes(project, ['static'])).toBeNull();
+  });
+
+  it('stampa nella lingua scelta per il progetto, con ricaduta sulla lingua di modifica', () => {
+    const { project, d } = setup();
+    const f = d.blocks.find((b) => b.kind === 'FB')!;
+    if (f.kind !== 'FB') throw new Error('FB');
+    f.networks[0]!.comment = 'Avvia il motore';
+    f.networks[0]!.title = 'Avvio';
+    setLanguages(project, { editing: 'it-IT', others: ['en-US'], display: 'en-US' });
+    setTranslation(
+      project,
+      textKey(d.id, f.networks[0]!.id, 'comment'),
+      'en-US',
+      'Starts the motor',
+    );
+    const html = buildPrintDocument(project, all(d), opts());
+    expect(html).toContain('Starts the motor');
+    expect(html).not.toContain('Avvia il motore');
+    expect(html).toContain('Avvio'); // titolo senza traduzione: lingua di modifica
+    project.languages!.display = 'it-IT';
+    expect(buildPrintDocument(project, all(d), opts())).toContain('Avvia il motore');
   });
 });

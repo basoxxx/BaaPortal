@@ -13,6 +13,7 @@ import { ELEMENTARY_TYPES } from '@baaportal/s7-types';
 import { DataGrid, type DataGridProps, type GridColumn } from '../../grid/DataGrid';
 import { parseTsv } from '../../grid/tsv';
 import { beginDrag, endDrag } from '../../project/navigation/objectCommands';
+import { useShownTexts } from '../../state/shownText';
 import { useAppStore, useServices } from '../../state/AppContext';
 import { cellKey, useCellDiagnostics } from '../../state/diagnostics';
 import {
@@ -62,6 +63,7 @@ export function TagsView({ deviceId, tableId }: Props) {
   const tables = device?.tagTables;
   const props = device?.properties;
   const diagnostics = useCellDiagnostics(deviceId, 'tag', t);
+  const tx = useShownTexts();
   const reveal = useAppStore((s) =>
     s.tagReveal &&
     s.tagReveal.deviceId === deviceId &&
@@ -144,10 +146,11 @@ export function TagsView({ deviceId, tableId }: Props) {
       headerKey: 'tags.col.comment',
       width: 240,
       editor: 'text',
-      get: (r) => r.tag.comment,
+      get: (r) => tx.shown(deviceId, r.tag.id, 'comment', r.tag.comment),
+      readOnly: () => tx.lang !== null,
     });
     return cols;
-  }, [props, tableId]);
+  }, [props, tableId, tx, deviceId]);
 
   const edit = useCallback(
     (label: string, recipe: (dev: PlcDevice) => void) =>

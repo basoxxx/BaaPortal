@@ -9,6 +9,7 @@ import {
   type WatchTarget,
 } from '@baaportal/project';
 import type { WatchValue } from '../../sim/protocol';
+import { useShownTexts } from '../../state/shownText';
 import { useAppStore, useServices } from '../../state/AppContext';
 import {
   bindObject,
@@ -81,6 +82,7 @@ export function HmiRuntime(p: {
   const { t } = useTranslation();
   const { store, bridge } = useServices();
   const { source, canWrite, token } = p.mode;
+  const tx = useShownTexts();
   const dev = useAppStore((s) => (s.doc ? findDevice(s.doc.project, p.deviceId) : undefined));
   const [current, setCurrent] = useState(p.screenId);
   const screen = dev && findHmiScreen(dev, current);
@@ -293,7 +295,7 @@ export function HmiRuntime(p: {
                 style={{ left: o.x, top: o.y, width: o.w, height: o.h }}
               >
                 <RuntimeObject
-                  o={o}
+                  o={tx.lang ? { ...o, text: tx.shown(p.deviceId, o.id, 'text', o.text) } : o}
                   b={bindings.get(o.id) ?? null}
                   value={(() => {
                     const b = bindings.get(o.id);

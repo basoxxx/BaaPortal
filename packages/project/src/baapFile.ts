@@ -343,8 +343,10 @@ function toJson(value: unknown): Uint8Array {
 const deviceDir = (deviceId: string) => `plc/${deviceId}`;
 
 export function writeBaap(project: Project, opts: { appVersion: string }): Uint8Array {
-  const { devices, library, texts: _texts, ...projectRest } = project;
+  const { devices, library, ...projectRest } = project;
+  // Solo le traduzioni di oggetti che esistono ancora.
   const texts = liveTexts(project);
+  delete projectRest.texts;
   const files: Record<string, Uint8Array> = {
     [MANIFEST_FILE]: toJson({
       format: 'baaportal-project',
