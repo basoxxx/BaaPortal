@@ -850,6 +850,8 @@
     "CPU_UNKNOWN": "La CPU non è nel catalogo.",
     "WATCH_NAME_DUPLICATE": "Esiste già una tabella di controllo con questo nome.",
     "WATCH_OPERAND_INVALID": "L'operando «{{operand}}» di una riga non si risolve.",
+    "HMI_NAME_DUPLICATE": "Esiste già una schermata HMI con questo nome.",
+    "HMI_TAG_INVALID": "La variabile «{{operand}}» di un oggetto della schermata non è valida ({{reason}}).",
     "force": {
       "active": "Forzamento attivo sulla CPU",
       "note": "Per forzare o terminare il forzamento usare TIA Portal o STEP 7",

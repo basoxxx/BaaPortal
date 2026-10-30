@@ -850,6 +850,8 @@
     "CPU_UNKNOWN": "The CPU is not in the catalog.",
     "WATCH_NAME_DUPLICATE": "A watch table with this name already exists.",
     "WATCH_OPERAND_INVALID": "The operand \"{{operand}}\" of a row does not resolve.",
+    "HMI_NAME_DUPLICATE": "An HMI screen with this name already exists.",
+    "HMI_TAG_INVALID": "The tag \"{{operand}}\" of an object on the screen is not valid ({{reason}}).",
     "force": {
       "active": "Force active on the CPU",
       "note": "To force or end forcing use TIA Portal or STEP 7",

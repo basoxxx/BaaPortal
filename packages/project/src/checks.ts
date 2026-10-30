@@ -12,6 +12,7 @@ import {
 } from '@baaportal/s7-types';
 import type { CpuType } from '@baaportal/catalog';
 import { findSystemFb, systemFbMembers, toTypedMembers, typeResolver } from './members';
+import { HMI_TAG_KINDS, hmiTagProblem } from './hmi';
 import { watchResolverFor } from './watchOperand';
 import { checkHardware, ioCoverage, type HwIssueCode } from './hardware';
 import type {
@@ -47,6 +48,8 @@ export type DiagnosticCode =
   | 'CPU_UNKNOWN'
   | 'WATCH_NAME_DUPLICATE'
   | 'WATCH_OPERAND_INVALID'
+  | 'HMI_NAME_DUPLICATE'
+  | 'HMI_TAG_INVALID'
   | 'IO_NOT_CONFIGURED'
   | HwIssueCode;
 
@@ -814,6 +817,37 @@ function checkWatchTables(ctx: Ctx): void {
   }
 }
 
+// ---- Schermate HMI ----
+
+// Avvisi (mai errori): schermate con lo stesso nome, variabili che non si risolvono o non adatte all'oggetto.
+function checkHmi(ctx: Ctx): void {
+  const screens = ctx.device.hmi?.screens ?? [];
+  if (screens.length === 0) return;
+  const byName = groupByName(screens, (x) => x.name);
+  const resolve = watchResolverFor(ctx.device, ctx.cpu);
+  for (const sc of screens) {
+    const ref: ObjectRef = { kind: 'hmiScreen', deviceId: ctx.device.id, id: sc.id };
+    if ((byName.get(nameKey(sc.name))?.length ?? 0) > 1) {
+      add(ctx, { severity: 'warning', code: 'HMI_NAME_DUPLICATE', ref, field: 'name' });
+    }
+    for (const o of sc.objects) {
+      if (!HMI_TAG_KINDS.has(o.kind)) continue;
+      const tag = o.tag?.trim() ?? '';
+      const r = tag === '' ? null : resolve(tag);
+      const reason = !r ? 'EMPTY' : !r.ok ? r.code : hmiTagProblem(o, r);
+      if (reason) {
+        add(ctx, {
+          severity: 'warning',
+          code: 'HMI_TAG_INVALID',
+          ref,
+          field: 'operand',
+          params: { operand: tag, reason },
+        });
+      }
+    }
+  }
+}
+
 // ---- Ingresso ----
 
 export function checkDevice(device: PlcDevice, cpu: CpuType | undefined): Diagnostic[] {
@@ -872,5 +906,6 @@ export function checkDevice(device: PlcDevice, cpu: CpuType | undefined): Diagno
   checkUdts(ctx);
   checkBlocks(ctx);
   checkWatchTables(ctx);
+  checkHmi(ctx);
   return ctx.out;
 }
