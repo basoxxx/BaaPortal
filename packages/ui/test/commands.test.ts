@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { createCodeBlock, createProject, findDevice, type CodeBlock } from '@baaportal/project';
+import { findCpu } from '@baaportal/catalog';
+import {
+  blockFromMc7,
+  blockToMc7File,
+  createCodeBlock,
+  createProject,
+  findDevice,
+  type CodeBlock,
+} from '@baaportal/project';
 import { plc } from './blockFixtures';
 import { commands, matchShortcut, type CommandContext } from '../src/commands/commands';
 import { handleShortcutKeydown } from '../src/commands/useShortcuts';
@@ -424,6 +432,32 @@ describe('block.convertToAwl', () => {
     expect(store.getState().doc!.revision).toBe(rev);
     expect(store.getState().messages.at(-1)).toMatchObject({
       textKey: 'messages.graphicConvert.NOT_COMPILABLE',
+    });
+  });
+
+  it('codice MC7 che cambierebbe: il progetto non cambia, nessun passo, messaggio', () => {
+    const { store, ctx, cur, deviceId } = setup();
+    // FC KOP importato coi byte originali ritoccati: tolto il grafico si ricompilerebbe diverso
+    store.getState().edit('history.editNetworkCode', (p) => {
+      const dev = findDevice(p, deviceId)!;
+      const b = dev.blocks.find((x) => x.name === 'B') as CodeBlock;
+      const file = blockToMc7File(b, dev, findCpu(dev.cpu.typeId), new Date()).file!;
+      const imp = blockFromMc7(dev, file).block as CodeBlock;
+      const hex = imp.mc7!.original;
+      const at = 36 * 2 + 3; // secondo byte della prima istruzione MC7 (dopo l'intestazione)
+      imp.mc7!.original =
+        hex.slice(0, at) + (parseInt(hex[at]!, 16) ^ 1).toString(16) + hex.slice(at + 1);
+      Object.assign(b, { ...imp, id: b.id });
+    });
+    const rev = store.getState().doc!.revision;
+    const past = store.getState().history.past.length;
+    const before = structuredClone(cur());
+    void cmd.run(ctx);
+    expect(cur()).toEqual(before);
+    expect(store.getState().doc!.revision).toBe(rev);
+    expect(store.getState().history.past).toHaveLength(past);
+    expect(store.getState().messages.at(-1)).toMatchObject({
+      textKey: 'messages.graphicConvert.MC7_DIFFERS',
     });
   });
 });

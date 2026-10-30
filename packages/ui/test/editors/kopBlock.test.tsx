@@ -170,6 +170,11 @@ describe('blocchi KOP nell’editor dei blocchi', () => {
       await app.user.click(screen.getByRole('menuitem', { name: 'Converti in AWL' }));
       expect(kopBlocks(app)[0]!.networks[0]!.lad).toBeUndefined();
       expect(screen.getByTestId('kop-awl-hint')).toBeInTheDocument();
+      // un solo passo annullabile riporta il grafico
+      expect(app.store.getState().history.past.at(-1)!.labelKey).toBe('history.convertToAwl');
+      act(() => app.store.getState().undo());
+      expect(kopBlocks(app)[0]!.networks[0]!.lad).toBeDefined();
+      expect(canvas()).toBeInTheDocument();
     },
     T,
   );

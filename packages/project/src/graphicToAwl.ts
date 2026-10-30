@@ -76,8 +76,12 @@ export function convertGraphicToAwl(
   }
   // dopo la rinumerazione ogni salto del blocco porta alla stessa istruzione di prima
   const jumps = blockJumps(sources);
-  const after = blockJumps(block.networks.map((x) => x.source));
-  if (!jumps || !after || JSON.stringify(jumps) !== JSON.stringify(after)) return restore('JUMPS');
-  if (compiledCode(block, dev) !== before) return restore('MC7_DIFFERS');
+  const jumpsAfter = blockJumps(block.networks.map((x) => x.source));
+  if (!jumps || !jumpsAfter || JSON.stringify(jumps) !== JSON.stringify(jumpsAfter)) {
+    return restore('JUMPS');
+  }
+  const after = compiledCode(block, dev);
+  if (after === undefined) return restore('NOT_COMPILABLE');
+  if (after !== before) return restore('MC7_DIFFERS');
   return null;
 }

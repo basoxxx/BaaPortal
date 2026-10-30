@@ -2,6 +2,7 @@ import { readBlockFile } from '@baaportal/mc7';
 import type { LadNetwork } from '@baaportal/ladfbd';
 import { describe, expect, it } from 'vitest';
 import {
+  blockFromMc7,
   blockSources,
   blockToMc7File,
   convertGraphicToAwl,
@@ -64,6 +65,51 @@ describe('convertGraphicToAwl: blocco intero', () => {
   it('un blocco che non compila non si converte', () => {
     const dev = makeDevice(seq('a'));
     const b = kop(dev, 61, [box('"NonEsiste"')]);
+    const before = structuredClone(b);
+    expect(convertGraphicToAwl(b, dev)).toBe('NOT_COMPILABLE');
+    expect(b).toEqual(before);
+  });
+});
+
+/**
+ * Un FC KOP importato: finché non cambia si esporta coi byte originali. Qui i byte originali sono
+ * ritoccati (un bit della prima istruzione), come per un blocco di STEP 7 che BaaPortal non ricompila
+ * uguale: il cambio di linguaggio lo farebbe ricompilare dal testo.
+ */
+function imported(exact: boolean) {
+  const src = makeDevice(seq('s'));
+  const file = blockToMc7File(kop(src, 70, [box()]), src, cpu315pn, now).file!;
+  const dev = makeDevice(seq('a'));
+  const b = blockFromMc7(dev, file, seq('i')).block as CodeBlock;
+  dev.blocks.push(b);
+  const mc7 = code(b, dev);
+  expect(b.language).toBe('KOP');
+  const at = Buffer.from(file).indexOf(Buffer.from(mc7)) * 2;
+  const tweaked = Buffer.from(mc7);
+  tweaked[1] = tweaked[1]! ^ 1;
+  b.mc7 = {
+    ...b.mc7!,
+    exact,
+    original:
+      b.mc7!.original.slice(0, at) +
+      tweaked.toString('hex') +
+      b.mc7!.original.slice(at + tweaked.length * 2),
+  };
+  expect(code(b, dev)).toEqual(Uint8Array.from(tweaked));
+  return { b, dev };
+}
+
+describe('convertGraphicToAwl: rifiuti dopo la conversione', () => {
+  it('il codice MC7 cambierebbe: MC7_DIFFERS e il blocco non cambia', () => {
+    const { b, dev } = imported(true);
+    const before = structuredClone(b);
+    expect(convertGraphicToAwl(b, dev)).toBe('MC7_DIFFERS');
+    expect(b).toEqual(before);
+  });
+
+  it('dopo la conversione il blocco non compila più: NOT_COMPILABLE e il blocco non cambia', () => {
+    // non ricodificabile: compila solo coi byte originali, cioè finché non cambia
+    const { b, dev } = imported(false);
     const before = structuredClone(b);
     expect(convertGraphicToAwl(b, dev)).toBe('NOT_COMPILABLE');
     expect(b).toEqual(before);
