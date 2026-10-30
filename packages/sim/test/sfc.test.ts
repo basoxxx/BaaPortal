@@ -750,6 +750,38 @@ describe('DIS_AIRT, EN_AIRT (SFC 41, 42)', () => {
     cpu.cycle();
     expect(word(cpu.memory, 22)).toBe(1);
   });
+
+  // System Software for S7-300/400, SFC 41 «DIS_AIRT»: ritarda gli OB di allarme e gli OB di
+  // errore asincrono di priorità più alta; gli eventi aspettano la fine del ritardo, non si perdono.
+  // OB1: 180 ms di WAIT (oltre i 150 del tempo di ciclo); OB80 conta in MW 30, MW 32 = MW 30 a fine OB1.
+  const withOb80 = (body: string) =>
+    buildProgram(
+      [
+        ob1(
+          `${body}\n\tL 6;\nx: T MW 50;\n\tCALL SFC 47 (WT := 30000);\n\tL MW 50;\n\tLOOP x;\n${nops}\tL MW 30;\n\tT MW 32;`,
+        ),
+        { kind: 'OB', number: 80, networks: ['\tL MW 30;\n\tL 1;\n\t+I;\n\tT MW 30;'] },
+      ],
+      {},
+      SFCS,
+    );
+
+  it('senza DIS_AIRT l’OB80 del tempo di ciclo interrompe l’OB1', () => {
+    const { cpu } = makeCpu(withOb80(''));
+    cpu.run();
+    expect(cpu.cycle().ok).toBe(true);
+    expect(word(cpu.memory, 32)).toBe(1);
+  });
+
+  it('dopo DIS_AIRT l’OB80 del tempo di ciclo aspetta la fine dell’OB1 (non si perde)', () => {
+    const { cpu } = makeCpu(withOb80('\tCALL SFC 41 (RET_VAL := MW 100);'));
+    cpu.run();
+    expect(cpu.cycle().ok).toBe(true);
+    expect(word(cpu.memory, 32)).toBe(0);
+    expect(cpu.mode).toBe('RUN');
+    cpu.cycle();
+    expect(word(cpu.memory, 32)).toBe(1);
+  });
 });
 
 describe('RE_TRIGR (SFC 43)', () => {
