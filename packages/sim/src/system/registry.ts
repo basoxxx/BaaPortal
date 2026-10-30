@@ -4,8 +4,11 @@ import { SimError, StopRequest } from '../errors';
 import type { ExecContext, ExecState } from '../executor';
 import { SFB_TABLE } from './sfb';
 import { SFC_TABLE } from './sfc';
+import { syncFaultOf } from '../events';
 import {
   SysError,
+  SysState,
+  type FaultMasks,
   paramRef,
   type SystemCall,
   type SystemHandler,
@@ -50,12 +53,29 @@ function layoutOf(b: SystemBlock): Layout {
   return l;
 }
 
+/**
+ * Errore sincrono mascherato con SFC 36 (bit n = SW_FLT 16#20+n per OB121, 16#40+n per OB122): lo si
+ * annota nel registro degli errori e l'istruzione si salta, senza OB (manuale, 11.1 «Handling
+ * synchronous errors», da verificare su CPU reale). `false` se non è mascherato.
+ */
+export function maskedFault(m: FaultMasks, e: SimError): boolean {
+  const f = syncFaultOf(e);
+  if (!f) return false;
+  const prg = f.ob === 121;
+  const bit = f.swFlt - (prg ? 0x20 : 0x40);
+  if (bit < 0 || bit > 31 || !(((prg ? m.prg : m.acc) >>> bit) & 1)) return false;
+  if (prg) m.prgErr = (m.prgErr | (1 << bit)) >>> 0;
+  else m.accErr = (m.accErr | (1 << bit)) >>> 0;
+  return true;
+}
+
 /** Servizi per un'esecuzione senza CPU (prove): orologio dall'`now()` del contesto, nessuna SZL. */
 function standaloneServices(ctx: ExecContext): SystemServices {
   const boot = ctx.now();
   let offset = 0;
   let delays = 0;
   let waitedUs = 0;
+  const masks: FaultMasks = { prg: 0, acc: 0, prgErr: 0, accErr: 0 };
   const now = (): number => ctx.now() + Math.floor(waitedUs / 1000);
   return {
     clockMs: () => now() + offset,
@@ -76,6 +96,10 @@ function standaloneServices(ctx: ExecContext): SystemServices {
     retrigger: () => undefined,
     delayInterrupts: (delta) => (delta < 0 && delays === 0 ? undefined : (delays += delta)),
     startInfo: () => ({ top: new Uint8Array(12), startUp: new Uint8Array(12) }),
+    state: new SysState(),
+    faults: () => masks,
+    onFault: (e) => maskedFault(masks, e),
+    userMessage: () => undefined,
   };
 }
 

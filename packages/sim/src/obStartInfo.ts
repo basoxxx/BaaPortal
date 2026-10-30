@@ -69,6 +69,17 @@ export function ob35StartInfo(intervalMs: number, ms: number): Uint8Array {
   return startInfo([0x11, 0x36, 12, 35, 0, 0, 0, 0, 0, 0, hi(f), f], ms);
 }
 
+/** OB10: classe 16#11, STRT_INFO 16#11 (⚠️), PERIOD_EXE = PERIOD di SFC 28. */
+export function ob10StartInfo(period: number, ms: number): Uint8Array {
+  return startInfo([0x11, 0x11, 2, 10, 0, 0, hi(period), period, 0, 0, 0, 0], ms);
+}
+
+/** OB20: classe 16#11, STRT_INF 16#21 (⚠️), SIGN e DTIME (ms) di SFC 32. */
+export function ob20StartInfo(sign: number, dtimeMs: number, ms: number): Uint8Array {
+  const d = dtimeMs >>> 0;
+  return startInfo([0x11, 0x21, 3, 20, 0, 0, hi(sign), sign, d >>> 24, d >> 16, d >> 8, d], ms);
+}
+
 /** OB che ha causato o subito un errore di tempo (OB80_ERR_EV_CLASS/NUM, OB_PRIORITY, OB_NUM). */
 export interface ObRef {
   evClass: number;

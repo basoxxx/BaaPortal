@@ -17,6 +17,8 @@ import { Program } from './program';
 import { SimMemory, memorySizesFor } from './memory';
 import {
   ob100StartInfo,
+  ob10StartInfo,
+  ob20StartInfo,
   ob121StartInfo,
   ob122StartInfo,
   ob1StartInfo,
@@ -30,7 +32,9 @@ import {
 import { newRegisters } from './registers';
 import { CounterBank } from './counters';
 import { TimerBank } from './timers';
-import type { SystemServices } from './system/params';
+import { SysState, type FaultMasks, type SystemServices } from './system/params';
+import { maskedFault } from './system/registry';
+import { nextTod } from './system/sfc';
 import { simBackend } from './backend';
 
 export type SimMode = 'STOP' | 'STARTUP' | 'RUN';
@@ -63,12 +67,17 @@ interface RunningOb {
   startInfo?: Uint8Array;
   /** Ritardi degli allarmi attivi (SFC 41 DIS_AIRT): finiscono con l'OB. */
   airt?: number;
+  /** Maschere degli errori sincroni (SFC 36–38): finiscono con l'OB (⚠️). */
+  faults?: FaultMasks;
 }
+
+/** Evento di avvio degli OB di programma (⚠️ OB10 16#1111 e OB20 16#1121 dedotti da STRT_INF). */
+const START_EVENT: Record<number, number> = { 1: 0x1103, 10: 0x1111, 20: 0x1121, 35: 0x1136 };
 
 /** Id del suo evento di avvio, per OB80_ERR_EV_CLASS/NUM (⚠️ OB1: 16#1103, OB35: 16#1136). */
 function obRef(r: RunningOb | undefined): ObRef {
   if (!r) return { evClass: 0, evNum: 0, priority: 0, ob: 0 };
-  const ev = r.ob === 1 ? 0x1103 : r.ob === 35 ? 0x1136 : 0;
+  const ev = START_EVENT[r.ob] ?? 0;
   return { evClass: ev >> 8, evNum: ev & 255, priority: r.prio, ob: r.ob };
 }
 
@@ -188,6 +197,15 @@ export class SimCpu {
         top: (this.running.at(-1)?.startInfo ?? new Uint8Array(12)).slice(0, 12),
         startUp: this.startUpInfo.slice(0, 12),
       }),
+      state: new SysState(),
+      faults: () => {
+        const top = this.running.at(-1);
+        if (!top) return { prg: 0, acc: 0, prgErr: 0, accErr: 0 };
+        return (top.faults ??= { prg: 0, acc: 0, prgErr: 0, accErr: 0 });
+      },
+      onFault: (e, st) => this.syncFault(e, st),
+      userMessage: (eventId, detail) =>
+        void this.record({ time: this.now(), code: 'MESSAGGIO_UTENTE', eventId, detail }),
     };
     this.maxInstructions = o.maxInstructions;
     this.memory = new SimMemory(memorySizesFor(o.cpuTypeId));
@@ -292,6 +310,7 @@ export class SimCpu {
     this.services.sfbState.clear();
     this.record({ time: t0, code: 'AVVIO' });
     this.warmRestart();
+    this.services.state.restart(t0);
     this.pending = [];
     this.pendingTime = [];
     this.startUpInfo = ob100StartInfo(this.stamp(t0));
@@ -526,13 +545,20 @@ export class SimCpu {
     if (this.running.some((r) => (r.airt ?? 0) > 0)) return;
     while (this.pendingTime.length > 0) this.pendingTime.shift()!(ctx);
     while (this.pending.length > 0) this.hwInterrupt(ctx, this.pending.shift()!, t);
+    this.serviceOb35(ctx, prio, t);
+    // `t` resta quello d'ingresso: un OB35 appena finito sposta OB20/OB10 al tick seguente.
+    this.serviceTimed(ctx, prio, t);
+  }
+
+  private serviceOb35(ctx: ExecContext, prio: number, t: number): void {
     const iv = this.props.cyclicInterruptMs;
     if (!(iv > 0) || t < this.ob35Due) return;
     // Scaduto mentre OB35 gira ancora: l'esecuzione richiesta si perde (OB80, 16#3502).
     if (this.ob35Running) return this.ob35Lost(ctx, t);
     if (prio >= PRIORITY.OB35) return;
     this.ob35Due = nextDue(this.ob35Due, iv, t);
-    if (!this.program.get('OB', 35)) return;
+    // SFC 39 DIS_IRT: l'allarme si scarta.
+    if (!this.program.get('OB', 35) || this.services.state.disabled.has(35)) return;
     this.ob35Running = true;
     try {
       this.runOb(ctx, 35, PRIORITY.OB35, ob35StartInfo(iv, this.stamp(t)));
@@ -541,6 +567,33 @@ export class SimCpu {
     }
     const end = this.now();
     if (end >= this.ob35Due) this.ob35Lost(ctx, end);
+  }
+
+  /** Allarme di ritardo (OB20, SFC 32) e dall'orologio (OB10, SFC 28/30), se scaduti. */
+  private serviceTimed(ctx: ExecContext, prio: number, t: number): void {
+    const s = this.services.state;
+    const delay = s.delay.get(20);
+    if (delay && prio < PRIORITY.OB20 && t >= delay.due) {
+      s.delay.delete(20);
+      const info = ob20StartInfo(delay.sign, delay.dtimeMs, this.stamp(t));
+      this.timedOb(ctx, 20, PRIORITY.OB20, info, t);
+    }
+    const tod = s.tod.get(10);
+    const clock = this.stamp(t);
+    if (tod?.active && tod.next !== undefined && prio < PRIORITY.OB10 && clock >= tod.next) {
+      // ⚠️ Le scadenze saltate (orologio spostato in avanti) danno un solo OB10.
+      const next = nextTod(tod.start, tod.period, clock);
+      if (next === undefined) tod.active = false;
+      else tod.next = next;
+      this.timedOb(ctx, 10, PRIORITY.OB10, ob10StartInfo(tod.period, this.stamp(t)), t);
+    }
+  }
+
+  /** OB10 o OB20: scartato se bloccato da SFC 39; se manca, OB85 (manuale, OB85) o STOP. */
+  private timedOb(ctx: ExecContext, ob: number, prio: number, info: Uint8Array, t: number): void {
+    if (this.services.state.disabled.has(ob)) return;
+    if (this.program.get('OB', ob)) return this.runOb(ctx, ob, prio, info);
+    this.missingOb(ctx, ob, START_EVENT[ob] ?? 0, prio, t);
   }
 
   private ob35Lost(ctx: ExecContext, t: number): void {
@@ -592,6 +645,8 @@ export class SimCpu {
     }
     if (!this.program.get('OB', 80) || this.inOb(80))
       throw new SimError('TEMPO_CICLO_SUPERATO', reason, { eventId });
+    // SFC 39 DIS_IRT: l'errore di tempo si scarta (⚠️); il secondo superamento resta uno STOP.
+    if (this.services.state.disabled.has(80)) return;
     this.record({ time: t, code: 'OB_RICHIAMATO', eventId, detail: `OB80: ${reason}` });
     this.runOb(ctx, 80, PRIORITY.ASYNC_ERROR, ob80StartInfo(fltId, errorInfo, ref, this.stamp(t)));
   }
@@ -599,6 +654,7 @@ export class SimCpu {
   /** OB82 o OB86; se manca, OB85 (16#35A1); se manca anche OB85, STOP. */
   private hwInterrupt(ctx: ExecContext, ev: HwInterrupt, t: number): void {
     const id = hwEventId(ev);
+    if (this.services.state.disabled.has(ev.ob)) return;
     if (this.program.get('OB', ev.ob)) {
       this.record({ time: t, code: 'OB_RICHIAMATO', eventId: id, detail: `OB${ev.ob}` });
       const info =
@@ -608,20 +664,21 @@ export class SimCpu {
       this.runOb(ctx, ev.ob, PRIORITY.ASYNC_ERROR, info);
       return;
     }
-    const detail = `OB${ev.ob} non caricato`;
+    this.missingOb(ctx, ev.ob, id, PRIORITY.ASYNC_ERROR, t);
+  }
+
+  /** OB d'evento non caricato: OB85 (16#35A1) con l'evento richiesto; se manca anche OB85, STOP. */
+  private missingOb(ctx: ExecContext, ob: number, id: number, priority: number, t: number): void {
+    const detail = `OB${ob} non caricato`;
     if (!this.program.get('OB', 85)) throw new SimError('OB_NON_CARICATO', detail);
+    if (this.services.state.disabled.has(85)) return;
     this.record({
       time: t,
       code: 'OB_RICHIAMATO',
       eventId: EVENT.OB_NOT_LOADED,
       detail: `OB85: ${detail}`,
     });
-    const missing = {
-      evClass: id >> 8,
-      evNum: id & 255,
-      priority: PRIORITY.ASYNC_ERROR,
-      ob: ev.ob,
-    };
+    const missing = { evClass: id >> 8, evNum: id & 255, priority, ob };
     this.runOb(ctx, 85, PRIORITY.ASYNC_ERROR, ob85StartInfo(missing, this.stamp(t)));
   }
 
@@ -632,8 +689,9 @@ export class SimCpu {
    */
   private syncFault(e: SimError, st: ExecState): boolean {
     const f = syncFaultOf(e);
-    if (!f || !this.program.get('OB', f.ob)) return false;
     const top = this.running.at(-1);
+    if (top?.faults && maskedFault(top.faults, e)) return true;
+    if (!f || !this.program.get('OB', f.ob)) return false;
     if (!top || top.ob === 121 || top.ob === 122) return false;
     const t = this.now();
     const site = {
@@ -701,6 +759,7 @@ export class SimCpu {
     this.memory.physOut.fill(0);
     this.pending = [];
     this.pendingTime = [];
+    this.services.state.stopRtm(this.now());
     this.setMode('STOP');
   }
 

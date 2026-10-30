@@ -312,7 +312,8 @@ export function execBlock(st: ExecState): void {
   const { block, ctx } = st;
   const code = block.code;
   const max = ctx.maxInstructions ?? MAX_INSTRUCTIONS;
-  const scratch = ctx.onError ? newSaved() : undefined;
+  // Il gestore può comparire a metà blocco (SFC 36 MSK_FLT): lo si guarda a ogni istruzione.
+  let scratch: Saved | undefined;
   let mon =
     ctx.monitor && ctx.monitor.kind === block.kind && ctx.monitor.number === block.number
       ? ctx.monitor
@@ -340,8 +341,8 @@ export function execBlock(st: ExecState): void {
       const handler = OPS[d.stmt.id];
       if (!handler)
         throw new SimError('MC7_NON_ESEGUIBILE', `operazione non implementata: ${d.stmt.id}`);
-      if (scratch) {
-        save(st, scratch);
+      if (ctx.onError) {
+        save(st, (scratch ??= newSaved()));
         saved = true;
       }
       // BE e BEU cambiano lo stato lasciato al chiamante (STA = 1, OS = OR = /FC = 0): il passo

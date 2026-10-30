@@ -284,7 +284,8 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§10–§13). Come per il 
 - **CREAT_DB, codici 16#80A1/16#80B1/16#80B2 non verificati:** un'altra lettura del manuale dà 16#80A2 per la lunghezza errata e 16#80B1 per nessun numero libero.
 - **Senza OB1:** OB35 gira comunque all'inizio del ciclo, ma non c'è un controllo di fine ciclo (watchdog, evento di ciclo).
 - **OB121, profondità dei blocchi:** la profondità dei blocchi dentro l'OB121 riparte da 0 invece di sommarsi a quella del blocco interrotto.
-- **SFC e SFB non simulati:** sono un avviso («non simulata», BR = 0, uscite intatte, una volta per numero e per RUN), non un errore. Sono non simulate **tutte** le SFC e gli SFB tranne SFC 0, 1, 6, 13, 14, 15, 20, 21, 22, 23, 24, 41, 42, 43, 46, 47, 51, 64 e SFB 0–5.
+- **SFC e SFB non simulati:** sono un avviso («non simulata», BR = 0, uscite intatte, una volta per numero e per RUN), non un errore. Sono non simulate **tutte** le SFC e gli SFB tranne SFC 0–6, 13–15, 20–24, 28–34, 36–43, 46, 47, 49, 51, 52, 58, 59, 64 e SFB 0–5. SFB 32 DRUM non è simulato.
+- **SFC aggiunte nella 2.1 (da verificare su CPU reale):** contatore di ore (SFC 2–4, uno solo, NR 0, fermo in STOP e da riavviare dopo l'avvio), allarmi dall'orologio (SFC 28–31, OB10) e di ritardo (SFC 32–34, OB20), maschere degli errori sincroni (SFC 36–38, valide fino alla fine dell'OB che le mette), DIS_IRT/EN_IRT (SFC 39–40, gli eventi bloccati si scartano), WR_USMSG (SFC 52, voce nel buffer; nessun PG iscritto: SEND = 1 dà 16#0001), GADR_LGC/LGC_GADR e WR_REC/RD_REC (SFC 5, 49, 58, 59: «nessun modulo»). I bit di STATUS di SFC 31/34, i codici 16#80A0/16#80A1, l'id di avvio di OB10/OB20 (16#1111/16#1121) e la cancellazione degli allarmi all'avvio a caldo sono dedotti. OB10/OB20 mancanti richiamano OB85 (o STOP).
 
 ## Strumenti di test (piano 2C)
 

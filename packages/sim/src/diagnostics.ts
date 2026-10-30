@@ -9,7 +9,9 @@ export type DiagCode =
   /** Un OB d'evento è stato richiamato (OB80, OB82, OB85, OB86, OB121, OB122): non è un errore. */
   | 'OB_RICHIAMATO'
   | 'SFC_NON_SIMULATA'
-  | 'SFB_NON_SIMULATA';
+  | 'SFB_NON_SIMULATA'
+  /** Voce scritta dal programma con SFC 52 (WR_USMSG); l'id è l'EVENTN del programma. */
+  | 'MESSAGGIO_UTENTE';
 
 /** Voce del buffer di diagnostica della CPU simulata. */
 export interface DiagEntry {
@@ -55,6 +57,7 @@ const SYNTHETIC_ORDER: readonly DiagCode[] = [
   'OB_RICHIAMATO',
   'SFC_NON_SIMULATA',
   'SFB_NON_SIMULATA',
+  'MESSAGGIO_UTENTE',
 ];
 
 /** Id sintetico del codice (16#9000 + indice), ⚠️. */
@@ -101,6 +104,7 @@ const IS_ERROR: Record<DiagCode, boolean> = {
   OB_RICHIAMATO: false,
   SFC_NON_SIMULATA: false,
   SFB_NON_SIMULATA: false,
+  MESSAGGIO_UTENTE: false,
 };
 
 /** La voce di diagnostica è un errore della CPU (DiagEntry non porta una gravità: la si ricava dal codice). */
