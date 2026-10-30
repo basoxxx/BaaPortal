@@ -72,6 +72,20 @@ const projectSchema = (version: 2 | 3 | 4) =>
     devices: z.array(obj({ id, name: str })),
     languages: languagesSchema.optional(),
     texts: textsSchema.optional(),
+    // Sottoreti (tappa 6B, facoltative). Indirizzi e parametri si controllano in checkNetworks.
+    subnets: z
+      .array(
+        obj({
+          id,
+          name: str,
+          type: z.enum(['MPI', 'PROFIBUS', 'ETHERNET']),
+          rate: str.optional(),
+          highestAddress: z.number().int().min(1).max(126).optional(),
+          subnetMask: str.optional(),
+          gateway: str.optional(),
+        }),
+      )
+      .optional(),
   });
 
 const manifestSchema = z.object({ formatVersion: z.number() });
@@ -133,6 +147,12 @@ const hmiSchema = obj({
     .max(1000),
 });
 
+// Collegamento a una sottorete; l'indirizzo si controlla in checkNetworks.
+const netFields = {
+  subnetId: id.optional(),
+  address: z.number().int().optional(),
+  ip: str.optional(),
+};
 const deviceShape = {
   id,
   name: str,
@@ -195,6 +215,32 @@ const deviceShape = {
         outputStart: z.number().int().min(0).optional(),
       }),
     ),
+    // Tappa 6B, facoltativi: interfacce collegate alle sottoreti e stazioni ET 200.
+    interfaces: z.array(obj({ port: id, ...netFields })).optional(),
+    stations: z
+      .array(
+        obj({
+          ...netFields,
+          id,
+          orderNumber: str,
+          name: str,
+          comment: str,
+          deviceName: str.optional(),
+          modules: z.array(
+            obj({
+              id,
+              rack: z.literal(0),
+              slot: z.number().int().min(1).max(63),
+              orderNumber: str,
+              name: str,
+              comment: str,
+              inputStart: z.number().int().min(0).optional(),
+              outputStart: z.number().int().min(0).optional(),
+            }),
+          ),
+        }),
+      )
+      .optional(),
   }).optional(),
   hmi: hmiSchema.optional(),
   // Ordine degli oggetti: gli id dei file elencati.
@@ -433,6 +479,10 @@ function checkUniqueIds(device: PlcDevice): void {
   }
   for (const x of device.sources) add(x.id);
   for (const m of device.hardware?.modules ?? []) add(m.id);
+  for (const st of device.hardware?.stations ?? []) {
+    add(st.id);
+    for (const m of st.modules) add(m.id);
+  }
   for (const sc of device.hmi?.screens ?? []) {
     add(sc.id);
     for (const o of sc.objects) add(o.id);
