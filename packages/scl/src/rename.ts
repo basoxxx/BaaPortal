@@ -3,7 +3,7 @@
 // dentro una chiamata è il parametro del blocco chiamato.
 import type { BlockFamily, RenameTarget, Renumber } from '@baaportal/awl';
 import { sameName } from '@baaportal/s7-types';
-import { lex, type Tok } from './lexer.js';
+import { isNewAddress, lex, type Tok } from './lexer.js';
 
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const unquote = (s: string) => (s.startsWith('"') ? s.slice(1, -1) : s);
@@ -59,7 +59,10 @@ function sclEdits(
   newName: string,
   opts: SclRenameOptions,
 ): Map<Tok, string> {
-  const toks = lex(source, { errors: [] });
+  // `AW1`, `ED0`: per il traduttore restano una variabile se l'interfaccia ne ha una con quel nome
+  const toks = lex(source, { errors: [] }).map((t) =>
+    t.kind === 'addr' && isNewAddress(t.text) ? { ...t, kind: 'id' as const } : t,
+  );
   const quoted = `"${newName}"`;
   const bare = IDENT.test(newName) ? newName : quoted;
   const edits = new Map<Tok, string>();

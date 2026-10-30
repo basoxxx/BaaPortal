@@ -95,3 +95,47 @@ describe('SCL 2.1: confronti fra BOOL e stringhe di bit senza segno', () => {
     expect(diag('w := w + 1;')).toContain('solo i confronti');
   });
 });
+
+describe('SCL 2.1: periferia e mnemonici tedeschi negli indirizzi', () => {
+  it('forma AWL internazionale', () => {
+    expect(ok('MW0 := PIW256 + PEW258;')).toMatch(/L %PIW256; L %PIW258/);
+    expect(ok('PQW256 := MW0; PAB260 := MB2; PQD262 := MD4;')).toMatch(
+      /T %PQW256.*T %PQB260.*T %PQD262/,
+    );
+    expect(ok('A1.0 := E0.1 AND NOT M0.0; AW4 := EW2; AD8 := ED4; AB3 := EB1;')).toMatch(
+      /A %I0.1; AN %M0.0; = %Q1.0; L %IW2; T %QW4; L %ID4; T %QD8; L %IB1; T %QB3/,
+    );
+  });
+
+  it('PI si legge e PQ si scrive soltanto', () => {
+    expect(diag('PIW256 := 1;')).toContain('si legge soltanto');
+    expect(diag('MW0 := PQW256;')).toContain('si scrive soltanto');
+  });
+
+  it('una variabile con il nome di un indirizzo tedesco resta la variabile', () => {
+    const ctx = makeCtx(
+      'FC',
+      emptyIface({
+        temp: [m('AD1', el('Int')), m('EW2', el('Int'))],
+        returnType: { kind: 'void' },
+      }),
+    );
+    expect(ok('AD1 := EW2 + 1;', ctx)).toMatch(/L #EW2; L 1; \+I; T #AD1/);
+    expect(ok('AD1 := %EW2;', ctx)).toContain('L %IW2');
+  });
+
+  it('nel simulatore: E/A come I/Q, PEW legge la periferia, PAW la scrive', () => {
+    const r = sclToAwl('A0.0 := E0.0; MW0 := PEW0; PAW2 := MW0;', abs, 0);
+    expect(r.diagnostics).toEqual([]);
+    const res = runAwl([r.source], {
+      setup: (mem) => {
+        mem.I[0] = 1;
+        mem.physIn[0] = 0x12;
+        mem.physIn[1] = 0x34;
+      },
+    });
+    expect(res.mem.Q[0]! & 1).toBe(1);
+    expect([res.mem.M[0], res.mem.M[1]]).toEqual([0x12, 0x34]);
+    expect([res.mem.physOut[2], res.mem.physOut[3]]).toEqual([0x12, 0x34]);
+  });
+});

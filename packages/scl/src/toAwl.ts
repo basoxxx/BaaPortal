@@ -19,7 +19,7 @@ import {
   type DataType,
   type TypedMember,
 } from '@baaportal/s7-types';
-import { intLiteral, parseAddress, SclError, timeLiteral } from './lexer.js';
+import { intLiteral, isNewAddress, parseAddress, SclError, timeLiteral } from './lexer.js';
 import {
   MAX_ERRORS,
   parse,
@@ -308,7 +308,13 @@ class Gen {
   ): { awl: string; ty: Ty; constant: boolean; dims?: Dim[] } {
     if (o.k === 'temp') return { awl: o.text, ty: o.ty as Ty, constant: false };
     if (o.k === 'addr') {
+      if (isNewAddress(o.text) && this.ownMember(o.text))
+        return this.resolve({ ...o, k: 'id' }, hint, dest);
       const a = parseAddress(o.text);
+      if (a.area === 'PI' && dest)
+        fail(o, `${o.text} è un ingresso di periferia: si legge soltanto`);
+      if (a.area === 'PQ' && !dest)
+        fail(o, `${o.text} è un'uscita di periferia: si scrive soltanto`);
       const ty: Ty =
         a.size === 'X'
           ? 'BOOL'
@@ -339,6 +345,14 @@ class Gen {
     const ty = typed(t);
     if (!ty) fail(o, `Tipo di ${shown}${tail(o)} non supportato in SCL in prova (${SUPPORTED})`);
     return { awl: d.awl, ty: ty!, constant: d.constant, ...(dims ? { dims } : {}) };
+  }
+
+  /** Una variabile o un parametro dell'interfaccia con questo nome. */
+  private ownMember(name: string): boolean {
+    const i = this.ctx.owner.iface;
+    return [...i.input, ...i.output, ...i.inOut, ...i.static, ...i.temp].some((x) =>
+      sameName(x.name, name),
+    );
   }
 
   /**

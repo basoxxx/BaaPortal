@@ -14,6 +14,12 @@ describe('renameInScl', () => {
     expect(sclRenameSkipped(src, { kind: 'local', oldName: 'A' }, 'Velocita')).toBe(false);
   });
 
+  it('una variabile col nome di un indirizzo tedesco (AD1) si rinomina, M0.0 no', () => {
+    const target = { kind: 'local', oldName: 'AD1' } as const;
+    expect(renameInScl('AD1 := #AD1 + MW0;', target, 'Ana')).toBe('Ana := #Ana + MW0;');
+    expect(renameInScl('%AD1 := 1;', target, 'Ana')).toBe('%AD1 := 1;');
+  });
+
   it('un parametro con un nome non identificatore: la chiamata resta com è', () => {
     const src = '"Calcola"(A := 1);';
     const target = { kind: 'callParam', block: 'Calcola', oldName: 'A' } as const;
