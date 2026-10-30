@@ -8,6 +8,7 @@ import { BlockEditor } from './block/BlockEditor';
 import { CompareView } from './compare/CompareView';
 import { OnlineDiagView } from './diag/OnlineDiagView';
 import { DbEditor } from './db/DbEditor';
+import { DeviceView } from './hw/DeviceView';
 import { SourceEditor } from './source/SourceEditor';
 import { WatchTableView } from './watch/WatchTableView';
 import { CallStructureView } from './xref/CallStructureView';
@@ -137,6 +138,13 @@ export const EDITORS: Record<EditorKind, EditorDef> = {
     title: (_r, _d, t) => t('resources.title'),
     exists: (r, d) => device(r, d) !== undefined,
     Component: ResourcesView,
+  },
+  deviceView: {
+    kind: 'deviceView',
+    icon: () => 'treeDeviceConfig',
+    title: (_r, _d, t) => t('hw.title'),
+    exists: (r, d) => device(r, d) !== undefined,
+    Component: DeviceView,
   },
   allTags: {
     kind: 'allTags',

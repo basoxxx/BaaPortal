@@ -441,6 +441,25 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
 - **Il documento è fatto di testo del progetto**: viene caricato in una finestra senza JavaScript, in sandbox e con CSP che vieta ogni risorsa esterna. Un progetto altrui non può eseguire codice né leggere file tramite la stampa.
 - **Riferimenti incrociati** nel documento: solo gli usi nei blocchi stampati.
 
+## Vista dispositivi (piano 6A)
+
+- **La configurazione hardware non si carica nella CPU.** La CPU la riceve nei blocchi dati di sistema (SDB), il cui formato non è documentato; lavoriamo in clean-room e non lo ricostruiamo. Si modifica e si salva nel progetto, il pulsante di caricamento è disattivato e _Carica nel dispositivo_ carica solo i blocchi del programma, come prima. Per l'hardware reale serve STEP 7 o TIA Portal. Lo studio degli SDB è la tappa 6C.
+- **Catalogo parziale.** Ci sono solo le varianti principali di PS 307, IM 360/361/365, SM 321/322/323/331/332/334, CP 340/341, CP 343-1 e FM 350-1, con numeri d'articolo da manuali e data sheet pubblici, non verificati su moduli reali. Mancano le altre varianti, le versioni di firmware dei moduli, i moduli F, SM 338, FM di posizionamento e regolazione, CP 342-5 e simili.
+- **Niente parametri dei moduli.** Campi di misura e tipi di misura degli ingressi analogici, diagnostica, allarmi, valori sostitutivi, filtri: non ci sono. Del modulo si salvano solo posto, nome, commento e indirizzi iniziali.
+- **Controlli semplificati.** Non si controllano: gli I/O integrati delle CPU compatte 31xC (che occupano indirizzi propri nel posto 2), il numero di rack che la CPU accetta (la CPU 312 ne ha uno solo), la corrente assorbita dal bus e quella dell'alimentatore, i posti vuoti in mezzo, la memoria immagine di processo.
+- **Niente GSD, niente periferia decentrata.** Nessuna importazione di file GSD/GSDML; ET 200, PROFIBUS DP, PROFINET IO e la vista di rete sono la tappa 6B.
+- **Il simulatore** usa ancora le dimensioni di I e Q della CPU, non quelle della configurazione.
+
+## Librerie (piano 7B)
+
+- **Formato del progetto invariato (4).** La libreria di progetto sta in `library.json` dentro il `.baap`: una versione precedente di BaaPortal apre il progetto ma ignora la libreria, e se lo salva la libreria va persa.
+- **Rinumera e riferimenti assoluti:** dentro il modello i riferimenti per nome e quelli scritti col numero (`CALL FC 500`, `CALL FB 1, DB 2`, `OPN DB 3`, `DB3.DBX 0.0`, `P#DB3.DBX0.0`, box KOP/FUP, `FC1(…)` in SCL) seguono un blocco rinumerato. Gli accessi indiretti (`OPN DB [MW 10]`, `UC FC [MW 10]`, `WORD_TO_BLOCK_DB`) non si riscrivono: il dialogo lo segnala e propone _Salta_, tranne per un blocco che il modello usa col numero (propone _Rinumera_). I blocchi con il numero libero nel PLC tengono il loro numero. Se si salta un blocco senza un omonimo nel PLC, non entrano nemmeno i blocchi del modello che lo usano col numero (anche a catena), e il dialogo li elenca. In SCL `FC1`, `FB1`, `DB1` senza `#` si rinumerano solo come chiamata (`FC1(…)`) o accesso (`DB1.DW0`): altrimenti sono variabili locali. I blocchi del PLC che chiamano un oggetto sostituito non si toccano: se il sostituto ha un altro numero, le loro CALL scritte col numero puntano al vecchio; il dialogo elenca chi lo chiama.
+- **Dipendenze:** solo le chiamate scritte, i tipi e l'FB di un DB di istanza. Non entrano i DB usati nel codice (`OPN`, `"Dati".x`), i DB di istanza delle CALL, i tag usati dal codice né i blocchi chiamati per puntatore.
+- **Inserimento** sempre nella radice delle cartelle del PLC, non nel gruppo su cui si rilascia. Un oggetto senza numero libero viene saltato con un messaggio. Il confronto con il PLC è per nome e numero, non per contenuto: un modello identico a ciò che c'è già chiede comunque cosa fare.
+- **Apri in sola lettura** mostra la sorgente AWL generata, non l'editor: i blocchi KOP e FUP non si mostrano (come in _Genera sorgente_), le tabelle sono un elenco di testo.
+- **Librerie globali:** chiudendo l'app o il progetto non si chiede di salvare una libreria globale modificata; non si ricordano le librerie aperte tra un avvio e l'altro. Si copiano modelli dalle globali alla libreria di progetto, non tra due globali. Le tabelle di controllo si aggiungono solo con _Aggiungi la selezione_ (dall'albero non si trascinano).
+- **Libreria standard IEC:** senza STRING (niente funzioni sulle stringhe), `MUX` con quattro ingressi fissi e `K` di tipo INT. `F_TRIG` non dà l'impulso al primo ciclo con `CLK = 0` (M parte da 0 e ricorda il CLK precedente). ENO segue il bit BR alla fine del blocco.
+
 ## Fuori dal codice, in sospeso per l'utente
 
 - Controlli a mano dei piani 1B (Windows e Mac), 1C e 1F. Le liste sono nei piani; per la 1F: xlsx in Excel e LibreOffice, xlsx di TIA Portal, Archivia/Ritira con percorsi accentati e con spazi, scala a 125%.

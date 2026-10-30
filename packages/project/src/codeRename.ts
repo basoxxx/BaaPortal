@@ -1,9 +1,14 @@
 // Rinomina nel codice salvato: aggiorna i `source` delle reti AWL e gli operandi del grafico (`lad`)
 // di quelle KOP/FUP. Il testo salvato usa i mnemonici internazionali. Le sorgenti esterne non si
 // toccano (sono file indipendenti).
-import { renameInSource, type RenameTarget } from '@baaportal/awl';
+import { renameInSource, renumberInSource, type RenameTarget, type Renumber } from '@baaportal/awl';
 import { mapOperands, type OperandRole } from '@baaportal/ladfbd';
-import { renameInScl, sclRenameSkipped, type SclRenameOptions } from '@baaportal/scl';
+import {
+  renameInScl,
+  renumberInScl,
+  sclRenameSkipped,
+  type SclRenameOptions,
+} from '@baaportal/scl';
 import { parseType, sameName, validateS7Name, type DataType } from '@baaportal/s7-types';
 import { kopSources } from './kopSources';
 import { isGraphic, type CodeBlock, type Member, type PlcDevice, type Udt } from './model';
@@ -147,6 +152,57 @@ export function renameSymbolInWatchRows(device: PlcDevice, oldName: string, newN
       }
     }
   }
+}
+
+/**
+ * Riferimenti assoluti ai blocchi (`CALL FC 1`, `OPN DB 2`, `DB2.DBW 0`, `FC1(…)`) nel codice e nelle
+ * tabelle di controllo del dispositivo, con i numeri nuovi di `renumber`. Restituisce i nomi dei
+ * blocchi con riferimenti che non si possono riscrivere (indiretti, o codice non analizzabile).
+ */
+export function renumberInCode(device: PlcDevice, renumber: Renumber): string[] {
+  const unsafe = new Set<string>();
+  for (const b of codeBlocks(device)) {
+    let lad = false;
+    for (const n of b.networks) {
+      if (n.lad && isGraphic(b.language)) {
+        let changed = false;
+        const net = mapOperands(n.lad, (v, role) => {
+          if (v.trim() === '') return v;
+          const r = renumberInSource(PREFIX[role] + v, renumber, 'international');
+          if (r.unsafe) unsafe.add(b.name);
+          const out = r.source.slice(PREFIX[role].length);
+          if (out !== v) changed = true;
+          return out;
+        });
+        // Solo se cambia qualcosa: senza numeri nuovi il dispositivo resta com'è.
+        if (changed) {
+          n.lad = net;
+          lad = true;
+        }
+        continue;
+      }
+      const r =
+        b.language === 'SCL'
+          ? renumberInScl(n.source, renumber)
+          : renumberInSource(n.source, renumber, 'international');
+      if (r.unsafe) unsafe.add(b.name);
+      if (r.source !== n.source) n.source = r.source;
+    }
+    if (lad) {
+      const sources = kopSources(b, device);
+      b.networks.forEach((n, i) => {
+        n.source = sources[i]?.source ?? n.source;
+      });
+    }
+  }
+  for (const w of device.watchTables) {
+    for (const r of w.rows) {
+      if (r.operand.trim() === '') continue;
+      const out = renumberInSource(`L ${r.operand}`, renumber, 'international').source.slice(2);
+      if (out !== r.operand) r.operand = out;
+    }
+  }
+  return [...unsafe];
 }
 
 /** Il membro con `id` e la catena dei suoi antenati (dal livello superiore al membro). */

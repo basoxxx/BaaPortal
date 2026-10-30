@@ -20,3 +20,6 @@ export * from './callGraph';
 export * from './assignment';
 export * from './resources';
 export * from './compileKeys';
+export * from './hardware';
+export * from './library';
+export * from './iecLibrary';

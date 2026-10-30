@@ -252,14 +252,59 @@ export interface PlcDevice {
   watchTables: WatchTable[];
   /** Percorsi di gruppo, es. 'A' e 'A/B'. */
   groups: { blocks: string[]; tags: string[]; types: string[] };
+  /** Configurazione hardware (tappa 6A); assente nei progetti che non l'hanno mai aperta. */
+  hardware?: DeviceHardware;
   /** Chiavi sconosciute della voce del dispositivo in project.json: si riscrivono com'erano. */
   listExtras?: Record<string, unknown>;
+}
+
+/**
+ * Modulo in un posto del rack S7-300. La CPU sta sempre nel posto 2 del rack 0 e non è elencata.
+ * Gli indirizzi iniziali ci sono solo se il modulo occupa byte di ingresso o di uscita.
+ */
+export interface HwModule {
+  id: string;
+  rack: number;
+  slot: number;
+  orderNumber: string;
+  name: string;
+  comment: string;
+  inputStart?: number;
+  outputStart?: number;
+}
+
+export interface DeviceHardware {
+  modules: HwModule[];
+}
+
+/**
+ * Modello di libreria (tappa 7B): una copia master di uno o più oggetti, con le loro dipendenze
+ * (un FB con i suoi UDT e gli FC che chiama). Gli oggetti stanno qui come in un PLC.
+ */
+export interface LibraryItem {
+  id: string;
+  name: string;
+  /** Percorso della cartella nella libreria ('' = radice, 'A/B'). */
+  group: string;
+  comment: string;
+  blocks: Block[];
+  udts: Udt[];
+  tagTables: TagTable[];
+  watchTables: WatchTable[];
+}
+
+export interface Library {
+  items: LibraryItem[];
+  /** Percorsi delle cartelle, anche vuote. */
+  groups: string[];
 }
 
 export interface Project {
   formatVersion: 4;
   meta: ProjectMeta;
   devices: PlcDevice[];
+  /** Libreria di progetto (facoltativa: assente nei file scritti prima della tappa 7B). */
+  library?: Library;
 }
 
 export type ObjectRef =

@@ -158,7 +158,8 @@
     "watchExportFailed": "Impossibile esportare la tabella di controllo \"{{name}}\": {{message}}",
     "watchImported": "Importazione da \"{{name}}\": {{count}} righe aggiunte alla tabella \"{{table}}\", scartate {{skipped}}{{detail}}.",
     "watchImportFailed": "Impossibile importare la tabella di controllo da \"{{name}}\": {{message}}",
-    "watchSharedLimit": "Le tabelle di controllo osservate insieme superano il limite di {{max}} righe sul PLC: le righe in più non vengono lette (errore sulla riga)."
+    "watchSharedLimit": "Le tabelle di controllo osservate insieme superano il limite di {{max}} righe sul PLC: le righe in più non vengono lette (errore sulla riga).",
+    "libraryInserted": "«{{name}}» inserito dalla libreria: {{count}} oggetti."
   },
   "commands": {
     "project.new": "Nuovo…",
@@ -563,7 +564,16 @@
     "setAccess": "Imposta accesso CPU",
     "moveRows": "Sposta righe",
     "pasteWatchTable": "Incolla tabelle di controllo",
-    "importWatch": "Importa tabella di controllo"
+    "importWatch": "Importa tabella di controllo",
+    "hwInsert": "Inserisci modulo",
+    "hwMove": "Sposta modulo",
+    "hwDelete": "Cancella modulo",
+    "hwEdit": "Proprietà del modulo",
+    "libraryInsert": "Inserisci dalla libreria",
+    "libraryAdd": "Aggiungi alla libreria",
+    "libraryDelete": "Elimina dalla libreria",
+    "libraryRename": "Rinomina nella libreria",
+    "libraryMove": "Sposta nella libreria"
   },
   "inspector": {
     "tab": {
@@ -877,7 +887,14 @@
         "offline": "Nessun collegamento online",
         "error": "Lettura non riuscita: {{message}}"
       }
-    }
+    },
+    "IO_NOT_CONFIGURED": "Nessun modulo della configurazione hardware copre l'indirizzo.",
+    "HW_MODULE_UNKNOWN": "Il modulo non è nel catalogo.",
+    "HW_SLOT_INVALID": "Il modulo non può stare in questo posto.",
+    "HW_SLOT_TAKEN": "Il posto è già occupato da un altro modulo.",
+    "HW_RACK_NOT_CONNECTED": "Il rack non è collegato: servono una IM 360 nel posto 3 del rack 0 e una IM 361 nel posto 3 di questo rack (oppure la coppia IM 365, solo per il rack 1).",
+    "HW_ADDRESS_OVERLAP": "Gli indirizzi ({{area}}) si sovrappongono a quelli di {{other}}.",
+    "HW_ADDRESS_OUT_OF_RANGE": "Gli indirizzi ({{area}}) sono fuori dai limiti della CPU."
   },
   "block": {
     "interface": "Interfaccia del blocco",
@@ -1553,7 +1570,8 @@
       "stoppedOnly": "CPU arrestata, nessun blocco caricato: collegamento o progetto cambiati.",
       "cancelledStopped": "Caricamento annullato. CPU lasciata in STOP."
     },
-    "cpuStopped": "CPU lasciata in STOP."
+    "cpuStopped": "CPU lasciata in STOP.",
+    "hwNotLoaded": "La configurazione hardware del progetto non viene caricata: la CPU tiene quella che ha. Vedi «Vista dispositivi»."
   },
   "upload": {
     "namePrefix": "Caricato da",
@@ -1903,7 +1921,8 @@
     "tag": "tag {{names}}",
     "overlap": "sovrapposto",
     "beyond": "oltre la CPU",
-    "empty": "Nessun indirizzo usato in quest’area."
+    "empty": "Nessun indirizzo usato in quest’area.",
+    "unconfigured": "senza modulo"
   },
   "resources": {
     "title": "Risorse",
@@ -1941,6 +1960,95 @@
       "COLONNA_MANCANTE": "manca la colonna «Operando»",
       "RIGA_ILLEGGIBILE": "riga illeggibile",
       "OPERANDO_VUOTO": "operando vuoto"
+    }
+  },
+  "hw": {
+    "title": "Vista dispositivi",
+    "racks": "Rack",
+    "rack": "Rack {{n}}",
+    "rackCol": "Rack",
+    "slot": "Posto",
+    "module": "Modulo",
+    "orderNumber": "Numero d'articolo",
+    "description": "Descrizione",
+    "name": "Nome",
+    "comment": "Commento",
+    "iAddr": "Indirizzo I",
+    "qAddr": "Indirizzo Q",
+    "inputStart": "Indirizzo iniziale degli ingressi",
+    "outputStart": "Indirizzo iniziale delle uscite",
+    "negative": "L'indirizzo non può essere negativo.",
+    "overview": "Panoramica dispositivi",
+    "catalog": "Catalogo hardware",
+    "search": "Cerca nel catalogo",
+    "family": "Famiglia",
+    "allFamilies": "Tutte le famiglie",
+    "insertHint": "Doppio clic o Invio su un modulo per inserirlo nel primo posto libero adatto del rack, oppure trascinalo su un posto. Nel rack: Canc cancella, Ctrl+frecce sposta.",
+    "emptySlot": "libero",
+    "properties": "Proprietà",
+    "noSelection": "Seleziona un modulo nel rack per vederne le proprietà.",
+    "delete": "Cancella modulo",
+    "noSlot": "Nessun posto libero adatto a {{name}} nel rack {{rack}}.",
+    "cannotMove": "Il modulo non può andare nel posto {{slot}}.",
+    "download": "Carica configurazione hardware nel dispositivo",
+    "downloadDisabled": "La configurazione hardware si modifica e si salva nel progetto, ma non si può caricare nella CPU: il formato dei blocchi dati di sistema (SDB) non è documentato. Configura l'hardware della CPU con STEP 7 o TIA Portal. «Carica nel dispositivo» carica solo i blocchi del programma, come prima."
+  },
+  "library": {
+    "project": "Libreria di progetto",
+    "iec": "Libreria standard IEC",
+    "noProject": "Aprire un progetto per usare la sua libreria.",
+    "empty": "Nessun modello. Trascinare qui blocchi, UDT o tabelle dall'albero del progetto, oppure usare «Aggiungi la selezione».",
+    "noMatch": "Nessun modello corrisponde alla ricerca.",
+    "search": "Cerca",
+    "searchIn": "Cerca in {{name}}",
+    "addSelection": "Aggiungi la selezione",
+    "newFolder": "Nuova cartella",
+    "menuLabel": "Menu della libreria",
+    "insert": "Inserisci nel PLC",
+    "view": "Apri in sola lettura",
+    "toProject": "Copia nella libreria di progetto",
+    "deleteMessage": "Eliminare dalla libreria?",
+    "viewTitle": "{{name}} (sola lettura)",
+    "conflictTitle": "Inserisci «{{name}}»",
+    "conflictMessage": "Nel PLC alcuni nomi o numeri sono già usati. Scegliere cosa fare per ciascun oggetto.",
+    "takenName": "nome già usato",
+    "takenNumber": "numero già usato",
+    "takenBoth": "nome e numero già usati",
+    "resolutionFor": "Cosa fare di {{name}}",
+    "resolution": {
+      "rename": "Rinomina",
+      "renumber": "Rinumera",
+      "replace": "Sostituisci",
+      "skip": "Salta",
+      "useExisting": "Usa la variabile del PLC",
+      "useExistingConstant": "Usa la costante del PLC"
+    },
+    "symbolRename": "Entra con un altro nome ({{at}}); il codice del modello la segue.",
+    "symbolUseExisting": "Non entra: il codice del modello usa quella del PLC ({{at}}).",
+    "replaceCallers": "Nel PLC lo chiamano: {{names}}.",
+    "indirectRefs": "Il codice del modello apre o chiama blocchi in modo indiretto: con un numero nuovo potrebbe puntare a un altro blocco.",
+    "cascadeSkip": "«{{block}}» non entra: si riferisce col numero a {{target}}, che si salta e nel PLC non ha un blocco con lo stesso nome.",
+    "newGlobal": "Nuova libreria globale…",
+    "openGlobal": "Apri libreria globale…",
+    "readOnly": "sola lettura",
+    "editing": "in modifica",
+    "edit": "Modifica",
+    "stopEditing": "Sola lettura",
+    "save": "Salva",
+    "close": "Chiudi la libreria {{name}}",
+    "closeTitle": "Chiudi libreria",
+    "closeUnsaved": "La libreria «{{name}}» ha modifiche non salvate. Chiuderla lo stesso?",
+    "fileFilter": "Libreria BaaPortal",
+    "defaultName": "Libreria",
+    "openFailed": "La libreria non si può aprire: {{detail}}",
+    "saveFailed": "La libreria non si può salvare: {{detail}}",
+    "fileError": {
+      "TOO_BIG": "il file è troppo grande.",
+      "NOT_ZIP": "non è un file di libreria.",
+      "MISSING_MANIFEST": "manca il manifesto della libreria.",
+      "WRONG_FORMAT": "non è un file di libreria BaaPortal.",
+      "NEWER_FORMAT": "è stato scritto da una versione più recente di BaaPortal.",
+      "INVALID": "il contenuto non è valido."
     }
   }
 }

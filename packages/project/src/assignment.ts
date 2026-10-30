@@ -3,6 +3,7 @@
 import { parseAddress } from '@baaportal/s7-types';
 import type { PlcDevice } from './model';
 import type { XrefAccess, XrefOperand } from './crossRef';
+import { ioCoverage } from './hardware';
 
 export type AssignArea = 'I' | 'Q' | 'M' | 'T' | 'C';
 export const ASSIGN_AREAS: readonly AssignArea[] = ['I', 'Q', 'M', 'T', 'C'];
@@ -27,6 +28,8 @@ export interface AssignRow {
   sizes: { B?: UseAccess; W?: UseAccess; D?: UseAccess };
   /** Il byte è oltre il limite della CPU. */
   beyondLimit: boolean;
+  /** I e Q: nessun modulo della configurazione hardware copre il byte (solo se c'è una configurazione). */
+  unconfigured?: boolean;
 }
 
 export interface AssignAreaList {
@@ -68,6 +71,7 @@ export function assignmentList(
     C: limits.counters,
   };
   const unit = (a: AssignArea) => (a === 'T' || a === 'C' ? 8 : 1);
+  const covered = ioCoverage(dev);
   const rows = new Map<AssignArea, Map<number, AssignRow>>(ASSIGN_AREAS.map((a) => [a, new Map()]));
   const rowOf = (area: AssignArea, byte: number): AssignRow => {
     let r = rows.get(area)!.get(byte);
@@ -78,6 +82,7 @@ export function assignmentList(
         overlap: false,
       }));
       r = { byte, cells, sizes: {}, beyondLimit: byte * unit(area) >= limit[area] };
+      if (covered && (area === 'I' || area === 'Q')) r.unconfigured = !covered(area, byte);
       rows.get(area)!.set(byte, r);
     }
     return r;

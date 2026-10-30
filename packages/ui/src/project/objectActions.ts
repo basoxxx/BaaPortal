@@ -65,7 +65,7 @@ function numberTaken(d: PlcDevice, kind: Block['kind'], n: number): boolean {
   return d.blocks.some((b) => family(b.kind) === family(kind) && b.number === n);
 }
 
-function blockNumber(d: PlcDevice, b: Block, cpu: CpuType | undefined): number | null {
+export function blockNumber(d: PlcDevice, b: Block, cpu: CpuType | undefined): number | null {
   if (!numberTaken(d, b.kind, b.number)) return b.number;
   if (b.kind === 'OB') {
     for (let n = FIRST_USER_OB; n <= MAX_OB; n++) if (!numberTaken(d, 'OB', n)) return n;

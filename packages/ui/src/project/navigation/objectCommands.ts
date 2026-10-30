@@ -470,6 +470,8 @@ export function addGroupAt(store: StoreApi<AppState>, nodeId: string): string | 
 export interface DragData {
   deviceId: string;
   refs: ObjectRef[];
+  /** Trascinamento da fuori dell'albero (un modello di libreria): il rilascio su un PLC lo passa qui. */
+  insert?: (deviceId: string) => void;
 }
 const DRAG_MIME = 'application/x-baaportal';
 // Durante dragover i dati del trascinamento non sono leggibili: si ricordano qui.
@@ -499,6 +501,17 @@ export function beginDrag(
   dt.setData('text/plain', [...names, ...tagNames].filter(Boolean).join('\n'));
   dt.effectAllowed = 'copyMove';
 }
+/** Avvia il trascinamento di un modello di libreria: si rilascia su un nodo qualsiasi di un PLC. */
+export function beginInsertDrag(
+  dt: DataTransferLike,
+  text: string,
+  insert: (deviceId: string) => void,
+): void {
+  currentDrag = { deviceId: '', refs: [], insert };
+  dt.setData(DRAG_MIME, '{}');
+  dt.setData('text/plain', text);
+  dt.effectAllowed = 'copy';
+}
 /** Il trascinamento in corso, per chi deve accettarlo o rifiutarlo durante `dragover`. */
 export const peekDrag = (): DragData | null => currentDrag;
 export const endDrag = (): void => {
@@ -510,6 +523,7 @@ export function dropVerdict(doc: OpenDoc | null, nodeId: string): 'move' | 'copy
   const drag = currentDrag;
   if (!drag) return null;
   const target = parseNodeId(nodeId);
+  if (drag.insert) return target.kind !== 'static' && deviceOf(doc, target.dev) ? 'copy' : null;
   if (drag.refs.length > 0 && drag.refs.every((r) => r.kind === 'tag')) {
     return target.kind === 'tagTable' &&
       target.dev === drag.deviceId &&
@@ -531,6 +545,10 @@ export function dropOn(store: StoreApi<AppState>, nodeId: string): void {
   currentDrag = null;
   if (!drag || !verdict) return;
   const target = parseNodeId(nodeId);
+  if (drag.insert && target.kind !== 'static') {
+    drag.insert(target.dev);
+    return;
+  }
   if (target.kind === 'tagTable') {
     store.getState().edit('history.moveTags', (p) => {
       const dev = findDevice(p, target.dev);

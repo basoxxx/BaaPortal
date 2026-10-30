@@ -1,0 +1,22 @@
+.baa-library-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 6px;
+}
+.baa-library-tools input[type='search'] {
+  flex: 1 1 8em;
+  min-width: 0;
+}
+.baa-library-tree {
+  min-height: 2em;
+}
+.baa-library-source {
+  max-height: 60vh;
+  overflow: auto;
+  white-space: pre;
+  font-family: monospace;
+}
+.baa-library-conflicts td {
+  padding: 2px 6px;
+}

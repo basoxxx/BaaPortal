@@ -20,7 +20,8 @@ export function activeObjectRef(s: AppState): ObjectRef | null {
     e.kind === 'crossRef' ||
     e.kind === 'callStructure' ||
     e.kind === 'assignment' ||
-    e.kind === 'resources'
+    e.kind === 'resources' ||
+    e.kind === 'deviceView'
   )
     return null;
   if (e.kind === 'allTags') return { kind: 'device', deviceId: e.deviceId };

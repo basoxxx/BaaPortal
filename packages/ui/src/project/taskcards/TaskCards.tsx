@@ -8,6 +8,7 @@ import { CallStack } from './CallStack';
 import { CpuPanel } from './CpuPanel';
 import { IoPanel } from './IoPanel';
 import { FindReplace } from './FindReplace';
+import { GlobalLibraries, ProjectLibrary } from '../library/LibraryPanel';
 
 const SECTIONS: Record<TaskCardId, string[]> = {
   instructions: ['favorites', 'basic', 'advanced', 'communication', 'optional'],
@@ -61,6 +62,14 @@ function Section({ card, id }: { card: TaskCardId; id: string }) {
       ) : open && id === 'callStack' ? (
         <div id={`tc-${card}-${id}`}>
           <CallStack />
+        </div>
+      ) : open && id === 'projectLibrary' ? (
+        <div id={`tc-${card}-${id}`}>
+          <ProjectLibrary />
+        </div>
+      ) : open && id === 'globalLibraries' ? (
+        <div id={`tc-${card}-${id}`}>
+          <GlobalLibraries />
         </div>
       ) : open && id === 'ioPanel' ? (
         <div id={`tc-${card}-${id}`}>

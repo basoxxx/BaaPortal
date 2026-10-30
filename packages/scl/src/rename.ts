@@ -1,7 +1,7 @@
 // Rinomina nel testo SCL, sui token del lexer (commenti e stringhe restano come sono): `"Motore"`
 // non è `"Motore2"`, `#a` e `a` sono la variabile locale, un nome dopo `.` è un membro, `x :=`
 // dentro una chiamata è il parametro del blocco chiamato.
-import type { RenameTarget } from '@baaportal/awl';
+import type { BlockFamily, RenameTarget, Renumber } from '@baaportal/awl';
 import { sameName } from '@baaportal/s7-types';
 import { lex, type Tok } from './lexer.js';
 
@@ -145,4 +145,35 @@ function sclEdits(
     }
   }
   return edits;
+}
+
+/**
+ * I riferimenti assoluti ai blocchi (`FC1(…)`, `DB2.DW0`) con i numeri di `renumber`. `unsafe`: il
+ * testo sceglie un DB da una variabile (`WORD_TO_BLOCK_DB`), che non si riscrive.
+ */
+export function renumberInScl(
+  source: string,
+  renumber: Renumber,
+): { source: string; unsafe: boolean } {
+  const toks = lex(source, { errors: [] });
+  let unsafe = false;
+  let out = '';
+  let pos = 0;
+  toks.forEach((t, i) => {
+    if (t.kind !== 'id' || toks[i - 1]?.text === '.') return;
+    if (t.text.toUpperCase() === 'WORD_TO_BLOCK_DB') unsafe = true;
+    const m = /^(FB|FC|DB)(\d+)$/i.exec(t.text);
+    if (!m) return;
+    const kind = m[1]!.toUpperCase() as BlockFamily;
+    // Senza `#` `DB1`, `FC1` sono anche nomi di variabili locali: è un blocco solo come chiamata
+    // `FC1(…)`, `DB1(…)` o accesso `DB1.DW0`.
+    const next = toks[i + 1]?.text;
+    if (next !== '(' && !(kind === 'DB' && next === '.')) return;
+    const n = Number(m[2]);
+    const to = renumber(kind, n);
+    if (to === undefined || to === n) return;
+    out += source.slice(pos, t.from) + m[1] + String(to);
+    pos = t.from + t.text.length;
+  });
+  return { source: out + source.slice(pos), unsafe };
 }

@@ -41,9 +41,12 @@ export interface BackupManifest {
 }
 
 export class BackupFormatError extends Error {
+  readonly detail: string;
+
   constructor(detail: string) {
     super(`File di backup non valido: ${detail}`);
     this.name = 'BackupFormatError';
+    this.detail = detail;
   }
 }
 
@@ -105,7 +108,7 @@ export interface InflateStats {
 /** Pezzo di archivio dato a fflate per volta: limita ogni blocco gonfiato (circa 1 MB al massimo). */
 const PUSH_SLICE = 1024;
 
-function inflateCapped(
+export function inflateCapped(
   bytes: Uint8Array,
   cap: (name: string) => number | undefined,
   stats?: InflateStats,
