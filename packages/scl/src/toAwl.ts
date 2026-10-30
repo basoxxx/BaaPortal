@@ -478,6 +478,16 @@ class Gen {
       case 'temp':
         return this.resolve(e, hint).ty;
       case 'fcall': {
+        const f = strFn(e);
+        if (f === 'FIND') {
+          this.strArgs(e);
+          return 'INT';
+        }
+        if (f)
+          fail(
+            e,
+            `${f} dà una STRING: si usa in :=, nei confronti, in LEN e come parametro STRING`,
+          );
         const c = this.callee(e);
         return c.ret ?? fail(e, `${c.shown} non restituisce un valore`);
       }
@@ -503,6 +513,7 @@ class Gen {
           if (!this.strSide(e.arg)) fail(e.arg, 'LEN vuole una STRING');
           return 'INT';
         }
+        if (e.name in STR_FNS) fail(e, `${e.name} vuole ${STR_FNS[e.name]!.length} parametri`);
         const c = CONV[e.name];
         if (!c) return this.typeOf(this.blockCall(e));
         this.want(e.arg, c[0]);
@@ -611,8 +622,9 @@ class Gen {
       return this.emit(INVERT[ty]);
     }
     if (e.k === 'call' && e.name === 'LEN') {
-      const s = this.strSide(e.arg)!;
-      if ('codes' in s) return this.emit(`L ${s.codes.length}`);
+      const side = this.strSide(e.arg)!;
+      if ('codes' in side) return this.emit(`L ${side.codes.length}`);
+      const s = this.materialize(side, e);
       this.opn(s.loc);
       return this.emit(`L ${this.at(s.loc, 'B', 1)}`);
     }
@@ -888,6 +900,7 @@ class Gen {
   private hoist(e: Expr): Expr {
     switch (e.k) {
       case 'fcall': {
+        if (strFn(e) === 'FIND') return this.strFind(e);
         const ty = this.typeOf(e);
         const text = this.temp(ty);
         this.emitCall(e, text);
@@ -1130,8 +1143,11 @@ class Gen {
   }
 
   /** Un lato STRING: una costante (codici) o una variabile (posizione e lunghezza massima). */
-  private strSide(e: Expr): { codes: number[] } | { loc: Loc; max: number } | undefined {
+  private strSide(e: Expr): StrSide | undefined {
+    if (e.k === 'call' && e.name in STR_FNS)
+      fail(e, `${e.name} vuole ${STR_FNS[e.name]!.length} parametri`);
     if (e.k === 'str') return { codes: this.chars(e) };
+    if (e.k === 'fcall' && strFn(e) && strFn(e) !== 'FIND') return { call: e, max: this.strMax(e) };
     const t = this.complexOf(e);
     if (t?.kind !== 'string') return undefined;
     const loc = this.located(e as Located);
@@ -1142,9 +1158,10 @@ class Gen {
   /** Un confronto con un lato STRING: una costante che non è di un carattere o una variabile. */
   private isStrCmp(e: Extract<Expr, { k: 'bin' }>): boolean {
     const str = (x: Expr) =>
-      (x.k === 'str' && x.text.length !== 1) || this.complexOf(x)?.kind === 'string';
+      (x.k === 'str' && x.text.length !== 1) ||
+      (x.k === 'fcall' && !!strFn(x) && strFn(x) !== 'FIND') ||
+      this.complexOf(x)?.kind === 'string';
     if (!str(e.l) && !str(e.r)) return false;
-    if (e.op !== '=' && e.op !== '<>') fail(e, `Con STRING si usano solo = e <>, non ${e.op}`);
     if (!this.strSide(e.l) || !this.strSide(e.r))
       fail(e, 'Una STRING si confronta solo con una STRING');
     if (e.l.k === 'str' && e.r.k === 'str') fail(e, 'Confronto fra due costanti');
@@ -1225,17 +1242,29 @@ class Gen {
       const c = src.codes;
       if (c.length > max)
         fail(e, `La costante ha ${c.length} caratteri, ${dst.text}${tail(dst)} ne tiene ${max}`);
-      this.opn(to);
-      this.emit(
-        `L ${max}`,
-        `T ${this.at(to, 'B', 0)}`,
-        `L ${c.length}`,
-        `T ${this.at(to, 'B', 1)}`,
-      );
-      for (const { k, part } of this.pieces(c))
-        this.emit(`L ${this.charConst(part)}`, `T ${this.at(to, WIDTH[part.length]!, 2 + k)}`);
-      return;
+      return this.constString(to, max, c);
     }
+    if ('call' in src) {
+      // un parametro che è anche la destinazione: prima in una TEMP, poi la copia
+      if (!this.strArgs(src.call).strs.some((a) => 'loc' in a && overlaps(a, { loc: to, max })))
+        return this.strCall(src.call, to, max);
+      const t = this.tempString(max, at);
+      this.strCall(src.call, t, max);
+      return this.copyString({ loc: t, max }, to, max, at);
+    }
+    this.copyString(src, to, max, at);
+  }
+
+  /** Una costante nella STRING `to` (lunghezza massima `max`). */
+  private constString(to: Loc, max: number, c: number[]): void {
+    this.opn(to);
+    this.emit(`L ${max}`, `T ${this.at(to, 'B', 0)}`, `L ${c.length}`, `T ${this.at(to, 'B', 1)}`);
+    for (const { k, part } of this.pieces(c))
+      this.emit(`L ${this.charConst(part)}`, `T ${this.at(to, WIDTH[part.length]!, 2 + k)}`);
+  }
+
+  /** Lunghezza attuale (al massimo quella di `to`) e caratteri da una STRING all'altra. */
+  private copyString(src: { loc: Loc; max: number }, to: Loc, max: number, at: Pos): void {
     const n = this.temp('INT');
     this.curLen(src.loc, Math.min(src.max, max), n);
     this.opn(to);
@@ -1247,7 +1276,12 @@ class Gen {
 
   /** `a = b` / `a <> b` fra STRING: stessa lunghezza attuale e stessi caratteri, in una TEMP BOOL. */
   private strCompare(e: Extract<Expr, { k: 'bin' }>): Expr {
-    const [a, b] = [this.strSide(e.l)!, this.strSide(e.r)!];
+    const sides = [this.strSide(e.l)!, this.strSide(e.r)!];
+    if (e.op !== '=' && e.op !== '<>') return this.strOrder(e, sides);
+    const [a, b] = sides.map((x) => ('call' in x ? this.materialize(x, e) : x)) as [
+      Exclude<StrSide, { call: unknown }>,
+      Exclude<StrSide, { call: unknown }>,
+    ];
     const r = this.temp('BOOL');
     const end = this.label(e);
     this.emit('CLR', `= ${r}`);
@@ -1283,6 +1317,320 @@ class Gen {
     this.place(end);
     const t: Expr = { k: 'temp', text: r, ty: 'BOOL', line: e.line, col: e.col };
     return e.op === '=' ? t : { k: 'not', e: t, line: e.line, col: e.col };
+  }
+
+  // ---- funzioni STRING (2.1), in linea: niente FC della libreria ----
+
+  /** Una STRING di appoggio nei TEMP, su un indirizzo pari, libera alla fine dello `scoped`. */
+  private tempString(max: number, at: Pos): Loc {
+    const byte = this.tempTop + (this.tempTop % 2);
+    this.tempTop = byte + max + 2;
+    return { area: 'L', bit: byte * 8, at };
+  }
+
+  /** Una STRING da leggere con AR1: una costante o una funzione passano da una TEMP. */
+  private materialize(s: StrSide, at: Pos): { loc: Loc; max: number } {
+    if ('loc' in s) return s;
+    const max = 'call' in s ? s.max : s.codes.length;
+    const loc = this.tempString(max, at);
+    if ('call' in s) this.strCall(s.call, loc, max);
+    else this.constString(loc, max, s.codes);
+    return { loc, max };
+  }
+
+  /** I parametri di una funzione STRING nell'ordine della firma (per posizione o per nome). */
+  private strArgs(c: Call): { strs: StrSide[]; ints: Expr[]; order: ('s' | 'i')[] } {
+    const f = strFn(c)!;
+    const sig = STR_FNS[f]!;
+    const positional = c.args.length > 0 && c.args[0]!.name === '';
+    if (c.args.length !== sig.length)
+      fail(c, `${f} vuole ${sig.length} parametri: ${sig.join(', ')}`);
+    const byName = sig.map((n, k) => {
+      const a = positional ? c.args[k] : c.args.find((x) => sameName(x.name, n));
+      if (!a || a.out) return fail(c, `Manca il parametro ${n} di ${f}`);
+      return a.e;
+    });
+    const out = { strs: [] as StrSide[], ints: [] as Expr[], order: [] as ('s' | 'i')[] };
+    sig.forEach((n, k) => {
+      const e = byName[k]!;
+      if (n === 'L' || n === 'P') {
+        this.want(e, 'INT');
+        out.ints.push(e);
+        out.order.push('i');
+      } else {
+        out.strs.push(this.strSide(e) ?? fail(e, `${n} di ${f} vuole una STRING`));
+        out.order.push('s');
+      }
+    });
+    return out;
+  }
+
+  /** Lunghezza massima del risultato di una funzione STRING (al massimo 254). */
+  private strMax(c: Call): number {
+    const s = this.strArgs(c).strs;
+    const len = (x: StrSide) => ('codes' in x ? x.codes.length : x.max);
+    const f = strFn(c)!;
+    return Math.min(
+      254,
+      f === 'CONCAT' || f === 'INSERT' || f === 'REPLACE' ? len(s[0]!) + len(s[1]!) : len(s[0]!),
+    );
+  }
+
+  /** Un ciclo `i = 0 … n-1` su `body`. */
+  private each(n: string, at: Pos, body: (i: string, next: string) => void): void {
+    const i = this.temp('INT');
+    const [top, next, done] = [this.label(at), this.label(at), this.label(at)];
+    this.emit('L 0', `T ${i}`);
+    this.place(top);
+    this.emit(`L ${i}`, `L ${n}`, '>=I', `JC ${done}`);
+    body(i, next);
+    this.place(next);
+    this.emit(`L ${i}`, 'L 1', '+I', `T ${i}`, `JU ${top}`);
+    this.place(done);
+  }
+
+  /** AR1 sul carattere `parti` (somma di INT, da 0) di `l`; poi il byte con `op`. */
+  private char(op: 'L' | 'T', l: Loc, parts: string[], value?: string): void {
+    this.emit(`L ${parts[0]}`);
+    for (const p of parts.slice(1)) this.emit(`L ${p}`, '+I');
+    this.emit('SLD 3');
+    if (l.area === 'DI') this.emit('TAR2', '+D');
+    this.emit('LAR1');
+    this.opn(l);
+    if (value) this.emit(`L ${value}`);
+    this.emit(`${op} ${this.at(l, 'B', 2, true)}`);
+  }
+
+  /** `t` = il minore fra `x` e `y` (INT). */
+  private minInto(t: string, x: string, y: string, at: Pos): void {
+    const skip = this.label(at);
+    this.emit(`L ${x}`, `T ${t}`, `L ${y}`, `L ${x}`, '<I', `JCN ${skip}`, `L ${y}`, `T ${t}`);
+    this.place(skip);
+  }
+
+  /** Un valore INT in una TEMP (o un letterale / operando così com'è). */
+  private intArg(e: Expr): string {
+    return this.actual(e, 'INT');
+  }
+
+  /**
+   * Il risultato di CONCAT, LEFT, RIGHT, MID, INSERT, DELETE o REPLACE in `dst` (massimo `max`),
+   * come le funzioni IEC di STEP 7 (FC 2, 20, 32, 26, 17, 4, 31): pezzi di STRING copiati uno dopo
+   * l'altro; quello che non ci sta si perde e BR va a 0. L o P non validi: STRING vuota e BR a 0.
+   */
+  private strCall(c: Call, dst: Loc, max: number): void {
+    const f = strFn(c)!;
+    // i parametri nell'ordine della firma, tutti prima di scrivere in `dst`
+    const args = this.strArgs(c);
+    const [ints, src]: [string[], { loc: Loc; max: number }[]] = [[], []];
+    for (const k of args.order)
+      if (k === 'i') ints.push(this.intArg(args.ints[ints.length]!));
+      else src.push(this.materialize(args.strs[src.length]!, c));
+    const lens = src.map((s) => {
+      const n = this.temp('INT');
+      this.curLen(s.loc, s.max, n);
+      return n;
+    });
+    const [a, b] = src;
+    const [na, nb] = lens;
+    const bad = this.label(c);
+    const fin = this.label(c);
+    const k = this.temp('INT');
+    const t = () => this.temp('INT');
+    this.emit('L 0', `T ${k}`);
+    const jump = (x: string, cmp: string, y: string, to = bad) =>
+      this.emit(`L ${x}`, `L ${y}`, cmp, `JC ${to}`);
+    const calc = (into: string, ...lines: string[]) => this.emit(...lines, `T ${into}`);
+    const pieces: [Loc, string, string][] = [];
+    const [L, P] = f === 'INSERT' ? [undefined, ints[0]] : [ints[0], ints[1]];
+    switch (f) {
+      case 'CONCAT':
+        pieces.push([a!.loc, '0', na!], [b!.loc, '0', nb!]);
+        break;
+      case 'LEFT':
+      case 'RIGHT': {
+        jump(L!, '<I', '0');
+        const n = t();
+        this.minInto(n, L!, na!, c);
+        if (f === 'LEFT') pieces.push([a!.loc, '0', n]);
+        else {
+          const st = t();
+          calc(st, `L ${na}`, `L ${n}`, '-I');
+          pieces.push([a!.loc, st, n]);
+        }
+        break;
+      }
+      case 'MID': {
+        jump(L!, '<=I', '0');
+        jump(P!, '<=I', '0');
+        jump(P!, '>I', na!);
+        const [st, rest, n] = [t(), t(), t()];
+        calc(st, `L ${P}`, 'L 1', '-I');
+        calc(rest, `L ${na}`, `L ${st}`, '-I');
+        this.minInto(n, L!, rest, c);
+        pieces.push([a!.loc, st, n]);
+        break;
+      }
+      case 'INSERT': {
+        jump(P!, '<I', '0');
+        const [p, rest] = [t(), t()];
+        this.minInto(p, P!, na!, c);
+        calc(rest, `L ${na}`, `L ${p}`, '-I');
+        pieces.push([a!.loc, '0', p], [b!.loc, '0', nb!], [a!.loc, p, rest]);
+        break;
+      }
+      case 'DELETE':
+      case 'REPLACE': {
+        jump(L!, '<I', '0');
+        jump(P!, '<I', '0');
+        const [p0, n, st, rest, bl] = [t(), t(), t(), t(), t()];
+        const whole = this.label(c);
+        const go = this.label(c);
+        // niente da togliere: p0 = fine, n = 0 (e REPLACE non mette IN2)
+        jump(L!, '==I', '0', whole);
+        if (f === 'DELETE') {
+          jump(P!, '==I', '0', whole);
+          jump(P!, '>I', na!, whole);
+          calc(p0, `L ${P}`, 'L 1', '-I');
+        } else {
+          // P 0 o 1 dal primo carattere; oltre la fine si aggiunge IN2
+          const one = this.label(c);
+          calc(p0, `L ${P}`, 'L 1', '-I');
+          this.emit(`L ${p0}`, 'L 0', '>=I', `JC ${one}`, 'L 0', `T ${p0}`);
+          this.place(one);
+          this.minInto(p0, p0, na!, c);
+          calc(bl, `L ${nb}`);
+        }
+        calc(rest, `L ${na}`, `L ${p0}`, '-I');
+        this.minInto(n, L!, rest, c);
+        this.emit(`JU ${go}`);
+        this.place(whole);
+        this.emit(`L ${na}`, `T ${p0}`, 'L 0', `T ${n}`);
+        if (f === 'REPLACE') this.emit(`T ${bl}`);
+        this.place(go);
+        calc(st, `L ${p0}`, `L ${n}`, '+I');
+        calc(rest, `L ${na}`, `L ${st}`, '-I');
+        pieces.push([a!.loc, '0', p0]);
+        if (f === 'REPLACE') pieces.push([b!.loc, '0', bl]);
+        pieces.push([a!.loc, st, rest]);
+        break;
+      }
+    }
+    const avail = t();
+    for (const [from, start, len] of pieces) {
+      const fits = this.label(c);
+      const n = t();
+      calc(avail, `L ${max}`, `L ${k}`, '-I');
+      this.emit(
+        `L ${len}`,
+        `T ${n}`,
+        `L ${avail}`,
+        '<=I',
+        `JC ${fits}`,
+        `L ${avail}`,
+        `T ${n}`,
+        'CLR',
+        'SAVE',
+      );
+      this.place(fits);
+      this.each(n, c, (i) => {
+        const ch = this.temp('BYTE');
+        this.char('L', from, [start, i]);
+        this.emit(`T ${ch}`);
+        this.char('T', dst, [k, i], ch);
+      });
+      calc(k, `L ${k}`, `L ${n}`, '+I');
+    }
+    this.emit(`JU ${fin}`);
+    this.place(bad);
+    this.emit('CLR', 'SAVE');
+    this.place(fin);
+    this.opn(dst);
+    this.emit(`L ${k}`, `T ${this.at(dst, 'B', 1)}`, `L ${max}`, `T ${this.at(dst, 'B', 0)}`);
+  }
+
+  /**
+   * FIND(IN1, IN2): la posizione (da 1) della prima IN2 dentro IN1, 0 se non c'è (anche con IN2
+   * vuota), in una TEMP INT.
+   */
+  private strFind(c: Call): Expr {
+    const src = this.strArgs(c).strs.map((a) => this.materialize(a, c));
+    const [a, b] = src as [{ loc: Loc; max: number }, { loc: Loc; max: number }];
+    const [na, nb, lim, res] = [
+      this.temp('INT'),
+      this.temp('INT'),
+      this.temp('INT'),
+      this.temp('INT'),
+    ];
+    const done = this.label(c);
+    this.emit('L 0', `T ${res}`);
+    this.curLen(a.loc, a.max, na);
+    this.curLen(b.loc, b.max, nb);
+    this.emit(
+      `L ${nb}`,
+      'L 0',
+      '<=I',
+      `JC ${done}`,
+      `L ${na}`,
+      `L ${nb}`,
+      '-I',
+      `T ${lim}`,
+      'L 1',
+      '+I',
+      `T ${lim}`,
+    );
+    // p = 0 … na - nb; per ogni p i caratteri di IN2
+    this.each(lim, c, (p, nextP) => {
+      this.each(nb, c, (j) => {
+        const ch = this.temp('BYTE');
+        this.char('L', a.loc, [p, j]);
+        this.emit(`T ${ch}`);
+        this.char('L', b.loc, [j]);
+        this.emit(`L ${ch}`, '<>I', `JC ${nextP}`);
+      });
+      this.emit(`L ${p}`, 'L 1', '+I', `T ${res}`, `JU ${done}`);
+    });
+    this.place(done);
+    return { k: 'temp', text: res, ty: 'INT', line: c.line, col: c.col };
+  }
+
+  /**
+   * `<`, `>`, `<=`, `>=` fra STRING, come STEP 7: carattere per carattere col codice, e a parità
+   * la più corta è la minore. Il risultato (-1, 0, 1) in una TEMP INT, confrontato con 0.
+   */
+  private strOrder(e: Extract<Expr, { k: 'bin' }>, sides: StrSide[]): Expr {
+    const [a, b] = sides.map((x) => this.materialize(x, e)) as [
+      { loc: Loc; max: number },
+      { loc: Loc; max: number },
+    ];
+    const [na, nb, n, r] = [this.temp('INT'), this.temp('INT'), this.temp('INT'), this.temp('INT')];
+    const [lt, gt, done] = [this.label(e), this.label(e), this.label(e)];
+    this.emit('L 0', `T ${r}`);
+    this.curLen(a.loc, a.max, na);
+    this.curLen(b.loc, b.max, nb);
+    this.minInto(n, na, nb, e);
+    this.each(n, e, (i) => {
+      const ch = this.temp('BYTE');
+      this.char('L', a.loc, [i]);
+      this.emit(`T ${ch}`);
+      this.char('L', b.loc, [i]);
+      // ACCU2 = carattere di a, ACCU1 = carattere di b
+      this.emit(`L ${ch}`, 'TAK', '<I', `JC ${lt}`, '>I', `JC ${gt}`);
+    });
+    this.emit(`L ${na}`, `L ${nb}`, '<I', `JC ${lt}`, '>I', `JC ${gt}`, `JU ${done}`);
+    this.place(lt);
+    this.emit('L -1', `T ${r}`, `JU ${done}`);
+    this.place(gt);
+    this.emit('L 1', `T ${r}`);
+    this.place(done);
+    const at = { line: e.line, col: e.col };
+    return {
+      k: 'bin',
+      op: e.op,
+      l: { k: 'temp', text: r, ty: 'INT', ...at },
+      r: { k: 'int', text: '0', ...at },
+      ...at,
+    };
   }
 
   /**
@@ -1577,6 +1925,31 @@ class Gen {
     });
   }
 }
+
+/** Un lato STRING: costante, variabile, o funzione STRING da calcolare. */
+type StrSide = { codes: number[] } | { loc: Loc; max: number } | { call: Call; max: number };
+/** Firme delle funzioni STRING (nomi dei parametri delle FC IEC di STEP 7). */
+const STR_FNS: Record<string, string[]> = {
+  CONCAT: ['IN1', 'IN2'],
+  LEFT: ['IN', 'L'],
+  RIGHT: ['IN', 'L'],
+  MID: ['IN', 'L', 'P'],
+  FIND: ['IN1', 'IN2'],
+  INSERT: ['IN1', 'IN2', 'P'],
+  DELETE: ['IN', 'L', 'P'],
+  REPLACE: ['IN1', 'IN2', 'L', 'P'],
+};
+/** Il nome della funzione STRING chiamata senza virgolette (`"CONCAT"(…)` è un blocco). */
+const strFn = (e: Expr): string | undefined =>
+  e.k === 'fcall' && e.callee.k === 'id' && e.callee.text.toUpperCase() in STR_FNS
+    ? e.callee.text.toUpperCase()
+    : undefined;
+/** Due STRING nella stessa memoria che si sovrappongono. */
+const overlaps = (x: { loc: Loc; max: number }, y: { loc: Loc; max: number }): boolean =>
+  x.loc.area === y.loc.area &&
+  x.loc.db === y.loc.db &&
+  x.loc.bit / 8 < y.loc.bit / 8 + y.max + 2 &&
+  y.loc.bit / 8 < x.loc.bit / 8 + x.max + 2;
 
 /** Indici e membri come in AWL: `[3]`, `[1,2]`, `.x`, `."con spazi"`. */
 const tail = (o: Operand): string => {

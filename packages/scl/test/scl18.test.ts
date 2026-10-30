@@ -123,7 +123,7 @@ describe('sclToAwl 1.8: diagnostiche', () => {
     expect(diag('a := n;')).toContain('Tipi diversi');
     expect(diag('a := ps;')).toContain('parametri complessi delle FC');
     expect(diag("s := 'troppo lunga';")).toContain('ne tiene 8');
-    expect(diag("M0.0 := s < 'a';")).toContain('solo = e <>');
+    expect(ok("M0.0 := s < 'a';")).toContain('<I');
     expect(diag('M0.0 := s = n;')).toContain('solo con una STRING');
     expect(diag('n := LEN(n);')).toContain('LEN');
     expect(diag("s := 'a$b';")).toContain('$');
