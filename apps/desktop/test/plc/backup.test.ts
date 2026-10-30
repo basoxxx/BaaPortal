@@ -71,6 +71,7 @@ describe('backup online contro il PLC di prova', () => {
   let plc: ListeningCpu;
   let dir: string;
   let service: PlcService;
+  let sim: SimCpu;
   const owner = new Owner();
   const access = (): PlcAccess => ({
     host: '127.0.0.1',
@@ -82,10 +83,10 @@ describe('backup online contro il PLC di prova', () => {
   const target = () => join(dir, 'prova.baapbak');
 
   beforeEach(async () => {
-    const cpu = new SimCpu({ cpuTypeId: 'cpu-315-2-pn-dp', props: PROPS });
-    cpu.run();
+    sim = new SimCpu({ cpuTypeId: 'cpu-315-2-pn-dp', props: PROPS });
+    sim.run();
     plc = await listen(
-      simBackend(cpu, { systemBlocks: [syntheticSdb(0, 64), syntheticSdb(1, 64)] }),
+      simBackend(sim, { systemBlocks: [syntheticSdb(0, 64), syntheticSdb(1, 64)] }),
       { port: 0 },
     );
     const w = await connectWriteTcp({
@@ -169,6 +170,32 @@ describe('backup online contro il PLC di prova', () => {
       await c.close();
     }
     expect(await readdir(dir)).toEqual(['prova.baapbak']);
+  });
+
+  it('il modo nel manifest è riletto all inizio, non quello dell ultimo giro di sorveglianza', async () => {
+    sim.stop(); // la sorveglianza (ogni secondo) ha visto RUN
+    expect(service.modeOf(owner)).toBe('RUN');
+    expect(await make().backup(owner)).toMatchObject({ ok: true });
+    const { manifest } = decodeBackup(new Uint8Array(await readFile(target())), (b) =>
+      createHash('sha256').update(b).digest('hex'),
+    );
+    expect(manifest.mode).toBe('STOP');
+  });
+
+  it('offline durante la raccolta → il backup si ferma con un errore, nessun file', async () => {
+    const uploads = new UploadService({
+      connect: wrapping((c) => ({
+        uploadWithInfo: async (t: never, n: number) => {
+          await service.disconnect(owner);
+          return c.uploadWithInfo(t, n);
+        },
+      })),
+    });
+    expect(await make({ uploads }).backup(owner)).toEqual({
+      ok: false,
+      error: 'Collegamento online finito: backup interrotto',
+    });
+    expect(await readdir(dir)).toEqual([]);
   });
 
   it('il collegamento del backup è read-only', async () => {

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { modeFrom } from '@baaportal/s7comm';
 import type { PlcBackupResult, PlcIdentity } from '@baaportal/ui';
 import {
   backupFileName,
@@ -8,6 +9,7 @@ import {
 } from '@baaportal/project';
 import { writeFileAtomic } from '../fsAtomic';
 import { accessLabel } from './access';
+import { toPlcMode } from './plcMap';
 import type { PlcOwner, PlcService } from './plcService';
 import { BACKUP_TYPES, type UploadOwner, type UploadService } from './uploadAll';
 
@@ -96,7 +98,33 @@ export class BackupService {
     const now = this.o.service.target(owner);
     if (!now || now.linkId !== target.linkId)
       return { ok: false, error: 'Nessun collegamento online' };
+    // Se il collegamento online finisce (offline, perso, altra CPU) il backup si ferma.
+    let ended = false;
+    const offLink = this.o.service.onLinkEnd(owner, () => {
+      ended = true;
+      this.cancel(owner);
+    });
+    try {
+      const r = await this.collect(owner, target, at, path, state);
+      return ended && !r.ok
+        ? { ok: false, error: 'Collegamento online finito: backup interrotto' }
+        : r;
+    } finally {
+      offLink();
+    }
+  }
 
+  private async collect(
+    owner: BackupOwner,
+    target: NonNullable<ReturnType<PlcService['target']>>,
+    at: Date,
+    path: string,
+    state: { cancelled: boolean },
+  ): Promise<PlcBackupResult> {
+    // Il modo riletto ora, non l'ultimo visto dalla sorveglianza.
+    const read = await this.o.service.read(owner, (run) => run((c) => c.readSzl(0x0424, 0)));
+    const mode = read.ok ? toPlcMode(modeFrom(read.value)) : 'UNKNOWN';
+    if (state.cancelled || owner.isDestroyed()) return { ok: false, cancelled: true };
     const r = await this.o.uploads.collect(owner, target.access, {
       kind: 'backup',
       types: BACKUP_TYPES,
@@ -150,7 +178,7 @@ export class BackupService {
         rack: target.access.rack,
         slot: target.access.slot,
       },
-      mode: this.o.service.modeOf(owner) ?? 'UNKNOWN',
+      mode,
       blocks: entries,
       failed: r.failed,
     };

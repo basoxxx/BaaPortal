@@ -61,14 +61,14 @@ Per ogni voce si indica che cosa succede oggi. "Errore chiaro" vuol dire che Baa
 - **Scritture da tabella in più richieste.** Se una fallisce, le precedenti restano scritte. L'«esito sconosciuto» riguarda tutta la richiesta in corso (fino a 20 righe); le righe successive dicono «Non scritto», e un rifiuto della CPU dice «Rifiutato dalla CPU».
 - **Numero di richieste nella conferma.** È un massimo calcolato per PDU 240, non il numero esatto.
 - **Backup: il ripristino è del 3D (sperimentale).** Non si sa se i DB caricati hanno i valori attuali o quelli iniziali (§19.4).
-- **Il backup registra il modo visto per ultimo dalla sorveglianza,** non quello riletto all'inizio.
+- **Il modo del backup è riletto all'inizio** sul collegamento online; se la lettura non riesce, nel file c'è `UNKNOWN`.
 - **Lettura di un `.baapbak`: risolto nel 3D.** La lettura non si fida più delle dimensioni dichiarate nello zip (vedi «Osservazione online, stack e ripristino (piano 3D)»).
 - **Niente messaggi push.** Il buffer si aggiorna ogni secondo, solo con l'editor aperto.
 - **`_DELE` usa 'A'.** Vedi «Caricamento e confronto (piano 3B)».
 - **Impostazione dell'ora con protezione di livello 3.** Anche la risposta `0xD0A1` è un'ipotesi (§12.0).
 - **Il numero di richieste nella conferma è un massimo solo se la CPU concorda una PDU di almeno 240 byte.** Con una PDU più piccola le richieste possono essere di più.
 - **Più tabelle online osservano insieme.** Le loro richieste si uniscono in un solo giro di letture per PLC (operandi uguali letti una volta) e il limite di 200 righe vale per l'insieme: le righe oltre il limite, in ordine di accensione, danno un errore di riga e un avviso. Una tabella che non è più aperta in un riquadro smette di interrogare. Sul simulatore resta una sola tabella osservata (vedi «Tabelle di controllo»).
-- **Il backup continua sul suo collegamento** anche se il collegamento online cade o si va offline: lo ferma solo _Interrompi_.
+- **Il backup si ferma se il collegamento online finisce** (offline, perso, finestra chiusa): errore «Collegamento online finito: backup interrotto», nessun file. Se finisce mentre il file si sta già scrivendo, il backup è salvato.
 - **I file `.baapbak` non compaiono nell'albero.** Restano così anche dopo il 3D: si aprono con la finestra dei file (vedi 3D).
 - **I record di diagnostica più corti di 20 byte si scartano.**
 - **Il pulsante si chiama «Osserva tutto»,** il nome del 2C, e non «Controlla tutto» come in TIA.
