@@ -277,10 +277,34 @@ export interface DeviceHardware {
   modules: HwModule[];
 }
 
+/**
+ * Modello di libreria (tappa 7B): una copia master di uno o più oggetti, con le loro dipendenze
+ * (un FB con i suoi UDT e gli FC che chiama). Gli oggetti stanno qui come in un PLC.
+ */
+export interface LibraryItem {
+  id: string;
+  name: string;
+  /** Percorso della cartella nella libreria ('' = radice, 'A/B'). */
+  group: string;
+  comment: string;
+  blocks: Block[];
+  udts: Udt[];
+  tagTables: TagTable[];
+  watchTables: WatchTable[];
+}
+
+export interface Library {
+  items: LibraryItem[];
+  /** Percorsi delle cartelle, anche vuote. */
+  groups: string[];
+}
+
 export interface Project {
   formatVersion: 4;
   meta: ProjectMeta;
   devices: PlcDevice[];
+  /** Libreria di progetto (facoltativa: assente nei file scritti prima della tappa 7B). */
+  library?: Library;
 }
 
 export type ObjectRef =

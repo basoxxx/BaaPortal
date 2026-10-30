@@ -4,6 +4,7 @@ import { z } from 'zod';
 import {
   FORMAT_VERSION,
   type ExternalSource,
+  type Library,
   type Member,
   type PlcDevice,
   type Project,
@@ -29,6 +30,7 @@ export class BaapFormatError extends Error {
 
 const MANIFEST_FILE = 'baaportal.json';
 const PROJECT_FILE = 'project.json';
+const LIBRARY_FILE = 'library.json';
 
 const str = z.string();
 const id = z.string().min(1);
@@ -239,6 +241,39 @@ const blockSchema = z.discriminatedUnion('kind', [
   }),
 ]);
 
+/** Tetti della libreria: difesa da file non fidati (`.baaplib`) prima di toccare i dati. */
+const LIBRARY_MAX_ITEMS = 10_000;
+const LIBRARY_MAX_OBJECTS = 2_000;
+
+const libraryItemSchema = obj({
+  id,
+  name: str,
+  group: str,
+  comment: str.default(''),
+  blocks: z.array(blockSchema).max(LIBRARY_MAX_OBJECTS),
+  udts: z.array(udtSchema).max(LIBRARY_MAX_OBJECTS),
+  tagTables: z.array(tagTableSchema).max(LIBRARY_MAX_OBJECTS),
+  watchTables: z.array(watchTableSchema).max(LIBRARY_MAX_OBJECTS),
+});
+const librarySchema = obj({
+  items: z.array(libraryItemSchema).max(LIBRARY_MAX_ITEMS),
+  groups: z.array(str).max(LIBRARY_MAX_ITEMS),
+});
+
+/** Valida una libreria (di progetto o di un `.baaplib`): schema, id unici per modello e tra i modelli. */
+export function parseLibrary(json: unknown): Library {
+  const parsed = librarySchema.safeParse(json);
+  if (!parsed.success) throw invalid();
+  const library = parsed.data as Library;
+  const itemIds = new Set<string>();
+  for (const item of library.items) {
+    if (itemIds.has(item.id)) throw invalid();
+    itemIds.add(item.id);
+    checkUniqueIds({ ...item, sources: [] } as unknown as PlcDevice);
+  }
+  return library;
+}
+
 function toJson(value: unknown): Uint8Array {
   return strToU8(JSON.stringify(value, null, 2));
 }
@@ -246,7 +281,7 @@ function toJson(value: unknown): Uint8Array {
 const deviceDir = (deviceId: string) => `plc/${deviceId}`;
 
 export function writeBaap(project: Project, opts: { appVersion: string }): Uint8Array {
-  const { devices, ...projectRest } = project;
+  const { devices, library, ...projectRest } = project;
   const files: Record<string, Uint8Array> = {
     [MANIFEST_FILE]: toJson({
       format: 'baaportal-project',
@@ -258,6 +293,8 @@ export function writeBaap(project: Project, opts: { appVersion: string }): Uint8
       devices: devices.map((d) => ({ ...d.listExtras, id: d.id, name: d.name })),
     }),
   };
+  // In un file a parte: le versioni precedenti lo ignorano e il progetto si apre lo stesso.
+  if (library) files[LIBRARY_FILE] = toJson(library);
   for (const device of devices) {
     const dir = deviceDir(device.id);
     const { tagTables, udts, blocks, sources, watchTables, ...deviceRest } = device;
@@ -446,6 +483,10 @@ export function readBaap(bytes: Uint8Array): Project {
   const project = projectSchema(version).safeParse(json);
   if (!project.success) throw invalid();
   const { devices: listed, ...rest } = project.data;
+  // La libreria vale solo dal suo file, validata.
+  delete (rest as { library?: unknown }).library;
+  const libraryBytes = files.get(LIBRARY_FILE);
+  const library = libraryBytes ? parseLibrary(parseJson(libraryBytes)) : undefined;
   const ids = new Set<string>();
   const devices = listed.map((l) => {
     if (ids.has(l.id)) throw invalid();
@@ -456,5 +497,10 @@ export function readBaap(bytes: Uint8Array): Project {
     if (extras.length > 0) device.listExtras = Object.fromEntries(extras);
     return device;
   });
-  return { ...rest, formatVersion: FORMAT_VERSION, devices } as Project;
+  return {
+    ...rest,
+    formatVersion: FORMAT_VERSION,
+    devices,
+    ...(library ? { library } : {}),
+  } as Project;
 }
