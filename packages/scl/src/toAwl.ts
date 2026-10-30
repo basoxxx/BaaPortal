@@ -235,8 +235,10 @@ const isSimple = (e: Expr) =>
   e.k === 'temp';
 const isOperand = (e: Expr): e is Operand => isSimple(e) && !isLiteral(e);
 /** Un elemento di ARRAY con indici variabili: si legge e si scrive passando da AR1. */
-type Indexed = Exclude<Operand, { k: 'temp' }> & { vindex: Expr[] };
-const isIndexed = (e: Expr): e is Indexed => isOperand(e) && e.k !== 'temp' && !!e.vindex;
+type Indexed = Exclude<Operand, { k: 'temp' }>;
+const hasVar = (o: Operand): boolean =>
+  o.k !== 'temp' && (!!o.vindex || !!o.path?.some((s) => s.vindex));
+const isIndexed = (e: Expr): e is Indexed => isOperand(e) && hasVar(e);
 
 /** Posizione di una variabile come la risolve il compilatore; `at` per gli errori. */
 type Loc = { area: string; bit: number; db?: number; at: Pos };
@@ -316,11 +318,7 @@ class Gen {
   // ---- operandi e tipi ----
 
   /** `hint` sceglie il tipo di un indirizzo che ne ammette più d'uno (MW: INT o WORD). */
-  private resolve(
-    o: Operand,
-    hint?: Ty,
-    dest = false,
-  ): { awl: string; ty: Ty; constant: boolean; dims?: Dim[] } {
+  private resolve(o: Operand, hint?: Ty, dest = false): { awl: string; ty: Ty; constant: boolean } {
     if (o.k === 'temp') return { awl: o.text, ty: o.ty as Ty, constant: false };
     if (o.k === 'addr') {
       if (isNewAddress(o.text) && this.ownMember(o.text))
@@ -345,21 +343,11 @@ class Gen {
       return { awl: a.awl, ty, constant: false };
     }
     const shown = o.k === 'local' ? o.text.slice(1) : o.text;
+    // con indici variabili, il tipo dell'elemento (l'indirizzo lo fa `address`)
     const d = this.declared(o, dest);
-    let t = d.type;
-    // indici variabili: tipo e limiti dell'elemento (l'indirizzo lo fa `address`)
-    let dims: Dim[] | undefined;
-    if (o.vindex) {
-      if (t?.kind !== 'array')
-        return fail(o, `${o.text}${tail(o)} non è un ARRAY: niente indici [ ]`);
-      if (t.dims.length !== o.vindex.length)
-        fail(o, `L'ARRAY ha ${t.dims.length} dimensioni, gli indici sono ${o.vindex.length}`);
-      dims = t.dims;
-      t = t.element;
-    }
-    const ty = typed(t);
+    const ty = typed(d.type);
     if (!ty) fail(o, `Tipo di ${shown}${tail(o)} non supportato in SCL in prova (${SUPPORTED})`);
-    return { awl: d.awl, ty: ty!, constant: d.constant, ...(dims ? { dims } : {}) };
+    return { awl: d.awl, ty: ty!, constant: d.constant };
   }
 
   /** Una variabile o un parametro dell'interfaccia con questo nome. */
@@ -377,13 +365,14 @@ class Gen {
   private declared(
     o: Exclude<Operand, { k: 'temp' | 'addr' }>,
     dest = false,
+    onVar?: OnVar,
   ): { type: DataType | null; awl: string; constant: boolean; formal?: TypedMember } {
     if (o.k === 'symbol') {
       const name = unquote(o.text);
       const s = this.ctx.symbol(name);
       if (s)
         return {
-          type: this.walk(o, s.type, o.index, o.path),
+          type: this.walk(o, s.type, o, o.path, 0, onVar),
           awl: o.text + tail(o),
           constant: s.kind === 'constant',
         };
@@ -391,10 +380,10 @@ class Gen {
       const members = db ? this.dbMembers(db) : undefined;
       if (!members) fail(o, `Operando sconosciuto: ${o.text}`);
       const [first, ...rest] = o.path ?? [];
-      if (!first || o.index) fail(o, `Di un DB si usa un membro: ${o.text}.nome`);
+      if (!first || o.index || o.vindex) fail(o, `Di un DB si usa un membro: ${o.text}.nome`);
       const m = this.member(o, members!, first!);
       return {
-        type: this.walk(o, m.type, first!.index, rest),
+        type: this.walk(o, m.type, first!, rest, 1, onVar),
         awl: o.text + tail(o),
         constant: false,
       };
@@ -421,7 +410,7 @@ class Gen {
     if (dest && formal && own.kind === 'FC' && i.input.includes(formal))
       fail(o, `#${m!.name} è un ingresso della FC: non si scrive (usa una TEMP)`);
     return {
-      type: this.walk(o, m!.type, o.index, o.path),
+      type: this.walk(o, m!.type, o, o.path, 0, onVar),
       awl: `#${m!.name}${tail(o)}`,
       constant: false,
       ...(formal || m!.name === 'RET_VAL' ? { formal: m as TypedMember } : {}),
@@ -441,14 +430,29 @@ class Gen {
     return m ?? fail(o, `Membro sconosciuto: ${seg.name}`);
   }
 
-  /** Il tipo dopo gli indici e i membri, con gli indici nei limiti dell'ARRAY. */
+  /**
+   * Il tipo dopo gli indici e i membri, con gli indici costanti nei limiti dell'ARRAY. `head`: gli
+   * indici dopo il nome (livello `base`); `onVar` riceve i limiti di ogni livello con indici
+   * variabili (0 il nome, poi i membri).
+   */
   private walk(
     o: Operand,
     t: DataType | null,
-    index: number[] | undefined,
+    head: { index?: number[]; vindex?: Expr[] },
     path: Seg[] | undefined,
+    base: number,
+    onVar?: OnVar,
   ): DataType | null {
-    const at = (t: DataType | null, index: number[] | undefined): DataType | null => {
+    const at = (t: DataType | null, i: { index?: number[]; vindex?: Expr[] }, level: number) => {
+      if (i.vindex && t) {
+        if (t.kind !== 'array')
+          return fail(o, `${o.text}${tail(o)} non è un ARRAY: niente indici [ ]`);
+        if (t.dims.length !== i.vindex.length)
+          fail(o, `L'ARRAY ha ${t.dims.length} dimensioni, gli indici sono ${i.vindex.length}`);
+        onVar?.(level, t.dims);
+        return t.element;
+      }
+      const index = i.index;
       if (!index || !t) return t;
       if (t.kind !== 'array') return fail(o, `${o.text} non è un ARRAY: niente indici [ ]`);
       if (t.dims.length !== index.length)
@@ -459,8 +463,8 @@ class Gen {
       });
       return t.element;
     };
-    let cur = at(t, index);
-    for (const seg of path ?? []) {
+    let cur = at(t, head, base);
+    for (const [k, seg] of (path ?? []).entries()) {
       let members: TypedMember[] | undefined;
       if (cur?.kind === 'struct') members = cur.members;
       else if (cur?.kind === 'named') {
@@ -471,7 +475,7 @@ class Gen {
       }
       if (!members) return fail(o, `${seg.name}: ${o.text} non ha membri`);
       const m = this.member(o, members, seg);
-      cur = at(m.type, seg.index);
+      cur = at(m.type, seg, base + k + 1);
     }
     return cur;
   }
@@ -848,6 +852,19 @@ class Gen {
         this.complexParam(c, k.fc, m, dir, a, after);
         continue;
       }
+      const out = a.e;
+      if (dir !== 'in' && isIndexed(out)) {
+        // un elemento con indici variabili passa da una TEMP: letto prima (IN_OUT), scritto dopo
+        const r = this.resolve(out, ty, true);
+        if (r.constant) fail(out, `Non si può scrivere in una costante: ${out.text}`);
+        if (r.ty !== ty) mismatch(out, ty, r.ty);
+        const t =
+          dir === 'inout' ? (this.readIndexed(out) as { text: string }).text : this.temp(ty);
+        const tmp: Expr = { k: 'temp', text: t, ty, line: a.line, col: a.col };
+        after.push(() => this.writeIndexed(out, ty, tmp, a, false));
+        params.push(`${m.name} := ${t}`);
+        continue;
+      }
       params.push(
         `${m.name} := ${dir === 'in' ? this.actual(a.e, ty) : this.variable(a.e, ty, m.name)}`,
       );
@@ -915,8 +932,6 @@ class Gen {
   /** Il parametro attuale di un'uscita o di un ingresso/uscita: una variabile del tipo giusto. */
   private variable(e: Expr, ty: Ty, formal: string): string {
     if (!isOperand(e) || e.k === 'temp') return fail(e, `Per ${formal} serve una variabile`);
-    if (e.vindex)
-      fail(e, `Per ${formal} serve una variabile senza indici variabili (usa una TEMP e copiala)`);
     const r = this.resolve(e, ty, true);
     if (r.constant) fail(e, `Non si può scrivere in una costante: ${e.text}`);
     if (r.ty !== ty) mismatch(e, ty, r.ty);
@@ -990,7 +1005,7 @@ class Gen {
   }
 
   /** `#a[#i] := e`: il valore in una TEMP (o un letterale), poi l'indirizzo e la scrittura. */
-  private writeIndexed(dst: Indexed, ty: Ty, e0: Expr, at: Pos): void {
+  private writeIndexed(dst: Indexed, ty: Ty, e0: Expr, at: Pos, mark = true): void {
     const e = this.hoist(e0);
     let value: string;
     if (ty === 'BOOL' && e.k === 'bool') value = e.value ? 'SET' : 'CLR';
@@ -1005,15 +1020,18 @@ class Gen {
     const [bad, end] = [this.label(at), this.label(at)];
     const op = this.address(dst, bad);
     this.emit(value, `${ty === 'BOOL' ? '=' : 'T'} ${op}`);
-    this.mark(ty);
+    if (mark) this.mark(ty);
     this.emit(`JU ${end}`);
     this.place(bad);
     this.emit('CLR', 'SAVE');
     this.place(end);
   }
 
-  /** L'elemento `index` dell'ARRAY di `o`, risolto come nel compilatore (area, bit, DB). */
-  private located(o: Located, index?: number[]): Loc {
+  /**
+   * `o` risolto come nel compilatore (area, bit, DB); `sub` dà gli indici dei livelli con indici
+   * variabili (0 il nome, poi i membri).
+   */
+  private located(o: Located, sub?: Map<number, number[]>): Loc {
     const seg = (name: string, i?: number[]): PathSegment => ({
       name: unquote(name),
       quoted: name.startsWith('"'),
@@ -1021,12 +1039,11 @@ class Gen {
       range: NO_RANGE,
     });
     const path = [
-      seg(o.k === 'local' ? o.text.slice(1) : o.text, o.index),
-      ...(o.path ?? []).map((s) => seg(s.name, s.index)),
+      seg(o.k === 'local' ? o.text.slice(1) : o.text, sub?.get(0) ?? o.index),
+      ...(o.path ?? []).map((s, k) => seg(s.name, sub?.get(k + 1) ?? s.index)),
     ];
-    if (index) path[path.length - 1]!.index = index;
     const op: AwlOperand = { kind: o.k === 'symbol' ? 'symbol' : 'local', path, range: NO_RANGE };
-    const shown = `${o.text}${tail(o)}${index ? `[${index.join(',')}]` : ''}`;
+    const shown = `${o.text}${tail(o)}`;
     let v: ResolvedOperand;
     try {
       this.resolver ??= ownOperandResolver(this.ctx);
@@ -1042,7 +1059,7 @@ class Gen {
       return { area: v.area, bit: v.bit, at, ...(v.db !== undefined ? { db: v.db } : {}) };
     return fail(
       o,
-      index
+      sub
         ? `${shown}: ARRAY non raggiungibile con un indice variabile`
         : `${shown}: non raggiungibile per copiarlo intero`,
     );
@@ -1069,7 +1086,7 @@ class Gen {
    * I parametri complessi delle FC e gli IN_OUT complessi degli FB sono puntatori: errore.
    */
   private complexOf(e: Expr): DataType | undefined {
-    if (!isOperand(e) || e.k === 'temp' || e.k === 'addr' || e.vindex) return undefined;
+    if (!isOperand(e) || e.k === 'temp' || e.k === 'addr' || hasVar(e)) return undefined;
     const d = this.declared(e);
     const t = d.type;
     if (!t || typed(t) || !['string', 'struct', 'array', 'named', 'dateAndTime'].includes(t.kind))
@@ -1847,34 +1864,57 @@ class Gen {
    */
   private address(o: Indexed, bad: string): string {
     const r = this.resolve(o);
-    const dims = r.dims!;
-    const lows = dims.map((d) => d.lo);
+    const levels = new Map<number, Dim[]>();
+    this.declared(o, false, (level, dims) => levels.set(level, dims));
+    const vars = [...levels].map(([level, dims]) => ({
+      level,
+      dims,
+      exprs: level === 0 ? o.vindex! : o.path![level - 1]!.vindex!,
+    }));
+    const lows = new Map(vars.map((v) => [v.level, v.dims.map((d) => d.lo)]));
     const first = this.located(o, lows);
-    // il secondo elemento: +1 nell'ultima dimensione con più di un elemento
-    const next = [...lows];
-    let j = dims.length - 1;
-    while (j >= 0 && dims[j]!.hi === dims[j]!.lo) j--;
-    if (j >= 0) next[j]! += 1;
-    const stride = j >= 0 ? this.located(o, next).bit - first.bit : 0;
+    const strides = vars.map(({ level, dims }) => {
+      // il secondo elemento: +1 nell'ultima dimensione con più di un elemento
+      const next = [...lows.get(level)!];
+      let j = dims.length - 1;
+      while (j >= 0 && dims[j]!.hi === dims[j]!.lo) j--;
+      if (j >= 0) next[j]! += 1;
+      return j >= 0 ? this.located(o, new Map(lows).set(level, next)).bit - first.bit : 0;
+    });
     if (first.bit > 0xffff)
       fail(o, `${o.text}: l'ARRAY inizia oltre il byte 8191, non raggiungibile con [AR1,P#…]`);
-    this.scoped(() => {
-      const k = dims.length > 1 ? this.temp('DINT') : '';
-      dims.forEach((d, n) => {
-        const e = this.dint(o.vindex[n]!);
-        if (e.k === 'int') {
-          const v = Number(intLiteral(e.text).value);
-          if (v < d.lo || v > d.hi) fail(e, `Indice ${v} fuori da [${d.lo}..${d.hi}]`);
-        }
-        if (n > 0) this.emit(`L ${k}`, `L L#${d.hi - d.lo + 1}`, '*D', `T ${k}`);
-        this.num(this.hoist(e), 'DINT');
-        // ACCU2 = indice: oltre hi o sotto lo si salta, poi indice - lo
-        this.emit(`L L#${d.hi}`, '>D', `JC ${bad}`, 'TAK', `L L#${d.lo}`, '<D', `JC ${bad}`, '-D');
-        if (n > 0) this.emit(`L ${k}`, '+D');
-        if (n < dims.length - 1) this.emit(`T ${k}`);
+    // più livelli (`#a[#i].v[#j]`): la somma dei loro scostamenti in una TEMP
+    const sum = vars.length > 1 ? this.temp('DINT') : '';
+    vars.forEach(({ dims, exprs }, li) => {
+      this.scoped(() => {
+        const k = dims.length > 1 ? this.temp('DINT') : '';
+        dims.forEach((d, n) => {
+          const e = this.dint(exprs[n]!);
+          if (e.k === 'int') {
+            const v = Number(intLiteral(e.text).value);
+            if (v < d.lo || v > d.hi) fail(e, `Indice ${v} fuori da [${d.lo}..${d.hi}]`);
+          }
+          if (n > 0) this.emit(`L ${k}`, `L L#${d.hi - d.lo + 1}`, '*D', `T ${k}`);
+          this.num(this.hoist(e), 'DINT');
+          // ACCU2 = indice: oltre hi o sotto lo si salta, poi indice - lo
+          this.emit(
+            `L L#${d.hi}`,
+            '>D',
+            `JC ${bad}`,
+            'TAK',
+            `L L#${d.lo}`,
+            '<D',
+            `JC ${bad}`,
+            '-D',
+          );
+          if (n > 0) this.emit(`L ${k}`, '+D');
+          if (n < dims.length - 1) this.emit(`T ${k}`);
+        });
       });
+      if (strides[li] !== 1) this.emit(`L L#${strides[li]}`, '*D');
+      if (li > 0) this.emit(`L ${sum}`, '+D');
+      if (li < vars.length - 1) this.emit(`T ${sum}`);
     });
-    if (stride !== 1) this.emit(`L L#${stride}`, '*D');
     if (first.area === 'DI') this.emit('TAR2', '+D');
     this.emit('LAR1');
     if (first.area === 'DB') this.emit(`OPN DB ${first.db}`);
@@ -2091,8 +2131,7 @@ class Gen {
    * variabile vale l'ultimo valore eseguito. CONTINUE salta all'incremento.
    */
   private forStmt(s: Extract<Stmt, { k: 'for' }>): void {
-    if (s.v.k !== 'temp' && s.v.vindex)
-      fail(s.v, 'La variabile del FOR non può avere indici variabili');
+    if (hasVar(s.v)) fail(s.v, 'La variabile del FOR non può avere indici variabili');
     const v = this.resolve(s.v, undefined, true);
     if (v.ty !== 'INT' && v.ty !== 'DINT')
       fail(s.v, `La variabile del FOR dev'essere INT o DINT, c'è ${v.ty}`);
@@ -2139,6 +2178,8 @@ const dword = (b: number[]): string =>
     .map((x) => x.toString(16).padStart(2, '0'))
     .join('')
     .toUpperCase()}`;
+/** Limiti di un livello dell'operando con indici variabili (0 il nome, poi i membri). */
+type OnVar = (level: number, dims: Dim[]) => void;
 /** Un lato STRING: costante, variabile, o funzione STRING da calcolare. */
 type StrSide = { codes: number[] } | { loc: Loc; max: number } | { call: Call; max: number };
 /** Firme delle funzioni STRING (nomi dei parametri delle FC IEC di STEP 7). */

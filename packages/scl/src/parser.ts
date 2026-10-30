@@ -4,8 +4,11 @@
 import { intLiteral, lex, SclError, type Tok } from './lexer.js';
 
 export type Pos = { line: number; col: number };
-/** Membro dopo `.` (nome come scritto, virgolette comprese) con i suoi indici costanti. */
-export type Seg = { name: string; index?: number[] };
+/**
+ * Membro dopo `.` (nome come scritto, virgolette comprese) con i suoi indici: costanti in `index`,
+ * con almeno un indice variabile in `vindex` (uno per dimensione).
+ */
+export type Seg = { name: string; index?: number[]; vindex?: Expr[] };
 export type Operand =
   | (Pos & {
       k: 'local' | 'id' | 'symbol' | 'addr';
@@ -14,7 +17,7 @@ export type Operand =
       index?: number[];
       /** Membri dopo il nome: `#s.x`, `"DB".m[2].n`. */
       path?: Seg[];
-      /** Indici variabili dell'ultimo ARRAY (`#a[#i]`, `#s.m[#i, 2]`), uno per dimensione. */
+      /** Indici variabili dopo il nome (`#a[#i]`, `#m[#i, 2].x`); quelli dei membri in `path`. */
       vindex?: Expr[];
     })
   /** Solo dalla traduzione: una TEMP di appoggio già calcolata, di tipo `ty`. */
@@ -330,37 +333,28 @@ export function parse(text: string): { stmts: Stmt[]; errors: SclError[] } {
       p++;
       const o: Operand = { k: t.kind, text: t.text, ...pos(t) };
       if (t.kind === 'addr') return o;
-      let vindex: Expr[] | undefined;
-      const onlyLast = (at: Tok) =>
-        fail(at, "Indice variabile solo nell'ultimo ARRAY dell'operando: #a[#i], non #a[#i].x");
-      /** Indici tutti costanti come numeri; con un indice variabile vanno in `vindex`. */
-      const take = (): number[] | undefined => {
+      /** Indici tutti costanti come numeri (`index`), altrimenti espressioni (`vindex`). */
+      const take = (): { index?: number[]; vindex?: Expr[] } => {
         const at = peek();
         const i = indices();
-        if (!i || i.every((e) => typeof e === 'number')) return i as number[] | undefined;
-        vindex = i.map((e) =>
-          typeof e === 'number' ? { k: 'int', text: String(e), ...pos(at) } : e,
-        );
-        return undefined;
+        if (!i) return {};
+        if (i.every((e) => typeof e === 'number')) return { index: i as number[] };
+        return {
+          vindex: i.map((e) =>
+            typeof e === 'number' ? { k: 'int', text: String(e), ...pos(at) } : e,
+          ),
+        };
       };
-      const index = take();
+      const root = take();
       const path: Seg[] = [];
       while (is('.')) {
         p++;
         const m = peek();
         if (m.kind !== 'id' && m.kind !== 'symbol') fail(m, 'Dopo «.» serve il nome di un membro');
-        if (vindex) onlyLast(m);
         p++;
-        const i = take();
-        path.push(i ? { name: m.text, index: i } : { name: m.text });
+        path.push({ name: m.text, ...take() });
       }
-      if (vindex && is('[')) onlyLast(peek());
-      return {
-        ...o,
-        ...(index ? { index } : {}),
-        ...(path.length ? { path } : {}),
-        ...(vindex ? { vindex } : {}),
-      };
+      return { ...o, ...root, ...(path.length ? { path } : {}) };
     }
     return fail(t, `Atteso un operando, trovato ${shown(t)}`);
   }
