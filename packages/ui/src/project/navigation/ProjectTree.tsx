@@ -52,6 +52,7 @@ import {
   renameNode,
   sourcesOfNodes,
   watchTablesOfNodes,
+  hmiScreensOfNodes,
 } from './objectCommands';
 import {
   exportSource,
@@ -223,7 +224,11 @@ export function ProjectTree() {
       }),
     copy: objectRefs.length > 0 || watchNodes.length > 0,
     delete:
-      objectRefs.length > 0 || groups.length > 0 || sourceNodes.length > 0 || watchNodes.length > 0,
+      objectRefs.length > 0 ||
+      groups.length > 0 ||
+      sourceNodes.length > 0 ||
+      watchNodes.length > 0 ||
+      hmiScreensOfNodes(selectedIds).length > 0,
     rename: selectedIds.length === 1 && renameInfo(doc, selectedIds[0]!) !== null,
     paste:
       (clip?.kind === 'objects' &&
@@ -242,7 +247,8 @@ export function ProjectTree() {
       refsOfNodes([id]).length +
         groupsOfNodes([id]).length +
         sourcesOfNodes([id]).length +
-        watchTablesOfNodes([id]).length >
+        watchTablesOfNodes([id]).length +
+        hmiScreensOfNodes([id]).length >
       0;
     setPicked(new Set(siblings.filter(selectable)));
   };

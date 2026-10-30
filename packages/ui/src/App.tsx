@@ -21,6 +21,7 @@ import { PrintDialog } from './print/PrintDialog';
 import { KitDialog } from './project/dialogs/KitDialog';
 import { DetachedWindows } from './project/workarea/DetachedWindow';
 import { UpdateNotice } from './update/UpdateNotice';
+import { HmiStuckNotice } from './editors/hmi/HmiStuckNotice';
 import { PortalView } from './portal/PortalView';
 import { ProjectView } from './project/ProjectView';
 import { loadLayout, saveLayout } from './project/layoutStorage';
@@ -93,6 +94,7 @@ function Shell() {
       ) : null}
       <DetachedWindows />
       <UpdateNotice />
+      <HmiStuckNotice />
     </div>
   );
 }

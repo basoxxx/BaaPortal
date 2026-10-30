@@ -100,6 +100,23 @@ const shapes: Partial<Record<IconName, ReactNode>> = {
       <path d="M8 10.2c1-1.4 3.4-1.4 4.4 0-1 1.4-3.4 1.4-4.4 0z" stroke={COLOR.table} />
     </>
   ),
+  objHmi: (
+    <>
+      <rect
+        x="1.5"
+        y="2.5"
+        width="13"
+        height="9"
+        rx="1"
+        stroke={COLOR.cpu}
+        fill={COLOR.cpu}
+        fillOpacity={0.14}
+      />
+      <path d="M6 14h4M8 11.5V14" stroke={COLOR.cpu} />
+      <circle cx="11" cy="7" r="1.6" stroke={COLOR.fc} />
+      <path d="M3.8 6h3.6M3.8 8h2.4" stroke={COLOR.cpu} />
+    </>
+  ),
   objGroup: (
     <path
       d="M1.5 4h4.5l1.5 1.5h7v7.5h-13z"
@@ -130,6 +147,7 @@ shapes.treeDeviceConfig = folder(<rect x="5.5" y="8" width="5" height="3.5" {...
 shapes.treeOnlineDiag = folder(<path d="M5 10.5h1.5l1-2.5 1.5 4 1-1.5H11" {...m} />);
 shapes.treeSources = folder(<path d="M7 8.2 5.5 9.7 7 11.2M9 8.2l1.5 1.5L9 11.2" {...m} />);
 shapes.treeWatch = folder(<path d="M4.8 9.8c1.5-2 4.9-2 6.4 0-1.5 2-4.9 2-6.4 0z" {...m} />);
+shapes.treeHmi = folder(<rect x="5" y="8" width="6" height="3.6" rx="0.5" {...m} />);
 shapes.treeBackup = folder(<path d="M8 8v3.2M6.5 9.7 8 11.2l1.5-1.5" {...m} />);
 shapes.treeProgInfo = folder(<path d="M8 11V9M8 7.6v.1" {...m} />);
 shapes.treeAdd = (

@@ -13,6 +13,8 @@ import {
   type Udt,
   type WatchTable,
 } from './model';
+import { HMI_FORMATS, HMI_MAX_SIZE, HMI_OBJECT_KINDS } from './hmi';
+import type { HmiFormat, HmiObjectKind } from './model';
 import { MPI_BUS_SPEEDS, MPI_HIGHEST_ADDRESSES } from './plcAccess';
 
 export type BaapErrorCode =
@@ -71,6 +73,48 @@ const memberSchema: z.ZodType<Member> = z.lazy(() =>
 );
 
 const mpiAddress = z.number().int().min(0).max(126);
+
+// Schermate HMI (1.9, facoltative). Colori solo `#rrggbb`: finiscono negli stili della schermata.
+const hmiColor = z.string().regex(/^#[0-9a-fA-F]{6}$/);
+const hmiPos = z.number().int().min(0).max(HMI_MAX_SIZE);
+const hmiLen = z.number().int().min(1).max(HMI_MAX_SIZE);
+const hmiText = z.string().max(1000);
+const hmiSchema = obj({
+  screens: z
+    .array(
+      obj({
+        id,
+        name: str,
+        width: hmiLen,
+        height: hmiLen,
+        background: hmiColor,
+        objects: z
+          .array(
+            obj({
+              id,
+              kind: z.enum(HMI_OBJECT_KINDS as [HmiObjectKind, ...HmiObjectKind[]]),
+              x: hmiPos,
+              y: hmiPos,
+              w: hmiLen,
+              h: hmiLen,
+              text: hmiText,
+              tag: hmiText.optional(),
+              format: z.enum(HMI_FORMATS as [HmiFormat, ...HmiFormat[]]).optional(),
+              input: z.boolean().optional(),
+              action: z.enum(['set', 'reset', 'toggle', 'write', 'jog']).optional(),
+              value: hmiText.optional(),
+              onColor: hmiColor.optional(),
+              offColor: hmiColor.optional(),
+              min: z.number().finite().optional(),
+              max: z.number().finite().optional(),
+              screen: str.optional(),
+            }),
+          )
+          .max(2000),
+      }),
+    )
+    .max(1000),
+});
 
 const deviceShape = {
   id,
@@ -135,6 +179,7 @@ const deviceShape = {
       }),
     ),
   }).optional(),
+  hmi: hmiSchema.optional(),
   // Ordine degli oggetti: gli id dei file elencati.
   tagTables: z.array(id),
   udts: z.array(id),
@@ -367,6 +412,10 @@ function checkUniqueIds(device: PlcDevice): void {
   }
   for (const x of device.sources) add(x.id);
   for (const m of device.hardware?.modules ?? []) add(m.id);
+  for (const sc of device.hmi?.screens ?? []) {
+    add(sc.id);
+    for (const o of sc.objects) add(o.id);
+  }
   for (const w of device.watchTables) {
     add(w.id);
     for (const r of w.rows) add(r.id);

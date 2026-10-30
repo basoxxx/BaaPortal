@@ -49,6 +49,8 @@ export type SimRequest =
   | { op: 'interrupt'; ob: 82 | 86; address?: number }
   | { op: 'monitor'; block?: MonitorRequest }
   | { op: 'watch'; items: WatchItem[] }
+  /** Lettura una tantum (runtime HMI): la risposta è un `WatchValue` per voce. */
+  | { op: 'read'; items: WatchItem[] }
   | { op: 'write'; items: WriteItemReq[] }
   | { op: 'stop' };
 

@@ -115,6 +115,6 @@ describe('vista dettagli del PLC', () => {
     expect(screen.getAllByTestId('details-row').map(cells)).toEqual([['Motore', '2', 'FB', 'AWL']]);
     act(() => store.getState().select(`plc:${PLC}`));
     expect(headers()).toEqual(['Nome']);
-    expect(screen.getAllByTestId('details-row')).toHaveLength(9);
+    expect(screen.getAllByTestId('details-row')).toHaveLength(10);
   });
 });

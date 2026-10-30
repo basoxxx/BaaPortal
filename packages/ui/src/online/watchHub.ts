@@ -142,8 +142,9 @@ export class WatchOnlineHub {
 
   /** Ai valori letti si aggiungono gli errori delle righe fuori limite. */
   private publish(): void {
-    const read = this.engine.getState().values;
+    const { values: read, paused = false } = this.engine.getState();
     for (const d of this.running) {
+      if ((d.state.paused ?? false) !== paused) this.set(d, { paused: paused || undefined });
       const values: Record<string, PlcWatchValue> = {};
       d.rowIds.forEach((id, i) => {
         const v = d.over.has(id)

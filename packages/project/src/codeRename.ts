@@ -144,14 +144,28 @@ export function renameSymbolInCode(device: PlcDevice, oldName: string, newName: 
 export function renameSymbolInWatchRows(device: PlcDevice, oldName: string, newName: string): void {
   if (!usable(oldName, newName)) return;
   const key = nameKey(oldName);
-  for (const w of device.watchTables) {
-    for (const r of w.rows) {
-      const m = /^(\s*)"([^"]*)"(?=$|[.\[\s])/.exec(r.operand);
-      if (m && nameKey(m[2]!) === key) {
-        r.operand = `${m[1]}"${newName}"${r.operand.slice(m[0].length)}`;
-      }
+  for (const r of operandHolders(device)) {
+    const m = /^(\s*)"([^"]*)"(?=$|[.\[\s])/.exec(r.operand);
+    if (m && nameKey(m[2]!) === key) {
+      r.operand = `${m[1]}"${newName}"${r.operand.slice(m[0].length)}`;
     }
   }
+}
+
+/** Gli operandi scritti fuori dal codice: righe delle tabelle di controllo e variabili delle schermate HMI. */
+export function operandHolders(device: PlcDevice): { operand: string }[] {
+  const hmi = (device.hmi?.screens ?? [])
+    .flatMap((s) => s.objects)
+    .filter((o) => (o.tag ?? '').trim() !== '')
+    .map((o) => ({
+      get operand() {
+        return o.tag!;
+      },
+      set operand(v: string) {
+        o.tag = v;
+      },
+    }));
+  return [...device.watchTables.flatMap((w) => w.rows), ...hmi];
 }
 
 /**

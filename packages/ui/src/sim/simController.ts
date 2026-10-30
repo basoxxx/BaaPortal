@@ -23,7 +23,7 @@ import {
 import { SIM_OFF, type AppState } from '../state/store';
 import { downloadOrder } from './downloadOrder';
 import { activeCodeBlock, codeBlockOf, monitorReasonOf, monitorStillShown } from './monitorStatus';
-import type { WatchItem, WriteResult } from './protocol';
+import type { WatchItem, WatchValue, WriteItemReq, WriteResult } from './protocol';
 import { SimSession, type SimSessionOptions } from './session';
 import { watchStillShown } from './watchStatus';
 
@@ -463,6 +463,21 @@ export class SimController {
       });
     }
     return { errors, written };
+  }
+
+  /** Legge una volta le voci (runtime HMI); `null` se la simulazione non è di questo PLC. */
+  async readItems(deviceId: string, items: WatchItem[]): Promise<WatchValue[] | null> {
+    const s = this.session;
+    if (!s || this.store.getState().sim.deviceId !== deviceId) return null;
+    const values = await s.request<WatchValue[]>({ op: 'read', items });
+    return this.session === s ? values : null;
+  }
+
+  /** Scrive le voci (runtime HMI); `null` se la simulazione non è di questo PLC. */
+  async writeItems(deviceId: string, items: WriteItemReq[]): Promise<WriteResult[] | null> {
+    const s = this.session;
+    if (!s || this.store.getState().sim.deviceId !== deviceId) return null;
+    return s.request<WriteResult[]>({ op: 'write', items });
   }
 
   /** "Carica nel dispositivo" sul simulatore. */

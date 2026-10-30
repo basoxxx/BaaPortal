@@ -500,7 +500,9 @@
       "backup": "Online backups",
       "progInfo": "Program info",
       "addSource": "Add new external file",
-      "addWatchTable": "Add new watch table"
+      "addWatchTable": "Add new watch table",
+      "hmi": "HMI screens",
+      "addHmiScreen": "Add new screen"
     }
   },
   "navigation": {
@@ -573,7 +575,14 @@
     "libraryAdd": "Add to library",
     "libraryDelete": "Delete from library",
     "libraryRename": "Rename in library",
-    "libraryMove": "Move in library"
+    "libraryMove": "Move in library",
+    "addHmiScreen": "Add HMI screen",
+    "hmiAdd": "Add HMI object",
+    "hmiDelete": "Delete HMI objects",
+    "hmiPaste": "Paste HMI objects",
+    "hmiMove": "Move HMI objects",
+    "hmiResize": "Resize HMI objects",
+    "hmiEdit": "Edit HMI screen"
   },
   "inspector": {
     "tab": {
@@ -661,7 +670,8 @@
     "group": "Group_1",
     "tag": "Tag_1",
     "constant": "Constant_1",
-    "watchTable": "Watch table_1"
+    "watchTable": "Watch table_1",
+    "hmiScreen": "Screen_1"
   },
   "settings": {
     "title": "Settings",
@@ -850,6 +860,8 @@
     "CPU_UNKNOWN": "The CPU is not in the catalog.",
     "WATCH_NAME_DUPLICATE": "A watch table with this name already exists.",
     "WATCH_OPERAND_INVALID": "The operand \"{{operand}}\" of a row does not resolve.",
+    "HMI_NAME_DUPLICATE": "An HMI screen with this name already exists.",
+    "HMI_TAG_INVALID": "The tag \"{{operand}}\" of an object on the screen is not valid ({{reason}}).",
     "force": {
       "active": "Force active on the CPU",
       "note": "To force or end forcing use TIA Portal or STEP 7",
@@ -2053,6 +2065,85 @@
       "WRONG_FORMAT": "it is not a BaaPortal library file.",
       "NEWER_FORMAT": "it was written by a newer version of BaaPortal.",
       "INVALID": "the content is not valid."
+    }
+  },
+  "hmi": {
+    "toolbox": "Objects",
+    "canvas": "Screen {{name}}",
+    "properties": "Properties",
+    "kind": {
+      "text": "Text",
+      "ioField": "I/O field",
+      "button": "Button",
+      "lamp": "Lamp",
+      "bar": "Bar",
+      "screenButton": "Change screen"
+    },
+    "kindLabel": "Type",
+    "text": "Text",
+    "tag": "Tag",
+    "format": "Format",
+    "input": "Input (Enter writes)",
+    "action": "Action on press",
+    "actions": {
+      "set": "Set bit",
+      "reset": "Reset bit",
+      "toggle": "Toggle bit",
+      "write": "Write value",
+      "jog": "Jog (1 pressed, 0 released)"
+    },
+    "value": "Value to write",
+    "onColor": "On colour",
+    "offColor": "Off colour",
+    "min": "Minimum",
+    "max": "Maximum",
+    "target": "Screen to open",
+    "noTarget": "(none)",
+    "width": "Width",
+    "height": "Height",
+    "size": "Size",
+    "customSize": "Custom",
+    "background": "Background",
+    "sizeRange": "Value out of range",
+    "number": "A number is required",
+    "delete": "Delete object",
+    "manySelected": "{{count}} objects selected: arrows move them, Shift+arrows resize them, Delete removes them.",
+    "allowWrite": "Allow writes to the CPU",
+    "startRuntime": "Start HMI runtime",
+    "runtimeOpen": "An HMI runtime is already open: close it before starting another.",
+    "noSource": "To run the HMI start the simulation or go online with this PLC.",
+    "err": {
+      "EMPTY": "Tag missing",
+      "SYNTAX": "Invalid operand",
+      "UNKNOWN": "Unknown symbol",
+      "NOT_OPERAND": "Not an operand",
+      "UNSUPPORTED": "Operand not available",
+      "RANGE": "Outside the CPU limits",
+      "BIT_REQUIRED": "A bit is required",
+      "FORMAT_SIZE": "The format does not match the size of the tag",
+      "NUMBER_REQUIRED": "A numeric tag is required",
+      "NOT_WRITABLE": "Tag not writable (only I, Q, M and DB)",
+      "ONLINE_UNSUPPORTED": "Not available online",
+      "NO_VALUE": "Current value not read yet"
+    },
+    "runtime": {
+      "title": "HMI runtime: {{name}}",
+      "sim": "Simulator",
+      "plcRead": "PLC: read only",
+      "plcWrite": "PLC: writes allowed",
+      "readOnly": "Runtime is read only",
+      "close": "Close runtime",
+      "lost": "Reading stopped: connection or simulation no longer active.",
+      "writeFailed": "Write failed: {{message}}",
+      "badValue": "Value not valid for the tag format",
+      "noScreen": "The screen no longer exists.",
+      "stuck": "Jog output may have stayed at 1: {{address}}. Check it on the machine.",
+      "paused": "Values paused: the MPI port is in use by another operation."
+    },
+    "stuckNotice": {
+      "title": "Jog buttons may have stayed at 1: the automatic 0 failed. Check the outputs on the machine.",
+      "item": "{{address}} (CPU {{cpu}}, {{time}})",
+      "ack": "I have checked"
     }
   }
 }

@@ -254,6 +254,8 @@ export interface PlcDevice {
   groups: { blocks: string[]; tags: string[]; types: string[] };
   /** Configurazione hardware (tappa 6A); assente nei progetti che non l'hanno mai aperta. */
   hardware?: DeviceHardware;
+  /** Schermate HMI (1.9) legate alle variabili di questo PLC; assente se non ce ne sono mai state. */
+  hmi?: DeviceHmi;
   /** Chiavi sconosciute della voce del dispositivo in project.json: si riscrivono com'erano. */
   listExtras?: Record<string, unknown>;
 }
@@ -275,6 +277,60 @@ export interface HwModule {
 
 export interface DeviceHardware {
   modules: HwModule[];
+}
+
+/** Oggetti di una schermata HMI. */
+export type HmiObjectKind = 'text' | 'ioField' | 'button' | 'lamp' | 'bar' | 'screenButton';
+/** Formato di un campo di I/O. */
+export type HmiFormat = 'INT' | 'DINT' | 'REAL' | 'HEX' | 'BOOL';
+/** Azione di un pulsante alla pressione; `jog`: 1 alla pressione, 0 al rilascio. */
+export type HmiButtonAction = 'set' | 'reset' | 'toggle' | 'write' | 'jog';
+
+/**
+ * Oggetto di una schermata: posizione e dimensioni in pixel della schermata, più le proprietà del
+ * suo tipo (le altre restano assenti).
+ */
+export interface HmiObject {
+  id: string;
+  kind: HmiObjectKind;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Testo dell'etichetta, didascalia del pulsante o della lampada. */
+  text: string;
+  /** Variabile: simbolo, indirizzo assoluto o membro di DB, come in una tabella di controllo. */
+  tag?: string;
+  /** Campo di I/O: formato del valore. */
+  format?: HmiFormat;
+  /** Campo di I/O: si può scrivere (Invio). */
+  input?: boolean;
+  /** Pulsante: azione alla pressione. */
+  action?: HmiButtonAction;
+  /** Pulsante con `write`: il valore da scrivere, nel formato del tipo della variabile. */
+  value?: string;
+  /** Lampada: colori (`#rrggbb`) con il bit a 1 e a 0. */
+  onColor?: string;
+  offColor?: string;
+  /** Barra: valori ai due estremi. */
+  min?: number;
+  max?: number;
+  /** Pulsante di navigazione: id della schermata da aprire. */
+  screen?: string;
+}
+
+export interface HmiScreen {
+  id: string;
+  name: string;
+  width: number;
+  height: number;
+  /** Colore di sfondo `#rrggbb`. */
+  background: string;
+  objects: HmiObject[];
+}
+
+export interface DeviceHmi {
+  screens: HmiScreen[];
 }
 
 /**
@@ -309,7 +365,11 @@ export interface Project {
 
 export type ObjectRef =
   | { kind: 'device'; deviceId: string }
-  | { kind: 'block' | 'udt' | 'tagTable' | 'source' | 'watchTable'; deviceId: string; id: string }
+  | {
+      kind: 'block' | 'udt' | 'tagTable' | 'source' | 'watchTable' | 'hmiScreen';
+      deviceId: string;
+      id: string;
+    }
   | { kind: 'tag' | 'constant'; deviceId: string; tableId: string; id: string }
   | {
       kind: 'member';

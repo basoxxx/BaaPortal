@@ -10,6 +10,8 @@ export interface WatchOnlineState {
   running: boolean;
   /** Ultimi valori per riga; `null` finché non ne è arrivato uno e dopo ogni fermata. */
   values: Record<string, PlcWatchValue> | null;
+  /** L'ultimo giro non è partito: la porta MPI la usa un'altra operazione (valori fermi). */
+  paused?: boolean;
 }
 
 export type WatchCommandOutcome =
@@ -113,7 +115,7 @@ export class WatchOnlineController {
     this.unsub = undefined;
     this.deferred = false;
     document.removeEventListener('visibilitychange', this.onVisibility);
-    this.set({ running: false, values: null });
+    this.set({ running: false, values: null, paused: undefined });
   }
 
   private async tick(session: number): Promise<void> {
@@ -162,7 +164,10 @@ export class WatchOnlineController {
         ? (result.values[i] ?? { error: 'Valore mancante' })
         : { error: result.error };
     });
-    this.set({ values: Object.keys(values).length > 0 ? values : null });
+    this.set({
+      values: Object.keys(values).length > 0 ? values : null,
+      paused: (!result.ok && result.paused === true) || undefined,
+    });
     this.schedule(session);
   }
 

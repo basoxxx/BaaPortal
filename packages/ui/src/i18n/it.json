@@ -500,7 +500,9 @@
       "backup": "Backup online",
       "progInfo": "Informazioni sul programma",
       "addSource": "Aggiungi nuovo file esterno",
-      "addWatchTable": "Aggiungi nuova tabella di controllo"
+      "addWatchTable": "Aggiungi nuova tabella di controllo",
+      "hmi": "Schermate HMI",
+      "addHmiScreen": "Aggiungi nuova schermata"
     }
   },
   "navigation": {
@@ -573,7 +575,14 @@
     "libraryAdd": "Aggiungi alla libreria",
     "libraryDelete": "Elimina dalla libreria",
     "libraryRename": "Rinomina nella libreria",
-    "libraryMove": "Sposta nella libreria"
+    "libraryMove": "Sposta nella libreria",
+    "addHmiScreen": "Aggiungi schermata HMI",
+    "hmiAdd": "Aggiungi oggetto HMI",
+    "hmiDelete": "Elimina oggetti HMI",
+    "hmiPaste": "Incolla oggetti HMI",
+    "hmiMove": "Sposta oggetti HMI",
+    "hmiResize": "Ridimensiona oggetti HMI",
+    "hmiEdit": "Modifica schermata HMI"
   },
   "inspector": {
     "tab": {
@@ -661,7 +670,8 @@
     "group": "Gruppo_1",
     "tag": "Variabile_1",
     "constant": "Costante_1",
-    "watchTable": "Tabella di controllo_1"
+    "watchTable": "Tabella di controllo_1",
+    "hmiScreen": "Schermata_1"
   },
   "settings": {
     "title": "Impostazioni",
@@ -850,6 +860,8 @@
     "CPU_UNKNOWN": "La CPU non è nel catalogo.",
     "WATCH_NAME_DUPLICATE": "Esiste già una tabella di controllo con questo nome.",
     "WATCH_OPERAND_INVALID": "L'operando «{{operand}}» di una riga non si risolve.",
+    "HMI_NAME_DUPLICATE": "Esiste già una schermata HMI con questo nome.",
+    "HMI_TAG_INVALID": "La variabile «{{operand}}» di un oggetto della schermata non è valida ({{reason}}).",
     "force": {
       "active": "Forzamento attivo sulla CPU",
       "note": "Per forzare o terminare il forzamento usare TIA Portal o STEP 7",
@@ -2053,6 +2065,85 @@
       "WRONG_FORMAT": "non è un file di libreria BaaPortal.",
       "NEWER_FORMAT": "è stato scritto da una versione più recente di BaaPortal.",
       "INVALID": "il contenuto non è valido."
+    }
+  },
+  "hmi": {
+    "toolbox": "Oggetti",
+    "canvas": "Schermata {{name}}",
+    "properties": "Proprietà",
+    "kind": {
+      "text": "Testo",
+      "ioField": "Campo di I/O",
+      "button": "Pulsante",
+      "lamp": "Lampada",
+      "bar": "Barra",
+      "screenButton": "Cambia schermata"
+    },
+    "kindLabel": "Tipo",
+    "text": "Testo",
+    "tag": "Variabile",
+    "format": "Formato",
+    "input": "Immissione (Invio scrive)",
+    "action": "Azione alla pressione",
+    "actions": {
+      "set": "Imposta bit",
+      "reset": "Resetta bit",
+      "toggle": "Commuta bit",
+      "write": "Scrivi valore",
+      "jog": "Impulso (1 premuto, 0 rilasciato)"
+    },
+    "value": "Valore da scrivere",
+    "onColor": "Colore acceso",
+    "offColor": "Colore spento",
+    "min": "Minimo",
+    "max": "Massimo",
+    "target": "Schermata da aprire",
+    "noTarget": "(nessuna)",
+    "width": "Larghezza",
+    "height": "Altezza",
+    "size": "Dimensioni",
+    "customSize": "Personalizzate",
+    "background": "Sfondo",
+    "sizeRange": "Valore fuori dai limiti",
+    "number": "Serve un numero",
+    "delete": "Elimina oggetto",
+    "manySelected": "{{count}} oggetti selezionati: frecce per spostarli, Maiusc+frecce per ridimensionarli, Canc per eliminarli.",
+    "allowWrite": "Consenti scritture nella CPU",
+    "startRuntime": "Avvia runtime HMI",
+    "runtimeOpen": "Un runtime HMI è già aperto: chiuderlo prima di avviarne un altro.",
+    "noSource": "Per il runtime avviare la simulazione o andare online con questo PLC.",
+    "err": {
+      "EMPTY": "Variabile mancante",
+      "SYNTAX": "Operando non valido",
+      "UNKNOWN": "Simbolo sconosciuto",
+      "NOT_OPERAND": "Non è un operando",
+      "UNSUPPORTED": "Operando non disponibile",
+      "RANGE": "Fuori dai limiti della CPU",
+      "BIT_REQUIRED": "Serve un bit",
+      "FORMAT_SIZE": "Il formato non corrisponde alla dimensione della variabile",
+      "NUMBER_REQUIRED": "Serve una variabile numerica",
+      "NOT_WRITABLE": "Variabile non scrivibile (solo I, Q, M e DB)",
+      "ONLINE_UNSUPPORTED": "Non disponibile online",
+      "NO_VALUE": "Valore attuale non ancora letto"
+    },
+    "runtime": {
+      "title": "Runtime HMI: {{name}}",
+      "sim": "Simulatore",
+      "plcRead": "PLC: sola lettura",
+      "plcWrite": "PLC: scritture consentite",
+      "readOnly": "Runtime in sola lettura",
+      "close": "Chiudi runtime",
+      "lost": "Lettura ferma: collegamento o simulazione non più attivi.",
+      "writeFailed": "Scrittura non riuscita: {{message}}",
+      "badValue": "Valore non valido per il formato della variabile",
+      "noScreen": "La schermata non esiste più.",
+      "stuck": "Uscita a impulsi forse rimasta a 1: {{address}}. Controllarla sulla macchina.",
+      "paused": "Valori in pausa: la porta MPI è usata da un'altra operazione."
+    },
+    "stuckNotice": {
+      "title": "Pulsanti a impulsi forse rimasti a 1: lo 0 automatico non è riuscito. Controllare le uscite sulla macchina.",
+      "item": "{{address}} (CPU {{cpu}}, {{time}})",
+      "ack": "Ho controllato"
     }
   }
 }

@@ -20,6 +20,9 @@ import type {
   PlcRestorePlanResult,
   PlcRestoreResult,
   PlcWriteProgress,
+  PlcHmiArmResult,
+  PlcHmiStuckEntry,
+  PlcWatchTarget,
   PlcWriteVarsResult,
   RestoreOutcomeRow,
 } from '@baaportal/ui';
@@ -36,7 +39,8 @@ import {
   type RestoreStep,
 } from './restore';
 import { connectMessage, type PlcOwner, type PlcService } from './plcService';
-import { confirmLine, parseWriteItems, toWriteItem } from './watchOnline';
+import { GONE, type GoneEvent } from './scanService';
+import { addressName, confirmLine, parseWriteItems, toWriteItem } from './watchOnline';
 
 /** PDU minima di una CPU S7-300: serve solo ad annunciare nella conferma quante richieste partiranno. */
 const NOTICE_PDU = 240;
@@ -50,11 +54,43 @@ const DELETABLE = ['OB', 'FB', 'FC', 'DB'];
 const MAX_LIST_LINES = 20;
 const PROGRESS_MIN_MS = 100; // al massimo 10 eventi al secondo, più quello finale
 const OPS: readonly PlcControlOp[] = ['RUN', 'STOP', 'COPY_RAM_TO_ROM', 'COMPRESS'];
+/** Quanto aspetta il rilascio di un pulsante a impulsi che un'altra scrittura finisca (ms). */
+export const HMI_RELEASE_WAIT_MS = 2000;
+const HMI_RELEASE_POLL_MS = 50;
 
 /** Finestra a cui si inviano gli avanzamenti (in produzione il `webContents`). */
 export interface PlcWriteOwner extends PlcOwner {
   send(channel: string, payload: unknown): void;
+  /** Anche ricarica e caduta del renderer: il runtime HMI che aveva il permesso non c'è più. */
+  once(event: GoneEvent, cb: () => void): unknown;
+  removeListener(event: GoneEvent, cb: () => void): unknown;
 }
+
+/** Un runtime HMI in scrittura: il permesso di un solo runtime, legato a finestra e collegamento. */
+interface HmiSession {
+  owner: PlcWriteOwner;
+  target: Target;
+  /** Pulsanti a impulsi a cui può essere rimasto 1 (dalla pressione allo 0 scritto). */
+  held: Map<string, PlcWatchTarget>;
+  /** Il collegamento `online-write` aperto (CPU verificata) e riusato da pressioni e rilasci. */
+  client?: WriteClient;
+  /** L'uso del collegamento, una richiesta alla volta. */
+  chain: Promise<unknown>;
+  /** Permesso revocato: niente più richieste, né collegamenti nuovi. */
+  ended?: boolean;
+  dispose(): void;
+}
+
+const heldKey = (t: PlcWatchTarget): string => JSON.stringify([t.area, t.db, t.byte, t.bit]);
+
+/** Il registro degli impulsi forse rimasti a 1 (`hmiStuck.ts`); `key` è CPU più bit. */
+export interface HmiStuckLog {
+  add(e: PlcHmiStuckEntry): Promise<void>;
+  clear(key: string): Promise<void>;
+}
+
+/** Esito di una richiesta che può essere arrivata alla CPU: l'unico che non esclude la scrittura. */
+const UNKNOWN_OUTCOME = 'Esito sconosciuto: la CPU potrebbe averlo scritto';
 
 export type WriteClient = Pick<
   S7WriteClient,
@@ -291,6 +327,12 @@ export class PlcWriteService {
   /** Prima di un ripristino ferma l'osservazione del blocco sulla stessa CPU (la imposta `plcIpc`). */
   beforeRestore?: (owner: PlcOwner) => Promise<void>;
   private restoreFileIo?: RestoreFileIo;
+  /** Runtime HMI in scrittura confermati, per token (uno per avvio del runtime). */
+  private readonly hmi = new Map<string, HmiSession>();
+  /** Fine di permessi già tolti da `hmi` con gli 0 ancora da scrivere: l'uscita li aspetta. */
+  private readonly ending = new Set<Promise<void>>();
+  /** Dove finiscono gli impulsi non riportati a 0 (lo imposta `plcIpc`). */
+  stuck?: HmiStuckLog;
 
   constructor(private readonly o: PlcWriteOptions) {
     this.connectFn = o.connect ?? ((a) => connectWriteTcp(a));
@@ -331,6 +373,14 @@ export class PlcWriteService {
   }
 
   /**
+   * Un impulso HMI premuto o uno 0 ancora da scrivere: all'uscita il rilascio può volere un
+   * collegamento nuovo (connessione e verifica della CPU), quindi più del secondo solito.
+   */
+  releasing(): boolean {
+    return this.ending.size > 0 || [...this.hmi.values()].some((s) => s.held.size > 0);
+  }
+
+  /**
    * Uscita dall'app: ferma ogni scrittura prima del passo successivo e aspetta che chiuda il
    * collegamento. Quelle ancora alla finestra di conferma vengono annullate senza attendere.
    */
@@ -362,6 +412,10 @@ export class PlcWriteService {
       op.aborted = true;
       if (op.stage === 'running') running.push(op.settled);
     }
+    // Uscendo, i pulsanti a impulsi ancora premuti tornano a 0 prima che i collegamenti chiudano,
+    // anche quelli di un runtime già finito (la finestra si distrugge prima di `before-quit`).
+    for (const t of [...this.hmi.keys()]) void this.hmiEnd(t, "uscita dall'app");
+    running.push(...this.ending);
     await Promise.all(running);
   }
 
@@ -529,44 +583,318 @@ export class PlcWriteService {
           confirmLabel: 'Comanda',
         }));
         if (!('c' in p)) return p.result;
-        const results: ({ ok: true } | { ok: false; error: string })[] = [];
-        let failed = false;
-        try {
-          // Un gruppo per richiesta, come la PDU negoziata col collegamento aperto.
-          const groups = planWrites(items, p.c.pduLength);
-          for (const group of groups) {
-            if (failed || owner.isDestroyed() || op.aborted) {
-              const why = failed
-                ? 'Non scritto: scrittura interrotta dopo un errore'
-                : op.aborted
-                  ? "Uscita dall'app: non scritto"
-                  : 'Finestra chiusa: non scritto';
-              for (let j = 0; j < group.length; j++) results.push({ ok: false, error: why });
-              continue;
-            }
-            try {
-              const rcs = await p.c.writeItems(group);
-              for (const rc of rcs) {
-                results.push(rc.returnCode === 0xff ? { ok: true } : { ok: false, error: rc.name });
-              }
-            } catch (e) {
-              // Un rifiuto nell'intestazione (p. es. protezione 0xD241) è certo: nulla è stato scritto.
-              // Altrimenti la richiesta può essere arrivata alla CPU: l'esito non si conosce.
-              // In ogni caso non si insiste.
-              const error =
-                e instanceof S7Error && e.code === 'CPU_ERROR'
-                  ? `Rifiutato dalla CPU: ${e.message}`
-                  : 'Esito sconosciuto: la CPU potrebbe averlo scritto';
-              for (let j = 0; j < group.length; j++) results.push({ ok: false, error });
-              failed = true;
-            }
+        const target = this.o.service.target(owner);
+        const r = await this.writeAll(owner, op, p.c, items);
+        // Uno 0 riuscito in un bit toglie anche da qui un impulso forse rimasto a 1.
+        if (target && r.ok) {
+          for (const [i, x] of parsed.entries()) {
+            const one = { ok: true as const, results: [r.results[i]!] };
+            if (x.target.size === 'X') await this.cleared(target, x, one);
           }
-          return { ok: true, results };
-        } finally {
-          await p.c.close().catch(() => undefined);
         }
+        return r;
       },
     );
+  }
+
+  /**
+   * Runtime HMI in scrittura: una conferma nativa sola per il collegamento online di adesso, poi
+   * un collegamento `online-write` aperto (CPU verificata una volta) che resta aperto fino alla
+   * revoca. Restituisce il token del permesso: `hmiWrite` e `hmiDisarm` lo richiedono.
+   */
+  async hmiArm(owner: PlcWriteOwner): Promise<PlcHmiArmResult> {
+    return this.exclusive<PlcHmiArmResult>(
+      owner,
+      (m) => ({ ok: false, error: m }),
+      (err) => ({ ok: false, error: errText(err) }),
+      async (op) => {
+        const target = this.o.service.target(owner);
+        if (!target) return { ok: false, error: 'Nessun collegamento online' };
+        const ok = await this.o.confirm(owner, {
+          title: 'Runtime HMI',
+          message: `Il runtime HMI può scrivere nella CPU ${cpuName(target)}: consentire?`,
+          detail:
+            'Pulsanti e campi di immissione delle schermate scriveranno subito nella CPU (aree I, Q, M e DB), senza altre conferme, finché il runtime resta aperto e il collegamento online non cambia.\nUn pulsante a impulsi scrive 0 al rilascio e alla chiusura del runtime: se il PC o la rete cadono mentre è premuto, il bit resta a 1. Non usarli per movimenti pericolosi.',
+          confirmLabel: 'Consenti scritture',
+        });
+        if (!ok || op.aborted) return { ok: false, cancelled: true };
+        if (owner.isDestroyed()) return { ok: false, error: 'Finestra chiusa' };
+        const again = this.o.service.target(owner);
+        if (!again || again.linkId !== target.linkId) {
+          return { ok: false, error: 'Collegamento online cambiato: operazione annullata' };
+        }
+        op.stage = 'running';
+        const c = await this.open(target);
+        if (typeof c === 'string') return { ok: false, error: c };
+        // MPI: la porta è una sola; tenerla aperta fermerebbe la lettura dei valori per tutto il
+        // runtime. La CPU è verificata, il collegamento si riapre a ogni richiesta (`hmiRun`).
+        const mpi = target.access.link?.kind === 'mpi';
+        if (mpi) await c.close().catch(() => undefined);
+        const token = randomUUID();
+        const end = (why: string) => (): void => void this.hmiEnd(token, why);
+        const gone = end('pagina chiusa o ricaricata');
+        for (const e of GONE) owner.once(e, gone);
+        const offLink = this.o.service.onLinkEnd?.(owner, end('collegamento online finito'));
+        this.hmi.set(token, {
+          owner,
+          target,
+          held: new Map(),
+          ...(mpi ? {} : { client: c }),
+          chain: Promise.resolve(),
+          dispose: () => {
+            for (const e of GONE) owner.removeListener(e, gone);
+            offLink?.();
+          },
+        });
+        return { ok: true, token };
+      },
+    );
+  }
+
+  /** Il runtime HMI di questo token è chiuso: i suoi impulsi tornano a 0, il permesso decade. */
+  async hmiDisarm(owner: PlcOwner, token: unknown): Promise<void> {
+    if (typeof token === 'string' && this.hmi.get(token)?.owner === owner) {
+      await this.hmiEnd(token, 'runtime chiuso');
+    }
+  }
+
+  /** Runtime HMI con il permesso ancora valido (serve ai test). */
+  hmiSessions(): number {
+    return this.hmi.size;
+  }
+
+  /**
+   * Scrittura dal runtime HMI: stessi controlli di `writeVars`, senza conferma, sul collegamento
+   * aperto da `hmiArm` e solo con il suo token. `jog`: la scrittura è la pressione di un pulsante a
+   * impulsi, il bit va ricordato fino allo 0. Lo 0 di un impulso premuto non è mai rifiutato
+   * perché è in corso un'altra scrittura: aspetta un poco, poi scrive comunque.
+   */
+  async hmiWrite(
+    owner: PlcWriteOwner,
+    token: unknown,
+    raw: unknown,
+    jog: unknown = false,
+  ): Promise<PlcWriteVarsResult> {
+    const parsed = parseWriteItems(raw);
+    if (typeof parsed === 'string') return { ok: false, error: parsed };
+    const s = typeof token === 'string' ? this.hmi.get(token) : undefined;
+    const target = this.o.service.target(owner);
+    if (!s || s.owner !== owner || !target || target.linkId !== s.target.linkId) {
+      if (s && s.owner === owner) void this.hmiEnd(token as string, 'collegamento online cambiato');
+      return {
+        ok: false,
+        error: 'Scritture HMI non consentite: riavviare il runtime in scrittura',
+      };
+    }
+    const one = parsed.length === 1 ? parsed[0]! : undefined;
+    const bit = one?.target.size === 'X' ? one : undefined;
+    if (bit && bit.data[0] === 0 && s.held.has(heldKey(bit.target))) {
+      return this.cleared(s.target, bit, await this.hmiRelease(s, bit.target));
+    }
+    if (jog === true && !bit) return { ok: false, error: 'Pulsante a impulsi senza un bit' };
+    const items = parsed.map((x) => toWriteItem(x.target, x.data));
+    return this.exclusive<PlcWriteVarsResult>(
+      owner,
+      (m) => ({ ok: false, error: m }),
+      (err) => ({ ok: false, error: errText(err) }),
+      async (op) => {
+        op.stage = 'running';
+        // Prima della richiesta: anche con l'esito sconosciuto il bit può essere a 1.
+        const k = bit && heldKey(bit.target);
+        const press = jog === true && k !== undefined && !s.held.has(k);
+        if (press) s.held.set(k, bit!.target);
+        const r = await this.hmiRun(s, (c) =>
+          this.writeAll(owner, op, c, items, () => this.hmiDrop(s, c)),
+        );
+        // Niente scritto di sicuro (rifiuto della CPU, collegamento non aperto): lo 0 di dopo
+        // potrebbe disfare un 1 messo apposta da un altro pulsante sullo stesso bit.
+        const x = r.ok ? r.results[0] : undefined;
+        if (press && (!r.ok || (x && !x.ok && x.error !== UNKNOWN_OUTCOME))) s.held.delete(k);
+        return bit ? this.cleared(s.target, bit, r) : r;
+      },
+    );
+  }
+
+  /** Uno 0 scritto in un bit lo toglie dal registro degli impulsi forse rimasti a 1. */
+  private async cleared(
+    target: Target,
+    bit: { target: PlcWatchTarget; data: Uint8Array },
+    r: PlcWriteVarsResult,
+  ): Promise<PlcWriteVarsResult> {
+    if (bit.data[0] === 0 && r.ok && r.results[0]?.ok) {
+      await this.stuck?.clear(stuckKey(target, bit.target)).catch(() => undefined);
+    }
+    return r;
+  }
+
+  /** Lo 0 di un pulsante a impulsi premuto: aspetta (non rifiuta) le altre scritture sulla CPU. */
+  private async hmiRelease(s: HmiSession, t: PlcWatchTarget): Promise<PlcWriteVarsResult> {
+    const cpu = cpuKey(s.target.access);
+    for (
+      let waited = 0;
+      waited < HMI_RELEASE_WAIT_MS && (this.ops.has(s.owner) || this.busyCpus.has(cpu));
+      waited += HMI_RELEASE_POLL_MS
+    ) {
+      await this.sleep(HMI_RELEASE_POLL_MS);
+    }
+    // Ancora occupata: si scrive lo stesso sul collegamento del runtime. Uno 0 su un impulso è la
+    // direzione sicura e la CPU accetta richieste da più collegamenti.
+    const free: Op = { aborted: false, stage: 'running', settled: Promise.resolve() };
+    const items = [toWriteItem(t, Uint8Array.of(0))];
+    const r = await this.hmiRun(s, (c) =>
+      this.writeAll(s.owner, free, c, items, () => this.hmiDrop(s, c)),
+    );
+    if (r.ok && r.results[0]?.ok) s.held.delete(heldKey(t));
+    return r;
+  }
+
+  /**
+   * Usa il collegamento del runtime, una richiesta alla volta; se manca (caduto dopo un errore)
+   * lo riapre verificando di nuovo la CPU.
+   */
+  private hmiRun(
+    s: HmiSession,
+    fn: (c: WriteClient) => Promise<PlcWriteVarsResult>,
+  ): Promise<PlcWriteVarsResult> {
+    const run = async (): Promise<PlcWriteVarsResult> => {
+      if (s.ended) return { ok: false, error: 'Runtime HMI chiuso: non scritto' };
+      if (!s.client) {
+        const c = await this.open(s.target);
+        if (typeof c === 'string') return { ok: false, error: c };
+        s.client = c;
+      }
+      const c = s.client;
+      try {
+        return await fn(c);
+      } catch (err) {
+        this.hmiDrop(s, c);
+        throw err;
+      } finally {
+        // MPI: porta libera fra una richiesta e l'altra, così la lettura dei valori riprende.
+        if (s.target.access.link?.kind === 'mpi' && s.client === c) {
+          s.client = undefined;
+          await c.close().catch(() => undefined);
+        }
+      }
+    };
+    const p = s.chain.then(run, run);
+    s.chain = p.catch(() => undefined);
+    return p;
+  }
+
+  private hmiDrop(s: HmiSession, c: WriteClient): void {
+    if (s.client === c) s.client = undefined;
+    void c.close().catch(() => undefined);
+  }
+
+  /**
+   * Fine di un permesso (runtime chiuso, pagina ricaricata o caduta, collegamento finito, uscita):
+   * prima gli 0 agli impulsi premuti, sul collegamento del runtime o su uno nuovo, poi la chiusura.
+   * Al meglio: un rilascio non riuscito resta nel registro.
+   */
+  private async hmiEnd(token: string, why: string): Promise<void> {
+    const s = this.hmi.get(token);
+    if (!s) return;
+    this.hmi.delete(token);
+    s.ended = true;
+    s.dispose();
+    const run = async (): Promise<void> => {
+      for (const t of s.held.values()) {
+        const key = stuckKey(s.target, t);
+        try {
+          if (!s.client) {
+            const c = await this.open(s.target);
+            if (typeof c === 'string') throw new Error(c);
+            s.client = c;
+          }
+          const [rc] = await s.client.writeItems([toWriteItem(t, Uint8Array.of(0))]);
+          if (rc?.returnCode !== 0xff) throw new Error(rc?.name ?? 'esito mancante');
+          console.warn(`[runtime HMI] ${why}: ${addressName(t)} riportato a 0`);
+          await this.stuck?.clear(key).catch(() => undefined);
+        } catch (err) {
+          if (s.client) this.hmiDrop(s, s.client);
+          console.warn(
+            `[runtime HMI] ${why}: ${addressName(t)} non riportato a 0 (${errText(err)}), può essere rimasto a 1`,
+          );
+          // Registro su disco e avviso: il messaggio in console non lo vede nessuno.
+          await this.stuck
+            ?.add({
+              key,
+              address: addressName(t),
+              cpu: cpuName(s.target),
+              at: new Date(this.now()).toISOString(),
+            })
+            .catch((e: unknown) =>
+              console.warn(`[runtime HMI] registro non salvato: ${errText(e)}`),
+            );
+        }
+      }
+      s.held.clear();
+      // Atteso: con l'adattatore MPI la chiusura è anche la ripresa della lettura dei valori.
+      const c = s.client;
+      s.client = undefined;
+      await c?.close().catch(() => undefined);
+    };
+    const done = s.chain.then(run, run);
+    s.chain = done;
+    this.ending.add(done);
+    try {
+      await done;
+    } finally {
+      this.ending.delete(done);
+    }
+  }
+
+  /**
+   * Scrive gli item a gruppi (uno per richiesta, come la PDU negoziata), si ferma al primo errore
+   * o all'interruzione, e chiude sempre il collegamento. L'esito è per item; nessuna ripetizione.
+   */
+  private async writeAll(
+    owner: PlcWriteOwner,
+    op: Op,
+    c: WriteClient,
+    items: ReturnType<typeof toWriteItem>[],
+    /** Runtime HMI: il collegamento resta aperto; si chiama solo se un errore lo rende dubbio. */
+    drop?: () => void,
+  ): Promise<PlcWriteVarsResult> {
+    const results: ({ ok: true } | { ok: false; error: string })[] = [];
+    let broken = false;
+    let failed = false;
+    try {
+      const groups = planWrites(items, c.pduLength);
+      for (const group of groups) {
+        if (failed || owner.isDestroyed() || op.aborted) {
+          const why = failed
+            ? 'Non scritto: scrittura interrotta dopo un errore'
+            : op.aborted
+              ? "Uscita dall'app: non scritto"
+              : 'Finestra chiusa: non scritto';
+          for (let j = 0; j < group.length; j++) results.push({ ok: false, error: why });
+          continue;
+        }
+        try {
+          const rcs = await c.writeItems(group);
+          for (const rc of rcs) {
+            results.push(rc.returnCode === 0xff ? { ok: true } : { ok: false, error: rc.name });
+          }
+        } catch (e) {
+          // Un rifiuto nell'intestazione (p. es. protezione 0xD241) è certo: nulla è stato scritto.
+          // Altrimenti la richiesta può essere arrivata alla CPU: l'esito non si conosce.
+          // In ogni caso non si insiste.
+          const error =
+            e instanceof S7Error && e.code === 'CPU_ERROR'
+              ? `Rifiutato dalla CPU: ${e.message}`
+              : UNKNOWN_OUTCOME;
+          for (let j = 0; j < group.length; j++) results.push({ ok: false, error });
+          failed = true;
+          broken = !(e instanceof S7Error && e.code === 'CPU_ERROR');
+        }
+      }
+      return { ok: true, results };
+    } finally {
+      if (!drop) await c.close().catch(() => undefined);
+      else if (broken) drop();
+    }
   }
 
   // ---- ripristino di un backup (sperimentale, proto §19.5) -----------------------------------
@@ -1139,6 +1467,10 @@ function parseRestoreRequest(raw: unknown): { token: string; restart: boolean } 
 }
 
 type Target = NonNullable<ReturnType<PlcService['target']>>;
+
+/** Chiave del registro degli impulsi forse rimasti a 1: la CPU e il bit. */
+const stuckKey = (target: Target, t: PlcWatchTarget): string =>
+  `${cpuKey(target.access)}|${heldKey(t)}`;
 
 function fail(error: string): PlcDownloadResult {
   return { ok: false, loaded: [], deleted: [], error };

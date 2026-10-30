@@ -17,6 +17,8 @@ export type PlcFolder =
   | 'types-add'
   | 'watch'
   | 'watch-add'
+  | 'hmi'
+  | 'hmi-add'
   | 'backup'
   | 'prog-info'
   | 'prog-xref'
@@ -41,6 +43,8 @@ const FOLDERS: ReadonlySet<string> = new Set<PlcFolder>([
   'types-add',
   'watch',
   'watch-add',
+  'hmi',
+  'hmi-add',
   'backup',
   'prog-info',
   'prog-xref',
@@ -62,6 +66,7 @@ export const ids = {
   udt: (dev: string, id: string) => `plc:${dev}:udt:${id}`,
   source: (dev: string, id: string) => `plc:${dev}:source:${id}`,
   watchTable: (dev: string, id: string) => `plc:${dev}:watchTable:${id}`,
+  hmiScreen: (dev: string, id: string) => `plc:${dev}:hmiScreen:${id}`,
   /** Blocco di sistema richiamato; `tag` è tipo e numero (SFB4). */
   sysBlock: (dev: string, tag: string) => `plc:${dev}:sysBlock:${tag}`,
   /** Blocco presente solo nella CPU (confronto online); `tag` è tipo e numero (DB7). */
@@ -74,7 +79,7 @@ export type ParsedNodeId =
   | { kind: 'folder'; dev: string; folder: PlcFolder }
   | { kind: 'group'; dev: string; area: TreeArea; path: string }
   | {
-      kind: 'block' | 'tagTable' | 'udt' | 'source' | 'watchTable' | 'sysBlock';
+      kind: 'block' | 'tagTable' | 'udt' | 'source' | 'watchTable' | 'hmiScreen' | 'sysBlock';
       dev: string;
       id: string;
     };
@@ -103,6 +108,7 @@ export function parseNodeId(id: string): ParsedNodeId {
       a === 'udt' ||
       a === 'source' ||
       a === 'watchTable' ||
+      a === 'hmiScreen' ||
       a === 'sysBlock')
   ) {
     return { kind: a, dev, id: b };
@@ -128,6 +134,8 @@ export function nodeIdForRef(ref: ObjectRef): string | null {
       return ids.source(ref.deviceId, ref.id);
     case 'watchTable':
       return ids.watchTable(ref.deviceId, ref.id);
+    case 'hmiScreen':
+      return ids.hmiScreen(ref.deviceId, ref.id);
     case 'member':
       return ref.ownerKind === 'udt'
         ? ids.udt(ref.deviceId, ref.ownerId)

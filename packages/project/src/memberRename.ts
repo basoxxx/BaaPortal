@@ -1,5 +1,5 @@
 import { parseType, type DataType } from '@baaportal/s7-types';
-import { renameMemberInCode } from './codeRename';
+import { operandHolders, renameMemberInCode } from './codeRename';
 import type { Block, CodeBlock, Member, PlcDevice, Udt } from './model';
 import { createCodeBlock } from './plc';
 
@@ -130,11 +130,11 @@ function renameMemberInWatchRows(
   oldName: string,
   newName: string,
 ): void {
-  const rows = device.watchTables.flatMap((w) => w.rows).filter((r) => !/[\r\n]/.test(r.operand));
+  const rows = operandHolders(device).filter((r) => !/[\r\n]/.test(r.operand));
   if (rows.length === 0) return;
   const tmp = createCodeBlock({ kind: 'FC', number: 0, name: '', language: 'AWL' });
-  tmp.networks = rows.map((r) => ({
-    id: r.id,
+  tmp.networks = rows.map((r, i) => ({
+    id: `op${i}`,
     title: '',
     comment: '',
     source: `L ${r.operand}`,
