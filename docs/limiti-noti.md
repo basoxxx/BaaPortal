@@ -332,9 +332,8 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
 
 ### Progetti di riferimento
 
-- **Solo copia.** Il riferimento non si apre negli editor. Il doppio clic mostra «solo copia».
-- **Niente trascinamento.** Si copia e si usa «Copia nel progetto».
-- **Dipendenze.** La copia non porta con sé le dipendenze (UDT, DB d'istanza), come la copia dentro il progetto.
+- **Sola lettura in una finestra.** Il doppio clic (o _Apri in sola lettura_) mostra l'oggetto in una finestra, non in un editor: interfaccia e segmenti, con i grafici KOP e FUP; nessuna osservazione, nessun rimando, nessuna modifica.
+- **Trascinamento.** Si trascina un oggetto del riferimento su un PLC (o un gruppo) del progetto: entra con le dipendenze come un modello di libreria, e per gli scontri di nome o di numero vale la scelta proposta (rinumera, rinomina o salta) senza chiedere. Copia e incolla e «Copia nel progetto» restano senza dipendenze.
 - **Gruppi.** «Copia nel progetto» appiattisce i gruppi nella cartella radice.
 - **Chiusura del progetto principale.** I progetti di riferimento restano aperti quando il progetto principale si chiude o si cambia, e non vengono salvati con il progetto.
 - **Percorsi.** Si confrontano come stringhe.

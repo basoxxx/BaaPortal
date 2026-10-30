@@ -1,4 +1,4 @@
-import { act, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { findCpu } from '@baaportal/catalog';
 import {
@@ -153,6 +153,20 @@ describe('progetti di riferimento', () => {
     const past = app.store.getState().history.past.length;
     await app.user.pointer({ keys: '[MouseRight]', target: calcoloNode() });
     await app.user.click(screen.getByRole('menuitem', { name: /Copia nel progetto/ }));
+    await waitFor(() => expect(dev(app).blocks.some((b) => b.name === 'Calcolo')).toBe(true));
+    expect(app.store.getState().history.past.length).toBe(past + 1);
+  });
+
+  it('doppio clic apre l\u2019oggetto in sola lettura; il trascinamento inserisce nel PLC con un passo di cronologia', async () => {
+    const app = await setup();
+    await app.user.dblClick(calcoloNode());
+    expect(screen.getByTestId('reference-view').textContent).toContain('Calcolo');
+    await app.user.click(within(screen.getByTestId('reference-view')).getByTestId('dialog-ok'));
+    const past = app.store.getState().history.past.length;
+    const dt = { setData: () => {}, effectAllowed: '' };
+    fireEvent.dragStart(calcoloNode(), { dataTransfer: dt });
+    const plcNode = screen.getByTestId(`tree-node-${ids.plc(PLC)}`);
+    fireEvent.drop(plcNode, { dataTransfer: dt });
     await waitFor(() => expect(dev(app).blocks.some((b) => b.name === 'Calcolo')).toBe(true));
     expect(app.store.getState().history.past.length).toBe(past + 1);
   });

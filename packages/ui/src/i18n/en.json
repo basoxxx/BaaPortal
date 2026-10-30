@@ -812,6 +812,7 @@
     }
   },
   "reference": {
+    "viewTitle": "{{name}} (read-only)",
     "copyIntoProject": "Copy into project",
     "close": "Close reference {{name}}"
   },

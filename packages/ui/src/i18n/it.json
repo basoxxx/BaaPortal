@@ -812,6 +812,7 @@
     }
   },
   "reference": {
+    "viewTitle": "{{name}} (sola lettura)",
     "copyIntoProject": "Copia nel progetto",
     "close": "Chiudi il riferimento {{name}}"
   },

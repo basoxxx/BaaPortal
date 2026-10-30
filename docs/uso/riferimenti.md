@@ -8,7 +8,7 @@ Guida breve alle informazioni sul programma (tappa 7A): dove si usa ogni operand
    - Da un blocco aperto, Maiusc+F11 filtra sull'operando sotto il cursore (AWL e SCL) o sul primo operando dell'elemento selezionato (KOP e FUP).
    - Dall'albero, su un blocco, filtra sul blocco: chi lo chiama e che cosa usa.
 2. **La tabella.** Una riga per ogni punto d'uso, con:
-   - **Operando:** l'indirizzo assoluto (`%I0.0`, `%MW10`, `%DB1.DBW2`, `%T5`, `FC1`). Simbolo e indirizzo dello stesso dato sono la stessa voce: `A "Start"` e `A I 0.0` stanno insieme.
+   - **Operando:** l'indirizzo assoluto (`%I0.0`, `%MW10`, `%DB1.DBW2`, `%T5`, `FC1`). `L DBW 4` dopo `OPN DB 1` è `%DB1.DBW4`; gli accessi tramite registro (`[AR1,P#…]`) sono voci «indiretto» col testo scritto. Simbolo e indirizzo dello stesso dato sono la stessa voce: `A "Start"` e `A I 0.0` stanno insieme.
    - **Simbolo:** il tag della tabella delle variabili, il membro del DB come scritto (`"Dati".Vel`) o il nome del blocco.
    - **Tipo:** il tipo del tag o del membro, altrimenti quello della dimensione dell'accesso (`Bool`, `Byte`, `Word`, `DWord`).
    - **Punto d'uso:** blocco, segmento e riga (in SCL la riga del testo SCL; in KOP e FUP il segmento). In una CALL di FB, fra parentesi, il DB di istanza o la multi-istanza.
@@ -35,9 +35,10 @@ Guida breve alle informazioni sul programma (tappa 7A): dove si usa ogni operand
 
 1. **Aprirla.** _Strumenti → Struttura di richiamo_, la sua voce nella cartella _Informazioni sul programma_ dell'albero o il menu dell'albero.
 2. **Struttura di richiamo.** Un albero per ogni OB: sotto ogni blocco i blocchi che chiama (CALL, UC, CC, multi-istanze, SFC e SFB), nell'ordine del codice, col DB di istanza e il punto della chiamata. Un blocco che richiama un blocco già sopra di lui è segnato «ricorsione» e non si apre oltre.
-3. **Blocchi non usati.** In fondo, i blocchi (FC, FB, DB) che nessun blocco chiama, apre o usa.
-4. **Dipendenze.** La seconda vista mostra ogni blocco con, sotto, chi lo chiama.
-5. **Clic.** Sul nome apre il blocco; sul punto della chiamata apre il blocco che chiama, alla chiamata.
+3. **Richiami calcolati.** `UC` e `CC` con destinazione calcolata (`CC [MW 10]`) sono elencati a parte: il blocco chiamato non si conosce.
+4. **Blocchi non usati.** In fondo, i blocchi (FC, FB, DB) che nessun blocco chiama, apre o usa.
+5. **Dipendenze.** La seconda vista mostra ogni blocco con, sotto, chi lo chiama.
+6. **Clic.** Sul nome apre il blocco; sul punto della chiamata apre il blocco che chiama, alla chiamata.
 
 ## Elenco di assegnazione
 
@@ -54,3 +55,7 @@ Guida breve alle informazioni sul programma (tappa 7A): dove si usa ogni operand
 4. **Aree usate.** I, Q, M, T e C usati contro i limiti della CPU.
 
 I limiti sono in [limiti noti](../limiti-noti.md#informazioni-sul-programma-piano-7a).
+
+## Progetti di riferimento
+
+Un progetto di riferimento è aperto per consultazione. Doppio clic su un oggetto (o _Apri in sola lettura_ nel menu) lo mostra in una finestra con interfaccia e segmenti, anche KOP e FUP come grafico, senza poterlo modificare. Trascinando un oggetto su un PLC o su un gruppo del progetto lo si copia con le sue dipendenze (UDT, FB, DB, tag usati), come un modello di libreria; _Copia nel progetto_ copia solo gli oggetti scelti.

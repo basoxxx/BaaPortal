@@ -7,13 +7,17 @@ import '../../icons/objects';
 import { useAppStore, useServices } from '../../state/AppContext';
 import type { EditAction } from '../../state/store';
 import { useEditTarget } from '../../state/useEditTarget';
-import { refsOfNodes } from '../navigation/objectCommands';
+import { Dialog } from '../../components/Dialog';
+import { ReadOnlyObjects } from '../../components/ReadOnlyObjects';
+import { beginInsertDrag, endDrag, refsOfNodes } from '../navigation/objectCommands';
 import { buildTree, type TreeNode } from '../navigation/treeModel';
 import {
   canCopyIntoProject,
   copyFromReference,
   copyIntoProject,
+  insertFromReference,
   qualify,
+  readOnlyObjectsOf,
   unqualify,
   type ReferenceProject,
 } from './referenceStore';
@@ -24,6 +28,15 @@ const isAddEntry = (id: string) =>
 
 function prune(node: TreeNode): TreeNode {
   return { ...node, children: node.children.filter((c) => !isAddEntry(c.id)).map(prune) };
+}
+
+function findNode(node: TreeNode, id: string): TreeNode | undefined {
+  if (node.id === id) return node;
+  for (const c of node.children) {
+    const hit = findNode(c, id);
+    if (hit) return hit;
+  }
+  return undefined;
 }
 
 interface Row {
@@ -43,6 +56,7 @@ export function ReferenceTree({ reference }: { reference: ReferenceProject }) {
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
   const [active, setActive] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
+  const [viewing, setViewing] = useState<{ title: string; objects: ReadOnlyObjects } | null>(null);
   const anchor = useRef<string | null>(null);
   const treeRef = useRef<HTMLUListElement>(null);
   const key = reference.key;
@@ -116,8 +130,11 @@ export function ReferenceTree({ reference }: { reference: ReferenceProject }) {
       return next;
     });
   };
-  const copyOnly = () =>
-    store.getState().pushMessage({ severity: 'info', textKey: 'messages.referenceCopyOnly' });
+  /** Apre l'oggetto del nodo in sola lettura (con i grafici KOP/FUP). */
+  const openReadOnly = (node: TreeNode) => {
+    const objects = readOnlyObjectsOf(key, [q(node.id)]);
+    if (objects) setViewing({ title: node.label ?? t(node.labelKey), objects });
+  };
 
   const menuItems = (nodeId: string): ContextMenuItem[] => {
     const nodes = picked.has(q(nodeId)) ? selectedIds : [q(nodeId)];
@@ -128,6 +145,15 @@ export function ReferenceTree({ reference }: { reference: ReferenceProject }) {
         label: t('commands.edit.copy'),
         disabled: !objs,
         run: () => void copyFromReference(key, nodes, bridge),
+      },
+      {
+        id: 'openReadOnly',
+        label: t('library.view'),
+        disabled: !objs,
+        run: () => {
+          const n = root && findNode(root, nodeId);
+          if (n) openReadOnly(n);
+        },
       },
       {
         id: 'copyIntoProject',
@@ -169,7 +195,7 @@ export function ReferenceTree({ reference }: { reference: ReferenceProject }) {
         else move(rows.find((r) => r.node === row.parent));
         break;
       case 'Enter':
-        if (row.node.ref) copyOnly();
+        if (row.node.ref) openReadOnly(row.node);
         else toggle(row.node);
         break;
       case 'ContextMenu': {
@@ -213,9 +239,16 @@ export function ReferenceTree({ reference }: { reference: ReferenceProject }) {
               tabIndex={id === tabbable ? 0 : -1}
               className="baa-tree-node"
               style={{ paddingLeft: 6 + level * 16 }}
-              draggable={false}
+              draggable={Boolean(node.ref)}
               onClick={(e) => onClick(e, node)}
-              onDoubleClick={() => (node.ref ? copyOnly() : toggle(node))}
+              onDoubleClick={() => (node.ref ? openReadOnly(node) : toggle(node))}
+              onDragStart={(e) => {
+                const nodes = picked.has(id) ? selectedIds : [id];
+                beginInsertDrag(e.dataTransfer, node.label ?? t(node.labelKey), (deviceId, drop) =>
+                  insertFromReference(store, key, nodes, deviceId, drop),
+                );
+              }}
+              onDragEnd={() => endDrag()}
               onContextMenu={(e) => {
                 e.preventDefault();
                 if (!picked.has(id)) pick(id);
@@ -232,6 +265,21 @@ export function ReferenceTree({ reference }: { reference: ReferenceProject }) {
           );
         })}
       </ul>
+      {viewing ? (
+        <Dialog
+          title={t('reference.viewTitle', { name: viewing.title })}
+          onClose={() => setViewing(null)}
+          onOk={() => setViewing(null)}
+          testId="reference-view"
+          footer={
+            <button type="button" data-testid="dialog-ok" onClick={() => setViewing(null)}>
+              {t('dialog.ok')}
+            </button>
+          }
+        >
+          <ReadOnlyObjects objects={viewing.objects} />
+        </Dialog>
+      ) : null}
       {menu ? (
         <ContextMenu
           x={menu.x}
