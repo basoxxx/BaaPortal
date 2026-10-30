@@ -1,6 +1,6 @@
 # Prove su una CPU S7-300 reale
 
-Questa è la lista di prove per la versione 1.8.0. BaaPortal non è mai stato provato su una CPU reale: i test automatici girano contro un PLC finto e contro catture di rete pubbliche. Queste prove servono a sapere che cosa funziona davvero.
+Questa è la lista di prove per la versione 1.9.0. BaaPortal non è mai stato provato su una CPU reale: i test automatici girano contro un PLC finto e contro catture di rete pubbliche. Queste prove servono a sapere che cosa funziona davvero.
 
 **Regola fissa:** le prove della parte B scrivono nella CPU. Si fanno **solo su una CPU non in produzione**: una CPU di scorta o una comprata allo scopo, mai su quella di una macchina che lavora. La parte A legge soltanto.
 
@@ -16,7 +16,7 @@ In caso di problemi, salva anche il progetto (`.baap`) e, se è possibile, il fi
 
 - [ ] Annota il modello della CPU (numero d'ordine e firmware) e come è collegata: Ethernet integrata, CP 343-1, gateway RFC 1006 o adattatore MPI seriale/USB-COM (con marca e modello dell'adattatore).
 - [ ] Fai un backup del programma della CPU con lo strumento che usi di solito, prima di qualsiasi prova della parte B.
-- [ ] Installa BaaPortal 1.8.0 da _Releases_ su GitHub. Al primo avvio vanno autorizzati Windows («Esegui comunque») e macOS (vedi le note di rilascio).
+- [ ] Installa BaaPortal 1.9.0 da _Releases_ su GitHub. Al primo avvio vanno autorizzati Windows («Esegui comunque») e macOS (vedi le note di rilascio).
 
 ## M. Adattatore MPI (solo se colleghi la CPU con l'adattatore seriale o USB-COM)
 
