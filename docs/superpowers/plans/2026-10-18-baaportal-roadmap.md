@@ -98,11 +98,11 @@ La ditta per ora non ha una CPU S7-300; un amico che userà BaaPortal ce l'ha. I
 
 ## Tappa 6 — Configurazione dispositivi e reti
 
-| Piano                               | Contenuto                                                                                                                            |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| **6A Catalogo e Vista dispositivi** | Rack S7-300, moduli, indirizzi, proprietà                                                                                            |
-| **6B Vista di rete**                | PROFINET/MPI/PROFIBUS, ET 200, Panoramica dispositivi, lettura configurazione reale dal PLC                                          |
-| **6C Studio SDB e DCP**             | Formato SDB analizzato solo sui PLC della ditta, da verificare; DCP con libreria nativa per trovare CPU senza IP e assegnare nome/IP |
+| Piano                               | Contenuto                                                                                                                                                                                             |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **6A Catalogo e Vista dispositivi** | Rack S7-300, moduli, indirizzi, proprietà. **Stato: fatto** (1.7), si salva nel progetto ma non si carica nella CPU; catalogo parziale (vedi `docs/limiti-noti.md`). Guida: `docs/uso/dispositivi.md` |
+| **6B Vista di rete**                | PROFINET/MPI/PROFIBUS, ET 200, Panoramica dispositivi, lettura configurazione reale dal PLC                                                                                                           |
+| **6C Studio SDB e DCP**             | Formato SDB analizzato solo sui PLC della ditta, da verificare; DCP con libreria nativa per trovare CPU senza IP e assegnare nome/IP                                                                  |
 
 ## Tappa 7 — Completamento e manutenzione
 

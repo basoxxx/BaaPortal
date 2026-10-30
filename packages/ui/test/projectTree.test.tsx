@@ -93,7 +93,7 @@ describe('albero del PLC', () => {
     const plc = screen.getByTestId(`tree-node-plc:${PLC}`);
     expect(plc).toHaveTextContent('PLC_1 [CPU 315-2 PN/DP]');
     expect(plc).toHaveAttribute('aria-level', '2');
-    expect(screen.getByTestId(`tree-node-plc:${PLC}:device-config`)).toHaveAttribute(
+    expect(screen.getByTestId(`tree-node-plc:${PLC}:device-config`)).not.toHaveAttribute(
       'aria-disabled',
       'true',
     );

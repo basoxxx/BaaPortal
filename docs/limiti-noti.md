@@ -441,6 +441,15 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
 - **Il documento è fatto di testo del progetto**: viene caricato in una finestra senza JavaScript, in sandbox e con CSP che vieta ogni risorsa esterna. Un progetto altrui non può eseguire codice né leggere file tramite la stampa.
 - **Riferimenti incrociati** nel documento: solo gli usi nei blocchi stampati.
 
+## Vista dispositivi (piano 6A)
+
+- **La configurazione hardware non si carica nella CPU.** La CPU la riceve nei blocchi dati di sistema (SDB), il cui formato non è documentato; lavoriamo in clean-room e non lo ricostruiamo. Si modifica e si salva nel progetto, il pulsante di caricamento è disattivato e _Carica nel dispositivo_ carica solo i blocchi del programma, come prima. Per l'hardware reale serve STEP 7 o TIA Portal. Lo studio degli SDB è la tappa 6C.
+- **Catalogo parziale.** Ci sono solo le varianti principali di PS 307, IM 360/361/365, SM 321/322/323/331/332/334, CP 340/341, CP 343-1 e FM 350-1, con numeri d'articolo da manuali e data sheet pubblici, non verificati su moduli reali. Mancano le altre varianti, le versioni di firmware dei moduli, i moduli F, SM 338, FM di posizionamento e regolazione, CP 342-5 e simili.
+- **Niente parametri dei moduli.** Campi di misura e tipi di misura degli ingressi analogici, diagnostica, allarmi, valori sostitutivi, filtri: non ci sono. Del modulo si salvano solo posto, nome, commento e indirizzi iniziali.
+- **Controlli semplificati.** Non si controllano: gli I/O integrati delle CPU compatte 31xC (che occupano indirizzi propri nel posto 2), il numero di rack che la CPU accetta (la CPU 312 ne ha uno solo), la corrente assorbita dal bus e quella dell'alimentatore, i posti vuoti in mezzo, la memoria immagine di processo.
+- **Niente GSD, niente periferia decentrata.** Nessuna importazione di file GSD/GSDML; ET 200, PROFIBUS DP, PROFINET IO e la vista di rete sono la tappa 6B.
+- **Il simulatore** usa ancora le dimensioni di I e Q della CPU, non quelle della configurazione.
+
 ## Fuori dal codice, in sospeso per l'utente
 
 - Controlli a mano dei piani 1B (Windows e Mac), 1C e 1F. Le liste sono nei piani; per la 1F: xlsx in Excel e LibreOffice, xlsx di TIA Portal, Archivia/Ritira con percorsi accentati e con spazi, scala a 125%.

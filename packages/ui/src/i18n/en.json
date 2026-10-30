@@ -563,7 +563,11 @@
     "setAccess": "Set CPU access",
     "moveRows": "Move rows",
     "pasteWatchTable": "Paste watch tables",
-    "importWatch": "Import watch table"
+    "importWatch": "Import watch table",
+    "hwInsert": "Insert module",
+    "hwMove": "Move module",
+    "hwDelete": "Delete module",
+    "hwEdit": "Module properties"
   },
   "inspector": {
     "tab": {
@@ -877,7 +881,14 @@
         "offline": "No online connection",
         "error": "Read failed: {{message}}"
       }
-    }
+    },
+    "IO_NOT_CONFIGURED": "No module of the hardware configuration covers the address.",
+    "HW_MODULE_UNKNOWN": "The module is not in the catalog.",
+    "HW_SLOT_INVALID": "The module cannot be placed in this slot.",
+    "HW_SLOT_TAKEN": "The slot is already used by another module.",
+    "HW_RACK_NOT_CONNECTED": "The rack is not connected: it needs an IM 360 in slot 3 of rack 0 and an IM 361 in slot 3 of this rack (or the IM 365 pair, rack 1 only).",
+    "HW_ADDRESS_OVERLAP": "The addresses ({{area}}) overlap those of {{other}}.",
+    "HW_ADDRESS_OUT_OF_RANGE": "The addresses ({{area}}) are outside the CPU limits."
   },
   "block": {
     "interface": "Block interface",
@@ -1553,7 +1564,8 @@
       "stoppedOnly": "CPU stopped, no block downloaded: connection or project changed.",
       "cancelledStopped": "Download cancelled. CPU left in STOP."
     },
-    "cpuStopped": "CPU left in STOP."
+    "cpuStopped": "CPU left in STOP.",
+    "hwNotLoaded": "The hardware configuration of the project is not downloaded: the CPU keeps its own. See \"Device view\"."
   },
   "upload": {
     "namePrefix": "Uploaded from",
@@ -1903,7 +1915,8 @@
     "tag": "tag {{names}}",
     "overlap": "overlapping",
     "beyond": "beyond the CPU",
-    "empty": "No address used in this area."
+    "empty": "No address used in this area.",
+    "unconfigured": "no module"
   },
   "resources": {
     "title": "Resources",
@@ -1942,5 +1955,36 @@
       "RIGA_ILLEGGIBILE": "unreadable row",
       "OPERANDO_VUOTO": "empty operand"
     }
+  },
+  "hw": {
+    "title": "Device view",
+    "racks": "Racks",
+    "rack": "Rack {{n}}",
+    "rackCol": "Rack",
+    "slot": "Slot",
+    "module": "Module",
+    "orderNumber": "Order number",
+    "description": "Description",
+    "name": "Name",
+    "comment": "Comment",
+    "iAddr": "I address",
+    "qAddr": "Q address",
+    "inputStart": "Input start address",
+    "outputStart": "Output start address",
+    "negative": "The address cannot be negative.",
+    "overview": "Device overview",
+    "catalog": "Hardware catalog",
+    "search": "Search the catalog",
+    "family": "Family",
+    "allFamilies": "All families",
+    "insertHint": "Double-click or press Enter on a module to insert it into the first suitable free slot of the rack, or drag it onto a slot. In the rack: Delete removes, Ctrl+arrows moves.",
+    "emptySlot": "empty",
+    "properties": "Properties",
+    "noSelection": "Select a module in the rack to see its properties.",
+    "delete": "Delete module",
+    "noSlot": "No suitable free slot for {{name}} in rack {{rack}}.",
+    "cannotMove": "The module cannot go into slot {{slot}}.",
+    "download": "Download hardware configuration to device",
+    "downloadDisabled": "The hardware configuration is edited and saved in the project, but it cannot be downloaded to the CPU: the format of the system data blocks (SDB) is not documented. Configure the CPU hardware with STEP 7 or TIA Portal. \"Download to device\" downloads only the program blocks, as before."
   }
 }

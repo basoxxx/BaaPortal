@@ -98,9 +98,12 @@ export function AssignmentView({ editor }: { editor: EditorRef }) {
           <tbody>
             {list.rows.map((r) => (
               <tr key={r.byte} data-testid="assign-row" data-byte={r.byte}>
-                <th className={r.beyondLimit ? 'baa-assign-beyond' : undefined}>
+                <th className={r.beyondLimit || r.unconfigured ? 'baa-assign-beyond' : undefined}>
                   {timed ? `${area}${r.byte * 8}` : `${area}B${r.byte}`}
                   {r.beyondLimit ? ` (${t('assign.beyond')})` : ''}
+                  {r.unconfigured ? (
+                    <span data-testid="assign-unconfigured"> ({t('assign.unconfigured')})</span>
+                  ) : null}
                 </th>
                 {r.cells.map((c, bit) => {
                   const a = addr(r.byte, bit);

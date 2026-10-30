@@ -12,7 +12,8 @@ export type EditorKind =
   | 'crossRef'
   | 'callStructure'
   | 'assignment'
-  | 'resources';
+  | 'resources'
+  | 'deviceView';
 export interface EditorRef {
   /** `${kind}:${deviceId}:${objectId}`; "Mostra tutte le variabili" ha objectId ''. */
   key: string;
@@ -84,6 +85,8 @@ export function nodeIdOfEditor(e: EditorTarget): string {
       return ids.folder(e.deviceId, 'tags-all');
     case 'onlineDiag':
       return ids.folder(e.deviceId, 'online-diag');
+    case 'deviceView':
+      return ids.folder(e.deviceId, 'device-config');
     case 'crossRef':
     case 'callStructure':
     case 'assignment':
@@ -109,6 +112,9 @@ export function editorOfNode(nodeId: string): EditorTarget | null {
   }
   if (p.kind === 'folder' && p.folder === 'online-diag') {
     return { kind: 'onlineDiag', deviceId: p.dev, objectId: '' };
+  }
+  if (p.kind === 'folder' && p.folder === 'device-config') {
+    return { kind: 'deviceView', deviceId: p.dev, objectId: '' };
   }
   const info = p.kind === 'folder' ? PROG_INFO_EDITOR[p.folder] : undefined;
   if (p.kind === 'folder' && info) return { kind: info, deviceId: p.dev, objectId: '' };

@@ -563,7 +563,11 @@
     "setAccess": "Imposta accesso CPU",
     "moveRows": "Sposta righe",
     "pasteWatchTable": "Incolla tabelle di controllo",
-    "importWatch": "Importa tabella di controllo"
+    "importWatch": "Importa tabella di controllo",
+    "hwInsert": "Inserisci modulo",
+    "hwMove": "Sposta modulo",
+    "hwDelete": "Cancella modulo",
+    "hwEdit": "Proprietà del modulo"
   },
   "inspector": {
     "tab": {
@@ -877,7 +881,14 @@
         "offline": "Nessun collegamento online",
         "error": "Lettura non riuscita: {{message}}"
       }
-    }
+    },
+    "IO_NOT_CONFIGURED": "Nessun modulo della configurazione hardware copre l'indirizzo.",
+    "HW_MODULE_UNKNOWN": "Il modulo non è nel catalogo.",
+    "HW_SLOT_INVALID": "Il modulo non può stare in questo posto.",
+    "HW_SLOT_TAKEN": "Il posto è già occupato da un altro modulo.",
+    "HW_RACK_NOT_CONNECTED": "Il rack non è collegato: servono una IM 360 nel posto 3 del rack 0 e una IM 361 nel posto 3 di questo rack (oppure la coppia IM 365, solo per il rack 1).",
+    "HW_ADDRESS_OVERLAP": "Gli indirizzi ({{area}}) si sovrappongono a quelli di {{other}}.",
+    "HW_ADDRESS_OUT_OF_RANGE": "Gli indirizzi ({{area}}) sono fuori dai limiti della CPU."
   },
   "block": {
     "interface": "Interfaccia del blocco",
@@ -1553,7 +1564,8 @@
       "stoppedOnly": "CPU arrestata, nessun blocco caricato: collegamento o progetto cambiati.",
       "cancelledStopped": "Caricamento annullato. CPU lasciata in STOP."
     },
-    "cpuStopped": "CPU lasciata in STOP."
+    "cpuStopped": "CPU lasciata in STOP.",
+    "hwNotLoaded": "La configurazione hardware del progetto non viene caricata: la CPU tiene quella che ha. Vedi «Vista dispositivi»."
   },
   "upload": {
     "namePrefix": "Caricato da",
@@ -1903,7 +1915,8 @@
     "tag": "tag {{names}}",
     "overlap": "sovrapposto",
     "beyond": "oltre la CPU",
-    "empty": "Nessun indirizzo usato in quest’area."
+    "empty": "Nessun indirizzo usato in quest’area.",
+    "unconfigured": "senza modulo"
   },
   "resources": {
     "title": "Risorse",
@@ -1942,5 +1955,36 @@
       "RIGA_ILLEGGIBILE": "riga illeggibile",
       "OPERANDO_VUOTO": "operando vuoto"
     }
+  },
+  "hw": {
+    "title": "Vista dispositivi",
+    "racks": "Rack",
+    "rack": "Rack {{n}}",
+    "rackCol": "Rack",
+    "slot": "Posto",
+    "module": "Modulo",
+    "orderNumber": "Numero d'articolo",
+    "description": "Descrizione",
+    "name": "Nome",
+    "comment": "Commento",
+    "iAddr": "Indirizzo I",
+    "qAddr": "Indirizzo Q",
+    "inputStart": "Indirizzo iniziale degli ingressi",
+    "outputStart": "Indirizzo iniziale delle uscite",
+    "negative": "L'indirizzo non può essere negativo.",
+    "overview": "Panoramica dispositivi",
+    "catalog": "Catalogo hardware",
+    "search": "Cerca nel catalogo",
+    "family": "Famiglia",
+    "allFamilies": "Tutte le famiglie",
+    "insertHint": "Doppio clic o Invio su un modulo per inserirlo nel primo posto libero adatto del rack, oppure trascinalo su un posto. Nel rack: Canc cancella, Ctrl+frecce sposta.",
+    "emptySlot": "libero",
+    "properties": "Proprietà",
+    "noSelection": "Seleziona un modulo nel rack per vederne le proprietà.",
+    "delete": "Cancella modulo",
+    "noSlot": "Nessun posto libero adatto a {{name}} nel rack {{rack}}.",
+    "cannotMove": "Il modulo non può andare nel posto {{slot}}.",
+    "download": "Carica configurazione hardware nel dispositivo",
+    "downloadDisabled": "La configurazione hardware si modifica e si salva nel progetto, ma non si può caricare nella CPU: il formato dei blocchi dati di sistema (SDB) non è documentato. Configura l'hardware della CPU con STEP 7 o TIA Portal. «Carica nel dispositivo» carica solo i blocchi del programma, come prima."
   }
 }

@@ -29,6 +29,12 @@ export function DownloadPreviewDialog({ plan, onClose }: { plan: DownloadPlan; o
   const { bridge, store } = useServices();
   const mode = useAppStore((s) => s.online.mode);
   const docLoadId = useAppStore((s) => s.docLoadId);
+  // La configurazione hardware resta nel progetto: si carica solo il programma (vedi docs/limiti-noti.md).
+  const hasHardware = useAppStore(
+    (s) =>
+      (s.doc?.project.devices.find((d) => d.id === plan.deviceId)?.hardware?.modules.length ?? 0) >
+      0,
+  );
   const online = useAppStore(
     (s) => s.online.status === 'on' && s.online.identity === plan.identity,
   );
@@ -122,6 +128,11 @@ export function DownloadPreviewDialog({ plan, onClose }: { plan: DownloadPlan; o
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
         {plan.rows.length === 0 ? <p>{t('download.empty')}</p> : null}
+        {hasHardware ? (
+          <p role="note" data-testid="download-hw-note">
+            {t('download.hwNotLoaded')}
+          </p>
+        ) : null}
         {plan.rows.length > 0 ? (
           <table className="baa-access-table">
             <thead>
