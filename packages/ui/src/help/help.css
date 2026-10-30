@@ -1,0 +1,69 @@
+.baa-dialog:has(.baa-help) {
+  width: min(1100px, 96vw);
+  height: 84vh;
+}
+.baa-help {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  min-height: 0;
+}
+.baa-help-nav {
+  flex: 0 0 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow: auto;
+}
+.baa-help-nav ul {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+.baa-help-nav ul ul {
+  padding-left: 14px;
+}
+.baa-help-nav li button {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 2px 4px;
+  color: inherit;
+  cursor: pointer;
+}
+.baa-help-nav li button[aria-current='page'] {
+  font-weight: 600;
+}
+.baa-help-hits small {
+  display: block;
+  padding: 0 4px 4px;
+  opacity: 0.7;
+}
+.baa-help-body {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  line-height: 1.5;
+}
+.baa-help-body table {
+  border-collapse: collapse;
+  margin: 8px 0;
+}
+.baa-help-body th,
+.baa-help-body td {
+  border: 1px solid var(--baa-border);
+  padding: 2px 6px;
+  text-align: left;
+}
+.baa-help-body pre {
+  overflow: auto;
+  padding: 6px;
+  background: var(--baa-panel-bg);
+}
+.baa-help-body code {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+.baa-help-ext {
+  text-decoration: underline dotted;
+}

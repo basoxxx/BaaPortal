@@ -13,6 +13,7 @@ import {
 import { ELEMENTARY_TYPES } from '@baaportal/s7-types';
 import { DataGrid, type DataGridProps, type GridColumn } from '../../grid/DataGrid';
 import { parseTsv, toTsv } from '../../grid/tsv';
+import { useShownTexts, type ShownTexts } from '../../state/shownText';
 import { useAppStore, useServices } from '../../state/AppContext';
 import { cellKey, useCellDiagnostics } from '../../state/diagnostics';
 import {
@@ -28,7 +29,7 @@ const TYPES = [...ELEMENTARY_TYPES];
 const rowKey = (c: UserConstant) => c.id;
 const newId = () => globalThis.crypto.randomUUID();
 
-const COLUMNS: GridColumn<UserConstant>[] = [
+const columnsFor = (deviceId: string, tx: ShownTexts): GridColumn<UserConstant>[] => [
   { id: 'name', headerKey: 'tags.col.name', width: 200, editor: 'text', get: (c) => c.name },
   {
     id: 'type',
@@ -44,7 +45,8 @@ const COLUMNS: GridColumn<UserConstant>[] = [
     headerKey: 'tags.col.comment',
     width: 280,
     editor: 'text',
-    get: (c) => c.comment,
+    get: (c) => tx.shown(deviceId, c.id, 'comment', c.comment),
+    readOnly: () => tx.lang !== null,
   },
 ];
 
@@ -56,6 +58,8 @@ export function ConstantsView({ deviceId, tableId }: { deviceId: string; tableId
     return dev ? findTagTable(dev, tableId) : undefined;
   });
   const diagnostics = useCellDiagnostics(deviceId, 'constant', t);
+  const tx = useShownTexts();
+  const columns = useMemo(() => columnsFor(deviceId, tx), [deviceId, tx]);
   const rows = table?.constants ?? [];
   const byKey = useMemo(() => new Map(rows.map((c) => [c.id, c])), [rows]);
 
@@ -168,7 +172,7 @@ export function ConstantsView({ deviceId, tableId }: { deviceId: string; tableId
       label={t('tags.tab.constants')}
       rows={rows}
       rowKey={rowKey}
-      columns={COLUMNS}
+      columns={columns}
       onCommit={onCommit}
       addRow={addRow}
       onDeleteRows={onDeleteRows}

@@ -1,0 +1,9 @@
+TYPE "Axis"
+TITLE = Asse
+VERSION : 0.1
+
+  STRUCT
+   Pos : INT ;	//Posizione
+   Speed : REAL ;
+  END_STRUCT ;
+END_TYPE

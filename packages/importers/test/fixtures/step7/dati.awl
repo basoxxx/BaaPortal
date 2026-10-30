@@ -1,0 +1,8 @@
+DATA_BLOCK "AxisData"
+TITLE = Dati asse
+VERSION : 0.1
+
+ "Axis"
+BEGIN
+   Pos := 5;
+END_DATA_BLOCK

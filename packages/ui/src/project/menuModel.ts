@@ -89,7 +89,7 @@ export const MENUS: MenuDef[] = [
       'online.restore',
     ],
   },
-  { id: 'options', items: ['options.settings'] },
+  { id: 'options', items: ['options.settings', 'options.projectTexts'] },
   {
     id: 'tools',
     items: [

@@ -5,6 +5,7 @@ import {
   MODULE_CATALOG,
   RACK_SLOTS,
   findCpu,
+  findIoModule,
   findModule,
   type ModuleType,
 } from '@baaportal/catalog';
@@ -305,14 +306,14 @@ export function DeviceView({ editor }: { editor: EditorRef }) {
   );
 }
 
-function ModuleProps(p: {
+export function ModuleProps(p: {
   m: HwModule;
   issues: string[];
   onChange(labelKey: string, fn: (m: HwModule) => void): void;
   onDelete(): void;
 }) {
   const { t } = useTranslation();
-  const type = findModule(p.m.orderNumber);
+  const type = findIoModule(p.m.orderNumber);
   const start = (key: 'inputStart' | 'outputStart', bytes: number, label: string) => {
     const v = p.m[key];
     return v === undefined || bytes === 0 ? null : (

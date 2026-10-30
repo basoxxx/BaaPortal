@@ -1,3 +1,4 @@
+import type { SubnetType } from '@baaportal/catalog';
 import type { BlockMeta } from '@baaportal/mc7';
 import type { LadNetwork } from '@baaportal/ladfbd';
 import type { PlcAccess } from './plcAccess';
@@ -277,6 +278,47 @@ export interface HwModule {
 
 export interface DeviceHardware {
   modules: HwModule[];
+  /** Collegamento delle interfacce della CPU e dei CP alle sottoreti (tappa 6B), per nome dell'interfaccia (`X1`) o id del CP. */
+  interfaces?: HwInterface[];
+  /** Stazioni di periferia decentrata ET 200 (tappa 6B): slave DP o IO device di questa CPU. */
+  stations?: HwStation[];
+}
+
+/** Interfaccia collegata a una sottorete: indirizzo MPI/DP (0–126) o indirizzo IP. */
+export interface HwInterface {
+  port: string;
+  subnetId?: string;
+  address?: number;
+  ip?: string;
+}
+
+/** Stazione ET 200: l'interfaccia è la stazione stessa; i moduli hanno indirizzi nello spazio della CPU. */
+export interface HwStation {
+  id: string;
+  orderNumber: string;
+  name: string;
+  comment: string;
+  subnetId?: string;
+  /** Indirizzo PROFIBUS (slave DP). */
+  address?: number;
+  /** IO device PROFINET: indirizzo IP e nome del dispositivo. */
+  ip?: string;
+  deviceName?: string;
+  /** Moduli nei posti della stazione (`rack` sempre 0). */
+  modules: HwModule[];
+}
+
+/** Sottorete del progetto (tappa 6B). Parametri secondo il tipo: MPI/PROFIBUS velocità e HSA, Ethernet maschera e router. */
+export interface Subnet {
+  id: string;
+  name: string;
+  type: SubnetType;
+  /** MPI e PROFIBUS: velocità di trasmissione, es. «187.5k». */
+  rate?: string;
+  highestAddress?: number;
+  /** Ethernet: maschera di sottorete e router, facoltativi. */
+  subnetMask?: string;
+  gateway?: string;
 }
 
 /** Oggetti di una schermata HMI. */
@@ -355,12 +397,31 @@ export interface Library {
   groups: string[];
 }
 
+/**
+ * Lingue dei testi di progetto (7D). Il testo nei campi del modello è sempre quello della lingua
+ * di modifica; le altre stanno in `Project.texts`. `display`: lingua mostrata e stampata per i commenti.
+ */
+export interface ProjectLanguages {
+  editing: string;
+  others: string[];
+  display?: string;
+}
+
+/** Traduzioni: chiave `dispositivo/oggetto/campo` (vedi `textKey`) → lingua → testo. */
+export type ProjectTexts = Record<string, Record<string, string>>;
+
 export interface Project {
   formatVersion: 4;
   meta: ProjectMeta;
   devices: PlcDevice[];
+  /** Lingue dei testi (facoltativo: assente nei file precedenti). */
+  languages?: ProjectLanguages;
+  /** Testi tradotti (facoltativo). */
+  texts?: ProjectTexts;
   /** Libreria di progetto (facoltativa: assente nei file scritti prima della tappa 7B). */
   library?: Library;
+  /** Sottoreti MPI, PROFIBUS e Ethernet (tappa 6B); assenti nei file precedenti. */
+  subnets?: Subnet[];
 }
 
 export type ObjectRef =

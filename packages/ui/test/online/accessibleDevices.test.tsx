@@ -1,6 +1,6 @@
 import { act, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { findDevice } from '@baaportal/project';
+import { connectNode, createSubnet, findDevice, setNodeAddress } from '@baaportal/project';
 import { commands } from '../../src/commands/commands';
 import { PlcController } from '../../src/online/plcController';
 import { parseAccessInput, parseTsap } from '../../src/online/accessInput';
@@ -451,5 +451,33 @@ describe('finestra «Dispositivi accessibili»: chiusura e casi limite', () => {
       expect(store.getState().online.deviceId).toBe('id2');
       expect(bridge.plcConnectCalls[0]!.host).toBe('192.0.2.40');
     });
+  });
+});
+
+describe('«Dispositivi accessibili» e vista di rete', () => {
+  it('«Usa l’indirizzo configurato» aggiunge e sceglie l’IP della CPU', async () => {
+    const app = await renderApp({ view: 'project', withProject: true, withPlc: true });
+    app.bridge.plcInterfacesValue = [IFACE];
+    act(() =>
+      app.store.getState().edit('history.netConnect', (p) => {
+        p.subnets = [createSubnet('ETHERNET', 'e', 'Ethernet_1')];
+        connectNode(p, p.devices[0]!.id, 'X2', 'e');
+        setNodeAddress(p, p.devices[0]!.id, 'X2', { ip: '192.0.2.10' });
+      }),
+    );
+    await act(async () => {
+      await commands['online.accessibleDevices'].run({
+        store: app.store,
+        service: app.service,
+        bridge: app.bridge,
+      });
+    });
+    const dlg = await screen.findByRole('dialog', { name: 'Dispositivi accessibili' });
+    expect(dlg).toHaveTextContent('192.0.2.10');
+    await app.user.click(within(dlg).getByTestId('access-use-configured'));
+    expect(within(dlg).getByRole('row', { name: '192.0.2.10' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
   });
 });

@@ -11,6 +11,8 @@ import {
   crossReferences,
   findDevice,
   isGraphic,
+  shownText,
+  type TextField,
   type Block,
   type CodeBlock,
   type Member,
@@ -68,24 +70,27 @@ pre { font: 9pt/1.3 ui-monospace, Menlo, Consolas, monospace; margin: 1mm 0 3mm;
 `;
 
 type T = PrintOptions['t'];
+/** Testo nella lingua scelta per il progetto (7D), altrimenti quello della lingua di modifica. */
+type Tr = (ownerId: string, field: TextField, original: string) => string;
+type Ctx = PrintOptions & { tr: Tr };
 const heads = (t: T, ks: string[]) =>
   `<tr>${ks.map((k) => `<th>${esc(t(`print.doc.col.${k}`))}</th>`).join('')}</tr>`;
 const cells = (vs: unknown[]) => `<tr>${vs.map((v) => `<td>${esc(v)}</td>`).join('')}</tr>`;
 
-const memberRows = (ms: Member[], depth: number): string =>
+const memberRows = (ms: Member[], depth: number, tr: Tr): string =>
   ms
     .map(
       (m) =>
         `<tr><td style="padding-left:${4 + depth * 12}px">${esc(m.name)}</td><td>${esc(m.type)}</td>` +
-        `<td>${esc(m.initial)}</td><td>${esc(m.comment)}</td></tr>` +
-        memberRows(m.members ?? [], depth + 1),
+        `<td>${esc(m.initial)}</td><td>${esc(tr(m.id, 'comment', m.comment))}</td></tr>` +
+        memberRows(m.members ?? [], depth + 1, tr),
     )
     .join('');
 
-const memberTable = (ms: Member[], t: T) =>
+const memberTable = (ms: Member[], t: T, tr: Tr) =>
   ms.length === 0
     ? ''
-    : `<table>${heads(t, ['name', 'type', 'initial', 'comment'])}${memberRows(ms, 0)}</table>`;
+    : `<table>${heads(t, ['name', 'type', 'initial', 'comment'])}${memberRows(ms, 0, tr)}</table>`;
 
 function header(rows: [string, unknown][], t: T): string {
   const shown = rows.filter(([, v]) => v !== undefined && v !== '' && v !== null);
@@ -98,7 +103,7 @@ function header(rows: [string, unknown][], t: T): string {
 
 const blockLabel = (b: Block) => `${b.kind}${b.number}${b.name ? ` — ${b.name}` : ''}`;
 
-function codeBlockHtml(b: CodeBlock, dev: PlcDevice, o: PrintOptions): string {
+function codeBlockHtml(b: CodeBlock, dev: PlcDevice, o: Ctx): string {
   const { t } = o;
   let out = '';
   if (o.includeInterface) {
@@ -115,7 +120,7 @@ function codeBlockHtml(b: CodeBlock, dev: PlcDevice, o: PrintOptions): string {
     if (i.returnType && i.returnType !== 'Void')
       out += `<p>${esc(t('print.doc.returnType'))}: ${esc(i.returnType)}</p>`;
     for (const [k, ms] of withData)
-      out += `<h3 class="muted">${esc(t(`print.doc.sec.${k}`))}</h3>${memberTable(ms, t)}`;
+      out += `<h3 class="muted">${esc(t(`print.doc.sec.${k}`))}</h3>${memberTable(ms, t, o.tr)}`;
   }
   if (!o.includeCode) return out;
   if (b.mc7?.knowHowLocked) return out + `<p class="muted">${esc(t('print.doc.protected'))}</p>`;
@@ -126,32 +131,32 @@ function codeBlockHtml(b: CodeBlock, dev: PlcDevice, o: PrintOptions): string {
   b.networks.forEach((n, i) => {
     const awl = convertMnemonics(srcs[i] ?? '', 'international', o.mnemonic);
     out +=
-      `<div class="net"><h3>${esc(t('print.doc.network', { n: i + 1 }))}${n.title ? `: ${esc(n.title)}` : ''}</h3>` +
-      (o.includeComments && n.comment ? `<p>${esc(n.comment)}</p>` : '') +
+      `<div class="net"><h3>${esc(t('print.doc.network', { n: i + 1 }))}${n.title ? `: ${esc(o.tr(n.id, 'title', n.title))}` : ''}</h3>` +
+      (o.includeComments && n.comment ? `<p>${esc(o.tr(n.id, 'comment', n.comment))}</p>` : '') +
       `<pre>${esc(awl)}</pre></div>`;
   });
   if (isGraphic(b.language)) out += `<p class="muted">${esc(t('print.doc.graphicAsAwl'))}</p>`;
   return out;
 }
 
-function blockHtml(b: Block, dev: PlcDevice, o: PrintOptions): string {
+function blockHtml(b: Block, dev: PlcDevice, o: Ctx): string {
   const { t } = o;
   let out = header(
     [
       ['number', `${b.kind}${b.number}`],
       ['name', b.name],
       ['language', b.kind === 'DB' || b.kind === 'IDB' ? 'DB' : b.language],
-      ['title', b.header.title],
+      ['title', o.tr(b.id, 'title', b.header.title)],
       ['author', b.header.author],
       ['family', b.header.family],
       ['version', b.header.version],
-      ['comment', o.includeComments ? b.header.comment : ''],
+      ['comment', o.includeComments ? o.tr(b.id, 'comment', b.header.comment) : ''],
     ],
     t,
   );
   if (b.kind === 'DB') {
     if (o.includeInterface)
-      out += `<h3>${esc(t('print.doc.members'))}</h3>${memberTable(b.members, t)}`;
+      out += `<h3>${esc(t('print.doc.members'))}</h3>${memberTable(b.members, t, o.tr)}`;
   } else if (b.kind === 'IDB') {
     const fb = dev.blocks.find((x) => x.kind === 'FB' && sameName(x.name, b.instanceOf));
     out += `<p>${esc(t('print.doc.instanceOf'))}: ${esc(fb ? blockLabel(fb) : b.instanceOf)}</p>`;
@@ -162,30 +167,30 @@ function blockHtml(b: Block, dev: PlcDevice, o: PrintOptions): string {
   return out;
 }
 
-function udtHtml(u: Udt, o: PrintOptions): string {
+function udtHtml(u: Udt, o: Ctx): string {
   return (
     header(
       [
         ['number', `UDT${u.number}`],
         ['name', u.name],
-        ['title', u.title],
+        ['title', o.tr(u.id, 'title', u.title)],
         ['author', u.author],
         ['version', u.version],
-        ['comment', o.includeComments ? u.comment : ''],
+        ['comment', o.includeComments ? o.tr(u.id, 'comment', u.comment) : ''],
       ],
       o.t,
-    ) + (o.includeInterface ? memberTable(u.members, o.t) : '')
+    ) + (o.includeInterface ? memberTable(u.members, o.t, o.tr) : '')
   );
 }
 
-function tagTableHtml(x: TagTable, t: T): string {
+function tagTableHtml(x: TagTable, t: T, tr: Tr): string {
   let out = `<table>${heads(t, ['name', 'type', 'address', 'comment'])}${x.tags
-    .map((g) => cells([g.name, g.type, g.address, g.comment]))
+    .map((g) => cells([g.name, g.type, g.address, tr(g.id, 'comment', g.comment)]))
     .join('')}</table>`;
   if (x.constants.length > 0)
     out +=
       `<h3>${esc(t('print.doc.constants'))}</h3><table>${heads(t, ['name', 'type', 'value', 'comment'])}` +
-      `${x.constants.map((c) => cells([c.name, c.type, c.value, c.comment])).join('')}</table>`;
+      `${x.constants.map((c) => cells([c.name, c.type, c.value, tr(c.id, 'comment', c.comment)])).join('')}</table>`;
   return out;
 }
 
@@ -213,10 +218,16 @@ const stamp = (d: Date) => {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 };
 
-export function buildPrintDocument(project: Project, sel: PrintSelection, o: PrintOptions): string {
-  const { t } = o;
+export function buildPrintDocument(
+  project: Project,
+  sel: PrintSelection,
+  opts: PrintOptions,
+): string {
+  const { t } = opts;
   const dev = findDevice(project, sel.deviceId);
   if (!dev) throw new Error('PLC not found');
+  const tr: Tr = (ownerId, field, original) => shownText(project, dev.id, ownerId, field, original);
+  const o: Ctx = { ...opts, tr };
   const blocks = dev.blocks
     .filter((b) => sel.blocks.includes(b.id))
     .sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || a.number - b.number);
@@ -227,7 +238,10 @@ export function buildPrintDocument(project: Project, sel: PrintSelection, o: Pri
       .map((u) => ({ title: `UDT${u.number} — ${u.name}`, body: udtHtml(u, o) })),
     ...dev.tagTables
       .filter((x) => sel.tagTables.includes(x.id))
-      .map((x) => ({ title: `${t('print.doc.tagTable')}: ${x.name}`, body: tagTableHtml(x, t) })),
+      .map((x) => ({
+        title: `${t('print.doc.tagTable')}: ${x.name}`,
+        body: tagTableHtml(x, t, tr),
+      })),
     ...dev.watchTables
       .filter((x) => sel.watchTables.includes(x.id))
       .map((x) => ({ title: `${t('print.doc.watchTable')}: ${x.name}`, body: watchHtml(x, t) })),

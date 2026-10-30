@@ -9,6 +9,8 @@ import { CompareView } from './compare/CompareView';
 import { OnlineDiagView } from './diag/OnlineDiagView';
 import { DbEditor } from './db/DbEditor';
 import { DeviceView } from './hw/DeviceView';
+import { StationView } from './hw/StationView';
+import { NetworkView } from './net/NetworkView';
 import { SourceEditor } from './source/SourceEditor';
 import { WatchTableView } from './watch/WatchTableView';
 import { HmiScreenEditor } from './hmi/HmiScreenEditor';
@@ -39,6 +41,10 @@ const BLOCK_ICON = {
 } as const satisfies Record<string, IconName>;
 
 const device = (ref: EditorRef, doc: OpenDoc) => findDevice(doc.project, ref.deviceId);
+const station = (ref: EditorRef, doc: OpenDoc) =>
+  ref.objectId
+    ? device(ref, doc)?.hardware?.stations?.find((s) => s.id === ref.objectId)
+    : undefined;
 const block = (ref: EditorRef, doc: OpenDoc) =>
   device(ref, doc)?.blocks.find((b) => b.id === ref.objectId);
 
@@ -150,9 +156,21 @@ export const EDITORS: Record<EditorKind, EditorDef> = {
   deviceView: {
     kind: 'deviceView',
     icon: () => 'treeDeviceConfig',
-    title: (_r, _d, t) => t('hw.title'),
-    exists: (r, d) => device(r, d) !== undefined,
-    Component: DeviceView,
+    // objectId vuoto: il rack della CPU; altrimenti la stazione ET 200 con quell'id.
+    title: (r, d, t) => {
+      const st = station(r, d);
+      return st ? `${t('hw.title')}: ${st.name}` : t('hw.title');
+    },
+    exists: (r, d) => device(r, d) !== undefined && (r.objectId === '' || !!station(r, d)),
+    Component: ({ editor }) =>
+      editor.objectId ? <StationView editor={editor} /> : <DeviceView editor={editor} />,
+  },
+  networkView: {
+    kind: 'networkView',
+    icon: () => 'treeDevicesNetworks',
+    title: (_r, _d, t) => t('net.title'),
+    exists: () => true,
+    Component: NetworkView,
   },
   allTags: {
     kind: 'allTags',

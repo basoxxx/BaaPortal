@@ -17,12 +17,15 @@ import { applyDisplaySettings, useSettings } from './settings/settings';
 import { AddBlockDialog } from './project/dialogs/AddBlockDialog';
 import { AddDeviceDialog } from './project/dialogs/AddDeviceDialog';
 import { ImportTagsReport } from './project/dialogs/ImportTagsReport';
+import { Step7ImportDialog } from './project/dialogs/Step7ImportDialog';
 import { PrintDialog } from './print/PrintDialog';
 import { KitDialog } from './project/dialogs/KitDialog';
 import { DetachedWindows } from './project/workarea/DetachedWindow';
 import { UpdateNotice } from './update/UpdateNotice';
 import { HmiStuckNotice } from './editors/hmi/HmiStuckNotice';
 import { PortalView } from './portal/PortalView';
+import { ProjectTextsDialog } from './dialogs/ProjectTextsDialog';
+import { HelpDialog } from './help/HelpDialog';
 import { ProjectView } from './project/ProjectView';
 import { loadLayout, saveLayout } from './project/layoutStorage';
 import { AppProvider, useAppStore, useServices, type AppServices } from './state/AppContext';
@@ -62,6 +65,8 @@ function Shell() {
       {view === 'portal' ? <PortalView /> : <ProjectView />}
       {dialog?.kind === 'addDevice' ? <AddDeviceDialog onClose={close} /> : null}
       {dialog?.kind === 'settings' ? <SettingsDialog onClose={close} /> : null}
+      {dialog?.kind === 'projectTexts' ? <ProjectTextsDialog onClose={close} /> : null}
+      {dialog?.kind === 'help' ? <HelpDialog page={dialog.page} onClose={close} /> : null}
       {dialog?.kind === 'accessibleDevices' ? <AccessibleDevicesDialog onClose={close} /> : null}
       {dialog?.kind === 'download' ? (
         <DownloadPreviewDialog plan={dialog.plan} onClose={close} />
@@ -91,6 +96,9 @@ function Shell() {
           summary={dialog.summary}
           onClose={close}
         />
+      ) : null}
+      {dialog?.kind === 'importStep7' ? (
+        <Step7ImportDialog deviceId={dialog.deviceId} onClose={close} />
       ) : null}
       <DetachedWindows />
       <UpdateNotice />

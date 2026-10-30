@@ -5,7 +5,10 @@ import {
   MAX_RACKS,
   RACK_SLOTS,
   defaultStartAddress,
+  findIoModule,
   findModule,
+  findStation,
+  stationAccepts,
   slotAccepts,
   type CpuType,
   type ModuleType,
@@ -108,14 +111,23 @@ export function deleteModule(dev: PlcDevice, id: string): boolean {
   const i = list?.findIndex((m) => m.id === id) ?? -1;
   if (!list || i < 0) return false;
   list.splice(i, 1);
+  // Un CP tolto non ha più l'interfaccia di rete.
+  const ifs = dev.hardware?.interfaces;
+  if (ifs) dev.hardware!.interfaces = ifs.filter((x) => x.port !== id);
   return true;
 }
+
+/** Moduli del rack e delle stazioni ET 200 (tappa 6B): tutti nello spazio degli indirizzi della CPU. */
+const allModules = (dev: PlcDevice): HwModule[] => [
+  ...(dev.hardware?.modules ?? []),
+  ...(dev.hardware?.stations ?? []).flatMap((s) => s.modules),
+];
 
 /** Intervalli di byte di ingresso (I) e di uscita (Q) occupati dai moduli, per indirizzo. */
 export function ioRanges(dev: PlcDevice): { I: IoRange[]; Q: IoRange[] } {
   const out = { I: [] as IoRange[], Q: [] as IoRange[] };
-  for (const m of dev.hardware?.modules ?? []) {
-    const type = findModule(m.orderNumber);
+  for (const m of allModules(dev)) {
+    const type = findIoModule(m.orderNumber);
     if (!type) continue;
     const add = (list: IoRange[], start: number | undefined, bytes: number) => {
       if (start !== undefined && bytes > 0) {
@@ -177,6 +189,19 @@ export function checkHardware(dev: PlcDevice, cpu: CpuType | undefined): HwIssue
       if (!ok && m.slot >= FIRST_IO_SLOT) {
         out.push({ moduleId: m.id, code: 'HW_RACK_NOT_CONNECTED' });
       }
+    }
+  }
+  // Stazioni ET 200: posti nel campo della stazione e moduli adatti.
+  for (const st of dev.hardware?.stations ?? []) {
+    const sType = findStation(st.orderNumber);
+    const slots = new Set<number>();
+    for (const m of st.modules) {
+      const type = findIoModule(m.orderNumber);
+      if (!type || !sType) out.push({ moduleId: m.id, code: 'HW_MODULE_UNKNOWN' });
+      else if (!stationAccepts(sType, type, m.slot)) {
+        out.push({ moduleId: m.id, code: 'HW_SLOT_INVALID' });
+      } else if (slots.has(m.slot)) out.push({ moduleId: m.id, code: 'HW_SLOT_TAKEN' });
+      slots.add(m.slot);
     }
   }
   const ranges = ioRanges(dev);

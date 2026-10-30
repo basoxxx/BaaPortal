@@ -26,10 +26,14 @@ export type DialogState =
   | { kind: 'collectKit' }
   | { kind: 'print'; nodeIds: string[]; mode: 'print' | 'pdf' }
   | { kind: 'settings' }
+  | { kind: 'projectTexts' }
+  /** Guida in linea; `page` è la pagina da aprire (F1 in un editor). */
+  | { kind: 'help'; page?: string }
   | { kind: 'accessibleDevices' }
   | { kind: 'download'; plan: DownloadPlan }
   | { kind: 'restore' }
   | { kind: 'importTagsReport'; fileName: string; tableName: string; summary: ImportSummary }
+  | { kind: 'importStep7'; deviceId: string }
   | null;
 
 export type EditAction = 'cut' | 'copy' | 'paste' | 'delete' | 'rename' | 'selectAll';

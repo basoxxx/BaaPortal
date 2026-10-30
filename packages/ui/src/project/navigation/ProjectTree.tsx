@@ -453,6 +453,14 @@ export function ProjectTree() {
         },
       );
     }
+    if (parsed.kind === 'plc') {
+      compileItems.push({
+        id: 'importStep7',
+        label: t('step7.menu'),
+        separator: true,
+        run: () => store.getState().openDialog({ kind: 'importStep7', deviceId: parsed.dev }),
+      });
+    }
     if (parsed.kind === 'folder' && parsed.folder === 'backup') {
       const o = store.getState().online;
       compileItems.push({

@@ -229,7 +229,7 @@ describe('Guida e Software installato', () => {
       const items = screen.getAllByRole('menuitem').map((i) => i.textContent);
       const at = items.indexOf('Controlla aggiornamenti…');
       expect(at).toBeGreaterThan(0);
-      expect(items[at - 1]).toBe('Visualizza la guida');
+      expect(items[at - 1]).toMatch(/^Visualizza la guida/);
       expect(items[at + 1]).toBe('Informazioni su BaaPortal');
       await app.user.click(screen.getByRole('menuitem', { name: 'Controlla aggiornamenti…' }));
       expect(app.bridge.updateCalls).toContain('check');

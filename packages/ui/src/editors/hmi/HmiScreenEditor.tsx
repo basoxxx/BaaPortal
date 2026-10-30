@@ -16,6 +16,7 @@ import {
   HMI_FORMATS,
   HMI_GRID,
   HMI_MAX_SIZE,
+  HMI_MAX_TEXT,
   HMI_OBJECT_KINDS,
   HMI_SCREEN_SIZES,
   createAwlContext,
@@ -511,6 +512,8 @@ function ObjectProps(p: {
       onCommit={(v) => p.onChange((x) => void (x[key] = Number(v)))}
     />
   );
+  const tooLong = (v: string) =>
+    v.length > HMI_MAX_TEXT ? t('hmi.tooLong', { max: HMI_MAX_TEXT }) : null;
   const hasTag = o.kind !== 'text' && o.kind !== 'screenButton';
   return (
     <div className="baa-props">
@@ -519,6 +522,7 @@ function ObjectProps(p: {
         <TextField
           label={t('hmi.text')}
           value={o.text}
+          validate={tooLong}
           onCommit={(v) => p.onChange((x) => void (x.text = v))}
         />
       ) : null}
@@ -567,6 +571,7 @@ function ObjectProps(p: {
             <TextField
               label={t('hmi.value')}
               value={o.value ?? ''}
+              validate={tooLong}
               onCommit={(v) => p.onChange((x) => void (x.value = v.trim()))}
             />
           ) : null}
@@ -657,6 +662,7 @@ function TagField(p: {
       <input
         id={id}
         list={`${id}-list`}
+        maxLength={HMI_MAX_TEXT}
         value={text}
         aria-invalid={p.problem ? true : undefined}
         aria-describedby={p.problem ? `${id}-diag` : undefined}

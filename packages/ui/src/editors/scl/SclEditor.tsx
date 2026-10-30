@@ -1,4 +1,4 @@
-import { useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { EditorView, type ViewUpdate } from '@codemirror/view';
 import type { Extension } from '@codemirror/state';
@@ -68,7 +68,8 @@ export function SclEditor(p: SclEditorProps): React.JSX.Element {
     return () => clearTimeout(timer);
   }, [p.check, shown]);
 
-  useEffect(() => {
+  // Nello stesso commit dell'elenco: sottolineature e margine non restano indietro di un frame.
+  useLayoutEffect(() => {
     const v = core.current?.getView();
     if (v) v.dispatch(setDiagnostics(v.state, sclLintDiagnostics(v.state.doc, problems)));
   }, [problems]);

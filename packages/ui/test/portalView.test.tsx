@@ -36,7 +36,7 @@ describe('vista portale: struttura', () => {
     ]);
     expect(screen.getByTestId('action-uploadDevice')).toBeEnabled();
     expect(screen.getByTestId('action-migrate')).toBeDisabled();
-    expect(screen.getByTestId('action-help')).toBeDisabled();
+    expect(screen.getByTestId('action-help')).toBeEnabled();
   });
 
   it('con progetto aperto gli altri portali sono attivi: Aggiungi nuovo dispositivo è attivo, Aggiungi nuovo blocco solo con un PLC', async () => {

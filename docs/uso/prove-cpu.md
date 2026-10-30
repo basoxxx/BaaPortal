@@ -1,6 +1,6 @@
 # Prove su una CPU S7-300 reale
 
-Questa è la lista di prove per la versione 1.9.0. BaaPortal non è mai stato provato su una CPU reale: i test automatici girano contro un PLC finto e contro catture di rete pubbliche. Queste prove servono a sapere che cosa funziona davvero.
+Questa è la lista di prove per la versione 2.0.0. BaaPortal non è mai stato provato su una CPU reale: i test automatici girano contro un PLC finto e contro catture di rete pubbliche. Queste prove servono a sapere che cosa funziona davvero.
 
 **Regola fissa:** le prove della parte B scrivono nella CPU. Si fanno **solo su una CPU non in produzione**: una CPU di scorta o una comprata allo scopo, mai su quella di una macchina che lavora. La parte A legge soltanto.
 
@@ -16,7 +16,7 @@ In caso di problemi, salva anche il progetto (`.baap`) e, se è possibile, il fi
 
 - [ ] Annota il modello della CPU (numero d'ordine e firmware) e come è collegata: Ethernet integrata, CP 343-1, gateway RFC 1006 o adattatore MPI seriale/USB-COM (con marca e modello dell'adattatore).
 - [ ] Fai un backup del programma della CPU con lo strumento che usi di solito, prima di qualsiasi prova della parte B.
-- [ ] Installa BaaPortal 1.9.0 da _Releases_ su GitHub. Al primo avvio vanno autorizzati Windows («Esegui comunque») e macOS (vedi le note di rilascio).
+- [ ] Installa BaaPortal 2.0.0 da _Releases_ su GitHub. Al primo avvio vanno autorizzati Windows («Esegui comunque») e macOS (vedi le note di rilascio).
 
 ## M. Adattatore MPI (solo se colleghi la CPU con l'adattatore seriale o USB-COM)
 
@@ -40,20 +40,24 @@ Se qualcosa non va, annota il messaggio esatto, la variante e le impostazioni us
 6. [ ] **Osservazione.** Apri un blocco AWL in esecuzione e accendi _Osserva_: i valori cambiano e sono plausibili.
 7. [ ] **Tabella di controllo** in sola osservazione: i valori di ingressi, uscite e merker corrispondono a quelli veri.
 8. [ ] **Backup online** (`.baapbak`): il file si crea e si riapre.
-9. [ ] **Interrompi collegamento** (Ctrl+M), poi stacca il cavo durante un collegamento: compare «Collegamento interrotto» e l'app torna offline.
+9. [ ] **Osservazione KOP, FUP e SCL.** Con un blocco KOP, uno FUP e uno SCL già nella CPU e uguali al progetto (per esempio quelli dei punti 15–17 su una CPU di prova), accendi _Osserva_: in KOP e FUP i contatti e i fili cambiano colore con gli ingressi, in SCL compaiono i valori a fine riga. Le righe fuori dalla finestra di osservazione mostrano «?», mai un valore inventato.
+10. [ ] **Interrompi collegamento** (Ctrl+M), poi stacca il cavo durante un collegamento: compare «Collegamento interrotto» e l'app torna offline.
 
 ## B. Scrittura: solo su una CPU non in produzione
 
-10. [ ] **OB1 AWL di prova.** Scrivi un OB1 piccolo, per esempio `A I 0.0`, `= Q 4.0`, e caricalo con _Carica nel dispositivo_ (Ctrl+L). Controlla che compaiano l'anteprima e le conferme e che non parta niente senza conferma. La CPU accetta il blocco, va in RUN e l'uscita segue l'ingresso.
-11. [ ] **RUN / STOP** dal pannello CPU, con le conferme. Prova anche la copia RAM→ROM e la compressione.
-12. [ ] **Comando di variabili** da una tabella di controllo, con conferma: il merker o l'uscita cambia davvero.
-13. [ ] **Imposta ora:** l'ora della CPU cambia.
-14. [ ] **Blocco KOP:** la stessa logica dell'OB1 in KOP, caricata ed eseguita.
-15. [ ] **Blocco FUP (in prova):** attiva _Impostazioni → Funzioni sperimentali_, crea un FC in FUP oppure converti il blocco KOP con _Cambia linguaggio KOP/FUP_, richiamalo da OB1 e caricalo.
-16. [ ] **Blocco SCL (in prova):** crea un FC in SCL con, per esempio, `#out := #a + #b;`, un IF e un FOR, richiamalo da OB1 e caricalo. Controlla i valori con una tabella di controllo.
-17. [ ] **Temporizzatori e contatori** (S_ODT, S_CU) in AWL o KOP: tempi e conteggi corretti.
-18. [ ] **Ripristino di un backup (sperimentale):** ripristina il backup del punto 8 e confronta.
-19. [ ] **Stack di chiamata (sperimentale),** con la CPU in STOP dopo un errore provocato: gli stack si leggono.
+11. [ ] **OB1 AWL di prova.** Scrivi un OB1 piccolo, per esempio `A I 0.0`, `= Q 4.0`, e caricalo con _Carica nel dispositivo_ (Ctrl+L). Controlla che compaiano l'anteprima e le conferme e che non parta niente senza conferma. La CPU accetta il blocco, va in RUN e l'uscita segue l'ingresso.
+12. [ ] **RUN / STOP** dal pannello CPU, con le conferme. Prova anche la copia RAM→ROM e la compressione.
+13. [ ] **Comando di variabili** da una tabella di controllo, con conferma: il merker o l'uscita cambia davvero.
+14. [ ] **Imposta ora:** l'ora della CPU cambia.
+15. [ ] **Blocco KOP:** la stessa logica dell'OB1 in KOP, caricata ed eseguita.
+16. [ ] **Blocco FUP (in prova):** attiva _Impostazioni → Funzioni sperimentali_, crea un FC in FUP oppure converti il blocco KOP con _Cambia linguaggio KOP/FUP_, richiamalo da OB1 e caricalo.
+17. [ ] **Blocco SCL (in prova):** crea un FC in SCL con, per esempio, `#out := #a + #b;`, un IF e un FOR, richiamalo da OB1 e caricalo. Controlla i valori con una tabella di controllo.
+18. [ ] **Temporizzatori e contatori** (S_ODT, S_CU) in AWL o KOP: tempi e conteggi corretti.
+19. [ ] **Ripristino di un backup (sperimentale):** ripristina il backup del punto 8 e confronta.
+20. [ ] **Stack di chiamata (sperimentale),** con la CPU in STOP dopo un errore provocato: gli stack si leggono.
+21. [ ] **Attributi dei DB.** Crea due DB globali di prova, uno con _Non ritentivo_ e uno con _Solo nella memoria di caricamento_ (proprietà del DB, _Attributi_), caricali e poi _Carica dal dispositivo_ in un progetto nuovo: gli attributi tornano uguali. Annota anche che cosa succede ai valori del DB non ritentivo dopo uno spegnimento e riaccensione, e se il DB solo nella memoria di caricamento si legge da una tabella di controllo.
+22. [ ] **Blocchi KOP ricaricati come KOP.** Dopo il punto 15, _Carica dal dispositivo_ in un progetto nuovo: il blocco KOP si riapre in KOP (non in AWL), con gli stessi segmenti. Annota anche come lo apre STEP 7 o TIA Portal, se li hai (BaaPortal non scrive i marcatori `BLD`).
+23. [ ] **Runtime HMI con scritture (solo CPU di prova).** Una schermata con una lampada su un'uscita, un campo di immissione su un merker e tre pulsanti: _Imposta bit_, _Scrivi valore_ e _Impulso_. Avvia il runtime con _Consenti scritture nella CPU_: compare **una** conferma all'avvio e poi nessuna. Il merker e l'uscita cambiano davvero; con _Impulso_ il bit è 1 solo finché tieni premuto, anche premendo e rilasciando in fretta. Poi tieni premuto il pulsante a impulsi e stacca il cavo: annota se il bit resta a 1 (è un limite noto) e che cosa dice BaaPortal.
 
 ## Che cosa rimandare
 

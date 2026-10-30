@@ -159,7 +159,10 @@
     "watchImported": "Import from \"{{name}}\": {{count}} rows added to table \"{{table}}\", {{skipped}} skipped{{detail}}.",
     "watchImportFailed": "Could not import a watch table from \"{{name}}\": {{message}}",
     "watchSharedLimit": "The watch tables watched together exceed the limit of {{max}} rows on the PLC: the extra rows are not read (row error).",
-    "libraryInserted": "“{{name}}” inserted from the library: {{count}} objects."
+    "libraryInserted": "“{{name}}” inserted from the library: {{count}} objects.",
+    "textsExported": "Project texts exported to \"{{path}}\".",
+    "textsImported": "Texts imported: {{applied}} applied, {{skipped}} skipped (unknown key or language, or text over 100,000 characters).",
+    "textsIoFailed": "Project texts: {{message}}"
   },
   "commands": {
     "project.new": "New…",
@@ -221,7 +224,8 @@
     "tools.collectCpuData": "Collect CPU data (read-only)…",
     "edit.compileFull": "Compile → Software (full compile)",
     "online.restore": "Restore backup to device… (experimental)",
-    "help.checkUpdates": "Check for updates…"
+    "help.checkUpdates": "Check for updates…",
+    "options.projectTexts": "Project texts…"
   },
   "menu": {
     "project": "Project",
@@ -562,6 +566,7 @@
     "editSource": "Edit source",
     "importBlocks": "Import blocks",
     "importTags": "Import tags",
+    "importStep7": "Import from STEP 7",
     "addWatchTable": "Add watch table",
     "setAccess": "Set CPU access",
     "moveRows": "Move rows",
@@ -582,7 +587,16 @@
     "hmiPaste": "Paste HMI objects",
     "hmiMove": "Move HMI objects",
     "hmiResize": "Resize HMI objects",
-    "hmiEdit": "Edit HMI screen"
+    "hmiEdit": "Edit HMI screen",
+    "projectLanguages": "Project languages",
+    "editTranslation": "Edit translation",
+    "importTexts": "Import project texts",
+    "netAddSubnet": "New subnet",
+    "netDeleteSubnet": "Delete subnet",
+    "netConnect": "Connect interface",
+    "netEdit": "Network properties",
+    "netAddStation": "Insert ET 200 station",
+    "netDeleteStation": "Delete ET 200 station"
   },
   "inspector": {
     "tab": {
@@ -906,7 +920,17 @@
     "HW_SLOT_TAKEN": "The slot is already used by another module.",
     "HW_RACK_NOT_CONNECTED": "The rack is not connected: it needs an IM 360 in slot 3 of rack 0 and an IM 361 in slot 3 of this rack (or the IM 365 pair, rack 1 only).",
     "HW_ADDRESS_OVERLAP": "The addresses ({{area}}) overlap those of {{other}}.",
-    "HW_ADDRESS_OUT_OF_RANGE": "The addresses ({{area}}) are outside the CPU limits."
+    "HW_ADDRESS_OUT_OF_RANGE": "The addresses ({{area}}) are outside the CPU limits.",
+    "NET_NOT_CONNECTED": "The interface is not connected to any subnet.",
+    "NET_SUBNET_INVALID": "The subnet does not exist or does not match the interface type.",
+    "NET_ADDRESS_OUT_OF_RANGE": "Address missing or out of range (0 up to the highest address of the subnet, at most 126).",
+    "NET_ADDRESS_DUPLICATE": "Address already used on the subnet by {{other}}.",
+    "NET_IP_INVALID": "IP address not valid for the subnet.",
+    "NET_IP_DUPLICATE": "IP address already used on the subnet by {{other}}.",
+    "NET_STATION_NO_MASTER": "The station's CPU has no interface on this subnet.",
+    "NET_MASK_INVALID": "Invalid subnet mask.",
+    "NET_GATEWAY_INVALID": "Invalid router address.",
+    "NET_RATE_INVALID": "Transmission rate or highest address not allowed for the subnet."
   },
   "block": {
     "interface": "Block interface",
@@ -1318,6 +1342,55 @@
       "VALORI_INIZIALI_DA_CAMPIONE": "Initial values of the SFB internal static data taken from the real block {{sample}}."
     }
   },
+  "step7": {
+    "menu": "Import from STEP 7…",
+    "title": "Import from STEP 7",
+    "filter": "STEP 7 exports (*.awl, *.scl, *.sdf, *.seq, *.dif, *.asc)",
+    "intro": "Choose the STL and SCL sources and the symbol tables exported from STEP 7 V5.5 (several files can be chosen at once). The .s7p project is not read.",
+    "pick": "Choose files…",
+    "files": "Files",
+    "fileErrors": "not imported ({{count}} errors)",
+    "lineMessage": "line {{line}}: {{message}}",
+    "empty": "Nothing to import.",
+    "import": "Import",
+    "sclErrors": "({{count}} SCL errors: the text is imported anyway)",
+    "col": {
+      "include": "Import",
+      "kind": "Type",
+      "name": "Name",
+      "file": "File",
+      "state": "Result"
+    },
+    "kind": {
+      "UDT": "UDT",
+      "OB": "OB",
+      "FB": "FB",
+      "FC": "FC",
+      "DB": "DB",
+      "IDB": "Instance DB",
+      "rename": "Block name",
+      "tags": "Tag table"
+    },
+    "state": {
+      "new": "new",
+      "replaces": "replaces {{name}}",
+      "nameTaken": "name already used by {{owner}}",
+      "rename": "renames {{old}}",
+      "tags": "{{count}} symbols"
+    },
+    "err": {
+      "FILE_TOO_LARGE": "file too large",
+      "UNKNOWN_FORMAT": "unrecognized format",
+      "SCL_SECTION_MOVED": "{{section}} section not supported: kept as a comment at the top of the body"
+    },
+    "msg": {
+      "done": "Import from STEP 7: {{created}} objects created, {{replaced}} replaced, {{renamed}} blocks renamed, {{tags}} tags.",
+      "failed": "Cannot import from STEP 7: {{message}}",
+      "renameSkipped": "Import from STEP 7: the name \"{{name}}\" is already used, the block keeps its name.",
+      "tagSkipped": "Import from STEP 7, symbol on line {{line}} not imported: {{reason}}",
+      "sclErrors": "Import from STEP 7: the SCL block \"{{name}}\" has {{count}} errors to fix in the editor."
+    }
+  },
   "tagIo": {
     "import": "Import tags…",
     "export": "Export tags…",
@@ -1552,7 +1625,9 @@
     "mpiSearching": "Searching the MPI bus nodes…",
     "mpiNoNodes": "No other node found on the MPI bus.",
     "mpiNodes": "Nodes on the MPI bus",
-    "mpiNode": "Address {{address}}"
+    "mpiNode": "Address {{address}}",
+    "useConfigured": "Use configured address",
+    "useConfiguredHint": "CPU address from the network view: {{address}}"
   },
   "download": {
     "title": "Download to device",
@@ -2007,7 +2082,9 @@
     "noSlot": "No suitable free slot for {{name}} in rack {{rack}}.",
     "cannotMove": "The module cannot go into slot {{slot}}.",
     "download": "Download hardware configuration to device",
-    "downloadDisabled": "The hardware configuration is edited and saved in the project, but it cannot be downloaded to the CPU: the format of the system data blocks (SDB) is not documented. Configure the CPU hardware with STEP 7 or TIA Portal. \"Download to device\" downloads only the program blocks, as before."
+    "downloadDisabled": "The hardware configuration is edited and saved in the project, but it cannot be downloaded to the CPU: the format of the system data blocks (SDB) is not documented. Configure the CPU hardware with STEP 7 or TIA Portal. \"Download to device\" downloads only the program blocks, as before.",
+    "noStationSlot": "No free slot suitable for {{name}} in the station.",
+    "stationOf": "distributed I/O of {{plc}}"
   },
   "library": {
     "project": "Project library",
@@ -2105,6 +2182,7 @@
     "customSize": "Custom",
     "background": "Background",
     "sizeRange": "Value out of range",
+    "tooLong": "Text too long (at most {{max}} characters)",
     "number": "A number is required",
     "delete": "Delete object",
     "manySelected": "{{count}} objects selected: arrows move them, Shift+arrows resize them, Delete removes them.",
@@ -2145,5 +2223,77 @@
       "item": "{{address}} (CPU {{cpu}}, {{time}})",
       "ack": "I have checked"
     }
+  },
+  "texts": {
+    "tooLong": "Translation too long (at most {{max}} characters)",
+    "title": "Project texts",
+    "close": "Close",
+    "editing": "Editing language",
+    "others": "Other languages (comma separated)",
+    "display": "Displayed language",
+    "langInvalid": "Invalid languages: use codes such as it-IT or en-US, without repeats.",
+    "hint": "Titles and comments are written in the editing language. With another language displayed, editors and printouts use the translations (the editing-language text where missing) and the fields are read-only.",
+    "filter": "Filter by object or text",
+    "exportXlsx": "Export xlsx…",
+    "exportCsv": "Export csv…",
+    "import": "Import…",
+    "col": {
+      "object": "Object",
+      "field": "Field"
+    },
+    "field": {
+      "title": "Title",
+      "comment": "Comment",
+      "text": "Text"
+    },
+    "truncated": "Showing {{shown}} of {{total}} rows: narrow down with the filter.",
+    "empty": "No titles or comments to translate.",
+    "noColumns": "The Key column or the project language columns are missing.",
+    "viewBanner": "Viewing the {{lang}} language: titles and comments are read-only. Change the displayed language in Options → Project texts."
+  },
+  "help": {
+    "title": "BaaPortal help",
+    "contents": "Help contents",
+    "search": "Search the help",
+    "results": "Results",
+    "noResults": "No results."
+  },
+  "net": {
+    "title": "Network view",
+    "addSubnet": "New subnet",
+    "add": "New {{type}} subnet",
+    "type": {
+      "MPI": "MPI",
+      "PROFIBUS": "PROFIBUS DP",
+      "ETHERNET": "Industrial Ethernet"
+    },
+    "station": "ET 200 station",
+    "master": "CPU",
+    "addStation": "Insert station",
+    "note": "Subnets, addresses and ET 200 stations are edited and saved in the project, but they are not downloaded to the CPU and not read from the CPU: the format of the system data blocks (SDB) is not documented. Drag an interface onto a subnet to connect it, or choose the subnet in the properties; Delete disconnects it. Double-click a device to open its device view.",
+    "openHint": "Double-click: device view",
+    "notConnected": "not connected",
+    "cannotConnect": "{{name}} cannot be connected to this subnet (different type).",
+    "overview": "Device overview",
+    "device": "Device",
+    "interface": "Interface",
+    "kind": "Type",
+    "subnet": "Subnet",
+    "address": "Address",
+    "problems": "Problems",
+    "noSelection": "Select a subnet or an interface to see its properties.",
+    "nameEmpty": "The name cannot be empty.",
+    "mask": "Subnet mask",
+    "gateway": "Router (optional)",
+    "rate": "Transmission rate",
+    "highest": "Highest address",
+    "deleteSubnet": "Delete subnet",
+    "ip": "IP address",
+    "mpiAddress": "MPI address",
+    "dpAddress": "PROFIBUS address",
+    "addressRange": "The address ranges from 0 to {{max}}.",
+    "deviceName": "PROFINET device name",
+    "openDeviceView": "Open device view",
+    "deleteStation": "Delete station"
   }
 }

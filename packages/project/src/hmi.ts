@@ -29,6 +29,8 @@ export const HMI_TAG_KINDS: ReadonlySet<HmiObjectKind> = new Set([
 export const HMI_GRID = 10;
 /** Tetti di forma: difesa da file non fidati. */
 export const HMI_MAX_SIZE = 4096;
+/** Lunghezza massima di testo, variabile e valore di un oggetto (oltre, il file non si riaprirebbe). */
+export const HMI_MAX_TEXT = 1000;
 
 const DEFAULT_SIZE: Record<HmiObjectKind, [number, number]> = {
   text: [120, 30],

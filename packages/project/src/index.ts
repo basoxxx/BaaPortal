@@ -21,6 +21,8 @@ export * from './assignment';
 export * from './resources';
 export * from './compileKeys';
 export * from './hardware';
+export * from './network';
 export * from './library';
 export * from './iecLibrary';
 export * from './hmi';
+export * from './texts';

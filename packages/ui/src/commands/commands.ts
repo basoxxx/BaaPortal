@@ -3,6 +3,7 @@ import type { BaaBridge } from '../bridge';
 import type { IconName } from '../icons';
 import type { ProjectService } from '../services/projectService';
 import type { AppState, EditAction, PanelName } from '../state/store';
+import { contextPage } from '../help/pages';
 import { checkNow, getUpdateState } from '../update/updateController';
 import { getProgress } from '../project/progress';
 import { compileProgram } from '../project/compile/compileActions';
@@ -81,6 +82,7 @@ export type CommandId =
   | 'online.backup'
   | 'online.restore'
   | 'options.settings'
+  | 'options.projectTexts'
   | 'tools.crossReferences'
   | 'tools.callStructure'
   | 'tools.assignmentList'
@@ -131,6 +133,17 @@ function focusedBlock(s: AppState) {
   const wa = s.workArea;
   const e = wa.editors.find((x) => x.key === wa.panes[wa.focusedPane]);
   return e?.kind === 'block' ? { deviceId: e.deviceId, blockId: e.objectId } : undefined;
+}
+/** La pagina della guida dell'editor in primo piano (F1); senza, si apre l'indice. */
+function helpPageFor(s: AppState): string | undefined {
+  const wa = s.workArea;
+  const e = wa.editors.find((x) => x.key === wa.panes[wa.focusedPane]);
+  if (!e || !s.doc) return undefined;
+  const b =
+    e.kind === 'block'
+      ? findDevice(s.doc.project, e.deviceId)?.blocks.find((x) => x.id === e.objectId)
+      : undefined;
+  return contextPage(e.kind, b && b.kind !== 'DB' && b.kind !== 'IDB' ? b.language : undefined);
 }
 /** Stampa la selezione dell'albero (senza, tutto il PLC): apre la finestra di stampa. */
 const printRun =
@@ -462,6 +475,10 @@ const list: Command[] = [
       !getProgress(),
     run: ({ store }) => store.getState().openDialog({ kind: 'restore' }),
   }),
+  def('options.projectTexts', {
+    isEnabled: hasDoc,
+    run: ({ store }) => store.getState().openDialog({ kind: 'projectTexts' }),
+  }),
   def('options.settings', {
     isEnabled: always,
     run: ({ store }) => store.getState().openDialog({ kind: 'settings' }),
@@ -508,7 +525,14 @@ const list: Command[] = [
     isEnabled: (s) => s.workArea.editors.length > 0,
     run: ({ store }) => store.getState().closeAllEditors(),
   }),
-  def('help.show'),
+  def('help.show', {
+    shortcut: 'F1',
+    isEnabled: always,
+    run: ({ store }) => {
+      const s = store.getState();
+      s.openDialog({ kind: 'help', page: helpPageFor(s) });
+    },
+  }),
   def('help.checkUpdates', {
     isEnabled: () => getUpdateState().info?.enabled === true,
     run: () => checkNow(),

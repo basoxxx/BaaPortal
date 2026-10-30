@@ -14,7 +14,9 @@ export type EditorKind =
   | 'callStructure'
   | 'assignment'
   | 'resources'
-  | 'deviceView';
+  | 'deviceView'
+  /** Vista di rete del progetto (tappa 6B): `deviceId` e `objectId` vuoti. */
+  | 'networkView';
 export interface EditorRef {
   /** `${kind}:${deviceId}:${objectId}`; "Mostra tutte le variabili" ha objectId ''. */
   key: string;
@@ -90,6 +92,8 @@ export function nodeIdOfEditor(e: EditorTarget): string {
       return ids.folder(e.deviceId, 'online-diag');
     case 'deviceView':
       return ids.folder(e.deviceId, 'device-config');
+    case 'networkView':
+      return 'devices-networks';
     case 'crossRef':
     case 'callStructure':
     case 'assignment':
@@ -100,6 +104,7 @@ export function nodeIdOfEditor(e: EditorTarget): string {
 
 /** Editor che il nodo apre (blocco, UDT, tabella, "Mostra tutte le variabili"), altrimenti null. */
 export function editorOfNode(nodeId: string): EditorTarget | null {
+  if (nodeId === 'devices-networks') return { kind: 'networkView', deviceId: '', objectId: '' };
   const p = parseNodeId(nodeId);
   if (
     p.kind === 'block' ||

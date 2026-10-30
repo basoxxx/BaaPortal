@@ -35,6 +35,7 @@ import { callInstanceOf } from './callInstance';
 import { convertAwl, convertToAwl } from './convertAwl';
 import { hasRawLines, isLockedImport, lockedBannerKey } from './readOnlyImport';
 import { useMnemonic } from '../awl/mnemonicPreference';
+import { useShownTexts } from '../../state/shownText';
 import { useAppStore, useServices } from '../../state/AppContext';
 
 const newId = () => globalThis.crypto.randomUUID();
@@ -212,6 +213,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
     else ctrl.setVisible(blockId, [0], { network: 0, line: Math.min(...own) });
   }, [plcOn, isScl, sclView, sclLines, store, bridge, blockId]);
   const handles = useRef(new Map<string, AwlEditorHandle>());
+  const tx = useShownTexts();
   // Le diagnostiche di ogni segmento: un segmento che non cambia tiene lo stesso array, e il suo editor non ricalcola.
   // Chiavi per id del segmento: se un segmento viene inserito o tolto, i problemi restano ai loro segmenti.
   const [byNetwork, setByNetwork] = useState<Record<string, AwlDiagnostic[]>>({});
@@ -417,12 +419,17 @@ export function NetworksView({ deviceId, blockId }: Props) {
           {t(lockedBannerKey(block))}
         </p>
       ) : null}
+      {tx.lang ? (
+        <p className="baa-readonly-banner" role="note" data-testid="texts-banner">
+          {t('texts.viewBanner', { lang: tx.lang })}
+        </p>
+      ) : null}
       <div className="baa-block-header">
         <label>
           <span>{t('block.title')}</span>
           <CommitInput
-            value={block.header.title}
-            readOnly={locked}
+            value={tx.shown(deviceId, block.id, 'title', block.header.title)}
+            readOnly={locked || tx.lang !== null}
             aria-label={t('block.title')}
             onCommit={(v) => editHeader('title', v)}
           />
@@ -430,8 +437,8 @@ export function NetworksView({ deviceId, blockId }: Props) {
         <label>
           <span>{t('block.comment')}</span>
           <CommitTextarea
-            value={block.header.comment}
-            readOnly={locked}
+            value={tx.shown(deviceId, block.id, 'comment', block.header.comment)}
+            readOnly={locked || tx.lang !== null}
             rows={2}
             aria-label={t('block.comment')}
             onCommit={(v) => editHeader('comment', v)}
@@ -455,8 +462,8 @@ export function NetworksView({ deviceId, blockId }: Props) {
           <header className="baa-network-head">
             <strong>{t('block.network', { n: i + 1 })}</strong>
             <CommitInput
-              value={n.title}
-              readOnly={locked}
+              value={tx.shown(deviceId, n.id, 'title', n.title)}
+              readOnly={locked || tx.lang !== null}
               aria-label={`${t('block.networkTitle')} ${i + 1}`}
               onCommit={(v) => editNetwork(n.id, 'title', v)}
             />
@@ -474,8 +481,8 @@ export function NetworksView({ deviceId, blockId }: Props) {
             </button>
           </header>
           <CommitTextarea
-            value={n.comment}
-            readOnly={locked}
+            value={tx.shown(deviceId, n.id, 'comment', n.comment)}
+            readOnly={locked || tx.lang !== null}
             rows={1}
             aria-label={`${t('block.networkComment')} ${i + 1}`}
             onCommit={(v) => editNetwork(n.id, 'comment', v)}

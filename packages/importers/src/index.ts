@@ -1,7 +1,7 @@
 export * from './awlSource/decode';
 export * from './awlSource/types';
 export { parseAwlSource } from './awlSource/parse';
-export { applySource } from './awlSource/apply';
+export { applySource, findExisting, nameOwner } from './awlSource/apply';
 export { generateAwlSource } from './awlSource/generate';
 export * from './tags/columns';
 export * from './tags/csv';
@@ -9,3 +9,7 @@ export * from './tags/rows';
 export * from './tags/xlsx';
 export * from './xlsx/ooxml';
 export * from './watch/csv';
+export * from './texts/texts';
+export * from './step7/symbols';
+export * from './step7/scl';
+export * from './step7/files';
