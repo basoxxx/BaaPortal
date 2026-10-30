@@ -91,6 +91,25 @@ describe('planStep7Import e applyStep7Plan', () => {
     applyStep7Plan(d, plan, new Set([plan.items[0]!.key]));
     expect(d.udts[0]!.members[0]!.type).toBe('DInt');
   });
+
+  it('un oggetto nuovo col nome di un altro blocco è bloccato nell\u2019anteprima', async () => {
+    const app = await renderApp({ view: 'project', withProject: true, withPlc: true });
+    const d = structuredClone(dev(app));
+    d.blocks.push(createCodeBlock({ kind: 'FC', number: 3, name: 'Motore', language: 'AWL' }));
+    const plan = planStep7Import(d, [
+      {
+        name: 'a.awl',
+        bytes: enc('FUNCTION "Motore" : VOID\nBEGIN\nNETWORK\nTITLE =\nEND_FUNCTION\n'),
+      },
+      { name: 's.sdf', bytes: enc('"Motore","FC 10","FC 10",""\r\n') },
+    ]);
+    const item = plan.items.find((i) => i.kind === 'FC')!;
+    expect(item).toMatchObject({ number: 10, nameTakenBy: 'FC3' });
+    expect(defaultSelection(plan).has(item.key)).toBe(false);
+    const before = d.blocks.length;
+    expect(applyStep7Plan(d, plan, new Set([item.key]))).toMatchObject({ created: 0 });
+    expect(d.blocks).toHaveLength(before);
+  });
 });
 
 function planAndApply(d: PlcDevice, f: { name: string; bytes: Uint8Array }[]) {

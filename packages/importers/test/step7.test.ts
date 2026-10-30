@@ -3,6 +3,7 @@ import { createCodeBlock } from '@baaportal/project';
 import { describe, expect, it } from 'vitest';
 import {
   applySource,
+  parseAwlSource,
   parseSclSource,
   parseStep7Symbols,
   readStep7Files,
@@ -256,3 +257,43 @@ describe('readStep7Files', () => {
     expect(r.units.map((u) => u.unit.name)).toEqual(['Axis']);
   });
 });
+
+describe('nome già usato da un altro oggetto', () => {
+  const enc = (s: string) => new TextEncoder().encode(s);
+  const withFc3 = () => {
+    const d = emptyDevice();
+    d.blocks.push(createCodeBlock({ kind: 'FC', number: 3, name: 'Motore', language: 'AWL' }));
+    return d;
+  };
+
+  it('STEP 7: FC 10 col nome di FC3 dai simboli non si crea', () => {
+    const d = withFc3();
+    const src = 'FUNCTION "Motore" : VOID\nBEGIN\nNETWORK\nTITLE =\n      NOP 0;\nEND_FUNCTION\n';
+    const r = readStep7Files(
+      [
+        { name: 'a.awl', bytes: enc(src) },
+        { name: 's.sdf', bytes: enc('"Motore","FC 10","FC 10",""\r\n') },
+      ],
+      d,
+    );
+    expect(() => applySource(d, { units: r.units.map((u) => u.unit) }, seq())).toThrow(
+      'Nome "Motore" già usato da FC3',
+    );
+    expect(d.blocks.map((b) => `${b.kind}${b.number}`)).toEqual(['FC3']);
+  });
+
+  it('sorgente AWL: un FB col nome di un FC non si crea', () => {
+    const d = withFc3();
+    const r = parseAwlSourceOk(
+      'FUNCTION_BLOCK "Motore"\nBEGIN\nNETWORK\nTITLE =\nEND_FUNCTION_BLOCK\n',
+    );
+    expect(() => applySource(d, r, seq())).toThrow('già usato da FC3');
+    expect(d.blocks).toHaveLength(1);
+  });
+});
+
+function parseAwlSourceOk(text: string) {
+  const r = parseAwlSource(text, emptyDevice());
+  if (!r.ok) throw new Error(JSON.stringify(r.errors));
+  return r.source;
+}

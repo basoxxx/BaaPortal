@@ -101,6 +101,18 @@ describe('editor delle schermate HMI', () => {
     expect(screenOf(app).objects[1]!.format).toBe('REAL');
   });
 
+  it('testo e variabile oltre il limite del file non si salvano', async () => {
+    const app = await openEditor();
+    await app.user.click(screen.getByTestId('hmi-tool-button'));
+    const props = within(screen.getByTestId('hmi-props'));
+    const text = props.getByLabelText('Testo');
+    fireEvent.focus(text);
+    fireEvent.change(text, { target: { value: 'x'.repeat(1001) } });
+    fireEvent.blur(text);
+    expect(screenOf(app).objects[0]!.text).toBe('Pulsante');
+    expect(props.getByLabelText('Variabile')).toHaveAttribute('maxLength', '1000');
+  });
+
   it('copia, incolla ed elimina con i comandi di Modifica; annulla rimette tutto', async () => {
     const app = await openEditor();
     await app.user.click(screen.getByTestId('hmi-tool-text'));

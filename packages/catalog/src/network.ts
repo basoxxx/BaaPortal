@@ -38,8 +38,9 @@ export const portAccepts = (kind: PortKind, subnet: SubnetType): boolean =>
 
 /**
  * Interfacce integrate della CPU (manuale 03/2011 delle CPU 31x, tabelle dei dati tecnici,
- * «1st/2nd/3rd interface»): CPU senza DP solo X1 MPI; CPU DP X1 MPI e X2 DP; CPU PN/DP X1 MPI/DP e
- * X2 PN; la 319-3 PN/DP X1 MPI/DP, X2 DP e X3 PN.
+ * «1st/2nd/3rd interface»): CPU senza DP (anche le 31xC-2 PtP: la PtP non va in rete) solo X1 MPI;
+ * CPU DP X1 MPI e X2 DP, ma la 317-2 DP e la 317F-2 DP hanno X1 MPI/DP; CPU PN/DP X1 MPI/DP e X2 PN;
+ * la 319-3 PN/DP X1 MPI/DP, X2 DP e X3 PN.
  */
 export function cpuPorts(cpu: CpuType): PortType[] {
   const { dp, pn } = cpu.interfaces;
@@ -58,7 +59,7 @@ export function cpuPorts(cpu: CpuType): PortType[] {
   }
   if (dp) {
     return [
-      { id: 'X1', kind: 'MPI' },
+      { id: 'X1', kind: /317/.test(cpu.id) ? 'MPI/DP' : 'MPI' },
       { id: 'X2', kind: 'DP' },
     ];
   }

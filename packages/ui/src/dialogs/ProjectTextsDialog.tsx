@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import {
   listTextEntries,
   setLanguages,
+  MAX_TRANSLATION_LENGTH,
   setTranslation,
   type ProjectLanguages,
 } from '@baaportal/project';
@@ -144,10 +145,18 @@ export function ProjectTextsDialog({ onClose }: { onClose(): void }) {
                       <CommitInput
                         value={texts?.[e.key]?.[l] ?? ''}
                         aria-label={`${e.object} ${t(`texts.field.${e.field}`)} ${l}`}
+                        validate={(v) =>
+                          v.length > MAX_TRANSLATION_LENGTH
+                            ? t('texts.tooLong', { max: MAX_TRANSLATION_LENGTH })
+                            : null
+                        }
                         onCommit={(v) =>
                           store
                             .getState()
-                            .edit('history.editTranslation', (p) => setTranslation(p, e.key, l, v))
+                            .edit(
+                              'history.editTranslation',
+                              (p) => void setTranslation(p, e.key, l, v),
+                            )
                         }
                       />
                     </td>

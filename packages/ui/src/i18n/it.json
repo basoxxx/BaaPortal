@@ -161,7 +161,7 @@
     "watchSharedLimit": "Le tabelle di controllo osservate insieme superano il limite di {{max}} righe sul PLC: le righe in più non vengono lette (errore sulla riga).",
     "libraryInserted": "«{{name}}» inserito dalla libreria: {{count}} oggetti.",
     "textsExported": "Testi di progetto esportati in \"{{path}}\".",
-    "textsImported": "Testi importati: {{applied}} applicati, {{skipped}} scartati (chiave o lingua sconosciuta).",
+    "textsImported": "Testi importati: {{applied}} applicati, {{skipped}} scartati (chiave o lingua sconosciuta, o testo oltre 100 000 caratteri).",
     "textsIoFailed": "Testi di progetto: {{message}}"
   },
   "commands": {
@@ -1374,6 +1374,7 @@
     "state": {
       "new": "nuovo",
       "replaces": "sostituisce {{name}}",
+      "nameTaken": "nome già usato da {{owner}}",
       "rename": "rinomina {{old}}",
       "tags": "{{count}} simboli"
     },
@@ -2181,6 +2182,7 @@
     "customSize": "Personalizzate",
     "background": "Sfondo",
     "sizeRange": "Valore fuori dai limiti",
+    "tooLong": "Testo troppo lungo (al massimo {{max}} caratteri)",
     "number": "Serve un numero",
     "delete": "Elimina oggetto",
     "manySelected": "{{count}} oggetti selezionati: frecce per spostarli, Maiusc+frecce per ridimensionarli, Canc per eliminarli.",
@@ -2223,6 +2225,7 @@
     }
   },
   "texts": {
+    "tooLong": "Traduzione troppo lunga (al massimo {{max}} caratteri)",
     "title": "Testi di progetto",
     "close": "Chiudi",
     "editing": "Lingua di modifica",

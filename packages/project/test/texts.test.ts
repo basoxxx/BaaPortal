@@ -5,6 +5,7 @@ import {
   createProject,
   displayLanguage,
   listTextEntries,
+  MAX_TRANSLATION_LENGTH,
   readBaap,
   setLanguages,
   setTranslation,
@@ -102,6 +103,22 @@ describe('testi di progetto', () => {
     ]);
     expect(r).toEqual({ applied: 1, skipped: 2 });
     expect(p.texts![e.key]).toEqual({ 'en-US': 'Hello' });
+  });
+
+  it('un testo oltre il limite del file si scarta e il progetto si riapre', () => {
+    const p = sample();
+    const e = listTextEntries(p)[0]!;
+    const long = 'x'.repeat(MAX_TRANSLATION_LENGTH + 1);
+    expect(applyTranslations(p, [{ key: e.key, lang: 'en-US', text: long }])).toEqual({
+      applied: 0,
+      skipped: 1,
+    });
+    expect(setTranslation(p, e.key, 'en-US', long)).toBe(false);
+    expect(p.texts).toBeUndefined();
+    expect(setTranslation(p, e.key, 'en-US', 'x'.repeat(MAX_TRANSLATION_LENGTH))).toBe(true);
+    expect(readBaap(writeBaap(p, { appVersion: 'x' })).texts?.[e.key]?.['en-US']).toHaveLength(
+      MAX_TRANSLATION_LENGTH,
+    );
   });
 
   it('setLanguages valida e toglie le traduzioni delle lingue tolte', () => {

@@ -18,6 +18,8 @@ export interface TextEntry {
 const TAG = /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/;
 export const isLanguageTag = (s: string): boolean => s.length <= 20 && TAG.test(s);
 export const MAX_LANGUAGES = 20;
+/** Lunghezza massima di una traduzione: oltre, il file del progetto non si riaprirebbe. */
+export const MAX_TRANSLATION_LENGTH = 100_000;
 
 export const textKey = (deviceId: string, ownerId: string, field: TextField): string =>
   `${deviceId}/${ownerId}/${field}`;
@@ -109,7 +111,8 @@ export function listTextEntries(p: Pick<Project, 'devices'>): TextEntry[] {
 }
 
 /** Scrive (o toglie, se il testo è vuoto) la traduzione di una chiave. Modifica `p` sul posto. */
-export function setTranslation(p: Project, key: string, lang: string, text: string): void {
+export function setTranslation(p: Project, key: string, lang: string, text: string): boolean {
+  if (text.length > MAX_TRANSLATION_LENGTH) return false;
   const texts = (p.texts ??= {});
   const map = Object.hasOwn(texts, key) ? texts[key]! : (texts[key] = {});
   if (text === '') {
@@ -117,6 +120,7 @@ export function setTranslation(p: Project, key: string, lang: string, text: stri
     if (Object.keys(map).length === 0) delete texts[key];
   } else map[lang] = text;
   if (Object.keys(texts).length === 0) delete p.texts;
+  return true;
 }
 
 export interface TranslationInput {
@@ -125,7 +129,10 @@ export interface TranslationInput {
   text: string;
 }
 
-/** Applica traduzioni importate: solo chiavi esistenti e lingue dichiarate; i testi vuoti non cambiano nulla. */
+/**
+ * Applica traduzioni importate: solo chiavi esistenti, lingue dichiarate e testi entro
+ * MAX_TRANSLATION_LENGTH (gli altri sono scartati); i testi vuoti non cambiano nulla.
+ */
 export function applyTranslations(
   p: Project,
   inputs: readonly TranslationInput[],
@@ -136,11 +143,8 @@ export function applyTranslations(
   let skipped = 0;
   for (const i of inputs) {
     if (i.text === '') continue;
-    if (!keys.has(i.key) || !langs.has(i.lang)) skipped++;
-    else {
-      setTranslation(p, i.key, i.lang, i.text);
-      applied++;
-    }
+    if (keys.has(i.key) && langs.has(i.lang) && setTranslation(p, i.key, i.lang, i.text)) applied++;
+    else skipped++;
   }
   return { applied, skipped };
 }

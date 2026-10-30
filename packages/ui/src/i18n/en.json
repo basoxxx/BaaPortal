@@ -161,7 +161,7 @@
     "watchSharedLimit": "The watch tables watched together exceed the limit of {{max}} rows on the PLC: the extra rows are not read (row error).",
     "libraryInserted": "“{{name}}” inserted from the library: {{count}} objects.",
     "textsExported": "Project texts exported to \"{{path}}\".",
-    "textsImported": "Texts imported: {{applied}} applied, {{skipped}} skipped (unknown key or language).",
+    "textsImported": "Texts imported: {{applied}} applied, {{skipped}} skipped (unknown key or language, or text over 100,000 characters).",
     "textsIoFailed": "Project texts: {{message}}"
   },
   "commands": {
@@ -1374,6 +1374,7 @@
     "state": {
       "new": "new",
       "replaces": "replaces {{name}}",
+      "nameTaken": "name already used by {{owner}}",
       "rename": "renames {{old}}",
       "tags": "{{count}} symbols"
     },
@@ -2181,6 +2182,7 @@
     "customSize": "Custom",
     "background": "Background",
     "sizeRange": "Value out of range",
+    "tooLong": "Text too long (at most {{max}} characters)",
     "number": "A number is required",
     "delete": "Delete object",
     "manySelected": "{{count}} objects selected: arrows move them, Shift+arrows resize them, Delete removes them.",
@@ -2223,6 +2225,7 @@
     }
   },
   "texts": {
+    "tooLong": "Translation too long (at most {{max}} characters)",
     "title": "Project texts",
     "close": "Close",
     "editing": "Editing language",

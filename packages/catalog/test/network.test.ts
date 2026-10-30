@@ -16,7 +16,15 @@ const ports = (id: string) => cpuPorts(findCpu(id)!).map((p) => `${p.id} ${p.kin
 
 describe('interfacce e stazioni ET 200', () => {
   it('interfacce delle CPU secondo il tipo', () => {
-    expect(ports('cpu-313c')).toEqual(['X1 MPI']);
+    for (const id of ['cpu-312', 'cpu-314', 'cpu-312c', 'cpu-313c', 'cpu-313c-2-ptp'])
+      expect(ports(id)).toEqual(['X1 MPI']);
+    for (const id of ['cpu-313c-2-dp', 'cpu-314c-2-dp', 'cpu-315f-2-dp'])
+      expect(ports(id)).toEqual(['X1 MPI', 'X2 DP']);
+    // 317-2 DP: la prima interfaccia è MPI/DP (manuale 03/2011, dati tecnici della CPU 317-2 DP).
+    expect(ports('cpu-317-2-dp')).toEqual(['X1 MPI/DP', 'X2 DP']);
+    expect(ports('cpu-317f-2-dp')).toEqual(['X1 MPI/DP', 'X2 DP']);
+    for (const id of ['cpu-314c-2-pn-dp', 'cpu-317-2-pn-dp', 'cpu-315f-2-pn-dp'])
+      expect(ports(id)).toEqual(['X1 MPI/DP', 'X2 PN']);
     expect(ports('cpu-315-2-dp')).toEqual(['X1 MPI', 'X2 DP']);
     expect(ports('cpu-315-2-pn-dp')).toEqual(['X1 MPI/DP', 'X2 PN']);
     expect(ports('cpu-319-3-pn-dp')).toEqual(['X1 MPI/DP', 'X2 DP', 'X3 PN']);

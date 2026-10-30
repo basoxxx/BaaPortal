@@ -58,6 +58,19 @@ function defaultName(device: PlcDevice, unitKind: SourceUnit['kind'], number: nu
   return uniqueName(base, symbolNames(device));
 }
 
+/**
+ * Chi usa già `name` nel dispositivo (`FC3`, `UDT2` o il simbolo stesso), se qualcuno lo usa: un
+ * oggetto nuovo non può prendere il nome di un altro blocco, UDT o simbolo.
+ */
+export function nameOwner(device: PlcDevice, name: string): string | undefined {
+  const b = device.blocks.find((x) => sameName(x.name, name));
+  if (b) return `${familyOf(b.kind)}${b.number}`;
+  const u = device.udts.find((x) => sameName(x.name, name));
+  if (u) return `UDT${u.number}`;
+  const tag = symbolNames(device).find((n) => sameName(n, name));
+  return tag === undefined ? undefined : `"${tag}"`;
+}
+
 /** L'oggetto del dispositivo che l'unità sostituirebbe (stessa famiglia, per numero o per nome). */
 export function findExisting(device: PlcDevice, unit: SourceUnit): Udt | Block | undefined {
   const byNumber = unit.number !== undefined;
@@ -240,6 +253,8 @@ export function applySource(
             (b) => familyOf(b.kind) === familyOf(unit.kind) && b.number === number,
           );
     if (taken) throw new Error(`Numero ${unit.kind} ${number} già in uso`);
+    const owner = unit.name !== '' ? nameOwner(device, unit.name) : undefined;
+    if (owner) throw new Error(`Nome "${unit.name}" già usato da ${owner}`);
     const name = unit.name !== '' ? unit.name : defaultName(device, unit.kind, number);
     const t = build(unit, number, name);
     if (t.kind === 'udt') device.udts.push(t.obj);

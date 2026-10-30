@@ -13,9 +13,9 @@ import {
   type Udt,
   type WatchTable,
 } from './model';
-import { HMI_FORMATS, HMI_MAX_SIZE, HMI_OBJECT_KINDS } from './hmi';
+import { HMI_FORMATS, HMI_MAX_SIZE, HMI_MAX_TEXT, HMI_OBJECT_KINDS } from './hmi';
 import type { HmiFormat, HmiObjectKind } from './model';
-import { liveTexts } from './texts';
+import { liveTexts, MAX_TRANSLATION_LENGTH } from './texts';
 import { MPI_BUS_SPEEDS, MPI_HIGHEST_ADDRESSES } from './plcAccess';
 
 export type BaapErrorCode =
@@ -64,7 +64,7 @@ const languagesSchema = obj({
   const all = [l.editing, ...l.others];
   return new Set(all).size === all.length && (!l.display || all.includes(l.display));
 });
-const textsSchema = z.record(str.max(1000), z.record(langTag, str.max(100_000)));
+const textsSchema = z.record(str.max(1000), z.record(langTag, str.max(MAX_TRANSLATION_LENGTH)));
 const projectSchema = (version: 2 | 3 | 4) =>
   obj({
     formatVersion: z.literal(version),
@@ -109,7 +109,7 @@ const mpiAddress = z.number().int().min(0).max(126);
 const hmiColor = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 const hmiPos = z.number().int().min(0).max(HMI_MAX_SIZE);
 const hmiLen = z.number().int().min(1).max(HMI_MAX_SIZE);
-const hmiText = z.string().max(1000);
+const hmiText = z.string().max(HMI_MAX_TEXT);
 const hmiSchema = obj({
   screens: z
     .array(

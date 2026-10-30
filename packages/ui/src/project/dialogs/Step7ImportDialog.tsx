@@ -61,9 +61,11 @@ export function Step7ImportDialog({ deviceId, onClose }: { deviceId: string; onC
       ? t('step7.state.tags', { count: i.number ?? 0 })
       : i.kind === 'rename'
         ? t('step7.state.rename', { old: i.replaces ?? '' })
-        : i.replaces !== undefined
-          ? t('step7.state.replaces', { name: i.replaces })
-          : t('step7.state.new');
+        : i.nameTakenBy !== undefined
+          ? t('step7.state.nameTaken', { owner: i.nameTakenBy })
+          : i.replaces !== undefined
+            ? t('step7.state.replaces', { name: i.replaces })
+            : t('step7.state.new');
 
   return (
     <Dialog
@@ -148,6 +150,7 @@ export function Step7ImportDialog({ deviceId, onClose }: { deviceId: string; onC
                         type="checkbox"
                         aria-label={i.name}
                         checked={selected.has(i.key)}
+                        disabled={i.nameTakenBy !== undefined}
                         onChange={() => toggle(i.key)}
                       />
                     </td>

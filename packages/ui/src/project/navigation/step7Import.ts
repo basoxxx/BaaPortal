@@ -2,6 +2,7 @@
 import {
   applySource,
   findExisting,
+  nameOwner,
   readStep7Files,
   STEP7_EXTENSIONS,
   unitKey,
@@ -40,6 +41,8 @@ export interface Step7Item {
   file: string;
   /** Sostituisce un oggetto che c'è già (per le voci `rename`: il nome vecchio). */
   replaces?: string;
+  /** Oggetto nuovo col nome di un altro oggetto o simbolo (`FC3`): non si può importare. */
+  nameTakenBy?: string;
   /** Blocco SCL: errori della compilazione del testo importato. */
   sclErrors?: { line: number; message: string }[];
 }
@@ -93,6 +96,7 @@ export function planStep7Import(
   const read = readStep7Files(files, dev);
   const items: Step7Item[] = read.units.map(({ unit, file }) => {
     const old = findExisting(dev, unit);
+    const owner = old || unit.name === '' ? undefined : nameOwner(dev, unit.name);
     return {
       key: unitKey(unit),
       kind: unit.kind,
@@ -100,14 +104,16 @@ export function planStep7Import(
       ...(unit.number === undefined ? {} : { number: unit.number }),
       file,
       ...(old ? { replaces: old.name } : {}),
+      ...(owner ? { nameTakenBy: owner } : {}),
     };
   });
+  const blocked = new Set(items.filter((i) => i.nameTakenBy).map((i) => i.key));
   const scratch = structuredClone(dev);
   let n = 0;
   try {
     const { created, replaced } = applySource(
       scratch,
-      { units: read.units.map((u) => u.unit) },
+      { units: read.units.filter((u) => !blocked.has(unitKey(u.unit))).map((u) => u.unit) },
       () => `dry${++n}`,
     );
     for (const ref of [...created, ...replaced]) {
@@ -141,10 +147,15 @@ export function planStep7Import(
 const tableNameFor = (read: Step7Read): string =>
   stemOf(read.tags[0]?.file ?? '') || t('defaults.tagTable');
 
-/** Chiavi selezionate all'apertura: tutto, tranne ciò che sostituisce un oggetto esistente. */
+/**
+ * Chiavi selezionate all'apertura: tutto, tranne ciò che sostituisce un oggetto esistente e ciò che
+ * ha il nome di un altro oggetto (quello non si può scegliere).
+ */
 export const defaultSelection = (plan: Step7Plan): Set<string> =>
   new Set(
-    plan.items.filter((i) => i.replaces === undefined || i.kind === 'rename').map((i) => i.key),
+    plan.items
+      .filter((i) => (i.replaces === undefined || i.kind === 'rename') && !i.nameTakenBy)
+      .map((i) => i.key),
   );
 
 export interface Step7Result {
@@ -166,7 +177,10 @@ export function applyStep7Plan(
   plan: Step7Plan,
   selected: ReadonlySet<string>,
 ): Step7Result {
-  const units = plan.read.units.map((u) => u.unit).filter((u) => selected.has(unitKey(u)));
+  const blocked = new Set(plan.items.filter((i) => i.nameTakenBy).map((i) => i.key));
+  const units = plan.read.units
+    .map((u) => u.unit)
+    .filter((u) => selected.has(unitKey(u)) && !blocked.has(unitKey(u)));
   const { created, replaced } = applySource(dev, { units }, newId);
   const result: Step7Result = {
     created: created.length,

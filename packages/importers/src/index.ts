@@ -1,7 +1,7 @@
 export * from './awlSource/decode';
 export * from './awlSource/types';
 export { parseAwlSource } from './awlSource/parse';
-export { applySource, findExisting } from './awlSource/apply';
+export { applySource, findExisting, nameOwner } from './awlSource/apply';
 export { generateAwlSource } from './awlSource/generate';
 export * from './tags/columns';
 export * from './tags/csv';
