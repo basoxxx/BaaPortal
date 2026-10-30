@@ -78,4 +78,5 @@ export type {
   LStackView,
   PlcWriteVarItem,
   PlcWriteVarsResult,
+  PlcHmiArmResult,
 } from './online/plcTypes';

@@ -192,6 +192,17 @@ function deviceNode(dev: PlcDevice, compare?: OnlineCompare): TreeNode {
       children: [],
       ref: { kind: 'watchTable', deviceId: dev.id, id: w.id },
     }));
+  const hmiNodes = [...(dev.hmi?.screens ?? [])]
+    .sort((a, b) => byName(a.name, b.name))
+    .map((x): TreeNode => ({
+      id: ids.hmiScreen(dev.id, x.id),
+      labelKey: '',
+      label: x.name,
+      icon: 'objHmi',
+      enabled: true,
+      children: [],
+      ref: { kind: 'hmiScreen', deviceId: dev.id, id: x.id },
+    }));
   const systemNodes = systemBlocksOf(dev).map((b): TreeNode => ({
     id: ids.sysBlock(dev.id, `${b.kind}${b.number}`),
     labelKey: '',
@@ -283,6 +294,10 @@ function deviceNode(dev: PlcDevice, compare?: OnlineCompare): TreeNode {
       folderNode(dev, 'watch', 'tree.plc.watch', 'treeWatch', true, [
         leaf(ids.folder(dev.id, 'watch-add'), 'tree.plc.addWatchTable', 'treeAdd'),
         ...watchNodes,
+      ]),
+      folderNode(dev, 'hmi', 'tree.plc.hmi', 'treeHmi', true, [
+        leaf(ids.folder(dev.id, 'hmi-add'), 'tree.plc.addHmiScreen', 'treeAdd'),
+        ...hmiNodes,
       ]),
       folderNode(dev, 'backup', 'tree.plc.backup', 'treeBackup', false),
       folderNode(dev, 'prog-info', 'tree.plc.progInfo', 'treeProgInfo', true, [

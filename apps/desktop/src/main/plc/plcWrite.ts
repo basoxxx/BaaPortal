@@ -20,6 +20,7 @@ import type {
   PlcRestorePlanResult,
   PlcRestoreResult,
   PlcWriteProgress,
+  PlcHmiArmResult,
   PlcWriteVarsResult,
   RestoreOutcomeRow,
 } from '@baaportal/ui';
@@ -291,6 +292,8 @@ export class PlcWriteService {
   /** Prima di un ripristino ferma l'osservazione del blocco sulla stessa CPU (la imposta `plcIpc`). */
   beforeRestore?: (owner: PlcOwner) => Promise<void>;
   private restoreFileIo?: RestoreFileIo;
+  /** Finestre con il runtime HMI in scrittura confermato: il collegamento online della conferma. */
+  private readonly hmiArmed = new WeakMap<PlcOwner, number>();
 
   constructor(private readonly o: PlcWriteOptions) {
     this.connectFn = o.connect ?? ((a) => connectWriteTcp(a));
@@ -529,44 +532,124 @@ export class PlcWriteService {
           confirmLabel: 'Comanda',
         }));
         if (!('c' in p)) return p.result;
-        const results: ({ ok: true } | { ok: false; error: string })[] = [];
-        let failed = false;
-        try {
-          // Un gruppo per richiesta, come la PDU negoziata col collegamento aperto.
-          const groups = planWrites(items, p.c.pduLength);
-          for (const group of groups) {
-            if (failed || owner.isDestroyed() || op.aborted) {
-              const why = failed
-                ? 'Non scritto: scrittura interrotta dopo un errore'
-                : op.aborted
-                  ? "Uscita dall'app: non scritto"
-                  : 'Finestra chiusa: non scritto';
-              for (let j = 0; j < group.length; j++) results.push({ ok: false, error: why });
-              continue;
-            }
-            try {
-              const rcs = await p.c.writeItems(group);
-              for (const rc of rcs) {
-                results.push(rc.returnCode === 0xff ? { ok: true } : { ok: false, error: rc.name });
-              }
-            } catch (e) {
-              // Un rifiuto nell'intestazione (p. es. protezione 0xD241) è certo: nulla è stato scritto.
-              // Altrimenti la richiesta può essere arrivata alla CPU: l'esito non si conosce.
-              // In ogni caso non si insiste.
-              const error =
-                e instanceof S7Error && e.code === 'CPU_ERROR'
-                  ? `Rifiutato dalla CPU: ${e.message}`
-                  : 'Esito sconosciuto: la CPU potrebbe averlo scritto';
-              for (let j = 0; j < group.length; j++) results.push({ ok: false, error });
-              failed = true;
-            }
-          }
-          return { ok: true, results };
-        } finally {
-          await p.c.close().catch(() => undefined);
-        }
+        return this.writeAll(owner, op, p.c, items);
       },
     );
+  }
+
+  /**
+   * Runtime HMI in scrittura: una conferma nativa sola per questa finestra e per il collegamento
+   * online di adesso. Finché non si revoca (o il collegamento cambia) `hmiWrite` scrive senza
+   * altre conferme; nessun collegamento si apre qui.
+   */
+  async hmiArm(owner: PlcWriteOwner): Promise<PlcHmiArmResult> {
+    this.hmiArmed.delete(owner);
+    return this.exclusive<PlcHmiArmResult>(
+      owner,
+      (m) => ({ ok: false, error: m }),
+      (err) => ({ ok: false, error: errText(err) }),
+      async (op) => {
+        const target = this.o.service.target(owner);
+        if (!target) return { ok: false, error: 'Nessun collegamento online' };
+        const ok = await this.o.confirm(owner, {
+          title: 'Runtime HMI',
+          message: `Il runtime HMI può scrivere nella CPU ${cpuName(target)}: consentire?`,
+          detail:
+            'Pulsanti e campi di immissione delle schermate scriveranno subito nella CPU (aree I, Q, M e DB), senza altre conferme, finché il runtime resta aperto e il collegamento online non cambia.\nUn pulsante a impulsi scrive 0 al rilascio: se il collegamento si interrompe mentre è premuto, il bit resta a 1.',
+          confirmLabel: 'Consenti scritture',
+        });
+        if (!ok || op.aborted) return { ok: false, cancelled: true };
+        if (owner.isDestroyed()) return { ok: false, error: 'Finestra chiusa' };
+        const again = this.o.service.target(owner);
+        if (!again || again.linkId !== target.linkId) {
+          return { ok: false, error: 'Collegamento online cambiato: operazione annullata' };
+        }
+        this.hmiArmed.set(owner, target.linkId);
+        return { ok: true };
+      },
+    );
+  }
+
+  /** Il runtime HMI non scrive più (chiuso): le scritture successive tornano rifiutate. */
+  hmiDisarm(owner: PlcOwner): void {
+    this.hmiArmed.delete(owner);
+  }
+
+  /**
+   * Scrittura dal runtime HMI: stessi controlli e stesso collegamento `online-write` di
+   * `writeVars`, ma senza conferma, e solo dopo `hmiArm` sullo stesso collegamento online.
+   */
+  async hmiWrite(owner: PlcWriteOwner, raw: unknown): Promise<PlcWriteVarsResult> {
+    const parsed = parseWriteItems(raw);
+    if (typeof parsed === 'string') return { ok: false, error: parsed };
+    const armed = this.hmiArmed.get(owner);
+    const target = this.o.service.target(owner);
+    if (armed === undefined || !target || target.linkId !== armed) {
+      this.hmiArmed.delete(owner);
+      return {
+        ok: false,
+        error: 'Scritture HMI non consentite: riavviare il runtime in scrittura',
+      };
+    }
+    const items = parsed.map((x) => toWriteItem(x.target, x.data));
+    return this.exclusive<PlcWriteVarsResult>(
+      owner,
+      (m) => ({ ok: false, error: m }),
+      (err) => ({ ok: false, error: errText(err) }),
+      async (op) => {
+        op.stage = 'running';
+        const c = await this.open(target);
+        if (typeof c === 'string') return { ok: false, error: c };
+        return this.writeAll(owner, op, c, items);
+      },
+    );
+  }
+
+  /**
+   * Scrive gli item a gruppi (uno per richiesta, come la PDU negoziata), si ferma al primo errore
+   * o all'interruzione, e chiude sempre il collegamento. L'esito è per item; nessuna ripetizione.
+   */
+  private async writeAll(
+    owner: PlcWriteOwner,
+    op: Op,
+    c: WriteClient,
+    items: ReturnType<typeof toWriteItem>[],
+  ): Promise<PlcWriteVarsResult> {
+    const results: ({ ok: true } | { ok: false; error: string })[] = [];
+    let failed = false;
+    try {
+      const groups = planWrites(items, c.pduLength);
+      for (const group of groups) {
+        if (failed || owner.isDestroyed() || op.aborted) {
+          const why = failed
+            ? 'Non scritto: scrittura interrotta dopo un errore'
+            : op.aborted
+              ? "Uscita dall'app: non scritto"
+              : 'Finestra chiusa: non scritto';
+          for (let j = 0; j < group.length; j++) results.push({ ok: false, error: why });
+          continue;
+        }
+        try {
+          const rcs = await c.writeItems(group);
+          for (const rc of rcs) {
+            results.push(rc.returnCode === 0xff ? { ok: true } : { ok: false, error: rc.name });
+          }
+        } catch (e) {
+          // Un rifiuto nell'intestazione (p. es. protezione 0xD241) è certo: nulla è stato scritto.
+          // Altrimenti la richiesta può essere arrivata alla CPU: l'esito non si conosce.
+          // In ogni caso non si insiste.
+          const error =
+            e instanceof S7Error && e.code === 'CPU_ERROR'
+              ? `Rifiutato dalla CPU: ${e.message}`
+              : 'Esito sconosciuto: la CPU potrebbe averlo scritto';
+          for (let j = 0; j < group.length; j++) results.push({ ok: false, error });
+          failed = true;
+        }
+      }
+      return { ok: true, results };
+    } finally {
+      await c.close().catch(() => undefined);
+    }
   }
 
   // ---- ripristino di un backup (sperimentale, proto §19.5) -----------------------------------

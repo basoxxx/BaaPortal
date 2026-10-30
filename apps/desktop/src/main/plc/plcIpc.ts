@@ -20,6 +20,7 @@ import type {
   PlcUploadBlockResult,
   PlcReadWatchResult,
   PlcWriteVarsResult,
+  PlcHmiArmResult,
   PlcStatusStartResult,
   PlcStatusWindowResult,
   PlcStatusReadResult,
@@ -217,6 +218,13 @@ export function registerPlc(
   );
   handle('plc:writeVars', (e, items): Promise<PlcWriteVarsResult> =>
     writes.writeVars(e.sender, items),
+  );
+  // Runtime HMI: una conferma nativa all'avvio in scrittura, poi scritture senza conferma finché
+  // la finestra non la revoca o il collegamento cambia (lo controlla il servizio).
+  handle('plc:hmiArm', (e): Promise<PlcHmiArmResult> => writes.hmiArm(e.sender));
+  handle('plc:hmiDisarm', (e) => writes.hmiDisarm(e.sender));
+  handle('plc:hmiWrite', (e, items): Promise<PlcWriteVarsResult> =>
+    writes.hmiWrite(e.sender, items),
   );
   // Osservazione del blocco: bersaglio e CPU li decide il servizio; qui solo la forma della richiesta.
   handle('plc:statusStart', (e, raw): Promise<PlcStatusStartResult> => status.start(e.sender, raw));

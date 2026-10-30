@@ -70,6 +70,7 @@ describe('buildTree', () => {
       'tree.plc.tags',
       'tree.plc.types',
       'tree.plc.watch',
+      'tree.plc.hmi',
       'tree.plc.backup',
       'tree.plc.progInfo',
     ]);
@@ -91,7 +92,8 @@ describe('buildTree', () => {
     ]);
     expect(plc.children[5]!.children.map((c) => labelOf(c))).toEqual(['tree.plc.addUdt']);
     expect(plc.children[6]!.children.map((c) => labelOf(c))).toEqual(['tree.plc.addWatchTable']);
-    expect(plc.children[8]!.children.map((c) => labelOf(c))).toEqual([
+    expect(plc.children[7]!.children.map((c) => labelOf(c))).toEqual(['tree.plc.addHmiScreen']);
+    expect(plc.children[9]!.children.map((c) => labelOf(c))).toEqual([
       'commands.tools.crossReferences',
       'commands.tools.callStructure',
       'commands.tools.assignmentList',

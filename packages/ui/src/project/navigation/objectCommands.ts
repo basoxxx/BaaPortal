@@ -2,12 +2,14 @@ import type { StoreApi } from 'zustand/vanilla';
 import { findCpu } from '@baaportal/catalog';
 import {
   deleteSource,
+  deleteHmiScreen,
   deleteWatchTable,
   findBlock,
   findDevice,
   findSource,
   findTagTable,
   findUdt,
+  findHmiScreen,
   findWatchTable,
   renameWithReferences,
   uniqueName,
@@ -120,6 +122,16 @@ export function watchTablesOfNodes(nodeIds: Iterable<string>): { dev: string; id
   return out;
 }
 
+/** Schermate HMI rappresentate dai nodi. */
+export function hmiScreensOfNodes(nodeIds: Iterable<string>): { dev: string; id: string }[] {
+  const out: { dev: string; id: string }[] = [];
+  for (const n of nodeIds) {
+    const p = parseNodeId(n);
+    if (p.kind === 'hmiScreen') out.push({ dev: p.dev, id: p.id });
+  }
+  return out;
+}
+
 export function groupsOfNodes(nodeIds: Iterable<string>) {
   const out: { dev: string; area: TreeArea; path: string }[] = [];
   for (const n of nodeIds) {
@@ -220,7 +232,9 @@ export const selectRef = (store: StoreApi<AppState>, r: ObjectRef | undefined) =
             ? ids.source(r.deviceId, r.id)
             : r?.kind === 'watchTable'
               ? ids.watchTable(r.deviceId, r.id)
-              : null;
+              : r?.kind === 'hmiScreen'
+                ? ids.hmiScreen(r.deviceId, r.id)
+                : null;
   if (target) store.getState().select(target);
 };
 
@@ -287,7 +301,17 @@ export async function deleteNodes(ctx: ObjectCtx, nodeIds: Iterable<string>): Pr
     const dev = deviceOf(doc, x.dev);
     return !!dev && !!findWatchTable(dev, x.id);
   });
-  if (removable.length === 0 && groups.length === 0 && sources.length === 0 && watches.length === 0)
+  const screens = hmiScreensOfNodes(all).filter((x) => {
+    const dev = deviceOf(doc, x.dev);
+    return !!dev && !!findHmiScreen(dev, x.id);
+  });
+  if (
+    removable.length === 0 &&
+    groups.length === 0 &&
+    sources.length === 0 &&
+    watches.length === 0 &&
+    screens.length === 0
+  )
     return;
 
   const names = [
@@ -299,6 +323,7 @@ export async function deleteNodes(ctx: ObjectCtx, nodeIds: Iterable<string>): Pr
     ...groups.map((g) => lastOf(g.path)),
     ...sources.map((x) => findSource(deviceOf(doc, x.dev)!, x.id)!.name),
     ...watches.map((x) => findWatchTable(deviceOf(doc, x.dev)!, x.id)!.name),
+    ...screens.map((x) => findHmiScreen(deviceOf(doc, x.dev)!, x.id)!.name),
   ];
   const listed = names.slice(0, MAX_LISTED);
   if (names.length > MAX_LISTED) {
@@ -329,6 +354,10 @@ export async function deleteNodes(ctx: ObjectCtx, nodeIds: Iterable<string>): Pr
       const dev = findDevice(p, x.dev);
       if (dev) deleteWatchTable(dev, x.id);
     }
+    for (const x of screens) {
+      const dev = findDevice(p, x.dev);
+      if (dev) deleteHmiScreen(dev, x.id);
+    }
   });
   const sel = store.getState().selection;
   const first = removable[0];
@@ -340,6 +369,8 @@ export async function deleteNodes(ctx: ObjectCtx, nodeIds: Iterable<string>): Pr
     store.getState().select(ids.folder(sources[0].dev, 'sources'));
   } else if (sel && watches[0] && all.includes(sel)) {
     store.getState().select(ids.folder(watches[0].dev, 'watch'));
+  } else if (sel && screens[0] && all.includes(sel)) {
+    store.getState().select(ids.folder(screens[0].dev, 'hmi'));
   }
 }
 
@@ -374,6 +405,10 @@ export function renameInfo(doc: OpenDoc | null, nodeId: string): { name: string 
     case 'watchTable': {
       const w = findWatchTable(dev, p.id);
       return w ? { name: w.name } : null;
+    }
+    case 'hmiScreen': {
+      const x = findHmiScreen(dev, p.id);
+      return x ? { name: x.name } : null;
     }
     default:
       return null;
@@ -410,6 +445,12 @@ export function checkRename(doc: OpenDoc | null, nodeId: string, name: string): 
       ? 'DUPLICATE'
       : null;
   }
+  if (p.kind === 'hmiScreen') {
+    if (name.trim() === '') return 'INVALID';
+    return (dev.hmi?.screens ?? []).some((x) => x.id !== p.id && sameName(x.name, name))
+      ? 'DUPLICATE'
+      : null;
+  }
   return 'INVALID';
 }
 
@@ -439,7 +480,8 @@ export function renameNode(
           p.kind === 'udt' ||
           p.kind === 'tagTable' ||
           p.kind === 'source' ||
-          p.kind === 'watchTable'
+          p.kind === 'watchTable' ||
+          p.kind === 'hmiScreen'
         ? { kind: p.kind, deviceId: p.dev, id: p.id }
         : null;
   if (ref) {

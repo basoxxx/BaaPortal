@@ -1,0 +1,167 @@
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
+import {
+  addHmiScreen,
+  createHmiObject,
+  createHmiScreen,
+  findDevice,
+  type HmiObject,
+} from '@baaportal/project';
+import { PLC, setupOnline } from '../online/downloadHelpers';
+
+let n = 0;
+const id = () => `o${++n}`;
+function obj(kind: HmiObject['kind'], patch: Partial<HmiObject>): HmiObject {
+  return { ...createHmiObject(kind, 0, 0, id), ...patch };
+}
+
+/** Online con una schermata: lampada Q 4.0, campo MW 10 con immissione, quattro pulsanti. */
+async function openOnline() {
+  const { app } = await setupOnline([]);
+  act(() => {
+    app.store.getState().edit('t', (p) => {
+      const sc = createHmiScreen('Main', () => 'sc1');
+      sc.objects.push(
+        obj('lamp', { id: 'lamp', text: 'Motore', tag: 'Q 4.0' }),
+        obj('ioField', { id: 'io', text: 'Velocità', tag: 'MW 10', format: 'INT', input: true }),
+        obj('button', { id: 'set', text: 'Avvio', tag: 'M 0.1', action: 'set' }),
+        obj('button', { id: 'jog', text: 'Avanti', tag: 'M 0.2', action: 'jog' }),
+        obj('button', { id: 'wr', text: 'Cento', tag: 'MW 12', action: 'write', value: '100' }),
+        obj('button', { id: 'tg', text: 'Commuta', tag: 'Q 4.0', action: 'toggle' }),
+      );
+      addHmiScreen(findDevice(p, PLC)!, sc);
+    });
+    app.store.getState().openEditor({ kind: 'hmiScreen', deviceId: PLC, objectId: 'sc1' });
+  });
+  await screen.findByTestId('hmi-canvas');
+  // Q 4.0 a 1, MW 10 = 42, i bit dei pulsanti a 0
+  app.bridge.plcReadWatchImpl = (items) => ({
+    ok: true,
+    values: items.map((t) =>
+      t.area === 'Q'
+        ? { bytes: Uint8Array.of(1) }
+        : t.size === 'W'
+          ? { bytes: Uint8Array.of(0, 42) }
+          : { bytes: Uint8Array.of(0) },
+    ),
+  });
+  return app;
+}
+
+const rt = () => within(screen.getByTestId('hmi-runtime'));
+
+describe('runtime HMI sul PLC', () => {
+  it('sola lettura (predefinito): valori dal giro di letture, nessuna scrittura', async () => {
+    const app = await openOnline();
+    await app.user.click(screen.getByRole('button', { name: 'Avvia runtime HMI' }));
+    expect(app.bridge.plcHmiArmCalls).toBe(0);
+    expect(rt().getByTestId('hmi-runtime-mode')).toHaveTextContent('PLC: sola lettura');
+    await waitFor(() => expect(rt().getByRole('img', { name: 'Motore ON' })).toBeInTheDocument());
+    expect(rt().getByLabelText('Velocità')).toHaveTextContent('42');
+    // un solo giro con le variabili della schermata, ognuna una volta (Q 4.0 è di due oggetti)
+    expect(app.bridge.plcReadWatchCalls[0]).toEqual([
+      { area: 'Q', byte: 4, bit: 0, size: 'X' },
+      { area: 'M', byte: 10, size: 'W' },
+      { area: 'M', byte: 0, bit: 1, size: 'X' },
+      { area: 'M', byte: 0, bit: 2, size: 'X' },
+      { area: 'M', byte: 12, size: 'W' },
+    ]);
+    const avvio = rt().getByRole('button', { name: 'Avvio' });
+    expect(avvio).toBeDisabled();
+    fireEvent.pointerDown(avvio, { button: 0 });
+    fireEvent.keyDown(avvio, { key: 'Enter' });
+    expect(app.bridge.plcHmiWriteCalls).toEqual([]);
+    await app.user.click(rt().getByRole('button', { name: 'Chiudi runtime' }));
+    expect(screen.queryByTestId('hmi-runtime')).toBeNull();
+    expect(app.bridge.plcHmiDisarmCalls).toBe(0);
+  });
+
+  it('scritture consentite: una conferma, poi pulsanti e campo scrivono i byte giusti', async () => {
+    const app = await openOnline();
+    await app.user.click(screen.getByLabelText('Consenti scritture nella CPU'));
+    await app.user.click(screen.getByRole('button', { name: 'Avvia runtime HMI' }));
+    expect(app.bridge.plcHmiArmCalls).toBe(1);
+    expect(rt().getByTestId('hmi-runtime-mode')).toHaveTextContent('PLC: scritture consentite');
+    await waitFor(() => expect(rt().getByRole('img', { name: 'Motore ON' })).toBeInTheDocument());
+    const writes = () =>
+      app.bridge.plcHmiWriteCalls.map((c) => c.map((w) => [w.target, [...w.data]]));
+
+    fireEvent.pointerDown(rt().getByRole('button', { name: 'Avvio' }), { button: 0 });
+    fireEvent.pointerUp(rt().getByRole('button', { name: 'Avvio' }));
+    // a impulsi: 1 alla pressione, 0 al rilascio, nell'ordine
+    const jog = rt().getByRole('button', { name: 'Avanti' });
+    fireEvent.pointerDown(jog, { button: 0 });
+    fireEvent.pointerUp(jog);
+    fireEvent.pointerDown(rt().getByRole('button', { name: 'Cento' }), { button: 0 });
+    // commuta parte dal valore letto (Q 4.0 = 1) → 0
+    fireEvent.pointerDown(rt().getByRole('button', { name: 'Commuta' }), { button: 0 });
+    const io = rt().getByLabelText('Velocità');
+    await app.user.click(io);
+    await app.user.clear(io);
+    await app.user.type(io, '-7{Enter}');
+    await waitFor(() => expect(app.bridge.plcHmiWriteCalls).toHaveLength(6));
+    expect(writes()).toEqual([
+      [[{ area: 'M', byte: 0, bit: 1, size: 'X' }, [1]]],
+      [[{ area: 'M', byte: 0, bit: 2, size: 'X' }, [1]]],
+      [[{ area: 'M', byte: 0, bit: 2, size: 'X' }, [0]]],
+      [[{ area: 'M', byte: 12, size: 'W' }, [0, 100]]],
+      [[{ area: 'Q', byte: 4, bit: 0, size: 'X' }, [0]]],
+      [[{ area: 'M', byte: 10, size: 'W' }, [0xff, 0xf9]]],
+    ]);
+    // valore non valido: nessuna scrittura, un messaggio
+    await app.user.click(io);
+    await app.user.clear(io);
+    await app.user.type(io, '99999{Enter}');
+    expect(rt().getByTestId('hmi-runtime-status')).toHaveTextContent('Valore non valido');
+    expect(app.bridge.plcHmiWriteCalls).toHaveLength(6);
+    // un rifiuto del processo principale si vede nella barra
+    app.bridge.plcHmiWriteResults.push({ ok: false, error: 'Scritture HMI non confermate' });
+    fireEvent.pointerDown(rt().getByRole('button', { name: 'Avvio' }), { button: 0 });
+    await waitFor(() =>
+      expect(rt().getByTestId('hmi-runtime-status')).toHaveTextContent(
+        'Scrittura non riuscita: Scritture HMI non confermate',
+      ),
+    );
+  });
+
+  it('chiudere con un pulsante a impulsi premuto scrive prima lo 0, poi revoca la conferma', async () => {
+    const app = await openOnline();
+    await app.user.click(screen.getByLabelText('Consenti scritture nella CPU'));
+    await app.user.click(screen.getByRole('button', { name: 'Avvia runtime HMI' }));
+    fireEvent.pointerDown(rt().getByRole('button', { name: 'Avanti' }), { button: 0 });
+    fireEvent.keyDown(screen.getByTestId('hmi-runtime'), { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByTestId('hmi-runtime')).toBeNull());
+    expect(app.bridge.plcHmiWriteCalls.map((c) => [...c[0]!.data])).toEqual([[1], [0]]);
+    expect(app.bridge.plcHmiDisarmCalls).toBe(1);
+  });
+
+  it('conferma annullata: il runtime non parte', async () => {
+    const app = await openOnline();
+    app.bridge.plcHmiArmResult = { ok: false, cancelled: true };
+    await app.user.click(screen.getByLabelText('Consenti scritture nella CPU'));
+    await app.user.click(screen.getByRole('button', { name: 'Avvia runtime HMI' }));
+    expect(app.bridge.plcHmiArmCalls).toBe(1);
+    expect(screen.queryByTestId('hmi-runtime')).toBeNull();
+  });
+
+  it('pulsanti di navigazione: la nuova schermata legge le sue variabili', async () => {
+    const app = await openOnline();
+    act(() => {
+      app.store.getState().edit('t', (p) => {
+        const dev = findDevice(p, PLC)!;
+        const two = createHmiScreen('Due', () => 'sc2');
+        two.objects.push(obj('lamp', { id: 'l2', text: 'Altro', tag: 'M 5.0' }));
+        addHmiScreen(dev, two);
+        dev.hmi!.screens[0]!.objects.push(obj('screenButton', { text: 'Vai', screen: 'sc2' }));
+      });
+    });
+    await app.user.click(screen.getByRole('button', { name: 'Avvia runtime HMI' }));
+    await app.user.click(rt().getByRole('button', { name: 'Vai' }));
+    await waitFor(() =>
+      expect(app.bridge.plcReadWatchCalls.at(-1)).toEqual([
+        { area: 'M', byte: 5, bit: 0, size: 'X' },
+      ]),
+    );
+    expect(rt().getByRole('img', { name: 'Altro OFF' })).toBeInTheDocument();
+  });
+});

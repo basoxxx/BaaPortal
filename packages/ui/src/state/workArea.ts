@@ -7,6 +7,7 @@ export type EditorKind =
   | 'udt'
   | 'source'
   | 'watchTable'
+  | 'hmiScreen'
   | 'compare'
   | 'onlineDiag'
   | 'crossRef'
@@ -79,6 +80,8 @@ export function nodeIdOfEditor(e: EditorTarget): string {
       return ids.source(e.deviceId, e.objectId);
     case 'watchTable':
       return ids.watchTable(e.deviceId, e.objectId);
+    case 'hmiScreen':
+      return ids.hmiScreen(e.deviceId, e.objectId);
     case 'compare':
       return ids.block(e.deviceId, e.objectId);
     case 'allTags':
@@ -103,7 +106,8 @@ export function editorOfNode(nodeId: string): EditorTarget | null {
     p.kind === 'udt' ||
     p.kind === 'tagTable' ||
     p.kind === 'source' ||
-    p.kind === 'watchTable'
+    p.kind === 'watchTable' ||
+    p.kind === 'hmiScreen'
   ) {
     return { kind: p.kind, deviceId: p.dev, objectId: p.id };
   }

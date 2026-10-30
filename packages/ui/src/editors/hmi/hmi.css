@@ -1,0 +1,166 @@
+.baa-hmi {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  color: var(--baa-text);
+  font-size: 13px;
+}
+.baa-hmi-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--baa-border);
+}
+.baa-hmi-sep {
+  flex: 1;
+}
+.baa-hmi-notice {
+  color: var(--baa-text-muted);
+}
+.baa-hmi-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  flex: 1;
+  min-height: 0;
+}
+.baa-hmi-scroll {
+  overflow: auto;
+  padding: 12px;
+  background: var(--baa-panel-bg);
+}
+.baa-hmi-props {
+  overflow: auto;
+  padding: 8px;
+  border-left: 1px solid var(--baa-border);
+}
+.baa-hmi-canvas {
+  position: relative;
+  flex: none;
+  outline-offset: 2px;
+  color: #1d2327;
+  font-size: 14px;
+  user-select: none;
+}
+.baa-hmi-canvas:not(.is-runtime) {
+  background-image:
+    linear-gradient(to right, rgb(0 0 0 / 8%) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(0 0 0 / 8%) 1px, transparent 1px);
+  background-size: 10px 10px;
+}
+.baa-hmi-obj {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+}
+.baa-hmi-canvas:not(.is-runtime) .baa-hmi-obj {
+  cursor: move;
+}
+.baa-hmi-obj.is-selected {
+  outline: 2px solid var(--baa-accent, #2f6fd0);
+}
+.baa-hmi-handle {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  width: 9px;
+  height: 9px;
+  background: var(--baa-accent, #2f6fd0);
+  cursor: nwse-resize;
+}
+.baa-hmi-text {
+  align-self: center;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.baa-hmi-io {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 2px 6px;
+  border: 1px solid #7d8a91;
+  background: #fff;
+  color: #1d2327;
+  font: inherit;
+  text-align: right;
+  overflow: hidden;
+}
+.baa-hmi-io.is-input {
+  border-color: #2f6fd0;
+}
+.baa-hmi-io.is-error,
+.baa-hmi-lamp.is-error,
+.baa-hmi-bar-frame.is-error {
+  outline: 2px dashed #c0392b;
+}
+.baa-hmi-button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #5b6770;
+  border-radius: 3px;
+  background: linear-gradient(#f4f6f8, #c9d1d8);
+  color: #1d2327;
+  font: inherit;
+}
+button.baa-hmi-button:active:not(:disabled) {
+  background: linear-gradient(#c9d1d8, #f4f6f8);
+}
+button.baa-hmi-button:disabled {
+  opacity: 0.6;
+}
+.baa-hmi-lamp-wrap {
+  display: flex;
+  flex: 1;
+  gap: 6px;
+  align-items: center;
+}
+.baa-hmi-lamp {
+  flex: none;
+  height: 100%;
+  aspect-ratio: 1;
+  border: 1px solid #333;
+  border-radius: 50%;
+}
+.baa-hmi-bar-frame {
+  position: relative;
+  flex: 1;
+  border: 1px solid #5b6770;
+  background: #fff;
+}
+.baa-hmi-bar-fill {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  background: #2f6fd0;
+}
+.baa-hmi-runtime {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  background: #20262b;
+  color: #f0f3f5;
+}
+.baa-hmi-runtime-bar {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 6px 12px;
+}
+.baa-hmi-runtime-bar [role='status'] {
+  flex: 1;
+}
+.baa-hmi-runtime-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+}

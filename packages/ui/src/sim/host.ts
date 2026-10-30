@@ -117,6 +117,13 @@ export class SimHost {
         checkSizes(req.items);
         this.watchItems = req.items;
         return undefined;
+      case 'read':
+        if (req.items.length > MAX_WATCH_ITEMS)
+          throw new RangeError(
+            `troppe voci da leggere: ${req.items.length} (al più ${MAX_WATCH_ITEMS})`,
+          );
+        checkSizes(req.items);
+        return req.items.map((it) => this.readOne(cpu, it));
       case 'write':
         if (req.items.length > MAX_WATCH_ITEMS)
           throw new RangeError(

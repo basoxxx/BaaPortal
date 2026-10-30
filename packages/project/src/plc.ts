@@ -385,6 +385,11 @@ export function renameWithReferences(device: PlcDevice, ref: ObjectRef, newName:
       if (w) w.name = newName;
       return;
     }
+    case 'hmiScreen': {
+      const x = device.hmi?.screens.find((sc) => sc.id === ref.id);
+      if (x) x.name = newName;
+      return;
+    }
     case 'source': {
       // Il nome e un nome di file: il testo non cambia.
       const s = findSource(device, ref.id);

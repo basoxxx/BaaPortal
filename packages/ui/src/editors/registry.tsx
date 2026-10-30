@@ -11,6 +11,7 @@ import { DbEditor } from './db/DbEditor';
 import { DeviceView } from './hw/DeviceView';
 import { SourceEditor } from './source/SourceEditor';
 import { WatchTableView } from './watch/WatchTableView';
+import { HmiScreenEditor } from './hmi/HmiScreenEditor';
 import { CallStructureView } from './xref/CallStructureView';
 import { AssignmentView } from './xref/AssignmentView';
 import { ResourcesView } from './xref/ResourcesView';
@@ -86,6 +87,13 @@ export const EDITORS: Record<EditorKind, EditorDef> = {
     title: (r, d) => device(r, d)?.watchTables.find((x) => x.id === r.objectId)?.name ?? '',
     exists: (r, d) => !!device(r, d)?.watchTables.some((x) => x.id === r.objectId),
     Component: WatchTableView,
+  },
+  hmiScreen: {
+    kind: 'hmiScreen',
+    icon: () => 'objHmi',
+    title: (r, d) => device(r, d)?.hmi?.screens.find((x) => x.id === r.objectId)?.name ?? '',
+    exists: (r, d) => !!device(r, d)?.hmi?.screens.some((x) => x.id === r.objectId),
+    Component: HmiScreenEditor,
   },
   tagTable: {
     kind: 'tagTable',

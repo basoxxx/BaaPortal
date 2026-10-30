@@ -41,6 +41,7 @@ import type {
   PlcWatchTarget,
   PlcWriteVarItem,
   PlcWriteVarsResult,
+  PlcHmiArmResult,
   PlcStatusRequest,
   PlcStatusStartResult,
   PlcStatusWindowResult,
@@ -353,6 +354,25 @@ export class FakeBridge implements BaaBridge {
   async plcReadStacks(experimental: boolean): Promise<PlcStacksResult> {
     this.plcReadStacksCalls.push(experimental);
     return this.plcReadStacksImpl(experimental);
+  }
+  /** Runtime HMI: `plcHmiArmResult` risponde alla conferma; le scritture si registrano. */
+  plcHmiArmResult: PlcHmiArmResult = { ok: true };
+  plcHmiArmCalls = 0;
+  plcHmiDisarmCalls = 0;
+  plcHmiWriteCalls: PlcWriteVarItem[][] = [];
+  plcHmiWriteResults: PlcWriteVarsResult[] = [];
+  async plcHmiArm(): Promise<PlcHmiArmResult> {
+    this.plcHmiArmCalls++;
+    return this.plcHmiArmResult;
+  }
+  async plcHmiDisarm(): Promise<void> {
+    this.plcHmiDisarmCalls++;
+  }
+  async plcHmiWrite(items: PlcWriteVarItem[]): Promise<PlcWriteVarsResult> {
+    this.plcHmiWriteCalls.push(items);
+    return (
+      this.plcHmiWriteResults.shift() ?? { ok: true, results: items.map(() => ({ ok: true })) }
+    );
   }
   plcWriteVarsCalls: PlcWriteVarItem[][] = [];
   plcWriteVarsResults: PlcWriteVarsResult[] = [];

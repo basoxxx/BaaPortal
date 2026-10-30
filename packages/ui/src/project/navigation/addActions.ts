@@ -1,6 +1,8 @@
 import type { StoreApi } from 'zustand/vanilla';
 import {
+  addHmiScreen,
   addWatchTable,
+  createHmiScreen,
   createTagTable,
   createUdt,
   findDevice,
@@ -50,6 +52,25 @@ export function addWatchTableTo(store: StoreApi<AppState>, deviceId: string): vo
   }
 }
 
+/** Aggiunge una schermata HMI (un solo passo di annulla), la seleziona e la apre. */
+export function addHmiScreenTo(store: StoreApi<AppState>, deviceId: string): void {
+  let newId: string | null = null;
+  store.getState().edit('history.addHmiScreen', (p) => {
+    const dev = findDevice(p, deviceId);
+    if (!dev) return;
+    const names = (dev.hmi?.screens ?? []).map((x) => x.name);
+    const screen = createHmiScreen(uniqueName(t('defaults.hmiScreen'), names), () =>
+      globalThis.crypto.randomUUID(),
+    );
+    addHmiScreen(dev, screen);
+    newId = screen.id;
+  });
+  if (newId) {
+    store.getState().select(ids.hmiScreen(deviceId, newId));
+    store.getState().openEditor({ kind: 'hmiScreen', deviceId, objectId: newId });
+  }
+}
+
 /** Aggiunge un tipo di dati utente (un solo passo di annulla), lo seleziona e lo apre. */
 export function addUdt(store: StoreApi<AppState>, deviceId: string): void {
   let newId: string | null = null;
@@ -91,6 +112,9 @@ export function runAddNode(store: StoreApi<AppState>, nodeId: string, bridge: Ba
       return true;
     case 'watch-add':
       addWatchTableTo(store, p.dev);
+      return true;
+    case 'hmi-add':
+      addHmiScreenTo(store, p.dev);
       return true;
     case 'sources-add':
       // Un errore imprevisto finisce in Informazioni, non come rifiuto non gestito.

@@ -22,6 +22,7 @@ import type {
   PlcWatchTarget,
   PlcWriteVarItem,
   PlcWriteVarsResult,
+  PlcHmiArmResult,
   PlcAccess,
   PlcBlockRef,
   PlcBlocksResult,
@@ -205,6 +206,14 @@ export interface BaaBridge {
   plcReadWatch(items: PlcWatchTarget[]): Promise<PlcReadWatchResult>;
   /** Scrive valori negli operandi (I, Q, M, DB): conferma nativa nel processo principale. */
   plcWriteVars(items: PlcWriteVarItem[]): Promise<PlcWriteVarsResult>;
+  /**
+   * Runtime HMI in scrittura: una conferma nativa sola, nel processo principale, che vale per
+   * questa finestra finché non si chiama `plcHmiDisarm` o il collegamento online cambia.
+   */
+  plcHmiArm(): Promise<PlcHmiArmResult>;
+  plcHmiDisarm(): Promise<void>;
+  /** Scrive dal runtime HMI (I, Q, M, DB) senza altre conferme: rifiutato se non confermato con `plcHmiArm`. */
+  plcHmiWrite(items: PlcWriteVarItem[]): Promise<PlcWriteVarsResult>;
   /** Elenco dei blocchi della CPU collegata (sola lettura); mai eccezioni: l'esito dice tutto. */
   plcBlocks(): Promise<PlcBlocksResult>;
   /** Carica un solo blocco OB, FB, FC o DB dalla CPU collegata (sola lettura); mai eccezioni. */
