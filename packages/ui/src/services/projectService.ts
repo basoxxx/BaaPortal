@@ -55,6 +55,8 @@ export interface ProjectServiceDeps {
   flushPendingEdits?: () => void;
   /** Chiamata alla chiusura confermata della finestra, prima di chiuderla (es. cancella la copia di recupero). */
   beforeWindowClose?: () => Promise<void>;
+  /** All'uscita dall'app, dopo il progetto: p.es. salvare le librerie globali modificate. */
+  beforeAppClose?: () => Promise<void>;
 }
 
 const APP_TITLE = 'BaaPortal';
@@ -386,6 +388,7 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
     shutdownOnline(store);
     shutdownSimulation(store); // il worker del simulatore non deve restare in esecuzione
     try {
+      await deps.beforeAppClose?.();
       await deps.beforeWindowClose?.();
     } catch {
       /* la chiusura non deve dipendere dalla pulizia */

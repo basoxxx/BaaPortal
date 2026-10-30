@@ -513,7 +513,7 @@ export interface DragData {
   deviceId: string;
   refs: ObjectRef[];
   /** Trascinamento da fuori dell'albero (un modello di libreria): il rilascio su un PLC lo passa qui. */
-  insert?: (deviceId: string) => void;
+  insert?: (deviceId: string, drop?: { area: TreeArea; group: string }) => void;
 }
 const DRAG_MIME = 'application/x-baaportal';
 // Durante dragover i dati del trascinamento non sono leggibili: si ricordano qui.
@@ -547,7 +547,7 @@ export function beginDrag(
 export function beginInsertDrag(
   dt: DataTransferLike,
   text: string,
-  insert: (deviceId: string) => void,
+  insert: (deviceId: string, drop?: { area: TreeArea; group: string }) => void,
 ): void {
   currentDrag = { deviceId: '', refs: [], insert };
   dt.setData(DRAG_MIME, '{}');
@@ -588,7 +588,8 @@ export function dropOn(store: StoreApi<AppState>, nodeId: string): void {
   if (!drag || !verdict) return;
   const target = parseNodeId(nodeId);
   if (drag.insert && target.kind !== 'static') {
-    drag.insert(target.dev);
+    const c = containerOf(doc, nodeId);
+    drag.insert(target.dev, c?.isContainer ? { area: c.area, group: c.group } : undefined);
     return;
   }
   if (target.kind === 'tagTable') {

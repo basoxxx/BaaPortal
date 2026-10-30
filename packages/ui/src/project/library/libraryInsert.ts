@@ -14,7 +14,21 @@ import {
 } from '@baaportal/project';
 import { sameName } from '@baaportal/s7-types';
 import type { ClipboardItem } from '../../services/clipboard';
-import { blockNumber, deleteObjects, isStandardTable, pasteObjects } from '../objectActions';
+import {
+  areaOfRef,
+  blockNumber,
+  deleteObjects,
+  isStandardTable,
+  moveToGroup,
+  pasteObjects,
+} from '../objectActions';
+import type { TreeArea } from '../navigation/treeIds';
+
+/** Rilascio su un gruppo dell'albero: gli oggetti dell'area del gruppo entrano lì. */
+export interface Drop {
+  area: TreeArea;
+  group: string;
+}
 
 /**
  * Cosa fare di un oggetto del modello che si scontra con il PLC. `useExisting`: un tag o una costante
@@ -265,6 +279,7 @@ export function insertLibraryItem(
   choices: ReadonlyMap<string, Resolution>,
   cpu: CpuType | undefined,
   newId: NewId,
+  drop?: Drop,
 ): { created: ObjectRef[]; skipped: number } {
   const scratch: PlcDevice = {
     ...dev,
@@ -382,5 +397,11 @@ export function insertLibraryItem(
     cpu,
     newId,
   );
+  if (drop)
+    moveToGroup(
+      dev,
+      pasted.filter((r) => areaOfRef(r) === drop.area),
+      drop.group,
+    );
   return { created: [...pasted, ...created], skipped: items.length - pasted.length };
 }

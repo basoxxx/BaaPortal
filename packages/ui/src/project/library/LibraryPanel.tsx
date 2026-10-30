@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { findCpu } from '@baaportal/catalog';
@@ -28,6 +28,7 @@ import {
   selectRef,
   watchTablesOfNodes,
 } from '../navigation/objectCommands';
+import { ReadOnlyObjects } from '../../components/ReadOnlyObjects';
 import { RenameInput } from '../navigation/RenameInput';
 import { targetPlcId } from '../navigation/treeIds';
 import {
@@ -36,6 +37,7 @@ import {
   insertLibraryItem,
   skipCascade,
   type Conflict,
+  type Drop,
   type Resolution,
 } from './libraryInsert';
 import {
@@ -56,6 +58,7 @@ import {
   PROJECT_KEY,
   renameFolder,
   renameItem,
+  restoreGlobalLibraries,
   saveGlobalLibrary,
   setGlobalEditing,
   useGlobalLibraries,
@@ -262,6 +265,7 @@ export function LibraryTree({ view }: { view: LibraryView }) {
     deviceId: string;
     conflicts: Conflict[];
     cascade(skipped: ReadonlySet<string>): Map<string, string>;
+    drop?: Drop;
   } | null>(null);
   const [viewing, setViewing] = useState<LibraryItem | null>(null);
   const [dropOn, setDropOn] = useState<string | null>(null);
@@ -271,11 +275,16 @@ export function LibraryTree({ view }: { view: LibraryView }) {
   const mutate = (label: string, recipe: (l: Library) => void) =>
     mutateLibrary(store, key, label, recipe);
 
-  const doInsert = (item: LibraryItem, deviceId: string, choices: Map<string, Resolution>) => {
+  const doInsert = (
+    item: LibraryItem,
+    deviceId: string,
+    choices: Map<string, Resolution>,
+    drop?: Drop,
+  ) => {
     let result: ReturnType<typeof insertLibraryItem> | null = null;
     store.getState().edit('history.libraryInsert', (p) => {
       const d = findDevice(p, deviceId);
-      if (d) result = insertLibraryItem(d, item, choices, findCpu(d.cpu.typeId), newId);
+      if (d) result = insertLibraryItem(d, item, choices, findCpu(d.cpu.typeId), newId, drop);
     });
     const done = result as ReturnType<typeof insertLibraryItem> | null;
     if (!done) return;
@@ -288,15 +297,15 @@ export function LibraryTree({ view }: { view: LibraryView }) {
     selectRef(store, done.created[0]);
   };
   /** Inserisce nel PLC; se nomi o numeri sono presi chiede prima cosa fare. */
-  const startInsert = (item: LibraryItem, deviceId: string | null) => {
+  const startInsert = (item: LibraryItem, deviceId: string | null, drop?: Drop) => {
     const doc = store.getState().doc;
     const dev = deviceId && doc ? findDevice(doc.project, deviceId) : undefined;
     if (!dev) return;
     const conflicts = findConflicts(dev, item);
-    if (conflicts.length === 0) doInsert(item, dev.id, new Map());
+    if (conflicts.length === 0) doInsert(item, dev.id, new Map(), drop);
     else {
       const cascade = (skipped: ReadonlySet<string>) => skipCascade(dev, item, skipped);
-      setPending({ item, deviceId: dev.id, conflicts, cascade });
+      setPending({ item, deviceId: dev.id, conflicts, cascade, ...(drop ? { drop } : {}) });
     }
   };
 
@@ -558,8 +567,8 @@ export function LibraryTree({ view }: { view: LibraryView }) {
                 if (row.type !== 'item') return;
                 const item = row.item;
                 internalDrag = { key, itemId: item.id };
-                beginInsertDrag(e.dataTransfer, item.name, (deviceId) =>
-                  startInsert(item, deviceId),
+                beginInsertDrag(e.dataTransfer, item.name, (deviceId, drop) =>
+                  startInsert(item, deviceId, drop),
                 );
               }}
               onDragEnd={() => {
@@ -614,7 +623,7 @@ export function LibraryTree({ view }: { view: LibraryView }) {
           onCancel={() => setPending(null)}
           onOk={(choices) => {
             setPending(null);
-            doInsert(pending.item, pending.deviceId, choices);
+            doInsert(pending.item, pending.deviceId, choices, pending.drop);
           }}
         />
       ) : null}
@@ -634,6 +643,16 @@ export function LibraryTree({ view }: { view: LibraryView }) {
           <pre className="baa-library-source" tabIndex={0}>
             {itemText(viewing, mnemonic)}
           </pre>
+          <ReadOnlyObjects
+            objects={{
+              blocks: viewing.blocks.filter(
+                (b) =>
+                  b.kind !== 'DB' &&
+                  b.kind !== 'IDB' &&
+                  (b.language === 'KOP' || b.language === 'FUP'),
+              ),
+            }}
+          />
         </Dialog>
       ) : null}
     </div>
@@ -663,6 +682,9 @@ export function GlobalLibraries() {
   const { t } = useTranslation();
   const { bridge } = useServices();
   const globals = useGlobalLibraries();
+  useEffect(() => {
+    void restoreGlobalLibraries(bridge);
+  }, [bridge]);
   return (
     <div className="baa-library-list">
       <div className="baa-library-tools">

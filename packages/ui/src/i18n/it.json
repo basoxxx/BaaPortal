@@ -1,4 +1,13 @@
 {
+  "readOnlyView": {
+    "input": "Ingressi",
+    "output": "Uscite",
+    "inOut": "Ingressi/uscite",
+    "static": "Statici",
+    "temp": "Temporanei",
+    "graphics": "Grafici KOP/FUP",
+    "openFailed": "Questo oggetto non si può aprire in sola lettura."
+  },
   "errors": {
     "title": "Errore",
     "write": "Impossibile scrivere il file \"{{path}}\" (codice {{code}}). Controlla i permessi e lo spazio disponibile, poi riprova.",
@@ -2102,6 +2111,7 @@
     "view": "Apri in sola lettura",
     "toProject": "Copia nella libreria di progetto",
     "deleteMessage": "Eliminare dalla libreria?",
+    "saveOnExit": "Salvare le modifiche alla libreria «{{name}}» prima di uscire?",
     "viewTitle": "{{name}} (sola lettura)",
     "conflictTitle": "Inserisci «{{name}}»",
     "conflictMessage": "Nel PLC alcuni nomi o numeri sono già usati. Scegliere cosa fare per ciascun oggetto.",

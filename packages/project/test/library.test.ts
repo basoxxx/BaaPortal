@@ -57,6 +57,26 @@ describe('dipendenze di un modello', () => {
     expect(names(d, withDependencies(d, [blockRef(d, 'Main')]))).toEqual(['Main', 'Calc']);
   });
 
+  it('porta i DB usati dal codice, le istanze delle CALL e i tag usati in una tabella generata', () => {
+    const d = makeDevice(seq());
+    const ob = createCodeBlock({ kind: 'OB', number: 5, name: 'Prova', language: 'AWL' });
+    ob.networks[0]!.source = 'OPN "Nastro_DB"\nL DBW 2\nT MW 10';
+    d.blocks.push(ob);
+    d.tagTables[0]!.tags.push({
+      id: 'tg1',
+      name: 'Pompa',
+      type: 'Word',
+      address: '%MW10',
+      hmi: false,
+      comment: '',
+    });
+    expect(names(d, withDependencies(d, [blockRef(d, 'Prova')]))).toContain('Nastro_DB');
+    const item = createLibraryItem(d, [blockRef(d, 'Prova')], { newId: () => 'g' })!;
+    expect(item.tagTables.map((t) => [t.name, t.tags.map((x) => x.name)])).toEqual([
+      ['Prova (tag)', ['Pompa']],
+    ]);
+  });
+
   it('createLibraryItem copia in profondità, prende il nome del primo oggetto, senza dipendenze se chiesto', () => {
     const d = makeDevice(seq());
     const item = createLibraryItem(d, [blockRef(d, 'Linea')], { newId: () => 'it1' })!;

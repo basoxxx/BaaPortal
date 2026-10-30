@@ -8,6 +8,7 @@ import { useShortcuts } from './commands/useShortcuts';
 import { i18next, initI18n, t } from './i18n';
 import { flushPendingEdits } from './flushPendingEdits';
 import { createProjectService } from './services/projectService';
+import { saveDirtyGlobalLibraries } from './project/library/libraryStore';
 import { createRecoveryService, type RecoveryService } from './services/recoveryService';
 import { AccessibleDevicesDialog } from './dialogs/AccessibleDevicesDialog';
 import { RestoreDialog } from './dialogs/RestoreDialog';
@@ -139,6 +140,7 @@ export function App({ bridge, onReady }: AppProps) {
         appVersion,
         flushPendingEdits,
         // "Non salvare" all'uscita non deve lasciare una copia di recupero.
+        beforeAppClose: () => saveDirtyGlobalLibraries(bridge),
         beforeWindowClose: async () => {
           const doc = store.getState().doc;
           if (doc) await ref.recovery?.clear(doc.filePath);

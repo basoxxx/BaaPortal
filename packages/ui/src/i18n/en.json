@@ -1,4 +1,13 @@
 {
+  "readOnlyView": {
+    "input": "Inputs",
+    "output": "Outputs",
+    "inOut": "In/outs",
+    "static": "Static",
+    "temp": "Temporary",
+    "graphics": "LAD/FBD graphics",
+    "openFailed": "This object cannot be opened read-only."
+  },
   "errors": {
     "title": "Error",
     "write": "Cannot write the file \"{{path}}\" (code {{code}}). Check permissions and free space, then try again.",
@@ -2102,6 +2111,7 @@
     "view": "Open read-only",
     "toProject": "Copy to project library",
     "deleteMessage": "Delete from the library?",
+    "saveOnExit": "Save changes to library {{name}} before exiting?",
     "viewTitle": "{{name}} (read-only)",
     "conflictTitle": "Insert “{{name}}”",
     "conflictMessage": "Some names or numbers are already used in the PLC. Choose what to do with each object.",
