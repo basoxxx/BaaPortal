@@ -43,7 +43,7 @@ function cycle(dev: PlcDevice): DataView {
   return new DataView(cpu.memory.M.buffer);
 }
 
-describe('SCL 2.1: funzioni STRING nei blocchi compilati', () => {
+describe('SCL 2.1: funzioni STRING e DATE_AND_TIME nei blocchi compilati', () => {
   it('FB, DB globale e TEMP', () => {
     const dev = makeDevice(seq('s'));
     dev.blocks.length = 0;
@@ -65,11 +65,15 @@ describe('SCL 2.1: funzioni STRING nei blocchi compilati', () => {
       "M2.5 := tmp = 'Pompi' AND tmp >= 'Pompi' AND NOT (tmp > 'Pompi');",
       "u := CONCAT(s, 'xyz');",
       'MW6 := LEN(u);',
+      'dt0 := dIn;',
+      'M2.6 := dt0 = DT#2024-03-15-12:00:00 AND dt0 > DT#1999-12-31-23:59:59.999;',
     ]);
+    fb.interface.input.push(member('dIn', 'Date_And_Time'));
     fb.interface.static.push(
       member('s', 'String[10]'),
       member('t', 'String[10]'),
       member('u', 'String[4]'),
+      member('dt0', 'Date_And_Time'),
     );
     fb.interface.temp.push(member('tmp', 'String[8]'));
     const dati = createGlobalDb({ number: 61, name: 'Dati' });
@@ -77,7 +81,7 @@ describe('SCL 2.1: funzioni STRING nei blocchi compilati', () => {
       { ...member('s1', 'String[10]'), initial: '' },
       { ...member('s2', 'String[5]'), initial: "'ab'" },
     );
-    const ob = scl('OB', 1, 'Main', ['"Testi_DB"();']);
+    const ob = scl('OB', 1, 'Main', ['"Testi_DB"(dIn := DT#2024-03-15-12:00:00);']);
     dev.blocks.push(
       fb,
       dati,
@@ -86,7 +90,7 @@ describe('SCL 2.1: funzioni STRING nei blocchi compilati', () => {
     );
     const v = cycle(dev);
     expect(v.getInt16(0)).toBe(7);
-    expect(v.getUint8(2) & 0x3f).toBe(0x3f);
+    expect(v.getUint8(2) & 0x7f).toBe(0x7f);
     expect([v.getInt16(4), v.getInt16(6)]).toEqual([7, 4]);
   });
 });

@@ -1,6 +1,6 @@
 // Parser a discesa ricorsiva del sottoinsieme SCL in prova (istruzioni, senza intestazione del
 // blocco: l'interfaccia è quella del blocco). Precedenze dal manuale pubblico SCL, dalla più bassa:
-// OR, XOR, AND/&, confronti, + -, * / MOD, NOT e meno unario.
+// OR, XOR, AND/&, confronti, + -, * / MOD, NOT e meno unario, **.
 import { intLiteral, lex, SclError, type Tok } from './lexer.js';
 
 export type Pos = { line: number; col: number };
@@ -439,7 +439,6 @@ export function parse(text: string): { stmts: Stmt[]; errors: SclError[] } {
       const t = toks[p++]!;
       l = { k: 'bin', op: up(t), l, r: unary(), ...pos(t) };
     }
-    if (is('**')) fail(peek(), 'La potenza ** non è supportata in prova');
     return l;
   }
 
@@ -453,7 +452,7 @@ export function parse(text: string): { stmts: Stmt[]; errors: SclError[] } {
       p++;
       const n = peek();
       // -123 è un letterale (serve per -32768 e per il tipo del letterale)
-      if (n.kind === 'int' || n.kind === 'real') {
+      if ((n.kind === 'int' || n.kind === 'real') && toks[p + 1]?.text !== '**') {
         p++;
         return { k: n.kind, text: `-${n.text}`, ...pos(t) };
       }
@@ -463,7 +462,30 @@ export function parse(text: string): { stmts: Stmt[]; errors: SclError[] } {
       p++;
       return unary();
     }
-    return primary();
+    return power();
+  }
+
+  /**
+   * `a ** b`, sopra il meno unario (`-2 ** 2` è -4); l'esponente può avere il segno. Le potenze in
+   * catena vogliono le parentesi (l'associatività non è verificata con STEP 7).
+   */
+  function power(): Expr {
+    const l = primary();
+    if (!is('**')) return l;
+    const t = toks[p++]!;
+    let r: Expr;
+    if (is('-', '+')) {
+      const s = toks[p++]!;
+      const x = primary();
+      r =
+        s.text === '+'
+          ? x
+          : x.k === 'int' || x.k === 'real'
+            ? { ...x, text: `-${x.text}` }
+            : { k: 'neg', e: x, ...pos(s) };
+    } else r = primary();
+    if (is('**')) fail(peek(), 'Potenze in catena: servono le parentesi');
+    return { k: 'bin', op: '**', l, r, ...pos(t) };
   }
 
   function primary(): Expr {

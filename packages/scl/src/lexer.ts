@@ -1,7 +1,7 @@
 // Lexer SCL del sottoinsieme in prova: parole chiave senza distinzione di maiuscole, commenti
 // `//` e `(* *)` (non annidati), simboli "…", locali #nome, indirizzi assoluti I/Q/M/PI/PQ (anche
 // coi mnemonici tedeschi E/A/PE/PA), interi in base 2/8/16 (`16#FF`) e tipizzati (`INT#5`,
-// `W#16#FF`, `L#5`), durate e date (`T#5s`, `S5T#2s`, `D#2024-01-01`, `TOD#12:00:00`), stringhe e
+// `W#16#FF`, `L#5`), durate e date (`T#5s`, `S5T#2s`, `D#2024-01-01`, `TOD#12:00:00`, `DT#2024-01-01-12:00:00`), stringhe e
 // caratteri fra apici.
 import { parseLiteral, type ElementaryTypeName } from '@baaportal/s7-types';
 
@@ -63,17 +63,24 @@ const INT_LIT =
   /^(?:(?:D?INT|D?WORD|BYTE|DW|W|B|L)#-?)?(?:(?:2|8|16)#[0-9A-Za-z_]+|\d[\d_]*)(?![0-9A-Za-z_#]|\.\d)/i;
 /** Durata o data tipizzata: `T#5s`, `TIME#1h2m`, `S5T#2s`, `D#2024-01-01`, `TOD#12:00:00.5`. */
 const TIME_LIT =
-  /^(?:(?:T|TIME|S5T|S5TIME)#-?[0-9A-Za-z_]+|(?:D|DATE)#[0-9-]+|(?:TOD|TIME_OF_DAY)#[0-9:.]+)(?![0-9A-Za-z_#])/i;
+  /^(?:(?:T|TIME|S5T|S5TIME)#-?[0-9A-Za-z_]+|(?:D|DATE)#[0-9-]+|(?:TOD|TIME_OF_DAY)#[0-9:.]+|(?:DT|DATE_AND_TIME)#[0-9:.-]+)(?![0-9A-Za-z_#])/i;
 const TIME_TYPES: [RegExp, TimeType, ElementaryTypeName][] = [
   [/^S5T(?:IME)?#/i, 'S5TIME', 'S5Time'],
   [/^T(?:IME)?#/i, 'TIME', 'Time'],
   [/^D(?:ATE)?#/i, 'DATE', 'Date'],
   [/^(?:TOD|TIME_OF_DAY)#/i, 'TOD', 'Time_Of_Day'],
 ];
-export type TimeType = 'TIME' | 'S5TIME' | 'DATE' | 'TOD';
+export type TimeType = 'TIME' | 'S5TIME' | 'DATE' | 'TOD' | 'DT';
 
-/** Tipo e forma AWL (`T#1H2M`, `D#2024-01-01`) di una durata o data; `undefined` se non è valida. */
+/**
+ * Tipo e forma AWL (`T#1H2M`, `D#2024-01-01`) di una durata o data; `undefined` se non è valida.
+ * Per DATE_AND_TIME la forma canonica `DT#2024-01-05-08:30:00.000`.
+ */
 export function timeLiteral(text: string): { ty: TimeType; awl: string } | undefined {
+  if (/^(?:DT|DATE_AND_TIME)#/i.test(text)) {
+    const r = parseLiteral({ kind: 'dateAndTime' }, text);
+    return r.ok ? { ty: 'DT', awl: r.canonical } : undefined;
+  }
   const k = TIME_TYPES.find(([re]) => re.test(text));
   if (!k) return undefined;
   const r = parseLiteral({ kind: 'elementary', name: k[2] }, text);

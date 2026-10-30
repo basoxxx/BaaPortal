@@ -65,7 +65,7 @@ type Dim = { lo: number; hi: number };
 const MAX_BRACKETS = 7;
 const MAX_LABEL = 999;
 const SUPPORTED =
-  'solo BOOL, BYTE, WORD, DWORD, INT, DINT, REAL, TIME, S5TIME, DATE, TIME_OF_DAY, CHAR; STRING, STRUCT, ARRAY e UDT interi solo in :=';
+  'solo BOOL, BYTE, WORD, DWORD, INT, DINT, REAL, TIME, S5TIME, DATE, TIME_OF_DAY, CHAR; STRING, STRUCT, ARRAY, UDT e DATE_AND_TIME interi solo in := (STRING e DATE_AND_TIME anche nei confronti)';
 /** Copia di STRUCT, ARRAY e UDT interi a istruzioni L/T: oltre, il codice diventa troppo lungo. */
 const MAX_COPY = 1024;
 const ELEMENTARY: Record<string, Ty> = {
@@ -164,7 +164,22 @@ const CONV: Record<string, [Num, Num, string[]]> = {
   BYTE_TO_WORD: ['BYTE', 'WORD', []],
   WORD_TO_DWORD: ['WORD', 'DWORD', ['AD DW#16#FFFF']],
   BYTE_TO_DWORD: ['BYTE', 'DWORD', ['AD DW#16#FF']],
+  // DATE si confronta a 32 bit: la parola alta resta a 0
+  DATE_TO_DINT: ['DATE', 'DINT', []],
+  DINT_TO_DATE: ['DINT', 'DATE', ['AD DW#16#FFFF']],
+  TOD_TO_DINT: ['TOD', 'DINT', []],
+  DINT_TO_TOD: ['DINT', 'TOD', []],
+  // calcolate in `hoist` (`s5Conv`)
+  S5TIME_TO_TIME: ['S5TIME', 'TIME', []],
+  TIME_TO_S5TIME: ['TIME', 'S5TIME', []],
 };
+/** S5TIME: limite in ms, divisore e base (bit 12-13) dalla base più piccola, come `L S5T#…`. */
+const S5_BASES: [number, number, number][] = [
+  [9999, 10, 0],
+  [99999, 100, 0x1000],
+  [999999, 1000, 0x2000],
+  [9999999, 10000, 0x3000],
+];
 /**
  * Conversioni che come in STEP 7 mettono a 0 il bit OK (qui BR, quindi l'ENO del blocco) se il
  * valore non ci sta: istruzioni dopo `T` nella TEMP del risultato, che tiene comunque i bit bassi.
@@ -521,7 +536,18 @@ class Gen {
       }
       case 'bin': {
         const cmp = e.op in CMP;
-        if (cmp && this.isStrCmp(e)) return 'BOOL';
+        if (cmp && (this.isStrCmp(e) || this.isDtCmp(e))) return 'BOOL';
+        if (e.op === '**') {
+          for (const [x, h] of [
+            [e.l, 'REAL'],
+            [e.r, undefined],
+          ] as const) {
+            const t = this.typeOf(x, h);
+            if (t !== 'INT' && t !== 'DINT' && t !== 'REAL')
+              fail(x, `** si usa con INT, DINT e REAL, c'è ${t}`);
+          }
+          return 'REAL';
+        }
         const t = this.pair(e, cmp ? undefined : hint);
         if (e.op in BOOL_OP) {
           if (t !== 'BOOL' && !isBits(t))
@@ -568,7 +594,11 @@ class Gen {
    * altrimenti nel suo tipo naturale (INT o DINT); testo per `L`.
    */
   private literal(e: Expr & { text: string }, hint?: Ty): { ty: Num; awl: string } {
-    if (e.k === 'tlit') return timeLiteral(e.text) ?? fail(e, `Costante non valida: ${e.text}`);
+    if (e.k === 'tlit') {
+      const t = timeLiteral(e.text) ?? fail(e, `Costante non valida: ${e.text}`);
+      if (t.ty === 'DT') return fail(e, DT_ONLY);
+      return t as { ty: Num; awl: string };
+    }
     if (e.k === 'str') {
       if (e.text.length !== 1)
         fail(
@@ -843,7 +873,7 @@ class Gen {
     const t = m.type;
     const shown = `Parametro ${m.name} di tipo ${formatType(t)}`;
     const complex =
-      ['string', 'struct', 'array'].includes(t.kind) ||
+      ['string', 'struct', 'array', 'dateAndTime'].includes(t.kind) ||
       (t.kind === 'named' && this.ctx.resolve(t.name)?.kind === 'udt');
     if (!complex) fail(a, `${shown}: non supportato in prova (${SUPPORTED})`);
     if (fc) fail(a, `${shown}: la compilazione non supporta i parametri complessi delle FC`);
@@ -911,6 +941,8 @@ class Gen {
         return { ...e, e: this.hoist(e.e) };
       case 'bin': {
         if (e.op in CMP && this.isStrCmp(e)) return this.strCompare(e);
+        if (e.op in CMP && this.isDtCmp(e)) return this.dtCompare(e);
+        if (e.op === '**') return this.power(e);
         const h = { ...e, l: this.hoist(e.l), r: this.hoist(e.r) };
         // BOOL: a <> b è a XOR b, a = b è NOT (a XOR b)
         if ((e.op === '=' || e.op === '<>') && this.pair(e) === 'BOOL') {
@@ -923,6 +955,7 @@ class Gen {
         if (e.name === 'LEN') return e;
         if (!CONV[e.name]) return this.hoist(this.blockCall(e));
         const c = { ...e, arg: this.hoist(e.arg) };
+        if (e.name === 'S5TIME_TO_TIME' || e.name === 'TIME_TO_S5TIME') return this.s5Conv(c);
         const check = CHECKED[e.name];
         if (!check) return c;
         const ty = CONV[e.name]![1];
@@ -1039,7 +1072,7 @@ class Gen {
     if (!isOperand(e) || e.k === 'temp' || e.k === 'addr' || e.vindex) return undefined;
     const d = this.declared(e);
     const t = d.type;
-    if (!t || typed(t) || !['string', 'struct', 'array', 'named'].includes(t.kind))
+    if (!t || typed(t) || !['string', 'struct', 'array', 'named', 'dateAndTime'].includes(t.kind))
       return undefined;
     if (t.kind === 'named' && this.ctx.resolve(t.name)?.kind !== 'udt')
       fail(e, `${e.text}${tail(e)}: si copiano interi solo STRUCT, ARRAY, UDT e STRING`);
@@ -1102,6 +1135,14 @@ class Gen {
     if (this.declared(dst, true).constant)
       fail(dst, `Non si può scrivere in una costante: ${dst.text}`);
     if (t.kind === 'string') return this.assignString(dst, t.length, e, at);
+    if (t.kind === 'dateAndTime' && e.k === 'tlit') {
+      const to = this.located(dst);
+      const b = this.dtBytes(e);
+      this.opn(to);
+      for (const k of [0, 4])
+        this.emit(`L ${dword(b.slice(k, k + 4))}`, `T ${this.at(to, 'D', k)}`);
+      return;
+    }
     const src = this.complexOf(e);
     if (!src || !this.sameType(src, t))
       return fail(
@@ -1317,6 +1358,170 @@ class Gen {
     this.place(end);
     const t: Expr = { k: 'temp', text: r, ty: 'BOOL', line: e.line, col: e.col };
     return e.op === '=' ? t : { k: 'not', e: t, line: e.line, col: e.col };
+  }
+
+  // ---- DATE_AND_TIME, S5TIME e potenza (2.1) ----
+
+  /** Gli 8 byte BCD di una costante DT#: anno, mese, giorno, ore, minuti, secondi, ms, giorno. */
+  private dtBytes(e: Extract<Expr, { k: 'tlit' }>): number[] {
+    const t = timeLiteral(e.text);
+    if (t?.ty !== 'DT') return fail(e, `Costante non valida: ${e.text}`);
+    const [y, mo, d, h, mi, sec, ms] = /^DT#(\d+)-(\d+)-(\d+)-(\d+):(\d+):(\d+)\.(\d+)$/
+      .exec(t.awl)!
+      .slice(1)
+      .map(Number) as number[];
+    const bcd = (n: number) => ((Math.floor(n / 10) % 10) << 4) | (n % 10);
+    // giorno della settimana come STEP 7: domenica = 1
+    const wd = new Date(Date.UTC(y!, mo! - 1, d!)).getUTCDay() + 1;
+    return [
+      bcd(y! % 100),
+      bcd(mo!),
+      bcd(d!),
+      bcd(h!),
+      bcd(mi!),
+      bcd(sec!),
+      bcd(Math.floor(ms! / 10)),
+      ((ms! % 10) << 4) | wd,
+    ];
+  }
+
+  /** Un lato DATE_AND_TIME: costante o variabile. */
+  private dtSide(e: Expr): { bytes: number[] } | { loc: Loc } | undefined {
+    if (e.k === 'tlit' && /^(?:DT|DATE_AND_TIME)#/i.test(e.text)) return { bytes: this.dtBytes(e) };
+    if (this.complexOf(e)?.kind !== 'dateAndTime') return undefined;
+    return { loc: this.located(e as Located) };
+  }
+
+  private isDtCmp(e: Extract<Expr, { k: 'bin' }>): boolean {
+    const [a, b] = [this.dtSide(e.l), this.dtSide(e.r)];
+    if (!a && !b) return false;
+    if (!a || !b) fail(e, 'Un DATE_AND_TIME si confronta solo con un DATE_AND_TIME');
+    if ('bytes' in a! && 'bytes' in b!) fail(e, 'Confronto fra due costanti');
+    return true;
+  }
+
+  /**
+   * Confronto fra DATE_AND_TIME, come i byte BCD in ordine (anno, mese… millisecondi), con gli
+   * anni 90-99 prima di 00-89 e senza il giorno della settimana. Due doppie parole senza segno:
+   * la prima con l'anno spostato (+16#70 nel byte alto) e il bit alto invertito, la seconda senza
+   * il giorno. Il risultato (-1, 0, 1) in una TEMP INT, confrontato con 0.
+   */
+  private dtCompare(e: Extract<Expr, { k: 'bin' }>): Expr {
+    const sides = [this.dtSide(e.l)!, this.dtSide(e.r)!];
+    const [lt, gt, done] = [this.label(e), this.label(e), this.label(e)];
+    const words = sides.map((x) =>
+      [0, 4].map((k) => {
+        const t = this.temp('DINT');
+        if ('bytes' in x) {
+          const v = x.bytes.slice(k, k + 4).reduce((a, b) => a * 256 + b, 0);
+          const adj = k === 0 ? (v + 0xf0000000) % 2 ** 32 : ((v & ~0xf) >>> 0) ^ 0x80000000;
+          this.emit(`L ${dword([24, 16, 8, 0].map((sh) => (adj >>> sh) & 0xff))}`, `T ${t}`);
+        } else {
+          this.opn(x.loc);
+          this.emit(`L ${this.at(x.loc, 'D', k)}`);
+          if (k === 0) this.emit('L DW#16#F0000000', '+D');
+          else this.emit('AD DW#16#FFFFFFF0', 'XOD DW#16#80000000');
+          this.emit(`T ${t}`);
+        }
+        return t;
+      }),
+    );
+    const r = this.temp('INT');
+    this.emit('L 0', `T ${r}`);
+    for (const k of [0, 1])
+      this.emit(`L ${words[0]![k]}`, `L ${words[1]![k]}`, '<D', `JC ${lt}`, '>D', `JC ${gt}`);
+    this.emit(`JU ${done}`);
+    this.place(lt);
+    this.emit('L -1', `T ${r}`, `JU ${done}`);
+    this.place(gt);
+    this.emit('L 1', `T ${r}`);
+    this.place(done);
+    const at = { line: e.line, col: e.col };
+    return {
+      k: 'bin',
+      op: e.op,
+      l: { k: 'temp', text: r, ty: 'INT', ...at },
+      r: { k: 'int', text: '0', ...at },
+      ...at,
+    };
+  }
+
+  /**
+   * S5TIME_TO_TIME: tre cifre BCD per la base (10 ms, 100 ms, 1 s, 10 s). TIME_TO_S5TIME: la base
+   * più piccola in cui il valore sta in tre cifre, il resto si tronca (come `L S5T#…`); un TIME
+   * negativo dà S5T#0MS, da 10000 s in su S5T#2H46M30S, e BR va a 0. Una cifra BCD non valida in
+   * S5TIME_TO_TIME è un errore BCD della CPU (BTI), come in STEP 7.
+   */
+  private s5Conv(e: Extract<Expr, { k: 'call' }>): Expr {
+    const [from, to] = CONV[e.name]!;
+    const a = this.temp(from);
+    const r = this.temp(to);
+    this.num(e.arg, from);
+    this.emit(`T ${a}`);
+    const end = this.label(e);
+    if (e.name === 'S5TIME_TO_TIME') {
+      const b = this.temp('INT');
+      const top = this.label(e);
+      this.emit(`L ${a}`, 'AW W#16#FFF', 'BTI', 'ITD', 'L L#10', '*D', `T ${r}`);
+      this.emit(`L ${a}`, 'SRW 12', 'AW W#16#3', `T ${b}`);
+      this.place(top);
+      this.emit(`L ${b}`, 'L 0', '==I', `JC ${end}`, `L ${r}`, 'L L#10', '*D', `T ${r}`);
+      this.emit(`L ${b}`, 'L 1', '-I', `T ${b}`, `JU ${top}`);
+    } else {
+      const neg = this.label(e);
+      this.emit(`L ${a}`, 'L L#0', '<D', `JC ${neg}`);
+      for (const [lim, div, base] of S5_BASES) {
+        const next = this.label(e);
+        this.emit(`L ${a}`, `L L#${lim}`, '>D', `JC ${next}`, `L ${a}`, `L L#${div}`, '/D', 'ITB');
+        if (base) this.emit(`OW W#16#${base.toString(16).toUpperCase()}`);
+        this.emit(`T ${r}`, `JU ${end}`);
+        this.place(next);
+      }
+      this.emit('L W#16#3999', `T ${r}`, 'CLR', 'SAVE', `JU ${end}`);
+      this.place(neg);
+      this.emit('L 0', `T ${r}`, 'CLR', 'SAVE');
+    }
+    this.place(end);
+    return { k: 'temp', text: r, ty: to, line: e.line, col: e.col };
+  }
+
+  /**
+   * `x ** y` in REAL. Esponente INT o DINT: quadrati successivi (al massimo 32 giri), esatto finché
+   * i prodotti REAL lo sono; negativo: 1 / x^|y|. Esponente REAL: EXP(y · LN(x)), quindi con x ≤ 0
+   * il risultato non è un numero (come LN). Una base INT o DINT diventa REAL.
+   */
+  private power(e: Extract<Expr, { k: 'bin' }>): Expr {
+    const bt = this.typeOf(e.l, 'REAL') as 'INT' | 'DINT' | 'REAL';
+    const xt = this.typeOf(e.r) as 'INT' | 'DINT' | 'REAL';
+    const [l, r] = [this.hoist(e.l), this.hoist(e.r)];
+    const [x, res] = [this.temp('REAL'), this.temp('REAL')];
+    this.num(l, bt);
+    if (bt !== 'REAL') this.emit(...(bt === 'INT' ? ['ITD'] : []), 'DTR');
+    this.emit(`T ${x}`);
+    if (xt === 'REAL') {
+      this.num(r, 'REAL');
+      this.emit(`T ${res}`, `L ${x}`, 'LN', `L ${res}`, '*R', 'EXP', `T ${res}`);
+    } else {
+      const [n, neg] = [this.temp('DINT'), this.temp('BOOL')];
+      const [pos, top, skip, end, done] = [1, 2, 3, 4, 5].map(() => this.label(e)) as string[];
+      this.num(r, xt);
+      if (xt === 'INT') this.emit('ITD');
+      this.emit(`T ${n}`, 'L 1.0', `T ${res}`);
+      this.emit(`L ${n}`, 'L L#0', '<D', `= ${neg}`, `JCN ${pos}`, `L ${n}`, 'NEGD', `T ${n}`);
+      this.place(pos!);
+      this.place(top!);
+      // n senza segno (SRD): anche |-2147483648|
+      this.emit(`L ${n}`, 'L L#0', '==D', `JC ${end}`);
+      this.emit(`L ${n}`, 'L L#1', 'AD', 'L L#0', '==D', `JC ${skip}`);
+      this.emit(`L ${res}`, `L ${x}`, '*R', `T ${res}`);
+      this.place(skip!);
+      this.emit(`L ${n}`, 'SRD 1', `T ${n}`, 'L L#0', '==D', `JC ${end}`);
+      this.emit(`L ${x}`, `L ${x}`, '*R', `T ${x}`, `JU ${top}`);
+      this.place(end!);
+      this.emit(`A ${neg}`, `JCN ${done}`, 'L 1.0', `L ${res}`, '/R', `T ${res}`);
+      this.place(done!);
+    }
+    return { k: 'temp', text: res, ty: 'REAL', line: e.line, col: e.col };
   }
 
   // ---- funzioni STRING (2.1), in linea: niente FC della libreria ----
@@ -1926,6 +2131,14 @@ class Gen {
   }
 }
 
+const DT_ONLY =
+  'Un DATE_AND_TIME si usa solo in := verso un DATE_AND_TIME e nei confronti fra DATE_AND_TIME';
+/** `DW#16#…` di quattro byte. */
+const dword = (b: number[]): string =>
+  `DW#16#${b
+    .map((x) => x.toString(16).padStart(2, '0'))
+    .join('')
+    .toUpperCase()}`;
 /** Un lato STRING: costante, variabile, o funzione STRING da calcolare. */
 type StrSide = { codes: number[] } | { loc: Loc; max: number } | { call: Call; max: number };
 /** Firme delle funzioni STRING (nomi dei parametri delle FC IEC di STEP 7). */
