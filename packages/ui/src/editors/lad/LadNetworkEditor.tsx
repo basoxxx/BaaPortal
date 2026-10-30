@@ -20,6 +20,7 @@ import './lad.css';
 export { LAD_DRAG_TYPE, TREE_DRAG_TYPE } from './useLadEdit';
 export type { LadInsertApi } from './useLadEdit';
 const PAD = 12;
+const GROUP_INSET = 4;
 
 type Editing = { id: string; key: string; value: string };
 
@@ -278,6 +279,16 @@ export function LadNetworkEditor({
                   x2={w.to[0] * CELL_W}
                   y2={w.to[1] * CELL_H + CELL_H / 2}
                   data-mon={w.flow && monAttr(monitor, w.flow.id, w.flow.side)}
+                />
+              ))}
+              {layout.groups.map((g) => (
+                <rect
+                  key={g.elemId}
+                  className="baa-lad-group"
+                  x={g.col * CELL_W + GROUP_INSET}
+                  y={g.row * CELL_H + GROUP_INSET}
+                  width={g.w * CELL_W - 2 * GROUP_INSET}
+                  height={g.h * CELL_H - 2 * GROUP_INSET}
                 />
               ))}
             </svg>

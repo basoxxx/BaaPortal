@@ -124,6 +124,16 @@ describe('layoutNetwork', () => {
     expect(cell(l, o.id).col).toBe(l.cols - 1);
   });
 
+  it('gruppo A( … NOT ): una cornice racchiude solo il confronto e il NOT, i paralleli no', () => {
+    const k = contact();
+    const cmp: LadElem = { id: id(), k: 'cmp', fn: '>I', in1: 'MW 10', in2: 'MW 12' };
+    const g: LadElem = { id: id(), k: 'parallel', branches: [[cmp, { id: id(), k: 'not' }]] };
+    const l = layoutNetwork(net(node([k, g], [coil()])));
+    expect(l.groups).toEqual([{ elemId: g.id, col: 1, row: 0, w: 2, h: 1 }]);
+    const p: LadElem = { id: id(), k: 'parallel', branches: [[contact()], [contact()]] };
+    expect(layoutNetwork(net(node([p], [coil()]))).groups).toEqual([]);
+  });
+
   it("ramo a T: l'uscita del secondo ramo sta sotto, sempre nell'ultima colonna", () => {
     const a = contact();
     const c = contact();

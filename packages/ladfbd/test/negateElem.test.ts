@@ -1,6 +1,13 @@
 // Negazione di un'entrata in mezzo alla serie: gruppo `A( … NOT )` (parallelo di un solo ramo).
 import { describe, expect, it } from 'vitest';
-import { awlToLad, negateElem, networkToAwl, removeElem, validateNetwork } from '../src/index.js';
+import {
+  awlToLad,
+  insertElem,
+  negateElem,
+  networkToAwl,
+  removeElem,
+  validateNetwork,
+} from '../src/index.js';
 import type { LadElem, LadNetwork } from '../src/index.js';
 
 let seq = 0;
@@ -68,5 +75,18 @@ describe('negateElem', () => {
     const g = n.root.series[1] as Extract<LadElem, { k: 'parallel' }>;
     const back = removeElem(n, g.branches[0]![1]!.id, nid);
     expect(back.root.series.map((e) => e.k)).toEqual(['contact', 'cmp']);
+  });
+
+  it("togliere l'entrata di un gruppo toglie anche il suo NOT", () => {
+    const cm = cmp();
+    const n = negateElem(net([c('I 0.0'), cm]), cm.id, nid);
+    const back = removeElem(n, cm.id, nid);
+    expect(back.root.series.map((e) => e.k)).toEqual(['contact']);
+    expect(awl(back)).toEqual(['A %I0.0;', '= %Q4.0;']);
+  });
+
+  it("insertElem rifiuta un'uscita", () => {
+    const coil = { id: nid(), k: 'coil', op: 'Q 4.1' } as unknown as LadElem;
+    expect(() => insertElem(net([]), { node: 'x', index: 0 }, coil)).toThrow(/non è un elemento/);
   });
 });

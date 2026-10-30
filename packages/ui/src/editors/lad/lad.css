@@ -75,6 +75,13 @@
 .baa-lad-wires .baa-lad-rail {
   stroke-width: 3;
 }
+/* gruppo A( … NOT ): la cornice mostra fin dove arriva il NOT */
+.baa-lad-wires .baa-lad-group {
+  fill: none;
+  stroke: var(--baa-text);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
 .baa-lad-svg {
   pointer-events: none;
 }

@@ -238,6 +238,11 @@ export function useLadEdit(o: LadEditOpts) {
     }
     const ids = picked();
     if (ids.length === 0) return;
+    // solo elementi di serie: un'uscita incollata in serie farebbe una rete non valida
+    if (ids.some((id) => placeOf(net, id)?.t !== 'elem')) {
+      setStatus(t('lad.cannotDo'));
+      return;
+    }
     clipboard = ids.map((id) => structuredClone(findElem(net, id) as LadElem));
     setStatus(t('lad.copied', { n: ids.length }));
     if (kind === 'cut' && !readOnly) doDelete();
