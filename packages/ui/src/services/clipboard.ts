@@ -1,4 +1,4 @@
-import type { Block, TagTable, Udt } from '@baaportal/project';
+import type { Block, TagTable, Udt, WatchTable } from '@baaportal/project';
 import type { BaaBridge } from '../bridge';
 
 export type ClipboardItem =
@@ -14,7 +14,8 @@ export type ClipboardPayload =
       /** Taglia: l'incolla sposta e consuma gli appunti. */
       cut?: boolean;
     }
-  | { kind: 'rows'; rowKind: 'tag' | 'constant' | 'member'; rows: unknown[] };
+  | { kind: 'rows'; rowKind: 'tag' | 'constant' | 'member' | 'watch'; rows: unknown[] }
+  | { kind: 'watchTables'; deviceId: string; tables: WatchTable[] };
 
 // Gli appunti di sistema portano solo testo: l'ultimo oggetto copiato vive qui e vale
 // finché il testo di sistema è ancora quello che abbiamo scritto.

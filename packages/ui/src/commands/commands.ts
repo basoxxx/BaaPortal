@@ -16,9 +16,20 @@ import { getSettings } from '../settings/settings';
 import { simControllerFor } from '../sim/simController';
 import { targetPlcId } from '../project/navigation/treeIds';
 import { isLockedImport } from '../editors/block/readOnlyImport';
-import { canConvertAwl, convertAwl } from '../editors/block/convertAwl';
+import {
+  canConvertAwl,
+  canConvertToAwl,
+  convertAwl,
+  convertToAwl,
+} from '../editors/block/convertAwl';
 import { findDevice, isGraphic } from '@baaportal/project';
-import { openCallStructure, openCrossRef, operandUnderCursor } from '../editors/xref/xrefActions';
+import {
+  openAssignment,
+  openCallStructure,
+  openCrossRef,
+  openResources,
+  operandUnderCursor,
+} from '../editors/xref/xrefActions';
 
 export type CommandId =
   | 'project.new'
@@ -53,6 +64,7 @@ export type CommandId =
   | 'insert.block'
   | 'block.switchLanguage'
   | 'block.convertToGraphic'
+  | 'block.convertToAwl'
   | 'online.goOnline'
   | 'online.goOffline'
   | 'online.compare'
@@ -71,6 +83,8 @@ export type CommandId =
   | 'options.settings'
   | 'tools.crossReferences'
   | 'tools.callStructure'
+  | 'tools.assignmentList'
+  | 'tools.resources'
   | 'tools.collectCpuData'
   | 'window.splitVertical'
   | 'window.splitHorizontal'
@@ -301,6 +315,16 @@ const list: Command[] = [
       if (t) convertAwl(store, t.deviceId, t.blockId);
     },
   }),
+  def('block.convertToAwl', {
+    isEnabled: (s) => {
+      const t = focusedBlock(s);
+      return !!t && canConvertToAwl(s, t.deviceId, t.blockId);
+    },
+    run: ({ store }) => {
+      const t = focusedBlock(store.getState());
+      if (t) convertToAwl(store, t.deviceId, t.blockId);
+    },
+  }),
   def('online.goOnline', {
     shortcut: 'Mod+K',
     icon: 'goOnline',
@@ -444,6 +468,20 @@ const list: Command[] = [
     run: ({ store }) => {
       const id = targetPlcId(store.getState());
       if (id) openCallStructure(store, id);
+    },
+  }),
+  def('tools.assignmentList', {
+    isEnabled: hasPlc,
+    run: ({ store }) => {
+      const id = targetPlcId(store.getState());
+      if (id) openAssignment(store, id);
+    },
+  }),
+  def('tools.resources', {
+    isEnabled: hasPlc,
+    run: ({ store }) => {
+      const id = targetPlcId(store.getState());
+      if (id) openResources(store, id);
     },
   }),
   def('tools.collectCpuData', {

@@ -1,4 +1,4 @@
-// «Converti in KOP/FUP»: un blocco AWL intero (solo se ogni segmento si converte) o i segmenti AWL
+// «Converti in KOP/FUP» (e, in fondo, il contrario «Converti in AWL»): un blocco AWL intero (solo se ogni segmento si converte) o i segmenti AWL
 // di un blocco KOP/FUP. La prova gira su una copia: il progetto cambia, con un solo passo di
 // annullamento, solo se almeno un segmento diventa grafico; ogni segmento che resta AWL ha il suo
 // messaggio col motivo.
@@ -6,6 +6,7 @@ import type { StoreApi } from 'zustand/vanilla';
 import type { AwlToLadFailure } from '@baaportal/ladfbd';
 import {
   convertBlockToGraphic,
+  convertGraphicToAwl,
   convertNetworkToGraphic,
   findDevice,
   isGraphic,
@@ -85,5 +86,48 @@ export function convertAwl(
   s.edit('history.convertToGraphic', (p) => {
     const d = target(p, deviceId, blockId);
     if (d) apply(d.b, d.dev, only, () => ids[k++] ?? newId());
+  });
+}
+
+/** Il blocco KOP/FUP modificabile `blockId`, se ha almeno un segmento grafico. */
+function graphicTarget(p: Project, deviceId: string, blockId: string) {
+  const dev = findDevice(p, deviceId);
+  const b = dev?.blocks.find((x) => x.id === blockId);
+  if (!dev || !b || b.kind === 'DB' || b.kind === 'IDB' || isLockedImport(b)) return undefined;
+  return isGraphic(b.language) && b.networks.some((n) => n.lad) ? { dev, b } : undefined;
+}
+
+export const canConvertToAwl = (s: AppState, deviceId: string, blockId: string): boolean =>
+  !!s.doc && graphicTarget(s.doc.project, deviceId, blockId) !== undefined;
+
+/**
+ * «Converti in AWL»: il blocco KOP/FUP (diventa AWL) o il suo segmento grafico `network` (da 0),
+ * con un solo passo di annullamento. La prova gira su una copia; se il codice MC7 cambierebbe o un
+ * salto andrebbe altrove il progetto resta com'è e un messaggio dice perché.
+ */
+export function convertToAwl(
+  store: StoreApi<AppState>,
+  deviceId: string,
+  blockId: string,
+  network?: number,
+): void {
+  const s = store.getState();
+  const t = s.doc ? graphicTarget(s.doc.project, deviceId, blockId) : undefined;
+  if (!t) return;
+  const trial = structuredClone(t.b);
+  const why = convertGraphicToAwl(trial, t.dev, network);
+  if (why) {
+    s.pushMessage({
+      severity: 'warning',
+      textKey: `messages.graphicConvert.${why}`,
+      params: { block: t.b.name },
+    });
+    return;
+  }
+  s.edit('history.convertToAwl', (p) => {
+    const d = graphicTarget(p, deviceId, blockId);
+    if (!d) return;
+    d.b.language = trial.language;
+    d.b.networks = trial.networks;
   });
 }

@@ -96,6 +96,12 @@
     "importSkipped": "{{file}}: skipped ({{reason}})",
     "importReadOnly": "Block {{name}} was imported read-only: it cannot be re-encoded identically.",
     "importWarning": "Import: {{message}}",
+    "graphicConvert": {
+      "SHAPE": "{{block}}: there are no LAD/FBD networks to convert.",
+      "JUMPS": "{{block}}: unchanged, after the conversion a jump would reach a different instruction.",
+      "NOT_COMPILABLE": "{{block}}: unchanged, the block does not compile (needed to check that the MC7 code stays the same).",
+      "MC7_DIFFERS": "{{block}}: unchanged, the compiled MC7 code would change."
+    },
     "awlConvert": {
       "SHAPE": "{{block}}, network {{network}}: stays AWL, no LAD/FBD network gives the same instructions (recognised up to line {{line}}).",
       "SYNTAX": "{{block}}, network {{network}}: stays AWL, the code has errors.",
@@ -147,7 +153,12 @@
     "uploadFirmwareUnknown": "Firmware {{firmware}} is not in the catalog: the project uses {{used}}.",
     "backupDone": "Backup saved to \"{{path}}\": {{count}} blocks.",
     "backupDonePartial": "Incomplete backup: {{missing}} blocks not read ({{list}}). Saved to \"{{path}}\" ({{count}} blocks); it cannot be restored.",
-    "backupFailed": "Backup failed: {{message}}"
+    "backupFailed": "Backup failed: {{message}}",
+    "watchExported": "Watch table \"{{name}}\" exported to \"{{path}}\".",
+    "watchExportFailed": "Could not export watch table \"{{name}}\": {{message}}",
+    "watchImported": "Import from \"{{name}}\": {{count}} rows added to table \"{{table}}\", {{skipped}} skipped{{detail}}.",
+    "watchImportFailed": "Could not import a watch table from \"{{name}}\": {{message}}",
+    "watchSharedLimit": "The watch tables watched together exceed the limit of {{max}} rows on the PLC: the extra rows are not read (row error)."
   },
   "commands": {
     "project.new": "New…",
@@ -181,6 +192,7 @@
     "insert.block": "New block…",
     "block.switchLanguage": "Switch language LAD/FBD",
     "block.convertToGraphic": "Convert to LAD/FBD",
+    "block.convertToAwl": "Convert to STL",
     "online.goOnline": "Go online",
     "online.compare": "Compare with CPU",
     "online.goOffline": "Go offline",
@@ -198,6 +210,8 @@
     "options.settings": "Settings",
     "tools.crossReferences": "Cross-references",
     "tools.callStructure": "Call structure",
+    "tools.assignmentList": "Assignment list",
+    "tools.resources": "Resources",
     "window.splitVertical": "Split work area vertically",
     "window.splitHorizontal": "Split work area horizontally",
     "window.closeAllEditors": "Close all editors",
@@ -447,7 +461,10 @@
     "loading": "Loading the block from the CPU...",
     "failed": "The block could not be read from the CPU: {{message}}",
     "offline": "The online connection is not active.",
-    "undecodable": "The CPU block cannot be decoded: its bytes are shown in hexadecimal."
+    "undecodable": "The CPU block cannot be decoded: its bytes are shown in hexadecimal.",
+    "networkOnCpu": "network {{n}} on the CPU",
+    "titleDiff": "Different title: project \"{{left}}\", CPU \"{{right}}\".",
+    "commentDiff": "Different comment: project \"{{left}}\", CPU \"{{right}}\"."
   },
   "compare": {
     "same": "Same as CPU",
@@ -513,6 +530,7 @@
     "addBlock": "Add block",
     "switchLanguage": "Switch language",
     "convertToGraphic": "Convert to LAD/FBD",
+    "convertToAwl": "Convert to STL",
     "addTagTable": "Add tag table",
     "addUdt": "Add data type",
     "paste": "Paste objects",
@@ -542,7 +560,10 @@
     "importBlocks": "Import blocks",
     "importTags": "Import tags",
     "addWatchTable": "Add watch table",
-    "setAccess": "Set CPU access"
+    "setAccess": "Set CPU access",
+    "moveRows": "Move rows",
+    "pasteWatchTable": "Paste watch tables",
+    "importWatch": "Import watch table"
   },
   "inspector": {
     "tab": {
@@ -888,6 +909,7 @@
     "removeOverrideLabel": "Remove the value of {{path}}",
     "deleteNetwork": "Delete network",
     "convertNetwork": "Convert to LAD/FBD",
+    "convertNetworkToAwl": "Convert to STL",
     "instanceFbMissing": "The instance DB refers to FB {{name}}, which does not exist",
     "problems": "Problems",
     "mnemonic": "Mnemonics",
@@ -1353,7 +1375,8 @@
       "ONLINE_ADDRESS": "Address outside the limits accepted online (DB 1 to 65535, area within 2 MB).",
       "ONLINE_TOO_MANY": "Too many rows to monitor online: the CPU accepts at most 200.",
       "ONLINE_NO_COMMAND": "Online this row can only be monitored: PI, timers and counters cannot be modified."
-    }
+    },
+    "sharedLimit": "Not watched: the tables watched together exceed the limit of {{max}} rows."
   },
   "accessDevices": {
     "title": "Accessible devices",
@@ -1788,6 +1811,41 @@
       "open": "Open"
     }
   },
+  "assign": {
+    "title": "Assignment list",
+    "area": "Area",
+    "areas": {
+      "I": "Inputs (I)",
+      "Q": "Outputs (Q)",
+      "M": "Memory bits (M)",
+      "T": "Timers (T)",
+      "C": "Counters (C)"
+    },
+    "usedBytes": "{{used}} of {{limit}} bytes used",
+    "usedElements": "{{used}} of {{limit}} used",
+    "legend": "R read, W write, RW both; • tag in the tag table; red outline: overlapping operands. Click a bit: cross-references.",
+    "byte": "Byte",
+    "group": "Elements",
+    "tag": "tag {{names}}",
+    "overlap": "overlapping",
+    "beyond": "beyond the CPU",
+    "empty": "No address used in this area."
+  },
+  "resources": {
+    "title": "Resources",
+    "estimate": "Values estimated from the compiled blocks: load memory is the block size, work memory its MC7 section. STEP 7 may give different numbers.",
+    "block": "Block",
+    "load": "Load memory (bytes)",
+    "work": "Work memory (bytes)",
+    "local": "Local data (bytes)",
+    "total": "Total",
+    "uncompiled": "to be compiled",
+    "paths": "Local data along the call paths",
+    "path": "Most expensive path",
+    "partial": "partial: blocks to compile",
+    "overLimit": "over the CPU limit",
+    "areas": "Areas used"
+  },
   "callTree": {
     "title": "Call structure",
     "mode": "View",
@@ -1800,5 +1858,15 @@
     "open": "Open the block",
     "expand": "Expand {{name}}",
     "collapse": "Collapse {{name}}"
+  },
+  "watchIo": {
+    "import": "Import watch table…",
+    "export": "Export watch table…",
+    "filterCsv": "CSV (*.csv)",
+    "err": {
+      "COLONNA_MANCANTE": "the \"Operando\" column is missing",
+      "RIGA_ILLEGGIBILE": "unreadable row",
+      "OPERANDO_VUOTO": "empty operand"
+    }
   }
 }

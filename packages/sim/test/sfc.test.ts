@@ -34,12 +34,19 @@ function sfcInfo(number: number): AwlBlockInfo {
 }
 
 const ob1 = (...networks: string[]): BlockSpec => ({ kind: 'OB', number: 1, networks });
-const SFCS = [0, 1, 14, 20, 21, 22, 23, 24, 46, 47, 51, 64].map(sfcInfo);
+const SFCS = [0, 1, 6, 13, 14, 15, 20, 21, 22, 23, 24, 41, 42, 43, 44, 46, 47, 51, 64].map(sfcInfo);
 const compile = (...networks: string[]) => buildProgram([ob1(...networks)], {}, SFCS);
 
-function makeCpu(program = compile('\tNOP 0;')): { cpu: SimCpu; clock: { t: number } } {
+function makeCpu(
+  program = compile('\tNOP 0;'),
+  props: Partial<SimCpuOptions['props']> = {},
+): { cpu: SimCpu; clock: { t: number } } {
   const clock = { t: 0 };
-  const cpu = new SimCpu({ cpuTypeId: 'cpu-315-2-pn-dp', props: PROPS, now: () => clock.t });
+  const cpu = new SimCpu({
+    cpuTypeId: 'cpu-315-2-pn-dp',
+    props: { ...PROPS, ...props },
+    now: () => clock.t,
+  });
   for (const b of program.list()) cpu.program.put(b);
   return { cpu, clock };
 }
@@ -169,6 +176,15 @@ describe('FILL (SFC 21)', () => {
     const r = runProgram(p, { setup: (mem) => mem.M.set([1, 2], 0) });
     expect(word(r.mem, 100)).toBe(0x823a);
     expect(bytes(r.mem.M, 0, 2)).toEqual([1, 2]);
+  });
+
+  it('BLK oltre la fine dell’area M → 16#8223, niente scritto', () => {
+    const p = compile(
+      '\tCALL SFC 21 (BVAL := P#M 0.0 BYTE 1, BLK := P#M 2044.0 BYTE 8, RET_VAL := MW 100);',
+    );
+    const r = runProgram(p, { setup: (mem) => mem.M.set([7], 0) });
+    expect(word(r.mem, 100)).toBe(0x8223);
+    expect(r.mem.M.subarray(2044).every((b) => b === 0)).toBe(true);
   });
 });
 
@@ -388,10 +404,10 @@ describe('RDSYSST (SFC 51)', () => {
 });
 
 describe('SFC o SFB non simulati', () => {
-  const dpRd = '\tCALL SFC 14 (LADDR := W#16#10, RECORD := P#M 0.0 BYTE 4, RET_VAL := MW 100);';
-  const program = () => compile('\tSET;\n\t= M 1.0;', dpRd + '\n\tA BR;\n\t= M 1.0;');
+  const replVal = '\tCALL SFC 44 (VAL := DW#16#12345678, RET_VAL := MW 100);';
+  const program = () => compile('\tSET;\n\t= M 1.0;', replVal + '\n\tA BR;\n\t= M 1.0;');
 
-  it('SFC 14: avviso una volta, BR = 0, uscite intatte, la CPU resta in RUN', () => {
+  it('SFC 44: avviso una volta, BR = 0, uscite intatte, la CPU resta in RUN', () => {
     const { cpu } = makeCpu(program());
     const events: SimEvent[] = [];
     cpu.onEvent((e) => events.push(e));
@@ -404,11 +420,11 @@ describe('SFC o SFB non simulati', () => {
     expect(bytes(cpu.memory.M, 0, 4)).toEqual([0, 0, 0, 0]);
     const diag = cpu.diagnostics.filter((d) => d.code === 'SFC_NON_SIMULATA');
     expect(diag).toHaveLength(1);
-    expect(diag[0]!.detail).toContain('SFC 14');
+    expect(diag[0]!.detail).toContain('SFC 44');
     expect(events.filter((e) => e.type === 'warning')).toHaveLength(1);
     expect(events.find((e) => e.type === 'warning')).toMatchObject({
       code: 'SFC_NON_SIMULATA',
-      block: 'SFC14',
+      block: 'SFC44',
     });
   });
 
@@ -617,5 +633,143 @@ describe('giro 1: effetti parziali e aree ANY', () => {
     clock.t = 6000;
     cpu.cycle();
     expect(new DataView(cpu.memory.M.buffer).getUint32(40)).toBe(5000);
+  });
+});
+
+// Tutte da verificare su CPU reale: codici e comportamento dal manuale, senza una CPU per confermarli.
+describe('RD_SINFO (SFC 6)', () => {
+  // RET_VAL, TOP_SI, START_UP_SI
+  const rd = (): Uint8Array => rawSfc(6, [M(100), M(10), M(30)]);
+
+  it('da OB1: TOP_SI = primi 12 byte dei dati di avvio di OB1, START_UP_SI = quelli di OB100', () => {
+    const { cpu } = makeCpu();
+    cpu.program.put(ob1Raw(rd()));
+    cpu.run();
+    cpu.cycle();
+    expect(word(cpu.memory, 100)).toBe(0);
+    expect(bytes(cpu.memory.M, 10, 4)).toEqual([0x11, 0x01, 1, 1]);
+    expect(bytes(cpu.memory.M, 30, 12)).toEqual([0x13, 0x81, 27, 100, 0, 0, 0, 0, 0, 0, 0, 0]);
+    expect(cpu.memory.M[22]).toBe(0); // si copiano solo 12 byte
+    cpu.cycle();
+    expect(cpu.memory.M[11]).toBe(0x03); // dal secondo ciclo, OB1 non è più il primo
+  });
+
+  it('START_UP_SI fuori area → 16#8223, TOP_SI intatta', () => {
+    const { cpu } = makeCpu();
+    cpu.program.put(ob1Raw(rawSfc(6, [M(100), M(10), M(4090)])));
+    cpu.run();
+    cpu.cycle();
+    expect(word(cpu.memory, 100)).toBe(0x8223);
+    expect(bytes(cpu.memory.M, 10, 4)).toEqual([0, 0, 0, 0]);
+  });
+});
+
+describe('DPNRM_DG, DPRD_DAT, DPWR_DAT (SFC 13–15) senza DP', () => {
+  const br = '\n\tA BR;\n\t= M 1.7;';
+
+  it('DPRD_DAT → 16#8090, BR = 0, RECORD intatto', () => {
+    const p = compile(
+      '\tCALL SFC 14 (LADDR := W#16#100, RECORD := P#M 10.0 BYTE 4, RET_VAL := MW 100);' + br,
+    );
+    const r = runProgram(p, { setup: (mem) => mem.M.fill(0xee, 10, 14) });
+    expect(word(r.mem, 100)).toBe(0x8090);
+    expect(r.mem.M[1]! & 0x80).toBe(0);
+    expect(bytes(r.mem.M, 10, 4)).toEqual([0xee, 0xee, 0xee, 0xee]);
+  });
+
+  it('DPWR_DAT → 16#8090', () => {
+    const p = compile(
+      '\tCALL SFC 15 (LADDR := W#16#100, RECORD := P#M 10.0 BYTE 4, RET_VAL := MW 100);',
+    );
+    expect(word(runProgram(p).mem, 100)).toBe(0x8090);
+  });
+
+  const dg = (req: string) =>
+    `\tCALL SFC 13 (REQ := ${req}, LADDR := W#16#100, RET_VAL := MW 100, RECORD := P#M 10.0 BYTE 4, BUSY := M 1.1);` +
+    br;
+
+  it('DPNRM_DG con REQ = 0 → 16#7000 (BR = 1), BUSY = 0', () => {
+    const r = runProgram(compile(dg('FALSE')), { setup: (mem) => (mem.M[1] = 0x02) });
+    expect(word(r.mem, 100)).toBe(0x7000);
+    expect(r.mem.M[1]).toBe(0x80);
+  });
+
+  it('DPNRM_DG con REQ = 1 → 16#8090, BUSY = 0, RECORD intatto', () => {
+    const r = runProgram(compile(dg('TRUE')), { setup: (mem) => mem.M.fill(0xee, 10, 14) });
+    expect(word(r.mem, 100)).toBe(0x8090);
+    expect(r.mem.M[1]).toBe(0);
+    expect(bytes(r.mem.M, 10, 4)).toEqual([0xee, 0xee, 0xee, 0xee]);
+  });
+});
+
+describe('DIS_AIRT, EN_AIRT (SFC 41, 42)', () => {
+  it('RET_VAL = ritardi attivi; EN_AIRT senza ritardi → 16#8080', () => {
+    const p = compile(
+      [100, 102].map((a) => `\tCALL SFC 41 (RET_VAL := MW ${a});`).join('\n') +
+        '\n' +
+        [104, 106, 108].map((a) => `\tCALL SFC 42 (RET_VAL := MW ${a});`).join('\n'),
+    );
+    const { cpu } = makeCpu(p);
+    cpu.run();
+    cpu.cycle();
+    expect([100, 102, 104, 106, 108].map((a) => word(cpu.memory, a))).toEqual([1, 2, 1, 0, 0x8080]);
+    // I ritardi finiscono con l'OB: il ciclo dopo si riparte da 1.
+    cpu.cycle();
+    expect(word(cpu.memory, 100)).toBe(1);
+  });
+
+  const nops = '\tNOP 0;\n'.repeat(1100);
+  // OB35 conta in MW 20; a fine OB1 MW 22 = esecuzioni di OB35 avvenute dentro l'OB1.
+  const withOb35 = (body: string) =>
+    buildProgram(
+      [
+        ob1(`${body}\n\tCALL SFC 47 (WT := 20000);\n${nops}\tL MW 20;\n\tT MW 22;`),
+        { kind: 'OB', number: 35, networks: ['\tL MW 20;\n\tL 1;\n\t+I;\n\tT MW 20;'] },
+      ],
+      {},
+      SFCS,
+    );
+
+  it('dopo DIS_AIRT l’OB35 scaduto aspetta la fine dell’OB1 (non si perde)', () => {
+    const { cpu } = makeCpu(withOb35('\tCALL SFC 41 (RET_VAL := MW 100);'), {
+      cyclicInterruptMs: 10,
+    });
+    cpu.run();
+    cpu.cycle();
+    expect(word(cpu.memory, 22)).toBe(0);
+    cpu.cycle();
+    expect(word(cpu.memory, 20)).toBe(1);
+  });
+
+  it('con DIS_AIRT ed EN_AIRT l’OB35 interrompe l’OB1 al tick', () => {
+    const { cpu } = makeCpu(
+      withOb35('\tCALL SFC 41 (RET_VAL := MW 100);\n\tCALL SFC 42 (RET_VAL := MW 102);'),
+      { cyclicInterruptMs: 10 },
+    );
+    cpu.run();
+    cpu.cycle();
+    expect(word(cpu.memory, 22)).toBe(1);
+  });
+});
+
+describe('RE_TRIGR (SFC 43)', () => {
+  // 4 × 30 ms di WAIT = 120 ms, sotto i 150 ms del tempo di ciclo massimo.
+  const wait120 = '\tL 4;\nx: T MW 50;\n\tCALL SFC 47 (WT := 30000);\n\tL MW 50;\n\tLOOP x;';
+  const wait120b = wait120.replaceAll('x', 'y');
+
+  it('riavvia il controllo del tempo di ciclo: 240 ms senza STOP', () => {
+    const { cpu } = makeCpu(compile(wait120, '\tCALL SFC 43;', wait120b));
+    cpu.run();
+    const r = cpu.cycle();
+    expect(r.ok).toBe(true);
+    expect(r.elapsedMs).toBe(240);
+    expect(cpu.mode).toBe('RUN');
+  });
+
+  it('senza RE_TRIGR gli stessi 240 ms portano in STOP', () => {
+    const { cpu } = makeCpu(compile(wait120, wait120b));
+    cpu.run();
+    expect(cpu.cycle().ok).toBe(false);
+    expect(cpu.mode).toBe('STOP');
   });
 });

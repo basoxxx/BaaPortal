@@ -92,6 +92,12 @@ describe('buildTree', () => {
     ]);
     expect(plc.children[5]!.children.map((c) => labelOf(c))).toEqual(['tree.plc.addUdt']);
     expect(plc.children[6]!.children.map((c) => labelOf(c))).toEqual(['tree.plc.addWatchTable']);
+    expect(plc.children[8]!.children.map((c) => labelOf(c))).toEqual([
+      'commands.tools.crossReferences',
+      'commands.tools.callStructure',
+      'commands.tools.assignmentList',
+      'commands.tools.resources',
+    ]);
     expect([blocks.dropArea, tags.dropArea, plc.children[5]!.dropArea]).toEqual([
       'blocks',
       'tags',

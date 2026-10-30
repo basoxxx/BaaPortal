@@ -96,6 +96,12 @@
     "importSkipped": "{{file}}: saltato ({{reason}})",
     "importReadOnly": "Il blocco {{name}} è stato importato in sola lettura: non si può ricodificare identico.",
     "importWarning": "Importazione: {{message}}",
+    "graphicConvert": {
+      "SHAPE": "{{block}}: non ci sono segmenti KOP/FUP da convertire.",
+      "JUMPS": "{{block}}: resta com'è, dopo la conversione un salto porterebbe a un'istruzione diversa.",
+      "NOT_COMPILABLE": "{{block}}: resta com'è, il blocco non si compila (serve per controllare che il codice MC7 non cambi).",
+      "MC7_DIFFERS": "{{block}}: resta com'è, il codice MC7 compilato cambierebbe."
+    },
     "awlConvert": {
       "SHAPE": "{{block}}, segmento {{network}}: resta in AWL, nessuna rete KOP/FUP dà le stesse istruzioni (riconosciuto fino alla riga {{line}}).",
       "SYNTAX": "{{block}}, segmento {{network}}: resta in AWL, il codice ha errori.",
@@ -147,7 +153,12 @@
     "uploadFirmwareUnknown": "Firmware {{firmware}} non presente nel catalogo: il progetto usa {{used}}.",
     "backupDone": "Backup salvato in «{{path}}»: {{count}} blocchi.",
     "backupDonePartial": "Backup incompleto: {{missing}} blocchi non letti ({{list}}). Salvato in «{{path}}» ({{count}} blocchi); non si può ripristinare.",
-    "backupFailed": "Backup non riuscito: {{message}}"
+    "backupFailed": "Backup non riuscito: {{message}}",
+    "watchExported": "Tabella di controllo \"{{name}}\" esportata in \"{{path}}\".",
+    "watchExportFailed": "Impossibile esportare la tabella di controllo \"{{name}}\": {{message}}",
+    "watchImported": "Importazione da \"{{name}}\": {{count}} righe aggiunte alla tabella \"{{table}}\", scartate {{skipped}}{{detail}}.",
+    "watchImportFailed": "Impossibile importare la tabella di controllo da \"{{name}}\": {{message}}",
+    "watchSharedLimit": "Le tabelle di controllo osservate insieme superano il limite di {{max}} righe sul PLC: le righe in più non vengono lette (errore sulla riga)."
   },
   "commands": {
     "project.new": "Nuovo…",
@@ -181,6 +192,7 @@
     "insert.block": "Nuovo blocco…",
     "block.switchLanguage": "Cambia linguaggio KOP/FUP",
     "block.convertToGraphic": "Converti in KOP/FUP",
+    "block.convertToAwl": "Converti in AWL",
     "online.goOnline": "Collegamento online",
     "online.compare": "Confronta con la CPU",
     "online.goOffline": "Interrompi collegamento online",
@@ -198,6 +210,8 @@
     "options.settings": "Impostazioni",
     "tools.crossReferences": "Riferimenti incrociati",
     "tools.callStructure": "Struttura di richiamo",
+    "tools.assignmentList": "Elenco di assegnazione",
+    "tools.resources": "Risorse",
     "window.splitVertical": "Dividi area di lavoro in verticale",
     "window.splitHorizontal": "Dividi area di lavoro in orizzontale",
     "window.closeAllEditors": "Chiudi tutti gli editor",
@@ -447,7 +461,10 @@
     "loading": "Caricamento del blocco dalla CPU...",
     "failed": "Il blocco non si è potuto leggere dalla CPU: {{message}}",
     "offline": "Il collegamento online non è attivo.",
-    "undecodable": "Il blocco della CPU non si può decodificare: si mostrano i suoi byte in esadecimale."
+    "undecodable": "Il blocco della CPU non si può decodificare: si mostrano i suoi byte in esadecimale.",
+    "networkOnCpu": "rete {{n}} nella CPU",
+    "titleDiff": "Titolo diverso: progetto \"{{left}}\", CPU \"{{right}}\".",
+    "commentDiff": "Commento diverso: progetto \"{{left}}\", CPU \"{{right}}\"."
   },
   "compare": {
     "same": "Uguale alla CPU",
@@ -513,6 +530,7 @@
     "addBlock": "Aggiungi blocco",
     "switchLanguage": "Cambia linguaggio",
     "convertToGraphic": "Converti in KOP/FUP",
+    "convertToAwl": "Converti in AWL",
     "addTagTable": "Aggiungi tabella delle variabili",
     "addUdt": "Aggiungi tipo di dati",
     "paste": "Incolla oggetti",
@@ -542,7 +560,10 @@
     "importBlocks": "Importa blocchi",
     "importTags": "Importa variabili",
     "addWatchTable": "Aggiungi tabella di controllo",
-    "setAccess": "Imposta accesso CPU"
+    "setAccess": "Imposta accesso CPU",
+    "moveRows": "Sposta righe",
+    "pasteWatchTable": "Incolla tabelle di controllo",
+    "importWatch": "Importa tabella di controllo"
   },
   "inspector": {
     "tab": {
@@ -888,6 +909,7 @@
     "removeOverrideLabel": "Rimuovi il valore di {{path}}",
     "deleteNetwork": "Elimina segmento",
     "convertNetwork": "Converti in KOP/FUP",
+    "convertNetworkToAwl": "Converti in AWL",
     "instanceFbMissing": "Il DB di istanza si riferisce all'FB {{name}}, che non esiste",
     "problems": "Problemi",
     "mnemonic": "Mnemonica",
@@ -1353,7 +1375,8 @@
       "ONLINE_ADDRESS": "Indirizzo fuori dai limiti accettati online (DB da 1 a 65535, area entro 2 MB).",
       "ONLINE_TOO_MANY": "Troppe righe da osservare online: la CPU ne accetta al più 200.",
       "ONLINE_NO_COMMAND": "Online questa riga si può solo osservare: PI, temporizzatori e contatori non si comandano."
-    }
+    },
+    "sharedLimit": "Non osservata: le tabelle osservate insieme superano il limite di {{max}} righe."
   },
   "accessDevices": {
     "title": "Dispositivi accessibili",
@@ -1788,6 +1811,41 @@
       "open": "Apertura"
     }
   },
+  "assign": {
+    "title": "Elenco di assegnazione",
+    "area": "Area",
+    "areas": {
+      "I": "Ingressi (I)",
+      "Q": "Uscite (Q)",
+      "M": "Merker (M)",
+      "T": "Temporizzatori (T)",
+      "C": "Contatori (C)"
+    },
+    "usedBytes": "{{used}} byte usati su {{limit}}",
+    "usedElements": "{{used}} usati su {{limit}}",
+    "legend": "R lettura, W scrittura, RW entrambe; • tag nella tabella dei simboli; contorno rosso: operandi sovrapposti. Clic su un bit: riferimenti incrociati.",
+    "byte": "Byte",
+    "group": "Elementi",
+    "tag": "tag {{names}}",
+    "overlap": "sovrapposto",
+    "beyond": "oltre la CPU",
+    "empty": "Nessun indirizzo usato in quest’area."
+  },
+  "resources": {
+    "title": "Risorse",
+    "estimate": "Valori stimati dai blocchi compilati: la memoria di caricamento è la dimensione del blocco, quella di lavoro la sua sezione MC7. STEP 7 può dare numeri diversi.",
+    "block": "Blocco",
+    "load": "Memoria di caricamento (byte)",
+    "work": "Memoria di lavoro (byte)",
+    "local": "Dati locali (byte)",
+    "total": "Totale",
+    "uncompiled": "da compilare",
+    "paths": "Dati locali lungo i percorsi di chiamata",
+    "path": "Percorso più costoso",
+    "partial": "parziale: blocchi da compilare",
+    "overLimit": "oltre il limite della CPU",
+    "areas": "Aree usate"
+  },
   "callTree": {
     "title": "Struttura di richiamo",
     "mode": "Vista",
@@ -1800,5 +1858,15 @@
     "open": "Apri il blocco",
     "expand": "Espandi {{name}}",
     "collapse": "Comprimi {{name}}"
+  },
+  "watchIo": {
+    "import": "Importa tabella di controllo…",
+    "export": "Esporta tabella di controllo…",
+    "filterCsv": "CSV (*.csv)",
+    "err": {
+      "COLONNA_MANCANTE": "manca la colonna «Operando»",
+      "RIGA_ILLEGGIBILE": "riga illeggibile",
+      "OPERANDO_VUOTO": "operando vuoto"
+    }
   }
 }

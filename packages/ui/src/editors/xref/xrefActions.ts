@@ -45,6 +45,14 @@ export function openCallStructure(store: Store, deviceId: string): void {
   store.getState().openEditor({ kind: 'callStructure', deviceId, objectId: '' });
 }
 
+export function openAssignment(store: Store, deviceId: string): void {
+  store.getState().openEditor({ kind: 'assignment', deviceId, objectId: '' });
+}
+
+export function openResources(store: Store, deviceId: string): void {
+  store.getState().openEditor({ kind: 'resources', deviceId, objectId: '' });
+}
+
 /** Porta l'editor del blocco sul punto d'uso: riga AWL o SCL, o elemento KOP/FUP. */
 export function openUse(store: Store, deviceId: string, use: XrefUse): void {
   store.getState().openBlockAt({

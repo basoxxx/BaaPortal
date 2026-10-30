@@ -11,6 +11,8 @@ import { DbEditor } from './db/DbEditor';
 import { SourceEditor } from './source/SourceEditor';
 import { WatchTableView } from './watch/WatchTableView';
 import { CallStructureView } from './xref/CallStructureView';
+import { AssignmentView } from './xref/AssignmentView';
+import { ResourcesView } from './xref/ResourcesView';
 import { CrossRefView } from './xref/CrossRefView';
 import { UdtEditor } from './udt/UdtEditor';
 import { AllTagsEditor } from './tags/AllTagsEditor';
@@ -121,6 +123,20 @@ export const EDITORS: Record<EditorKind, EditorDef> = {
     title: (_r, _d, t) => t('callTree.title'),
     exists: (r, d) => device(r, d) !== undefined,
     Component: CallStructureView,
+  },
+  assignment: {
+    kind: 'assignment',
+    icon: () => 'treeProgInfo',
+    title: (_r, _d, t) => t('assign.title'),
+    exists: (r, d) => device(r, d) !== undefined,
+    Component: AssignmentView,
+  },
+  resources: {
+    kind: 'resources',
+    icon: () => 'treeProgInfo',
+    title: (_r, _d, t) => t('resources.title'),
+    exists: (r, d) => device(r, d) !== undefined,
+    Component: ResourcesView,
   },
   allTags: {
     kind: 'allTags',

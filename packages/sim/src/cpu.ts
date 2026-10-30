@@ -59,6 +59,10 @@ export interface SimCpuOptions {
 interface RunningOb {
   ob: number;
   prio: number;
+  /** Dati di avvio (SFC 6 RD_SINFO). */
+  startInfo?: Uint8Array;
+  /** Ritardi degli allarmi attivi (SFC 41 DIS_AIRT): finiscono con l'OB. */
+  airt?: number;
 }
 
 /** Id del suo evento di avvio, per OB80_ERR_EV_CLASS/NUM (⚠️ OB1: 16#1103, OB35: 16#1136). */
@@ -122,6 +126,8 @@ export class SimCpu {
   private waitedUs = 0;
   /** Scarto dell'orologio della CPU (data e ora) fissato da SFC 0 (SET_CLK). */
   private clockOffsetMs = 0;
+  /** Dati di avvio dell'ultimo avvio a caldo (SFC 6 RD_SINFO, START_UP_SI), anche senza OB100. */
+  private startUpInfo: Uint8Array = new Uint8Array(12);
   /** Istante del primo avvio, origine di SFC 64 (TIME_TCK). */
   private bootAt: number | undefined;
   /** SFC e SFB non simulati già segnalati nel periodo di RUN in corso. */
@@ -167,6 +173,19 @@ export class SimCpu {
       szl: (id, index) => buildSzl((this.backend ??= simBackend(this)), id, index),
       sfbState: new Map(),
       maxDb: findCpu(o.cpuTypeId)?.limits.maxDb ?? DEFAULT_MAX_DB,
+      retrigger: () => {
+        this.watchdog = this.now();
+      },
+      delayInterrupts: (delta) => {
+        const top = this.running.at(-1);
+        const n = (top?.airt ?? 0) + delta;
+        if (!top || n < 0) return undefined;
+        return (top.airt = n);
+      },
+      startInfo: () => ({
+        top: (this.running.at(-1)?.startInfo ?? new Uint8Array(12)).slice(0, 12),
+        startUp: this.startUpInfo.slice(0, 12),
+      }),
     };
     this.maxInstructions = o.maxInstructions;
     this.memory = new SimMemory(memorySizesFor(o.cpuTypeId));
@@ -272,6 +291,7 @@ export class SimCpu {
     this.record({ time: t0, code: 'AVVIO' });
     this.warmRestart();
     this.pending = [];
+    this.startUpInfo = ob100StartInfo(this.stamp(t0));
     if (this.program.get('OB', 100)) {
       const t = this.now();
       this.watchdog = t;
@@ -454,7 +474,7 @@ export class SimCpu {
     // Registri propri: quelli del blocco interrotto restano nel suo contesto e si ritrovano al ritorno.
     const sub: ExecContext = { ...parent, regs: newRegisters(), prio };
     const prevL = this.memory.selectL(prio);
-    this.running.push({ ob, prio });
+    this.running.push({ ob, prio, startInfo });
     try {
       const L = this.memory.L;
       if (lBase + block.localBytes > L.length)
@@ -499,6 +519,8 @@ export class SimCpu {
    */
   private serviceInterrupts(ctx: ExecContext, prio: number, t: number): void {
     if (this._mode !== 'RUN' || prio >= PRIORITY.ASYNC_ERROR) return;
+    // SFC 41 DIS_AIRT: gli allarmi aspettano (non si perdono) la fine dell'OB o SFC 42.
+    if (this.running.some((r) => (r.airt ?? 0) > 0)) return;
     while (this.pending.length > 0) this.hwInterrupt(ctx, this.pending.shift()!, t);
     const iv = this.props.cyclicInterruptMs;
     if (!(iv > 0) || t < this.ob35Due) return;

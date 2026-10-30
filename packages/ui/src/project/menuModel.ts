@@ -51,6 +51,7 @@ export const MENUS: MenuDef[] = [
       'sep',
       'block.switchLanguage',
       'block.convertToGraphic',
+      'block.convertToAwl',
     ],
   },
   {
@@ -91,7 +92,14 @@ export const MENUS: MenuDef[] = [
   { id: 'options', items: ['options.settings'] },
   {
     id: 'tools',
-    items: ['tools.crossReferences', 'tools.callStructure', 'sep', 'tools.collectCpuData'],
+    items: [
+      'tools.crossReferences',
+      'tools.callStructure',
+      'tools.assignmentList',
+      'tools.resources',
+      'sep',
+      'tools.collectCpuData',
+    ],
   },
   {
     id: 'window',

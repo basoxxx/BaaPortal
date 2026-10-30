@@ -17,7 +17,7 @@ import {
   type GridColumn,
   type GridDiagnostic,
 } from '../../grid/DataGrid';
-import { WatchOnlineController } from '../../online/watchOnline';
+import { watchHubFor } from '../../online/watchHub';
 import { MAX_WATCH_ITEMS } from '../../sim/protocol';
 import { simControllerFor } from '../../sim/simController';
 import { useAppStore, useServices } from '../../state/AppContext';
@@ -35,6 +35,7 @@ import {
   type RowInfo,
   type WatchRowError,
 } from './watchRows';
+import { cloneWatchRows, moveWatchRows, watchRowsFromTsv, watchRowsToTsv } from './watchEdit';
 import './watch.css';
 
 interface ViewRow {
@@ -48,6 +49,8 @@ interface ViewRow {
 }
 
 const newId = () => globalThis.crypto.randomUUID();
+// Durante dragover i dati del trascinamento non sono leggibili: si ricordano qui.
+let dragging: { tableId: string; keys: string[] } | null = null;
 const rowKey = (r: ViewRow) => r.row.id;
 
 function errorText(e: WatchRowError, t: TFunction): string {
@@ -65,7 +68,7 @@ export function WatchTableView({ editor }: { editor: EditorRef }) {
   const plcOn = useAppStore((s) => s.online.status === 'on' && s.online.deviceId === deviceId);
   // La sorgente: il simulatore se è attivo, il PLC se si è online, altrimenti nessuna.
   const source: WatchSource | null = simOn ? 'sim' : plcOn ? 'plc' : null;
-  const online = useMemo(() => new WatchOnlineController(store, bridge), [store, bridge]);
+  const online = useMemo(() => watchHubFor(store, bridge).client(), [store, bridge]);
   const onlineState = useSyncExternalStore(online.subscribe, online.getState);
   const simWatching = useAppStore(
     (s) => s.sim.watch?.deviceId === deviceId && s.sim.watch.tableId === tableId,
@@ -265,6 +268,70 @@ export function WatchTableView({ editor }: { editor: EditorRef }) {
     [edit, tableId],
   );
 
+  const copyRows = useCallback<NonNullable<DataGridProps<ViewRow>['copyRows']>>(
+    (keys) => {
+      const gone = new Set(keys);
+      const picked = (table?.rows ?? []).filter((r) => gone.has(r.id)).map((r) => ({ ...r }));
+      return {
+        text: watchRowsToTsv(picked),
+        payload: { kind: 'rows', rowKind: 'watch', rows: picked },
+      };
+    },
+    [table],
+  );
+
+  const onPaste = useCallback<NonNullable<DataGridProps<ViewRow>['onPaste']>>(
+    (text, payload, atKey) => {
+      // Righe di altro genere (o oggetti dell'albero) qui non si incollano.
+      if (payload && (payload.kind !== 'rows' || payload.rowKind !== 'watch')) return;
+      edit('history.pasteRows', (dev) => {
+        const tb = findWatchTable(dev, tableId);
+        if (!tb) return;
+        const fresh = payload
+          ? cloneWatchRows(payload.rows as WatchRow[], newId)
+          : watchRowsFromTsv(text, newId, (op) => {
+              const r = watchResolverFor(dev, findCpu(dev.cpu.typeId))(op);
+              return r.ok ? r.format : 'DEC';
+            });
+        const at = atKey === null ? -1 : tb.rows.findIndex((r) => r.id === atKey);
+        tb.rows.splice(at < 0 ? tb.rows.length : at + 1, 0, ...fresh);
+      });
+    },
+    [edit, tableId],
+  );
+
+  const onRowDragStart = useCallback<NonNullable<DataGridProps<ViewRow>['onRowDragStart']>>(
+    (keys, e) => {
+      dragging = { tableId, keys };
+      if (e.dataTransfer) {
+        e.dataTransfer.setData('text/plain', keys.join('\n'));
+        e.dataTransfer.effectAllowed = 'move';
+      }
+    },
+    [tableId],
+  );
+  // Si accettano solo righe di questa tabella: l'ordine cambia, nulla viene copiato.
+  const onDragOverRow = useCallback(
+    (e: DragEvent) => {
+      if (dragging?.tableId !== tableId) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    },
+    [tableId],
+  );
+  const onDropOnRow = useCallback(
+    (_e: DragEvent, rowKey: string | null) => {
+      const d = dragging;
+      dragging = null;
+      if (d?.tableId !== tableId) return;
+      edit('history.moveRows', (dev) => {
+        const tb = findWatchTable(dev, tableId);
+        if (tb) tb.rows = moveWatchRows(tb.rows, d.keys, rowKey);
+      });
+    },
+    [edit, tableId],
+  );
+
   const diagnostic = useCallback(
     (key: string, columnId: string): GridDiagnostic | undefined => {
       const r = cache.current.get(key);
@@ -371,6 +438,12 @@ export function WatchTableView({ editor }: { editor: EditorRef }) {
           onCommit={onCommit}
           addRow={addRow}
           onDeleteRows={onDeleteRows}
+          copyRows={copyRows}
+          onPaste={onPaste}
+          onRowDragStart={onRowDragStart}
+          onRowDragEnd={() => (dragging = null)}
+          onDragOverRow={onDragOverRow}
+          onDropOnRow={onDropOnRow}
           diagnostic={diagnostic}
         />
       </div>

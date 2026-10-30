@@ -21,7 +21,13 @@ import { commands } from '../../commands/commands';
 import { areaOfItem, isStandardTable } from '../objectActions';
 import { useMnemonic } from '../../editors/awl/mnemonicPreference';
 import { editorOfNode } from '../../state/workArea';
-import { blockFilter, openCallStructure, openCrossRef } from '../../editors/xref/xrefActions';
+import {
+  blockFilter,
+  openAssignment,
+  openCallStructure,
+  openCrossRef,
+  openResources,
+} from '../../editors/xref/xrefActions';
 import {
   blockNodesOf,
   compileProgram,
@@ -54,6 +60,13 @@ import {
   objectsToGenerate,
 } from './sourceActions';
 import { exportTagTable, importTagTable } from './tagTableIo';
+import {
+  copyWatchTables,
+  exportWatchTable,
+  importWatchTable,
+  pasteWatchTables,
+  watchPasteDevice,
+} from './watchTableCommands';
 import { RenameInput } from './RenameInput';
 import type { CompareState } from '../../online/compare';
 import { preparePlcDownload } from '../../online/plcDownload';
@@ -208,14 +221,15 @@ export function ProjectTree() {
         const d = doc && findDevice(doc.project, r.deviceId);
         return r.kind === 'tagTable' && !!d && isStandardTable(d, r.id);
       }),
-    copy: objectRefs.length > 0,
+    copy: objectRefs.length > 0 || watchNodes.length > 0,
     delete:
       objectRefs.length > 0 || groups.length > 0 || sourceNodes.length > 0 || watchNodes.length > 0,
     rename: selectedIds.length === 1 && renameInfo(doc, selectedIds[0]!) !== null,
     paste:
-      clip?.kind === 'objects' &&
-      !!pasteTarget &&
-      clip.items.some((i) => areaOfItem(i) === pasteTarget.area),
+      (clip?.kind === 'objects' &&
+        !!pasteTarget &&
+        clip.items.some((i) => areaOfItem(i) === pasteTarget.area)) ||
+      (clip?.kind === 'watchTables' && !!selection && watchPasteDevice(selection) !== null),
     selectAll: selection !== null,
   };
 
@@ -247,12 +261,19 @@ export function ProjectTree() {
     switch (action) {
       case 'copy':
       case 'cut':
-        copyNodes(ctx, selectedIds, action === 'cut');
+        if (objectRefs.length > 0 || action === 'cut')
+          copyNodes(ctx, selectedIds, action === 'cut');
+        else copyWatchTables(ctx, selectedIds);
         setClipboardTick((n) => n + 1);
         return;
       case 'paste':
         return selection
-          ? settle(pasteAt(ctx, selection).then(() => setClipboardTick((n) => n + 1)))
+          ? settle(
+              (peekClipboardPayload()?.kind === 'watchTables'
+                ? pasteWatchTables(ctx, selection)
+                : pasteAt(ctx, selection)
+              ).then(() => setClipboardTick((n) => n + 1)),
+            )
           : undefined;
       case 'delete':
         return settle(deleteNodes(ctx, selectedIds));
@@ -312,7 +333,9 @@ export function ProjectTree() {
     editorOfNode(nodeId) !== null && !!rows.find((r) => r.node.id === nodeId)?.node.enabled;
   const openNode = (nodeId: string): boolean => {
     const target = openable(nodeId) ? editorOfNode(nodeId) : null;
-    if (target) store.getState().openEditor(target);
+    // i riferimenti incrociati dall'albero: tutto il programma, senza il filtro dell'ultima apertura
+    if (target?.kind === 'crossRef') openCrossRef(store, target.deviceId);
+    else if (target) store.getState().openEditor(target);
     return target !== null;
   };
 
@@ -359,6 +382,29 @@ export function ProjectTree() {
         label: t('tagIo.import'),
         separator: true,
         run: () => void settle(importTagTable({ deviceId: parsed.dev }, ctx)),
+      });
+    }
+    if (parsed.kind === 'watchTable') {
+      tagIoItems.push(
+        {
+          id: 'importWatch',
+          label: t('watchIo.import'),
+          separator: true,
+          run: () =>
+            void settle(importWatchTable({ deviceId: parsed.dev, tableId: parsed.id }, ctx)),
+        },
+        {
+          id: 'exportWatch',
+          label: t('watchIo.export'),
+          run: () => void settle(exportWatchTable({ deviceId: parsed.dev, id: parsed.id }, ctx)),
+        },
+      );
+    } else if (parsed.kind === 'folder' && parsed.folder === 'watch') {
+      tagIoItems.push({
+        id: 'importWatch',
+        label: t('watchIo.import'),
+        separator: true,
+        run: () => void settle(importWatchTable({ deviceId: parsed.dev }, ctx)),
       });
     }
     // Dei blocchi e dei tipi selezionati; sulle cartelle, di tutti quelli che contengono.
@@ -528,6 +574,16 @@ export function ProjectTree() {
               id: 'callStructure',
               label: t('commands.tools.callStructure'),
               run: () => openCallStructure(store, parsed.dev),
+            },
+            {
+              id: 'assignmentList',
+              label: t('commands.tools.assignmentList'),
+              run: () => openAssignment(store, parsed.dev),
+            },
+            {
+              id: 'resources',
+              label: t('commands.tools.resources'),
+              run: () => openResources(store, parsed.dev),
             },
           ]
         : []),

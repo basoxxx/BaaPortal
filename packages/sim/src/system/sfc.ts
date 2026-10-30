@@ -4,7 +4,7 @@ import { type AnyRef, type SystemCall, type SystemHandler } from './params';
 
 /**
  * SFC simulate. Fonte della semantica: manuale «System Software for S7-300/400 System and Standard
- * Functions» (SFC 0, 1, 20–24, 46, 47, 51, 64). I codici di RET_VAL sono quelli del manuale dove lo
+ * Functions» (SFC 0, 1, 6, 13–15, 20–24, 41–43, 46, 47, 51, 64). Tutte da verificare su una CPU reale. I codici di RET_VAL sono quelli del manuale dove lo
  * documenta; gli altri sono marcati ⚠️ e vanno verificati su una CPU vera.
  */
 
@@ -184,14 +184,71 @@ const rdsysst: SystemHandler = (call: SystemCall) => {
   call.ret(truncated ? SSL_TRUNCATED : 0);
 };
 
+// ---- RD_SINFO (SFC 6) ------------------------------------------------------------------------------
+
+/**
+ * Manuale, 13.2 «SFC 6 RD_SINFO»: TOP_SI = primi 12 byte dei dati di avvio dell'OB in corso,
+ * START_UP_SI = quelli dell'ultimo OB di avvio. Entrambe le uscite si convalidano prima di scrivere.
+ */
+const rdSinfo: SystemHandler = (call) => {
+  const top = call.param('TOP_SI').bytes(12, 'write');
+  const startUp = call.param('START_UP_SI').bytes(12, 'write');
+  const info = call.services.startInfo();
+  top.set(info.top);
+  startUp.set(info.startUp);
+  call.ret(0);
+};
+
+// ---- DP (SFC 13, 14, 15) ---------------------------------------------------------------------------
+
+/**
+ * La CPU simulata non ha slave DP: nessun modulo all'indirizzo LADDR. Manuale, 16.4 «SFC 13
+ * DPNRM_DG», 16.5 «SFC 14 DPRD_DAT», 16.6 «SFC 15 DPWR_DAT»: 16#8090 = indirizzo logico non
+ * configurato. Uscite (RECORD) intatte.
+ */
+const NO_DP_MODULE = 0x8090;
+/** Manuale, SFC 13: 16#7000 = prima chiamata con REQ = 0, nessun trasferimento, BUSY = 0 (⚠️). */
+const FIRST_CALL_NO_REQ = 0x7000;
+
+const dpnrmDg: SystemHandler = (call) => {
+  const req = call.param('REQ').read('X');
+  call.param('BUSY').write('X', 0);
+  call.ret(req ? NO_DP_MODULE : FIRST_CALL_NO_REQ);
+};
+
+const noDp: SystemHandler = (call) => call.ret(NO_DP_MODULE);
+
+// ---- Allarmi e controllo del ciclo (SFC 41, 42, 43) ------------------------------------------------
+
+/**
+ * Manuale, 12.4 «SFC 41 DIS_AIRT»: ritarda gli allarmi di priorità più alta e gli errori asincroni
+ * fino a SFC 42 o alla fine dell'OB; RET_VAL = ritardi attivi dopo la chiamata.
+ */
+const disAirt: SystemHandler = (call) => call.ret(call.services.delayInterrupts(1) ?? 0);
+
+/** Manuale, 12.5 «SFC 42 EN_AIRT»: toglie un ritardo; 16#8080 se non ce n'era nessuno attivo. */
+const AIRT_ALREADY_ENABLED = 0x8080;
+const enAirt: SystemHandler = (call) =>
+  call.ret(call.services.delayInterrupts(-1) ?? AIRT_ALREADY_ENABLED);
+
+/** Manuale, 4.1 «SFC 43 RE_TRIGR»: riavvia il controllo del tempo di ciclo. */
+const reTrigr: SystemHandler = (call) => call.services.retrigger();
+
 export const SFC_TABLE: Record<number, SystemHandler> = {
   0: setClk,
   1: readClk,
+  6: rdSinfo,
+  13: dpnrmDg,
+  14: noDp,
+  15: noDp,
   20: blkmov,
   21: fill,
   22: creatDb,
   23: delDb,
   24: testDb,
+  41: disAirt,
+  42: enAirt,
+  43: reTrigr,
   46: stp,
   47: wait,
   51: rdsysst,
