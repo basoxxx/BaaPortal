@@ -59,7 +59,7 @@ describe('ladNetworkSchema', () => {
     const bad = structuredClone(full) as unknown as {
       root: { series: { branches?: unknown[] }[] };
     };
-    bad.root.series[6]!.branches = [bad.root.series[6]!.branches![0]!];
+    bad.root.series[6]!.branches = [];
     expect(ladNetworkSchema.safeParse(bad).success).toBe(false);
   });
 

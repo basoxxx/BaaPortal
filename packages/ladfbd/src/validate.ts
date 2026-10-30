@@ -113,7 +113,8 @@ function checkSeries(
       case 'parallel':
         e.branches.forEach((b, i) => {
           if (b.length === 0) add(e.id, 'EMPTY_BRANCH', { branch: String(i + 1) });
-          else checkSeries(b, true, !logic, add, inPin);
+          // un gruppo (un solo ramo) riparte da capo dentro la sua parentesi
+          else checkSeries(b, true, !logic || e.branches.length === 1, add, inPin);
         });
         break;
       case 'box':

@@ -17,7 +17,8 @@ type Props = {
   selected: boolean;
   /** Messaggi di diagnostica dell'elemento (vuoto = nessuno). */
   messages: string[];
-  onSelect: () => void;
+  /** `extend`: Maiusc o Ctrl/Cmd premuto, estende la selezione. */
+  onSelect: (extend: boolean) => void;
   /** Doppio clic; `pin` è il nome del pin se il clic cade sull'etichetta o sull'operando di un pin. */
   onEdit: (pin?: string) => void;
   /** Osservazione del segmento (assente se non si osserva). */
@@ -187,7 +188,7 @@ export function LadElement({ elem, cell, selected, messages, onSelect, onEdit, m
       title={tip || undefined}
       tabIndex={selected ? 0 : -1}
       data-lad-id={elem.id}
-      onClick={onSelect}
+      onClick={(ev) => onSelect(ev.shiftKey || ev.ctrlKey || ev.metaKey)}
       onDoubleClick={(ev) =>
         onEdit(
           (ev.target as HTMLElement).closest('[data-pin]')?.getAttribute('data-pin') ?? undefined,

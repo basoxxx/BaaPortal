@@ -4,10 +4,17 @@
 import { createContext, useContext, useRef, useState } from 'react';
 import type { DragEvent, KeyboardEvent, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BOX_CATALOG, findElem, insertElem, isNode, updateElem } from '@baaportal/ladfbd';
+import {
+  BOX_CATALOG,
+  findElem,
+  insertElem,
+  isNode,
+  negateElem,
+  updateElem,
+} from '@baaportal/ladfbd';
 import type { LadBox, LadElem, LadNetwork, LadNode, LadOut } from '@baaportal/ladfbd';
 import { LadToolbar } from '../lad/LadToolbar';
-import { LAD_TOOL_KEYS, ladAction } from '../lad/ladKeys';
+import { LAD_TOOL_KEYS, ladAction, ladClipKey } from '../lad/ladKeys';
 import { fieldPatch, fieldValue, fieldsOf, flowPin, paletteIdOf, placeOf } from '../lad/ladOps';
 import type { CallParams, LadField } from '../lad/ladOps';
 import { monAttr, monText, pinValues, type LadMonitor } from '../lad/ladMonitor';
@@ -33,7 +40,8 @@ type Item = LadElem | LadOut;
 type Editing = { id: string; key: string };
 interface Ctx {
   sel: string | null;
-  select: (id: string) => void;
+  multi: readonly string[];
+  select: (id: string, extend: boolean) => void;
   editing: Editing | null;
   edit: (id: string, key: string) => void;
   commit: (id: string, fld: LadField, value: string) => void;
@@ -75,7 +83,8 @@ function Sel({
   const mon = monText(c.monitor, item, t);
   const tip = [...msgs, ...(mon ? [mon] : [])].join('\n');
   const cls = [className, 'baa-fup-el'];
-  if (c.sel === item.id) cls.push('baa-fup-el--selected');
+  const picked = c.sel === item.id || c.multi.includes(item.id);
+  if (picked) cls.push('baa-fup-el--selected');
   if (msgs.length > 0) cls.push('baa-fup-el--error');
   return (
     <div
@@ -83,17 +92,21 @@ function Sel({
       tabIndex={0}
       className={cls.join(' ')}
       aria-label={mon ? `${nameOf(item, t)} (${mon})` : nameOf(item, t)}
-      aria-pressed={c.sel === item.id}
+      aria-pressed={picked}
       title={tip || undefined}
       data-fup-id={item.id}
+      // con Maiusc/Ctrl il fuoco resta dov'è: l'ancora della selezione non si perde
+      onMouseDown={(ev) => {
+        if (ev.shiftKey || ev.ctrlKey || ev.metaKey) ev.preventDefault();
+      }}
       data-mon={fupMon(c.monitor, item)}
       onClick={(ev) => {
         ev.stopPropagation();
-        c.select(item.id);
+        c.select(item.id, ev.shiftKey || ev.ctrlKey || ev.metaKey);
       }}
       onFocus={(ev) => {
         // Solo il proprio fuoco: l'evento deve risalire fino alla vista (tavolozza attiva).
-        if (ev.target === ev.currentTarget) c.select(item.id);
+        if (ev.target === ev.currentTarget && c.sel !== item.id) c.select(item.id, false);
       }}
     >
       {children}
@@ -214,6 +227,8 @@ function Input({ e }: { e: LadElem }) {
         </Sel>
       );
     case 'parallel':
+      // un solo ramo = gruppo `A( … NOT )`: la negazione di un'entrata, il suo cerchietto sul pin
+      if (e.branches.length === 1) return <Logic elems={e.branches[0]!} />;
       return (
         <Sel item={e} className="baa-fup-boxel">
           <Gate
@@ -391,7 +406,10 @@ export function FupNetworkView({
   const itemOf = (id: string) => findElem(net, id) as Item | LadNode | undefined;
   const ctx: Ctx = {
     sel,
-    select: (id) => ed.setSel({ t: 'elem', id }),
+    multi: ed.multi?.ids ?? [],
+    select: (id, extend) => {
+      if (!extend || !ed.extendTo(id)) ed.setSel({ t: 'elem', id });
+    },
     editing,
     edit: (id, key) => {
       if (!readOnly) setEditing({ id, key });
@@ -414,8 +432,9 @@ export function FupNetworkView({
 
   /**
    * N: nega l'entrata selezionata. Un contatto cambia NA/NC; la prima entrata di una serie che
-   * parte da capo riceve un `NOT` subito dopo (nega solo lei); un `NOT` selezionato si toglie. In
-   * un ramo a T che eredita logica il `NOT` negherebbe anche quella: si rifiuta.
+   * parte da capo riceve un `NOT` subito dopo (nega solo lei); un `NOT` selezionato si toglie. Un
+   * confronto, un POS/NEG o un `>=1` più avanti nella serie (o in un ramo a T che eredita logica)
+   * va in un gruppo `A( … NOT )` così il `NOT` nega solo lui. Fronti, `#` e box non si negano.
    */
   function negate() {
     const e = sel ? itemOf(sel) : undefined;
@@ -427,24 +446,33 @@ export function FupNetworkView({
     else if (el.k === 'not') ed.run('delete');
     else if (p.index === 0 && !('node' in p.at(0) && inheritedLen(net.root, p.nodeId)))
       ed.apply(() => insertElem(net, p.at(1), { id: newId(), k: 'not' }));
+    else if (el.k === 'cmp' || el.k === 'posneg' || el.k === 'parallel')
+      ed.apply(() => negateElem(net, id, newId));
     else ed.setStatus(t('lad.cannotNegate'));
   }
 
   /** Frecce: elemento precedente o successivo nell'ordine del disegno. */
-  function move(delta: number) {
+  function move(delta: number, extend: boolean) {
     const els = [...(root.current?.querySelectorAll<HTMLElement>('[data-fup-id]') ?? [])];
     const i = els.findIndex((x) => x.dataset.fupId === sel);
     const to = els[i < 0 ? 0 : i + delta];
-    if (to) ed.setSel({ t: 'elem', id: to.dataset.fupId! });
+    if (to && !(extend && sel && ed.extendTo(to.dataset.fupId!)))
+      ed.setSel({ t: 'elem', id: to.dataset.fupId! });
     ed.wantFocus.current = true;
   }
 
   const onKeyDown = (ev: KeyboardEvent<HTMLDivElement>) => {
     if (editing || (ev.target as HTMLElement).tagName === 'INPUT') return;
+    const clipKey = ladClipKey(ev);
+    if (clipKey) {
+      ev.preventDefault();
+      ed.clip(clipKey);
+      return;
+    }
     const a = ladAction(ev);
     if (a === 'left' || a === 'up' || a === 'right' || a === 'down') {
       ev.preventDefault();
-      move(a === 'left' || a === 'up' ? -1 : 1);
+      move(a === 'left' || a === 'up' ? -1 : 1, ev.shiftKey);
       return;
     }
     if (readOnly) return;

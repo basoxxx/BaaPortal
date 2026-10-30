@@ -179,7 +179,7 @@ export function fieldPatch(
 }
 
 /** Lista di elementi (serie, ramo o pin) che contiene l'elemento `id`. */
-function listOf(net: LadNetwork, id: string): LadElem[] | undefined {
+export function listOf(net: LadNetwork, id: string): LadElem[] | undefined {
   const inList = (list: LadElem[]): LadElem[] | undefined => {
     for (const e of list) {
       if (e.id === id) return list;
@@ -252,4 +252,25 @@ export function paletteIdOf(e: LadElem | LadOut): string {
     default:
       return e.k;
   }
+}
+
+/** Elementi contigui della stessa serie fra `a` e `b` inclusi (ordine del modello); `undefined` se stanno in liste diverse. */
+export function rangeBetween(net: LadNetwork, a: string, b: string): string[] | undefined {
+  const list = listOf(net, a);
+  if (!list || list !== listOf(net, b)) return undefined;
+  const i = list.findIndex((e) => e.id === a);
+  const j = list.findIndex((e) => e.id === b);
+  return list.slice(Math.min(i, j), Math.max(i, j) + 1).map((e) => e.id);
+}
+
+/** Copia profonda di un elemento con id nuovi (anche negli elementi che contiene). */
+export function cloneFresh(e: LadElem, newId: () => string): LadElem {
+  const c = structuredClone(e);
+  const renew = (x: LadElem): void => {
+    x.id = newId();
+    if (x.k === 'parallel') x.branches.forEach((b) => b.forEach(renew));
+    else if (x.k === 'box') Object.values(x.boolPins).forEach((l) => l.forEach(renew));
+  };
+  renew(c);
+  return c;
 }
