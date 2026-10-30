@@ -158,7 +158,8 @@
     "watchExportFailed": "Impossibile esportare la tabella di controllo \"{{name}}\": {{message}}",
     "watchImported": "Importazione da \"{{name}}\": {{count}} righe aggiunte alla tabella \"{{table}}\", scartate {{skipped}}{{detail}}.",
     "watchImportFailed": "Impossibile importare la tabella di controllo da \"{{name}}\": {{message}}",
-    "watchSharedLimit": "Le tabelle di controllo osservate insieme superano il limite di {{max}} righe sul PLC: le righe in più non vengono lette (errore sulla riga)."
+    "watchSharedLimit": "Le tabelle di controllo osservate insieme superano il limite di {{max}} righe sul PLC: le righe in più non vengono lette (errore sulla riga).",
+    "libraryInserted": "«{{name}}» inserito dalla libreria: {{count}} oggetti."
   },
   "commands": {
     "project.new": "Nuovo…",
@@ -567,7 +568,12 @@
     "hwInsert": "Inserisci modulo",
     "hwMove": "Sposta modulo",
     "hwDelete": "Cancella modulo",
-    "hwEdit": "Proprietà del modulo"
+    "hwEdit": "Proprietà del modulo",
+    "libraryInsert": "Inserisci dalla libreria",
+    "libraryAdd": "Aggiungi alla libreria",
+    "libraryDelete": "Elimina dalla libreria",
+    "libraryRename": "Rinomina nella libreria",
+    "libraryMove": "Sposta nella libreria"
   },
   "inspector": {
     "tab": {
@@ -1986,5 +1992,56 @@
     "cannotMove": "Il modulo non può andare nel posto {{slot}}.",
     "download": "Carica configurazione hardware nel dispositivo",
     "downloadDisabled": "La configurazione hardware si modifica e si salva nel progetto, ma non si può caricare nella CPU: il formato dei blocchi dati di sistema (SDB) non è documentato. Configura l'hardware della CPU con STEP 7 o TIA Portal. «Carica nel dispositivo» carica solo i blocchi del programma, come prima."
+  },
+  "library": {
+    "project": "Libreria di progetto",
+    "iec": "Libreria standard IEC",
+    "noProject": "Aprire un progetto per usare la sua libreria.",
+    "empty": "Nessun modello. Trascinare qui blocchi, UDT o tabelle dall'albero del progetto, oppure usare «Aggiungi la selezione».",
+    "noMatch": "Nessun modello corrisponde alla ricerca.",
+    "search": "Cerca",
+    "searchIn": "Cerca in {{name}}",
+    "addSelection": "Aggiungi la selezione",
+    "newFolder": "Nuova cartella",
+    "menuLabel": "Menu della libreria",
+    "insert": "Inserisci nel PLC",
+    "view": "Apri in sola lettura",
+    "toProject": "Copia nella libreria di progetto",
+    "deleteMessage": "Eliminare dalla libreria?",
+    "viewTitle": "{{name}} (sola lettura)",
+    "conflictTitle": "Inserisci «{{name}}»",
+    "conflictMessage": "Nel PLC alcuni nomi o numeri sono già usati. Scegliere cosa fare per ciascun oggetto.",
+    "takenName": "nome già usato",
+    "takenNumber": "numero già usato",
+    "takenBoth": "nome e numero già usati",
+    "resolutionFor": "Cosa fare di {{name}}",
+    "resolution": {
+      "rename": "Rinomina",
+      "renumber": "Rinumera",
+      "replace": "Sostituisci",
+      "skip": "Salta"
+    },
+    "newGlobal": "Nuova libreria globale…",
+    "openGlobal": "Apri libreria globale…",
+    "readOnly": "sola lettura",
+    "editing": "in modifica",
+    "edit": "Modifica",
+    "stopEditing": "Sola lettura",
+    "save": "Salva",
+    "close": "Chiudi la libreria {{name}}",
+    "closeTitle": "Chiudi libreria",
+    "closeUnsaved": "La libreria «{{name}}» ha modifiche non salvate. Chiuderla lo stesso?",
+    "fileFilter": "Libreria BaaPortal",
+    "defaultName": "Libreria",
+    "openFailed": "La libreria non si può aprire: {{detail}}",
+    "saveFailed": "La libreria non si può salvare: {{detail}}",
+    "fileError": {
+      "TOO_BIG": "il file è troppo grande.",
+      "NOT_ZIP": "non è un file di libreria.",
+      "MISSING_MANIFEST": "manca il manifesto della libreria.",
+      "WRONG_FORMAT": "non è un file di libreria BaaPortal.",
+      "NEWER_FORMAT": "è stato scritto da una versione più recente di BaaPortal.",
+      "INVALID": "il contenuto non è valido."
+    }
   }
 }

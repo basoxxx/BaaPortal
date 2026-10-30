@@ -158,7 +158,8 @@
     "watchExportFailed": "Could not export watch table \"{{name}}\": {{message}}",
     "watchImported": "Import from \"{{name}}\": {{count}} rows added to table \"{{table}}\", {{skipped}} skipped{{detail}}.",
     "watchImportFailed": "Could not import a watch table from \"{{name}}\": {{message}}",
-    "watchSharedLimit": "The watch tables watched together exceed the limit of {{max}} rows on the PLC: the extra rows are not read (row error)."
+    "watchSharedLimit": "The watch tables watched together exceed the limit of {{max}} rows on the PLC: the extra rows are not read (row error).",
+    "libraryInserted": "“{{name}}” inserted from the library: {{count}} objects."
   },
   "commands": {
     "project.new": "New…",
@@ -567,7 +568,12 @@
     "hwInsert": "Insert module",
     "hwMove": "Move module",
     "hwDelete": "Delete module",
-    "hwEdit": "Module properties"
+    "hwEdit": "Module properties",
+    "libraryInsert": "Insert from library",
+    "libraryAdd": "Add to library",
+    "libraryDelete": "Delete from library",
+    "libraryRename": "Rename in library",
+    "libraryMove": "Move in library"
   },
   "inspector": {
     "tab": {
@@ -1986,5 +1992,56 @@
     "cannotMove": "The module cannot go into slot {{slot}}.",
     "download": "Download hardware configuration to device",
     "downloadDisabled": "The hardware configuration is edited and saved in the project, but it cannot be downloaded to the CPU: the format of the system data blocks (SDB) is not documented. Configure the CPU hardware with STEP 7 or TIA Portal. \"Download to device\" downloads only the program blocks, as before."
+  },
+  "library": {
+    "project": "Project library",
+    "iec": "IEC standard library",
+    "noProject": "Open a project to use its library.",
+    "empty": "No master copies. Drag blocks, UDTs or tables here from the project tree, or use “Add selection”.",
+    "noMatch": "No master copy matches the search.",
+    "search": "Search",
+    "searchIn": "Search in {{name}}",
+    "addSelection": "Add selection",
+    "newFolder": "New folder",
+    "menuLabel": "Library menu",
+    "insert": "Insert into PLC",
+    "view": "Open read-only",
+    "toProject": "Copy to project library",
+    "deleteMessage": "Delete from the library?",
+    "viewTitle": "{{name}} (read-only)",
+    "conflictTitle": "Insert “{{name}}”",
+    "conflictMessage": "Some names or numbers are already used in the PLC. Choose what to do with each object.",
+    "takenName": "name already used",
+    "takenNumber": "number already used",
+    "takenBoth": "name and number already used",
+    "resolutionFor": "What to do with {{name}}",
+    "resolution": {
+      "rename": "Rename",
+      "renumber": "Renumber",
+      "replace": "Replace",
+      "skip": "Skip"
+    },
+    "newGlobal": "New global library…",
+    "openGlobal": "Open global library…",
+    "readOnly": "read-only",
+    "editing": "editing",
+    "edit": "Edit",
+    "stopEditing": "Read-only",
+    "save": "Save",
+    "close": "Close library {{name}}",
+    "closeTitle": "Close library",
+    "closeUnsaved": "Library “{{name}}” has unsaved changes. Close it anyway?",
+    "fileFilter": "BaaPortal library",
+    "defaultName": "Library",
+    "openFailed": "The library cannot be opened: {{detail}}",
+    "saveFailed": "The library cannot be saved: {{detail}}",
+    "fileError": {
+      "TOO_BIG": "the file is too large.",
+      "NOT_ZIP": "it is not a library file.",
+      "MISSING_MANIFEST": "the library manifest is missing.",
+      "WRONG_FORMAT": "it is not a BaaPortal library file.",
+      "NEWER_FORMAT": "it was written by a newer version of BaaPortal.",
+      "INVALID": "the content is not valid."
+    }
   }
 }

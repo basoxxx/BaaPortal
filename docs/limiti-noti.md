@@ -450,6 +450,16 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
 - **Niente GSD, niente periferia decentrata.** Nessuna importazione di file GSD/GSDML; ET 200, PROFIBUS DP, PROFINET IO e la vista di rete sono la tappa 6B.
 - **Il simulatore** usa ancora le dimensioni di I e Q della CPU, non quelle della configurazione.
 
+## Librerie (piano 7B)
+
+- **Formato del progetto invariato (4).** La libreria di progetto sta in `library.json` dentro il `.baap`: una versione precedente di BaaPortal apre il progetto ma ignora la libreria, e se lo salva la libreria va persa.
+- **Rinumera e riferimenti assoluti:** le CALL per nome seguono un oggetto rinumerato, quelle scritte col numero (`CALL FC 500`) no. Lo stesso vale per i riferimenti dei blocchi del PLC a un oggetto sostituito con un altro numero.
+- **Dipendenze:** solo le chiamate scritte, i tipi e l'FB di un DB di istanza. Non entrano i DB usati nel codice (`OPN`, `"Dati".x`), i DB di istanza delle CALL, i tag usati dal codice né i blocchi chiamati per puntatore.
+- **Inserimento** sempre nella radice delle cartelle del PLC, non nel gruppo su cui si rilascia. Un oggetto senza numero libero viene saltato con un messaggio. Il confronto con il PLC è per nome e numero, non per contenuto: un modello identico a ciò che c'è già chiede comunque cosa fare.
+- **Apri in sola lettura** mostra la sorgente AWL generata, non l'editor: i blocchi KOP e FUP non si mostrano (come in _Genera sorgente_), le tabelle sono un elenco di testo.
+- **Librerie globali:** chiudendo l'app o il progetto non si chiede di salvare una libreria globale modificata; non si ricordano le librerie aperte tra un avvio e l'altro. Si copiano modelli dalle globali alla libreria di progetto, non tra due globali. Le tabelle di controllo si aggiungono solo con _Aggiungi la selezione_ (dall'albero non si trascinano).
+- **Libreria standard IEC:** senza STRING (niente funzioni sulle stringhe), `MUX` con quattro ingressi fissi e `K` di tipo INT. `F_TRIG` non dà l'impulso al primo ciclo con `CLK = 0` (M parte da 0 e ricorda il CLK precedente). ENO segue il bit BR alla fine del blocco.
+
 ## Fuori dal codice, in sospeso per l'utente
 
 - Controlli a mano dei piani 1B (Windows e Mac), 1C e 1F. Le liste sono nei piani; per la 1F: xlsx in Excel e LibreOffice, xlsx di TIA Portal, Archivia/Ritira con percorsi accentati e con spazi, scala a 125%.
