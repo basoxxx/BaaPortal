@@ -15,7 +15,7 @@ import {
 } from './model';
 import { HMI_FORMATS, HMI_MAX_SIZE, HMI_MAX_TEXT, HMI_OBJECT_KINDS } from './hmi';
 import type { HmiFormat, HmiObjectKind } from './model';
-import { liveTexts, MAX_TRANSLATION_LENGTH } from './texts';
+import { liveTexts, liveTextSources, MAX_TRANSLATION_LENGTH } from './texts';
 import { MPI_BUS_SPEEDS, MPI_HIGHEST_ADDRESSES } from './plcAccess';
 
 export type BaapErrorCode =
@@ -72,6 +72,7 @@ const projectSchema = (version: 2 | 3 | 4) =>
     devices: z.array(obj({ id, name: str })),
     languages: languagesSchema.optional(),
     texts: textsSchema.optional(),
+    textSources: z.record(str.max(1000), str.max(MAX_TRANSLATION_LENGTH)).optional(),
     // Sottoreti (tappa 6B, facoltative). Indirizzi e parametri si controllano in checkNetworks.
     subnets: z
       .array(
@@ -393,6 +394,8 @@ export function writeBaap(project: Project, opts: { appVersion: string }): Uint8
   // Solo le traduzioni di oggetti che esistono ancora.
   const texts = liveTexts(project);
   delete projectRest.texts;
+  const textSources = liveTextSources(project);
+  delete projectRest.textSources;
   const files: Record<string, Uint8Array> = {
     [MANIFEST_FILE]: toJson({
       format: 'baaportal-project',
@@ -402,6 +405,7 @@ export function writeBaap(project: Project, opts: { appVersion: string }): Uint8
     [PROJECT_FILE]: toJson({
       ...projectRest,
       ...(texts ? { texts } : {}),
+      ...(textSources ? { textSources } : {}),
       devices: devices.map((d) => ({ ...d.listExtras, id: d.id, name: d.name })),
     }),
   };

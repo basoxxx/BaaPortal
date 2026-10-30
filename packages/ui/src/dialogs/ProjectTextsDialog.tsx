@@ -1,7 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   listTextEntries,
+  markReviewed,
+  staleTranslations,
   setLanguages,
   MAX_TRANSLATION_LENGTH,
   setTranslation,
@@ -13,8 +15,10 @@ import { useAppStore, useServices } from '../state/AppContext';
 import { exportProjectTexts, importProjectTexts } from './projectTextsIo';
 import './projectTexts.css';
 
-/** Righe mostrate al massimo: il filtro restringe l'elenco. */
-export const TEXTS_ROW_LIMIT = 300;
+/** Altezza di una riga e righe in più sopra e sotto la finestra visibile: l'elenco è virtuale. */
+const ROW_HEIGHT = 34;
+const OVERSCAN = 10;
+const FALLBACK_VIEWPORT = 400;
 const DEFAULT_EDITING = 'it-IT';
 
 /** «Testi di progetto»: lingue, tabella delle traduzioni, esportazione e importazione. */
@@ -26,6 +30,13 @@ export function ProjectTextsDialog({ onClose }: { onClose(): void }) {
   const devices = useAppStore((s) => s.doc?.project.devices);
   const [filter, setFilter] = useState('');
   const [error, setError] = useState(false);
+  const [scroll, setScroll] = useState(0);
+  const box = useRef<HTMLDivElement>(null);
+  const project = useAppStore((s) => s.doc?.project);
+  const stale = useMemo(
+    () => (project ? staleTranslations(project) : new Set<string>()),
+    [project],
+  );
   const base: ProjectLanguages = languages ?? { editing: DEFAULT_EDITING, others: [] };
   const all = [base.editing, ...base.others];
   const entries = useMemo(() => (devices ? listTextEntries({ devices }) : []), [devices]);
@@ -37,6 +48,13 @@ export function ProjectTextsDialog({ onClose }: { onClose(): void }) {
       e.source.toLowerCase().includes(q) ||
       Object.values(texts?.[e.key] ?? {}).some((v) => v.toLowerCase().includes(q)),
   );
+
+  // Solo le righe nella finestra visibile (più qualcuna sopra e sotto) sono nel DOM.
+  const viewport = box.current?.clientHeight || FALLBACK_VIEWPORT;
+  const first = Math.max(0, Math.floor(scroll / ROW_HEIGHT) - OVERSCAN);
+  const last = Math.min(shown.length, Math.ceil((scroll + viewport) / ROW_HEIGHT) + OVERSCAN);
+  const topPad = first * ROW_HEIGHT;
+  const bottomPad = (shown.length - last) * ROW_HEIGHT;
 
   const apply = (next: ProjectLanguages) => {
     let ok = true;
@@ -106,7 +124,11 @@ export function ProjectTextsDialog({ onClose }: { onClose(): void }) {
             value={filter}
             placeholder={t('texts.filter')}
             aria-label={t('texts.filter')}
-            onChange={(e) => setFilter(e.target.value)}
+            onChange={(e) => {
+              setFilter(e.target.value);
+              setScroll(0);
+              if (box.current) box.current.scrollTop = 0;
+            }}
           />
           <button type="button" onClick={() => void exportProjectTexts('xlsx', ctx)}>
             {t('texts.exportXlsx')}
@@ -122,7 +144,11 @@ export function ProjectTextsDialog({ onClose }: { onClose(): void }) {
             {t('texts.import')}
           </button>
         </div>
-        <div className="baa-texts-scroll">
+        <div
+          className="baa-texts-scroll"
+          ref={box}
+          onScroll={(e) => setScroll(e.currentTarget.scrollTop)}
+        >
           <table className="baa-texts-table">
             <thead>
               <tr>
@@ -135,11 +161,41 @@ export function ProjectTextsDialog({ onClose }: { onClose(): void }) {
               </tr>
             </thead>
             <tbody>
-              {shown.slice(0, TEXTS_ROW_LIMIT).map((e) => (
-                <tr key={e.key}>
+              {topPad > 0 ? (
+                <tr aria-hidden="true" style={{ height: topPad }}>
+                  <td colSpan={3 + base.others.length} />
+                </tr>
+              ) : null}
+              {shown.slice(first, last).map((e) => (
+                <tr
+                  key={e.key}
+                  style={{ height: ROW_HEIGHT }}
+                  className={stale.has(e.key) ? 'baa-texts-stale' : undefined}
+                >
                   <td>{e.object}</td>
                   <td>{t(`texts.field.${e.field}`)}</td>
-                  <td>{e.source}</td>
+                  <td>
+                    {e.source}
+                    {stale.has(e.key) ? (
+                      <>
+                        {' '}
+                        <button
+                          type="button"
+                          title={t('texts.markReviewed')}
+                          aria-label={`${t('texts.markReviewed')}: ${e.object}`}
+                          onClick={() =>
+                            store
+                              .getState()
+                              .edit('history.editTranslation', (p) =>
+                                markReviewed(p, e.key, e.source),
+                              )
+                          }
+                        >
+                          {t('texts.stale')}
+                        </button>
+                      </>
+                    ) : null}
+                  </td>
                   {base.others.map((l) => (
                     <td key={l}>
                       <CommitInput
@@ -155,7 +211,7 @@ export function ProjectTextsDialog({ onClose }: { onClose(): void }) {
                             .getState()
                             .edit(
                               'history.editTranslation',
-                              (p) => void setTranslation(p, e.key, l, v),
+                              (p) => void setTranslation(p, e.key, l, v, e.source),
                             )
                         }
                       />
@@ -163,13 +219,13 @@ export function ProjectTextsDialog({ onClose }: { onClose(): void }) {
                   ))}
                 </tr>
               ))}
+              {bottomPad > 0 ? (
+                <tr aria-hidden="true" style={{ height: bottomPad }}>
+                  <td colSpan={3 + base.others.length} />
+                </tr>
+              ) : null}
             </tbody>
           </table>
-          {shown.length > TEXTS_ROW_LIMIT ? (
-            <p className="baa-texts-hint">
-              {t('texts.truncated', { shown: TEXTS_ROW_LIMIT, total: shown.length })}
-            </p>
-          ) : null}
           {entries.length === 0 ? <p className="baa-texts-hint">{t('texts.empty')}</p> : null}
         </div>
       </div>

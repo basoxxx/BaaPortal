@@ -2266,6 +2266,8 @@
       "comment": "Commento",
       "text": "Testo"
     },
+    "stale": "Da rivedere",
+    "markReviewed": "Segna come rivista (il testo di modifica è cambiato dopo la traduzione)",
     "truncated": "Mostrate {{shown}} righe di {{total}}: restringi con il filtro.",
     "empty": "Nessun titolo o commento da tradurre.",
     "noColumns": "Mancano la colonna Key o le colonne delle lingue del progetto.",

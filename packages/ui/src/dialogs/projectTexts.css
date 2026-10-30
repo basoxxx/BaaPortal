@@ -31,6 +31,9 @@
   min-height: 0;
   overflow: auto;
 }
+.baa-texts-stale td:nth-child(3) {
+  background: color-mix(in srgb, var(--baa-warning, #c80) 18%, transparent);
+}
 .baa-texts-table {
   width: 100%;
   border-collapse: collapse;

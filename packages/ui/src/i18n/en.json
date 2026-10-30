@@ -2266,6 +2266,8 @@
       "comment": "Comment",
       "text": "Text"
     },
+    "stale": "To review",
+    "markReviewed": "Mark as reviewed (the editing text changed after the translation)",
     "truncated": "Showing {{shown}} of {{total}} rows: narrow down with the filter.",
     "empty": "No titles or comments to translate.",
     "noColumns": "The Key column or the project language columns are missing.",

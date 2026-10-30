@@ -418,6 +418,8 @@ export interface Project {
   languages?: ProjectLanguages;
   /** Testi tradotti (facoltativo). */
   texts?: ProjectTexts;
+  /** Testo di modifica di ogni chiave quando la si è tradotta: se cambia, la traduzione è «da rivedere». */
+  textSources?: Record<string, string>;
   /** Libreria di progetto (facoltativa: assente nei file scritti prima della tappa 7B). */
   library?: Library;
   /** Sottoreti MPI, PROFIBUS e Ethernet (tappa 6B); assenti nei file precedenti. */
