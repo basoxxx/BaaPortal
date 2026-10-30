@@ -298,7 +298,7 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
   - I blocchi importati e non ricompilati non si possono osservare (mancano le righe del compilatore).
   - Gli editor nelle finestre staccate non vengono osservati.
   - Il tasto esadecimale/decimale non viene salvato e torna esadecimale a ogni simulazione.
-- **Nessun FORCE.** Il pannello I/O simula gli ingressi fisici e non forza valori; il forzamento non è fatto (vedi «Forzamento» nel piano 3D).
+- **Forzamento solo nel simulatore (2.1).** Il pannello I/O forza I, Q e M (ingressi e merker all'inizio del ciclo, uscite prima dei moduli; il programma può sovrascrivere, come sulla S7-300). Non si forzano PI/PQ né T/C; la cancellazione totale termina il forzamento (⚠️); non c'è la tabella di forzamento nell'albero né la colonna «Forza» nelle tabelle di controllo. Online il forzamento resta non fatto (vedi «Forzamento» nel piano 3D).
 - **Blocchi cancellati.** «Carica nel dispositivo» cancella dalla CPU simulata i blocchi (compresi i DB) non più nel progetto; un blocco cancellato che era in osservazione smette di essere osservato. Anche i DB creati dal programma con SFC 22 (CREAT_DB) vengono cancellati da un nuovo caricamento.
 - **Byte aggiunti a mano nel pannello I/O** («+ byte») durano solo la sessione di simulazione e non sono salvati nel progetto.
 - **Tabelle di controllo.**

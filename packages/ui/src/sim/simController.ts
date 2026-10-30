@@ -183,6 +183,7 @@ export class SimController {
         warnings: n.warnings,
         ...(this.inputsInFlight > 0 ? {} : { inputs: n.inputs }),
         outputs: n.outputs,
+        forces: n.forces,
       });
     });
     session.onFail((e) => {
@@ -239,6 +240,17 @@ export class SimController {
       if (this.session === s) this.push('error', 'simInputsFailed', { message: errorText(e) });
     } finally {
       if (this.session === s) this.inputsInFlight--;
+    }
+  }
+
+  /** Sostituisce la tabella di forzamento della CPU simulata (vuota = termina il forzamento). */
+  async setForce(items: WriteItemReq[]): Promise<void> {
+    const s = this.session;
+    if (!s) return;
+    try {
+      await s.request({ op: 'force', items });
+    } catch (e) {
+      if (this.session === s) this.push('error', 'simForceFailed', { message: errorText(e) });
     }
   }
 

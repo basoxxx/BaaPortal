@@ -52,6 +52,8 @@ export type SimRequest =
   /** Lettura una tantum (runtime HMI): la risposta è un `WatchValue` per voce. */
   | { op: 'read'; items: WatchItem[] }
   | { op: 'write'; items: WriteItemReq[] }
+  /** Tabella di forzamento intera (solo I, Q, M); vuota = forzamento terminato. */
+  | { op: 'force'; items: WriteItemReq[] }
   | { op: 'stop' };
 
 export interface SimWarning {
@@ -77,6 +79,8 @@ export type SimNotice =
       /** Ingressi fisici (`physIn`) e uscite fisiche (`physOut`). */
       inputs: Uint8Array;
       outputs: Uint8Array;
+      /** Tabella di forzamento attiva (LED FRCE acceso se non è vuota). */
+      forces: WriteItemReq[];
     }
   | { kind: 'monitor'; block: MonitorRequest; steps: MonitorStep[] }
   | { kind: 'watch'; values: WatchValue[] }

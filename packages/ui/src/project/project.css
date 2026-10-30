@@ -915,6 +915,9 @@
 .baa-led-sf[data-on='true']::before {
   background: var(--baa-error, #c42b1c);
 }
+.baa-led-frce[data-on='true']::before {
+  background: #e0b000;
+}
 .baa-cpu-buttons {
   display: flex;
   gap: 6px;

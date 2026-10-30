@@ -324,6 +324,16 @@ Codici generali ⚠️: 16#8x22 area d'origine fuori campo (lettura), 16#8x23 de
 
 ⚠️ All'avvio a caldo (STOP → RUN) gli allarmi di ritardo e dall'orologio impostati dalle SFC si cancellano, i blocchi di SFC 39 si tolgono e il contatore di ore si ferma (il valore resta). OB10 e OB20 si servono come OB35: all'inizio del ciclo e ai tick (§11.6), se la priorità in corso è più bassa (OB10 2, OB20 3); SFC 41 li ritarda come gli altri allarmi. Da verificare su CPU reale.
 
+## 12.2 Forzamento
+
+Fonte: manuale delle CPU 31x e guida di STEP 7, «Forzamento delle variabili» (S7-300). `setForce(voci)` sostituisce la tabella di forzamento (operandi di I, Q e M, bit, byte, parola o doppia parola); una voce fuori area fa rifiutare tutta la tabella. La tabella vale in ogni modo della CPU finché non la si cambia; la svuota la cancellazione totale (⚠️).
+
+- **Ingressi**: i valori forzati si scrivono nella PII subito dopo la lettura degli ingressi, all'inizio del ciclo; **merker** nello stesso punto (⚠️ la fonte parla solo di I e Q).
+- **Uscite**: i valori forzati si scrivono nella PIQ subito prima del trasferimento ai moduli (`physOut`), a fine ciclo.
+- Come sulla S7-300, il programma **può sovrascrivere** i valori forzati durante il ciclo: legge il proprio valore fino al punto di controllo successivo.
+- ⚠️ Gli accessi diretti alla periferia (PI, PQ) non sono forzati; OB35 e gli altri OB d'allarme vedono i valori del ciclo in corso.
+- LED FRCE (SZL `0x0074`/`0x0174`, `forceActive` del backend) acceso con la tabella non vuota.
+
 ## 13. SFB 0–5 IEC e avviso «non simulata»
 
 ### 13.1 SFB 0–5
@@ -358,9 +368,9 @@ Una SFC o un SFB senza gestore (cioè **tutte** quelle diverse da SFC 0–6, 13�
 
 Nell'app la CPU simulata gira in un **Web Worker** del renderer (`packages/ui/src/sim/`), non in un processo separato: il simulatore è TypeScript puro e il Worker non blocca l'interfaccia. `SimHost` (puro, testabile senza Worker) è l'unico che tocca `SimCpu`; `SimController` nel renderer lo pilota per messaggi.
 
-- **Richieste** (renderer → Worker, `SimRequest`): `start`, `download` (blocchi nell'ordine di caricamento; con `keep`, l'elenco dei blocchi del progetto, l'ospite cancella dalla CPU quelli che non vi compaiono, DB compresi), `mode` (RUN/STOP), `mres`, `setInputs` (byte degli ingressi fisici), `interrupt` (OB82/OB86 con indirizzo logico del modulo, 0..65535), `monitor` (blocco da osservare, o nessuno), `watch` (operandi già risolti dal renderer), `write` (comanda), `stop`. Ogni richiesta ha un `id` e una risposta. L'ospite non si fida del renderer: `interrupt` con un OB diverso da 82 e 86, e `watch` o `write` con una voce di dimensione diversa da X, B, W, D, sono rifiutate con un errore (risposta `ok: false`) e non cambiano nulla.
+- **Richieste** (renderer → Worker, `SimRequest`): `start`, `download` (blocchi nell'ordine di caricamento; con `keep`, l'elenco dei blocchi del progetto, l'ospite cancella dalla CPU quelli che non vi compaiono, DB compresi), `mode` (RUN/STOP), `mres`, `setInputs` (byte degli ingressi fisici), `interrupt` (OB82/OB86 con indirizzo logico del modulo, 0..65535), `force` (tabella di forzamento intera, solo I, Q, M; §12.2), `monitor` (blocco da osservare, o nessuno), `watch` (operandi già risolti dal renderer), `write` (comanda), `stop`. Ogni richiesta ha un `id` e una risposta. L'ospite non si fida del renderer: `interrupt` con un OB diverso da 82 e 86, e `watch` o `write` con una voce di dimensione diversa da X, B, W, D, sono rifiutate con un errore (risposta `ok: false`) e non cambiano nulla.
 - **Notifiche** (Worker → renderer, `SimNotice`): `status` (modo, tempi di ciclo, buffer di diagnostica, avvisi, ingressi e uscite fisiche) circa ogni 200 ms; `monitor` con i passi registrati; `watch` con i valori grezzi richiesti; `error`.
 - **Osservazione.** La tabella delle righe viene dal compilatore (ogni istruzione MC7 ha la riga AWL che l'ha prodotta, anche per le CALL espanse). Per il blocco osservato la CPU registra, per ogni istruzione, RLO, STA, ACCU1, ACCU2 e parola di stato. ⚠️ Si registra solo la **prima esecuzione** di ogni istruzione nel ciclo. Un blocco modificato dopo il caricamento o importato senza tabella non si osserva.
-- **Ingressi.** Il pannello I/O scrive negli ingressi fisici (`physIn`), come farebbe il campo; non forza.
+- **Ingressi.** Il pannello I/O scrive negli ingressi fisici (`physIn`), come farebbe il campo. Il forzamento (§12.2) è una richiesta a parte; la notifica `status` porta la tabella attiva (`forces`).
 - **Tabelle di controllo.** Il renderer risolve simboli e indirizzi (stessa risoluzione del compilatore) in area, DB, byte, bit e dimensione; il Worker restituisce byte grezzi big-endian e il renderer li formatta. T e C si leggono come parola BCD; `write` risponde con un esito per voce, `{ ok: true }` o `{ error }`: per T e C l'errore è «scrittura non supportata» (`TC_WRITE` è la chiave con cui il renderer lo mostra). Per PQ la scrittura si riflette anche in Q, come per l'accesso diretto. Al più 1000 voci per richiesta.
 - La CPU del Worker non avanza il tempo come una CPU vera (§5): i tempi di ciclo mostrati dipendono dal computer.

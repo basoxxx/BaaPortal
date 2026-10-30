@@ -39,6 +39,20 @@ import { simBackend } from './backend';
 
 export type SimMode = 'STOP' | 'STARTUP' | 'RUN';
 
+/** Area forzabile nel simulatore. */
+export type ForceArea = 'I' | 'Q' | 'M';
+
+/** Voce della tabella di forzamento: operando e valore (big-endian; per `X` conta se il byte è ≠ 0). */
+export interface ForceEntry {
+  area: ForceArea;
+  byte: number;
+  bit?: number;
+  size: 'X' | 'B' | 'W' | 'D';
+  data: Uint8Array;
+}
+
+const FORCE_BYTES = { X: 1, B: 1, W: 2, D: 4 } as const;
+
 /** Proprietà della CPU che servono al simulatore (stessa forma di `CpuProperties`, senza dipendere da `project`). */
 export interface SimCpuProps {
   maxCycleMs: number;
@@ -162,6 +176,9 @@ export class SimCpu {
   private pending: HwInterrupt[] = [];
   /** Errori di tempo (OB80) ritardati da SFC 41 DIS_AIRT: girano alla fine del ritardo. */
   private pendingTime: ((ctx: ExecContext) => void)[] = [];
+  /** Tabella di forzamento e, per area, maschera dei bit forzati e loro valori. */
+  private forces: ForceEntry[] = [];
+  private forceMasks: Partial<Record<ForceArea, { mask: Uint8Array; value: Uint8Array }>> = {};
   /** Osservazione di un blocco (`setMonitor`); `undefined` = nessuna, costo zero nell'esecutore. */
   private monitor: MonitorSink | undefined;
 
@@ -250,6 +267,57 @@ export class SimCpu {
   onEvent(cb: (e: SimEvent) => void): () => void {
     this.listeners.add(cb);
     return () => this.listeners.delete(cb);
+  }
+
+  /** Tabella di forzamento attiva (LED FRCE). */
+  get forceTable(): readonly ForceEntry[] {
+    return this.forces;
+  }
+
+  get forceActive(): boolean {
+    return this.forces.length > 0;
+  }
+
+  /**
+   * Sostituisce la tabella di forzamento (vuota = forzamento terminato). Vale in ogni modo, anche in
+   * STOP, finché non la si cambia o con la cancellazione totale. Una voce fuori area fa rifiutare
+   * tutta la tabella (RangeError) e lascia quella di prima.
+   */
+  setForce(entries: readonly ForceEntry[]): void {
+    const masks: typeof this.forceMasks = {};
+    for (const f of entries) {
+      const buf = this.memory[f.area];
+      const len = FORCE_BYTES[f.size];
+      const bitOk = f.size !== 'X' || (Number.isInteger(f.bit) && f.bit! >= 0 && f.bit! <= 7);
+      if (!buf || !Number.isInteger(f.byte) || f.byte < 0 || f.byte + len > buf.length || !bitOk)
+        throw new RangeError(`forzamento fuori area: ${f.area} ${f.byte}`);
+      if (f.size !== 'X' && f.data.length !== len)
+        throw new RangeError(`forzamento ${f.area} ${f.byte}: servono ${len} byte`);
+      const m = (masks[f.area] ??= {
+        mask: new Uint8Array(buf.length),
+        value: new Uint8Array(buf.length),
+      });
+      if (f.size === 'X') {
+        const b = 1 << f.bit!;
+        m.mask[f.byte]! |= b;
+        m.value[f.byte] = f.data[0] ? m.value[f.byte]! | b : m.value[f.byte]! & ~b;
+      } else
+        for (let i = 0; i < len; i++) {
+          m.mask[f.byte + i] = 0xff;
+          m.value[f.byte + i] = f.data[i]!;
+        }
+    }
+    this.forces = entries.map((f) => ({ ...f, data: f.data.slice() }));
+    this.forceMasks = masks;
+  }
+
+  /** Scrive i valori forzati nell'area (immagine di processo o merker). */
+  private applyForce(area: ForceArea): void {
+    const f = this.forceMasks[area];
+    if (!f) return;
+    const buf = this.memory[area];
+    for (let i = 0; i < buf.length; i++)
+      if (f.mask[i]) buf[i] = (buf[i]! & ~f.mask[i]!) | (f.value[i]! & f.mask[i]!);
   }
 
   /** Osserva un blocco: dopo ogni ciclo `monitorSnapshot` dà lo stato dopo le sue istruzioni. */
@@ -354,6 +422,8 @@ export class SimCpu {
     this.counters.reset(0);
     this.services.sfbState.clear();
     for (const db of m.dbs.values()) db.data.set(db.initial);
+    // ⚠️ La cancellazione totale termina anche il forzamento.
+    this.setForce([]);
     this.st = { last: 0, min: 0, max: 0, cycles: 0 };
     this.record({ time: this.now(), code: 'CANCELLAZIONE_TOTALE' });
   }
@@ -376,6 +446,9 @@ export class SimCpu {
     const m = this.memory;
     this.updateClock(start);
     m.I.set(m.physIn);
+    // Forzamento S7-300: ingressi (e merker, ⚠️) all'inizio del ciclo; il programma può sovrascriverli.
+    this.applyForce('I');
+    this.applyForce('M');
     if (this.monitor) {
       this.monitor.steps = [];
       this.monitor.seen.clear();
@@ -387,6 +460,7 @@ export class SimCpu {
       this.serviceInterrupts(ctx, PRIORITY.OB1, start);
       if (!this.program.get('OB', 1)) {
         // Senza OB1 il ciclo gira a vuoto: le immagini di processo si aggiornano lo stesso.
+        this.applyForce('Q');
         m.physOut.set(m.Q);
         return { ran: true, ok: true, elapsedMs: 0 };
       }
@@ -411,6 +485,8 @@ export class SimCpu {
       if (e instanceof StopRequest) return this.stopRequested(e, start);
       return this.failedCycle(this.fail(e), start);
     }
+    // Uscite forzate nella PIQ prima del trasferimento ai moduli.
+    this.applyForce('Q');
     m.physOut.set(m.Q);
     this.firstCycle = false;
     const s = this.st;

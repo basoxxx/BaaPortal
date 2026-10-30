@@ -64,6 +64,7 @@
     "downloadingUpdate": "Download aggiornamento {{version}}"
   },
   "messages": {
+    "simForceFailed": "Il simulatore non ha accettato il forzamento: {{message}}",
     "replaced": "Sostituiti {{replaced}} testi, saltati {{skipped}}.",
     "detachBlocked": "Impossibile aprire la finestra separata: l'editor resta nell'area di lavoro.",
     "created": "Progetto \"{{name}}\" creato.",
@@ -1453,6 +1454,7 @@
     }
   },
   "cpuPanel": {
+    "frce": "FRCE",
     "needSim": "Avvia la simulazione per usare il pannello",
     "run": "RUN",
     "stop": "STOP",
@@ -1494,7 +1496,8 @@
       "CANCELLAZIONE_TOTALE": "Cancellazione totale",
       "OB_RICHIAMATO": "OB d'evento richiamato",
       "SFC_NON_SIMULATA": "SFC non simulata",
-      "SFB_NON_SIMULATA": "SFB non simulato"
+      "SFB_NON_SIMULATA": "SFB non simulato",
+      "MESSAGGIO_UTENTE": "Messaggio del programma (SFC 52)"
     },
     "ledOn": "acceso",
     "ledOff": "spento",
@@ -1508,6 +1511,14 @@
     "openDiag": "Apri Online e diagnostica"
   },
   "ioPanel": {
+    "force": "Forzamento",
+    "forceAddress": "Operando (I, Q, M)",
+    "forceValue": "Valore",
+    "forceAdd": "Forza",
+    "forceRemove": "Togli il forzamento di {{operand}}",
+    "forceClear": "Termina forzamento",
+    "forceBadAddress": "Operando non valido: si forzano solo I, Q e M (bit, byte, parola, doppia parola).",
+    "forceBadValue": "Valore non valido per l'operando (0/1 per un bit, intero o 16#… per gli altri).",
     "inputs": "Ingressi",
     "outputs": "Uscite",
     "noBytes": "Nessun byte: aggiungine uno con «+ byte».",

@@ -64,6 +64,7 @@
     "downloadingUpdate": "Downloading update {{version}}"
   },
   "messages": {
+    "simForceFailed": "The simulator did not accept the force: {{message}}",
     "replaced": "Replaced {{replaced}} texts, skipped {{skipped}}.",
     "detachBlocked": "The separate window could not be opened: the editor stays in the work area.",
     "created": "Project \"{{name}}\" created.",
@@ -1453,6 +1454,7 @@
     }
   },
   "cpuPanel": {
+    "frce": "FRCE",
     "needSim": "Start the simulation to use the panel",
     "run": "RUN",
     "stop": "STOP",
@@ -1494,7 +1496,8 @@
       "CANCELLAZIONE_TOTALE": "Memory reset",
       "OB_RICHIAMATO": "Event OB called",
       "SFC_NON_SIMULATA": "SFC not simulated",
-      "SFB_NON_SIMULATA": "SFB not simulated"
+      "SFB_NON_SIMULATA": "SFB not simulated",
+      "MESSAGGIO_UTENTE": "Program message (SFC 52)"
     },
     "ledOn": "on",
     "ledOff": "off",
@@ -1508,6 +1511,14 @@
     "openDiag": "Open Online & diagnostics"
   },
   "ioPanel": {
+    "force": "Force",
+    "forceAddress": "Operand (I, Q, M)",
+    "forceValue": "Value",
+    "forceAdd": "Force",
+    "forceRemove": "Remove the force on {{operand}}",
+    "forceClear": "Stop forcing",
+    "forceBadAddress": "Invalid operand: only I, Q and M can be forced (bit, byte, word, double word).",
+    "forceBadValue": "Invalid value for the operand (0/1 for a bit, integer or 16#… otherwise).",
     "inputs": "Inputs",
     "outputs": "Outputs",
     "noBytes": "No bytes: add one with \"+ byte\".",

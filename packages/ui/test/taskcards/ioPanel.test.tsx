@@ -143,4 +143,29 @@ describe('pannello I/O del simulatore', () => {
     expect(screen.getByTestId('fault-ob82')).toBeDisabled();
     expect(screen.getByTestId('fault-ob86')).toBeDisabled();
   });
+
+  it('Forzamento: aggiunge una voce, la sostituisce, termina; LED FRCE dalla tabella', async () => {
+    const { app } = await setup();
+    const setForce = vi.spyOn(simControllerFor(app.store), 'setForce').mockResolvedValue();
+    await app.user.type(screen.getByTestId('force-address'), 'MW 10');
+    await app.user.clear(screen.getByTestId('force-value'));
+    await app.user.type(screen.getByTestId('force-value'), '-2');
+    await app.user.click(screen.getByTestId('force-add'));
+    expect(setForce).toHaveBeenCalledWith([
+      { area: 'M', byte: 10, size: 'W', data: Uint8Array.of(0xff, 0xfe) },
+    ]);
+    await app.user.clear(screen.getByTestId('force-address'));
+    await app.user.type(screen.getByTestId('force-address'), 'PIW 0');
+    await app.user.click(screen.getByTestId('force-add'));
+    expect(screen.getByRole('alert')).toHaveTextContent('si forzano solo I, Q e M');
+    act(() =>
+      app.store.getState().setSim({
+        forces: [{ area: 'Q', byte: 4, bit: 1, size: 'X', data: Uint8Array.of(1) }],
+      }),
+    );
+    expect(screen.getByTestId('force-row-Q 4.1')).toHaveTextContent('Q 4.1 = 1');
+    expect(screen.getByTestId('plc-force-warning')).toBeInTheDocument();
+    await app.user.click(screen.getByTestId('force-clear'));
+    expect(setForce).toHaveBeenLastCalledWith([]);
+  });
 });

@@ -1,5 +1,5 @@
 import { parseBlockFile, type S7WriteClient } from '@baaportal/s7comm';
-import { SimCpu, connectToSim, type MonitorRequest } from '@baaportal/sim';
+import { SimCpu, connectToSim, type ForceEntry, type MonitorRequest } from '@baaportal/sim';
 import {
   INTERRUPT_OBS,
   MAX_WATCH_ITEMS,
@@ -131,6 +131,17 @@ export class SimHost {
           );
         checkSizes(req.items);
         return req.items.map((it) => this.writeOne(cpu, it));
+      case 'force':
+        if (req.items.length > MAX_WATCH_ITEMS)
+          throw new RangeError(`troppe voci da forzare: ${req.items.length}`);
+        checkSizes(req.items);
+        for (const it of req.items)
+          if (it.area !== 'I' && it.area !== 'Q' && it.area !== 'M')
+            throw new RangeError(`area non forzabile: ${String(it.area)}`);
+        // La CPU convalida indirizzi e lunghezze e rifiuta tutta la tabella se una voce è sbagliata.
+        cpu.setForce(req.items as ForceEntry[]);
+        this.sendStatus();
+        return undefined;
       case 'stop':
         await this.shutdown();
         return undefined;
@@ -285,6 +296,7 @@ export class SimHost {
       warnings: [...this.warnings],
       inputs: cpu.memory.physIn.slice(),
       outputs: cpu.memory.physOut.slice(),
+      forces: cpu.forceTable.map((f) => ({ ...f, data: f.data.slice() })),
     });
   }
 

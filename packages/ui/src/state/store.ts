@@ -5,7 +5,7 @@ import type { LineMapRow } from '../editors/awl/monitorExtension';
 import type { OnlineCompare } from '../online/compare';
 import type { DownloadPlan } from '../online/plcDownload';
 import type { PlcAccess, PlcIdentity, PlcMode, PlcRegs } from '../online/plcTypes';
-import type { SimStats, SimWarning, WatchValue } from '../sim/protocol';
+import type { SimStats, SimWarning, WatchValue, WriteItemReq } from '../sim/protocol';
 import type { ImportSummary } from '../project/navigation/tagTableIo';
 import * as wa from './workArea';
 import type { FindRequest, FindUi, TagReveal } from '../search/findState';
@@ -142,6 +142,8 @@ export interface SimUiState {
   warnings: SimWarning[];
   inputs: Uint8Array;
   outputs: Uint8Array;
+  /** Tabella di forzamento della CPU simulata (LED FRCE acceso se non è vuota). */
+  forces: WriteItemReq[];
   /** Un «Carica nel dispositivo» è in corso su questa sessione. */
   downloading: boolean;
   /** Byte aggiunti a mano nel pannello I/O («+ byte»): solo per questa simulazione, non nel progetto. */
@@ -180,6 +182,7 @@ export const SIM_OFF: SimUiState = {
   warnings: [],
   inputs: new Uint8Array(0),
   outputs: new Uint8Array(0),
+  forces: [],
   downloading: false,
   ioExtra: { inputs: [], outputs: [] },
   loaded: {},

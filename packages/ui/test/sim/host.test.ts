@@ -421,4 +421,23 @@ describe('SimHost: blocchi cancellati e controlli', () => {
       }),
     ).resolves.toEqual([{ ok: true }]);
   });
+
+  it('force: uscita forzata ai moduli, tabella nello status; area non forzabile rifiutata', async () => {
+    const f = fake();
+    await start(f.host);
+    await f.host.handle({ op: 'download', files: [ob1(['\tA I 0.0;\n\t= Q 4.0;'])] });
+    await f.host.handle({ op: 'mode', to: 'RUN' });
+    const q4 = { area: 'Q' as const, byte: 4, bit: 0, size: 'X' as const, data: Uint8Array.of(1) };
+    await f.host.handle({ op: 'force', items: [q4] });
+    await f.advance(300);
+    const st = f.of('status').at(-1)!;
+    expect(st.outputs[4]).toBe(1);
+    expect(st.forces).toHaveLength(1);
+    await expect(f.host.handle({ op: 'force', items: [{ ...q4, area: 'PQ' }] })).rejects.toThrow(
+      /forzabile/,
+    );
+    await f.host.handle({ op: 'force', items: [] });
+    await f.advance(300);
+    expect(f.of('status').at(-1)!.outputs[4]).toBe(0);
+  });
 });

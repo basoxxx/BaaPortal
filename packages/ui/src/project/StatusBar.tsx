@@ -32,7 +32,7 @@ export function StatusBar() {
               })}
         </span>
       ) : null}
-      {online.status === 'on' && online.force ? (
+      {(online.status === 'on' && online.force) || (sim.phase === 'on' && sim.forces.length > 0) ? (
         <span data-testid="plc-force-warning" className="baa-status-warn">
           {t('diag.force.active')}
         </span>
