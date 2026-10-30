@@ -26,14 +26,22 @@ import {
 } from './parser.js';
 
 export type SclDiag = { line: number; col: number; message: string }; // line 1-based
+/** Tipi elementari del sottoinsieme SCL in prova. */
+export type SclType = 'BOOL' | 'BYTE' | 'WORD' | 'DWORD' | 'INT' | 'DINT' | 'REAL';
+/**
+ * Riga 0-based dell'AWL generato → riga 1-based del testo SCL. `value`: lo stato dopo questa
+ * istruzione dà il valore della riga SCL nel tipo detto (RLO per BOOL, ACCU1 altrimenti): il valore
+ * scritto da un'assegnazione (`T`/`=`), il risultato di una condizione (l'istruzione prima del salto,
+ * che rimette RLO a 1), il selettore di CASE, la variabile di FOR al controllo in cima al ciclo.
+ */
+export type SclLine = { line: number; sclLine: number; value?: SclType };
 export type SclAwl = {
   source: string;
-  /** Riga 0-based dell'AWL generato → riga 1-based del testo SCL. */
-  lines: { line: number; sclLine: number }[];
+  lines: SclLine[];
   diagnostics: SclDiag[];
 };
 
-type Ty = 'BOOL' | 'BYTE' | 'WORD' | 'DWORD' | 'INT' | 'DINT' | 'REAL';
+type Ty = SclType;
 type Num = Exclude<Ty, 'BOOL'>;
 type Bits = 'BYTE' | 'WORD' | 'DWORD';
 type Conn = 'A' | 'O' | 'X';
@@ -152,7 +160,7 @@ const isIndexed = (e: Expr): e is Indexed => isOperand(e) && e.k !== 'temp' && !
 type Loop = { at: Pos; exit?: string; cont?: string };
 
 class Gen {
-  readonly out: { text: string; sclLine: number }[] = [];
+  readonly out: { text: string; sclLine: number; value?: Ty }[] = [];
   readonly errors: SclError[] = [];
   private sclLine = 1;
   private labelNo = 1;
@@ -170,6 +178,11 @@ class Gen {
 
   private emit(...texts: string[]): void {
     for (const text of texts) this.out.push({ text, sclLine: this.sclLine });
+  }
+
+  /** L'istruzione `at` (di solito l'ultima scritta) porta il valore della riga (`SclLine.value`). */
+  private mark(ty: Ty, at = this.out.length - 1): void {
+    this.out[at]!.value = ty;
   }
 
   private label(at: Pos): string {
@@ -536,6 +549,7 @@ class Gen {
   private boolExpr(e: Expr, at: Pos): void {
     this.want(e, 'BOOL');
     this.scoped(() => this.cond(this.hoist(e), at));
+    this.mark('BOOL');
   }
 
   // ---- chiamate di blocchi ----
@@ -715,7 +729,9 @@ class Gen {
     }
     const [bad, end] = [this.label(at), this.label(at)];
     const op = this.address(dst, bad);
-    this.emit(value, `${ty === 'BOOL' ? '=' : 'T'} ${op}`, `JU ${end}`);
+    this.emit(value, `${ty === 'BOOL' ? '=' : 'T'} ${op}`);
+    this.mark(ty);
+    this.emit(`JU ${end}`);
     this.place(bad);
     this.emit('CLR', 'SAVE');
     this.place(end);
@@ -848,12 +864,10 @@ class Gen {
         if (isIndexed(to)) return this.scoped(() => this.writeIndexed(to, dst.ty, s.e, s));
         return this.scoped(() => {
           const e = this.hoist(s.e);
-          if (dst.ty === 'BOOL') {
-            this.cond(e, s);
-            return this.emit(`= ${dst.awl}`);
-          }
-          this.num(e, dst.ty as Num);
-          return this.emit(`T ${dst.awl}`);
+          if (dst.ty === 'BOOL') this.cond(e, s);
+          else this.num(e, dst.ty as Num);
+          this.emit(`${dst.ty === 'BOOL' ? '=' : 'T'} ${dst.awl}`);
+          this.mark(dst.ty);
         });
       }
       case 'call':
@@ -930,8 +944,10 @@ class Gen {
       if (lit.ty !== n) fail(at, `Valore ${text} fuori intervallo ${n}`);
       return { awl: lit.awl, v: intLiteral(text).value };
     };
-    const run = (sel: string) => {
+    /** `simple`: il selettore si carica nei confronti, e il primo `L` ne dà il valore. */
+    const run = (sel: string, simple: boolean) => {
       const end = this.label(s);
+      const first = this.out.length;
       const targets = s.arms.map((arm) => {
         const lab = this.label(s);
         for (const v of arm.values) {
@@ -959,6 +975,7 @@ class Gen {
         }
         return lab;
       });
+      if (simple && this.out.length > first) this.mark(n, first);
       const otherwise = s.else ? this.label(s) : end;
       this.emit(`JU ${otherwise}`);
       s.arms.forEach((arm, i) => {
@@ -977,11 +994,12 @@ class Gen {
     };
     this.scoped(() => {
       const sel = this.hoist(s.sel);
-      if (isSimple(sel)) return run(this.load(sel, n));
+      if (isSimple(sel)) return run(this.load(sel, n), true);
       this.num(sel, n);
       this.withTemp(n, (tmp) => {
         this.emit(`T ${tmp}`);
-        run(tmp);
+        this.mark(n);
+        run(tmp, false);
       });
     });
   }
@@ -1015,6 +1033,7 @@ class Gen {
       const l: Loop = { at: s, exit };
       this.place(top);
       this.emit(`L ${v.awl}`, `L ${end}`, `${step > 0n ? '>' : '<'}${t}`, `JC ${exit}`);
+      this.mark(ty, this.out.length - 4);
       this.loopBody(l, s.body);
       this.sclLine = s.line;
       if (l.cont) this.place(l.cont);
@@ -1058,7 +1077,11 @@ export function sclToAwl(text: string, ctx: AwlContext, tempEnd: number): SclAwl
   const formatted = formatNetwork(plain, 'international');
   return {
     source: formatted.split('\n').length === gen.out.length ? formatted : plain,
-    lines: gen.out.map((l, line) => ({ line, sclLine: l.sclLine })),
+    lines: gen.out.map((l, line) => ({
+      line,
+      sclLine: l.sclLine,
+      ...(l.value ? { value: l.value } : {}),
+    })),
     diagnostics: [],
   };
 }

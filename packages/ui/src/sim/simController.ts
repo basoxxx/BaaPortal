@@ -321,7 +321,11 @@ export class SimController {
       }
       if (m.reason === 'ok') {
         const a = codeBlockOf(st, m.deviceId, m.blockId);
-        if (a) want = { kind: a.kind, number: a.number };
+        const b =
+          st.doc && findDevice(st.doc.project, m.deviceId)?.blocks.find((x) => x.id === m.blockId);
+        // SCL: l'ultima esecuzione nel ciclo, come la CPU (in un ciclo si vede l'ultimo giro)
+        const last = b?.kind !== 'DB' && b?.kind !== 'IDB' && b?.language === 'SCL';
+        if (a) want = { kind: a.kind, number: a.number, ...(last ? { last: true } : {}) };
       }
     } else this.reasonInputs = [];
     const key = want ? `${want.kind}${want.number}` : undefined;

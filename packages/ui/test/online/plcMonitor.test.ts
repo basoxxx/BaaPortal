@@ -61,6 +61,25 @@ describe('windowFor', () => {
     expect(windowFor(MAP, [1], 24).saz).toBe(16);
     expect(windowFor(MAP, [], 24).offsets).toEqual([]);
   });
+  it('from: in una rete lunga (SCL) parte dalla prima riga in vista', () => {
+    const w = windowFor(big, [0], 5, undefined, { network: 0, line: 6 });
+    expect(w.offsets).toEqual([12, 14, 16, 18, 20]);
+    expect(w.saz).toBe(22);
+  });
+});
+
+describe('PlcMonitorController: finestra SCL', () => {
+  it('setVisible con la prima riga: start dalla riga, poi segue lo scorrimento', async () => {
+    const { bridge, timers, ctrl } = setup();
+    ctrl.toggle('d1', 'b1');
+    ctrl.setVisible('b1', [0], { network: 0, line: 2 });
+    await flush();
+    expect(bridge.plcStatusStartCalls[0]!.offsets).toEqual([4, 6]);
+    timers.t += 1000;
+    ctrl.setVisible('b1', [0], { network: 0, line: 3 });
+    await flush();
+    expect(bridge.plcStatusWindowCalls.at(-1)!.offsets).toEqual([6]);
+  });
 });
 
 function setup(over: Partial<PlcMonitorInput> = {}) {
