@@ -58,7 +58,8 @@ function defaultName(device: PlcDevice, unitKind: SourceUnit['kind'], number: nu
   return uniqueName(base, symbolNames(device));
 }
 
-function findExisting(device: PlcDevice, unit: SourceUnit): Udt | Block | undefined {
+/** L'oggetto del dispositivo che l'unità sostituirebbe (stessa famiglia, per numero o per nome). */
+export function findExisting(device: PlcDevice, unit: SourceUnit): Udt | Block | undefined {
   const byNumber = unit.number !== undefined;
   if (unit.kind === 'UDT') {
     return device.udts.find((u) =>
@@ -174,8 +175,8 @@ export function applySource(
       b.overrides = { ...unit.overrides };
       return { kind: 'block', obj: b };
     }
-    const b = createCodeBlock({ kind: unit.kind, number, name, language: 'AWL', newId });
     const src = unit.block;
+    const b = createCodeBlock({ kind: unit.kind, number, name, language: src.language, newId });
     b.header = { ...src.header };
     b.knowHowProtected = src.knowHowProtected;
     b.interface = {

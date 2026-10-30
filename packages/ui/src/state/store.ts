@@ -33,6 +33,7 @@ export type DialogState =
   | { kind: 'download'; plan: DownloadPlan }
   | { kind: 'restore' }
   | { kind: 'importTagsReport'; fileName: string; tableName: string; summary: ImportSummary }
+  | { kind: 'importStep7'; deviceId: string }
   | null;
 
 export type EditAction = 'cut' | 'copy' | 'paste' | 'delete' | 'rename' | 'selectAll';

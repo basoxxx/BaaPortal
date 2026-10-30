@@ -17,6 +17,7 @@ import { applyDisplaySettings, useSettings } from './settings/settings';
 import { AddBlockDialog } from './project/dialogs/AddBlockDialog';
 import { AddDeviceDialog } from './project/dialogs/AddDeviceDialog';
 import { ImportTagsReport } from './project/dialogs/ImportTagsReport';
+import { Step7ImportDialog } from './project/dialogs/Step7ImportDialog';
 import { PrintDialog } from './print/PrintDialog';
 import { KitDialog } from './project/dialogs/KitDialog';
 import { DetachedWindows } from './project/workarea/DetachedWindow';
@@ -95,6 +96,9 @@ function Shell() {
           summary={dialog.summary}
           onClose={close}
         />
+      ) : null}
+      {dialog?.kind === 'importStep7' ? (
+        <Step7ImportDialog deviceId={dialog.deviceId} onClose={close} />
       ) : null}
       <DetachedWindows />
       <UpdateNotice />

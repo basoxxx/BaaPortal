@@ -566,6 +566,7 @@
     "editSource": "Edit source",
     "importBlocks": "Import blocks",
     "importTags": "Import tags",
+    "importStep7": "Import from STEP 7",
     "addWatchTable": "Add watch table",
     "setAccess": "Set CPU access",
     "moveRows": "Move rows",
@@ -1323,6 +1324,54 @@
       "UNSUPPORTED": "Not supported by the compiler: {{detail}}",
       "VALORI_ATTUALI_PERSI": "The recompiled DB uses the initial values (and, in an instance DB, the instance values): the actual values of the original that cannot be written there are not kept (in a global DB all of them; in an instance DB arrays, pointers, parameters and values whose literal does not give back the same bytes).",
       "VALORI_INIZIALI_DA_CAMPIONE": "Initial values of the SFB internal static data taken from the real block {{sample}}."
+    }
+  },
+  "step7": {
+    "menu": "Import from STEP 7…",
+    "title": "Import from STEP 7",
+    "filter": "STEP 7 exports (*.awl, *.scl, *.sdf, *.seq, *.dif, *.asc)",
+    "intro": "Choose the STL and SCL sources and the symbol tables exported from STEP 7 V5.5 (several files can be chosen at once). The .s7p project is not read.",
+    "pick": "Choose files…",
+    "files": "Files",
+    "fileErrors": "not imported ({{count}} errors)",
+    "lineMessage": "line {{line}}: {{message}}",
+    "empty": "Nothing to import.",
+    "import": "Import",
+    "sclErrors": "({{count}} SCL errors: the text is imported anyway)",
+    "col": {
+      "include": "Import",
+      "kind": "Type",
+      "name": "Name",
+      "file": "File",
+      "state": "Result"
+    },
+    "kind": {
+      "UDT": "UDT",
+      "OB": "OB",
+      "FB": "FB",
+      "FC": "FC",
+      "DB": "DB",
+      "IDB": "Instance DB",
+      "rename": "Block name",
+      "tags": "Tag table"
+    },
+    "state": {
+      "new": "new",
+      "replaces": "replaces {{name}}",
+      "rename": "renames {{old}}",
+      "tags": "{{count}} symbols"
+    },
+    "err": {
+      "FILE_TOO_LARGE": "file too large",
+      "UNKNOWN_FORMAT": "unrecognized format",
+      "SCL_SECTION_MOVED": "{{section}} section not supported: kept as a comment at the top of the body"
+    },
+    "msg": {
+      "done": "Import from STEP 7: {{created}} objects created, {{replaced}} replaced, {{renamed}} blocks renamed, {{tags}} tags.",
+      "failed": "Cannot import from STEP 7: {{message}}",
+      "renameSkipped": "Import from STEP 7: the name \"{{name}}\" is already used, the block keeps its name.",
+      "tagSkipped": "Import from STEP 7, symbol on line {{line}} not imported: {{reason}}",
+      "sclErrors": "Import from STEP 7: the SCL block \"{{name}}\" has {{count}} errors to fix in the editor."
     }
   },
   "tagIo": {

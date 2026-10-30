@@ -566,6 +566,7 @@
     "editSource": "Modifica sorgente",
     "importBlocks": "Importa blocchi",
     "importTags": "Importa variabili",
+    "importStep7": "Importa da STEP 7",
     "addWatchTable": "Aggiungi tabella di controllo",
     "setAccess": "Imposta accesso CPU",
     "moveRows": "Sposta righe",
@@ -1323,6 +1324,54 @@
       "UNSUPPORTED": "Non supportato dal compilatore: {{detail}}",
       "VALORI_ATTUALI_PERSI": "Il DB ricompilato usa i valori iniziali (e, in un DB di istanza, i valori di istanza): i valori attuali dell'originale che non vi si scrivono non si conservano (in un DB globale tutti; in un DB di istanza ARRAY, puntatori, parametri e valori il cui letterale non ridà gli stessi byte).",
       "VALORI_INIZIALI_DA_CAMPIONE": "Valori iniziali dei dati statici interni degli SFB presi dal blocco reale {{sample}}."
+    }
+  },
+  "step7": {
+    "menu": "Importa da STEP 7…",
+    "title": "Importa da STEP 7",
+    "filter": "Esportazioni di STEP 7 (*.awl, *.scl, *.sdf, *.seq, *.dif, *.asc)",
+    "intro": "Scegliere le sorgenti AWL e SCL e le tabelle dei simboli esportate da STEP 7 V5.5 (si possono scegliere più file insieme). Il progetto .s7p non si legge.",
+    "pick": "Scegli file…",
+    "files": "File",
+    "fileErrors": "non importato ({{count}} errori)",
+    "lineMessage": "riga {{line}}: {{message}}",
+    "empty": "Nessun oggetto da importare.",
+    "import": "Importa",
+    "sclErrors": "({{count}} errori SCL: il testo si importa comunque)",
+    "col": {
+      "include": "Importa",
+      "kind": "Tipo",
+      "name": "Nome",
+      "file": "File",
+      "state": "Esito"
+    },
+    "kind": {
+      "UDT": "UDT",
+      "OB": "OB",
+      "FB": "FB",
+      "FC": "FC",
+      "DB": "DB",
+      "IDB": "DB di istanza",
+      "rename": "Nome del blocco",
+      "tags": "Tabella delle variabili"
+    },
+    "state": {
+      "new": "nuovo",
+      "replaces": "sostituisce {{name}}",
+      "rename": "rinomina {{old}}",
+      "tags": "{{count}} simboli"
+    },
+    "err": {
+      "FILE_TOO_LARGE": "file troppo grande",
+      "UNKNOWN_FORMAT": "formato non riconosciuto",
+      "SCL_SECTION_MOVED": "sezione {{section}} non supportata: messa come commento in testa al corpo"
+    },
+    "msg": {
+      "done": "Importazione da STEP 7: creati {{created}} oggetti, sostituiti {{replaced}}, rinominati {{renamed}} blocchi, {{tags}} variabili.",
+      "failed": "Impossibile importare da STEP 7: {{message}}",
+      "renameSkipped": "Importazione da STEP 7: il nome \"{{name}}\" è già usato, il blocco tiene il suo nome.",
+      "tagSkipped": "Importazione da STEP 7, simbolo alla riga {{line}} non importato: {{reason}}",
+      "sclErrors": "Importazione da STEP 7: il blocco SCL \"{{name}}\" ha {{count}} errori da correggere nell'editor."
     }
   },
   "tagIo": {
