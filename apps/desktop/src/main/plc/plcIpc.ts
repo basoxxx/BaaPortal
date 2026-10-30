@@ -219,12 +219,12 @@ export function registerPlc(
   handle('plc:writeVars', (e, items): Promise<PlcWriteVarsResult> =>
     writes.writeVars(e.sender, items),
   );
-  // Runtime HMI: una conferma nativa all'avvio in scrittura, poi scritture senza conferma finché
-  // la finestra non la revoca o il collegamento cambia (lo controlla il servizio).
+  // Runtime HMI: una conferma nativa all'avvio in scrittura, poi scritture senza conferma con il
+  // token di quell'avvio, finché il runtime non lo revoca o il collegamento cambia (lo controlla il servizio).
   handle('plc:hmiArm', (e): Promise<PlcHmiArmResult> => writes.hmiArm(e.sender));
-  handle('plc:hmiDisarm', (e) => writes.hmiDisarm(e.sender));
-  handle('plc:hmiWrite', (e, items): Promise<PlcWriteVarsResult> =>
-    writes.hmiWrite(e.sender, items),
+  handle('plc:hmiDisarm', (e, token) => writes.hmiDisarm(e.sender, token));
+  handle('plc:hmiWrite', (e, token, items, jog): Promise<PlcWriteVarsResult> =>
+    writes.hmiWrite(e.sender, token, items, jog),
   );
   // Osservazione del blocco: bersaglio e CPU li decide il servizio; qui solo la forma della richiesta.
   handle('plc:statusStart', (e, raw): Promise<PlcStatusStartResult> => status.start(e.sender, raw));

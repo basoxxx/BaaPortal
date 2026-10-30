@@ -2110,6 +2110,7 @@
     "manySelected": "{{count}} oggetti selezionati: frecce per spostarli, Maiusc+frecce per ridimensionarli, Canc per eliminarli.",
     "allowWrite": "Consenti scritture nella CPU",
     "startRuntime": "Avvia runtime HMI",
+    "runtimeOpen": "Un runtime HMI è già aperto: chiuderlo prima di avviarne un altro.",
     "noSource": "Per il runtime avviare la simulazione o andare online con questo PLC.",
     "err": {
       "EMPTY": "Variabile mancante",
@@ -2135,7 +2136,8 @@
       "lost": "Lettura ferma: collegamento o simulazione non più attivi.",
       "writeFailed": "Scrittura non riuscita: {{message}}",
       "badValue": "Valore non valido per il formato della variabile",
-      "noScreen": "La schermata non esiste più."
+      "noScreen": "La schermata non esiste più.",
+      "stuck": "Uscita a impulsi forse rimasta a 1: {{address}}. Controllarla sulla macchina."
     }
   }
 }

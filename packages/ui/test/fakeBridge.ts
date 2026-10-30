@@ -355,21 +355,31 @@ export class FakeBridge implements BaaBridge {
     this.plcReadStacksCalls.push(experimental);
     return this.plcReadStacksImpl(experimental);
   }
-  /** Runtime HMI: `plcHmiArmResult` risponde alla conferma; le scritture si registrano. */
-  plcHmiArmResult: PlcHmiArmResult = { ok: true };
+  /** Runtime HMI: `plcHmiArmResult` risponde alla conferma; scritture e revoche si registrano. */
+  plcHmiArmResult: PlcHmiArmResult = { ok: true, token: 'tok' };
   plcHmiArmCalls = 0;
   plcHmiDisarmCalls = 0;
+  plcHmiDisarmTokens: string[] = [];
   plcHmiWriteCalls: PlcWriteVarItem[][] = [];
+  plcHmiWriteTokens: string[] = [];
+  plcHmiWriteJog: (boolean | undefined)[] = [];
   plcHmiWriteResults: PlcWriteVarsResult[] = [];
   async plcHmiArm(): Promise<PlcHmiArmResult> {
     this.plcHmiArmCalls++;
     return this.plcHmiArmResult;
   }
-  async plcHmiDisarm(): Promise<void> {
+  async plcHmiDisarm(token: string): Promise<void> {
     this.plcHmiDisarmCalls++;
+    this.plcHmiDisarmTokens.push(token);
   }
-  async plcHmiWrite(items: PlcWriteVarItem[]): Promise<PlcWriteVarsResult> {
+  async plcHmiWrite(
+    token: string,
+    items: PlcWriteVarItem[],
+    jog?: boolean,
+  ): Promise<PlcWriteVarsResult> {
     this.plcHmiWriteCalls.push(items);
+    this.plcHmiWriteTokens.push(token);
+    this.plcHmiWriteJog.push(jog);
     return (
       this.plcHmiWriteResults.shift() ?? { ok: true, results: items.map(() => ({ ok: true })) }
     );

@@ -7,6 +7,7 @@ import {
   findDevice,
   type HmiObject,
 } from '@baaportal/project';
+import { focusOpenRuntime } from '../../src/editors/hmi/HmiRuntime';
 import { PLC, setupOnline } from '../online/downloadHelpers';
 
 let n = 0;
@@ -132,7 +133,9 @@ describe('runtime HMI sul PLC', () => {
     fireEvent.keyDown(screen.getByTestId('hmi-runtime'), { key: 'Escape' });
     await waitFor(() => expect(screen.queryByTestId('hmi-runtime')).toBeNull());
     expect(app.bridge.plcHmiWriteCalls.map((c) => [...c[0]!.data])).toEqual([[1], [0]]);
-    expect(app.bridge.plcHmiDisarmCalls).toBe(1);
+    expect(app.bridge.plcHmiWriteJog).toEqual([true, undefined]);
+    expect(app.bridge.plcHmiWriteTokens).toEqual(['tok', 'tok']);
+    await waitFor(() => expect(app.bridge.plcHmiDisarmTokens).toEqual(['tok']));
   });
 
   it('conferma annullata: il runtime non parte', async () => {
@@ -163,5 +166,92 @@ describe('runtime HMI sul PLC', () => {
       ]),
     );
     expect(rt().getByRole('img', { name: 'Altro OFF' })).toBeInTheDocument();
+  });
+});
+
+describe('runtime HMI: rilascio dei pulsanti a impulsi', () => {
+  async function writing() {
+    const app = await openOnline();
+    await app.user.click(screen.getByLabelText('Consenti scritture nella CPU'));
+    await app.user.click(screen.getByRole('button', { name: 'Avvia runtime HMI' }));
+    return app;
+  }
+  const FAIL = { ok: false, error: 'Collegamento non riuscito' } as const;
+  const data = (app: Awaited<ReturnType<typeof writing>>) =>
+    app.bridge.plcHmiWriteCalls.map((c) => [...c[0]!.data]);
+
+  it('un rilascio non riuscito si ritenta: al secondo tentativo lo 0 è scritto, nessun avviso', async () => {
+    const app = await writing();
+    const jog = rt().getByRole('button', { name: 'Avanti' });
+    app.bridge.plcHmiWriteResults.push({ ok: true, results: [{ ok: true }] }, FAIL);
+    fireEvent.pointerDown(jog, { button: 0 });
+    fireEvent.pointerUp(jog);
+    await waitFor(() => expect(data(app)).toEqual([[1], [0], [0]]));
+    await waitFor(() => expect(rt().getByTestId('hmi-runtime-status')).toHaveTextContent(''));
+    expect(rt().queryByTestId('hmi-runtime-stuck')).toBeNull();
+  });
+
+  it("rilascio mai riuscito: avviso fisso con l'indirizzo finché uno 0 non va a buon fine", async () => {
+    const app = await writing();
+    const jog = rt().getByRole('button', { name: 'Avanti' });
+    app.bridge.plcHmiWriteResults.push({ ok: true, results: [{ ok: true }] }, FAIL, FAIL, FAIL);
+    fireEvent.pointerDown(jog, { button: 0 });
+    fireEvent.pointerUp(jog);
+    const stuck = await rt().findByTestId('hmi-runtime-stuck');
+    expect(stuck).toHaveTextContent('Uscita a impulsi forse rimasta a 1: M 0.2');
+    expect(data(app)).toEqual([[1], [0], [0], [0]]);
+    // altre scritture riuscite non lo tolgono
+    fireEvent.pointerDown(rt().getByRole('button', { name: 'Avvio' }), { button: 0 });
+    await waitFor(() => expect(app.bridge.plcHmiWriteCalls).toHaveLength(5));
+    expect(rt().getByTestId('hmi-runtime-stuck')).toBeInTheDocument();
+    // un nuovo rilascio riuscito sì
+    fireEvent.pointerDown(jog, { button: 0 });
+    fireEvent.pointerUp(jog);
+    await waitFor(() => expect(rt().queryByTestId('hmi-runtime-stuck')).toBeNull());
+  });
+
+  it.each([
+    ['cattura del puntatore persa', (el: HTMLElement) => fireEvent.lostPointerCapture(el)],
+    ['puntatore annullato', (el: HTMLElement) => fireEvent.pointerCancel(el)],
+    ['finestra senza focus', () => fireEvent.blur(window)],
+    [
+      'finestra nascosta',
+      () => {
+        Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+        fireEvent(document, new Event('visibilitychange'));
+        Object.defineProperty(document, 'visibilityState', {
+          value: 'visible',
+          configurable: true,
+        });
+      },
+    ],
+  ])('%s: il pulsante premuto si rilascia', async (_name, lose) => {
+    const app = await writing();
+    const jog = rt().getByRole('button', { name: 'Avanti' });
+    fireEvent.pointerDown(jog, { button: 0 });
+    lose(jog);
+    await waitFor(() => expect(data(app)).toEqual([[1], [0]]));
+  });
+
+  it('campo di immissione: Invio senza aver scritto nulla non riscrive il valore letto', async () => {
+    const app = await writing();
+    const io = rt().getByLabelText('Velocità');
+    await waitFor(() => expect(io).toHaveValue('42'));
+    await app.user.click(io);
+    await app.user.keyboard('{Enter}');
+    expect(app.bridge.plcHmiWriteCalls).toEqual([]);
+    await app.user.type(io, '3{Enter}'); // 42 e un 3 in coda: 423
+    await waitFor(() => expect(data(app)).toEqual([[0x01, 0xa7]]));
+  });
+
+  it("un solo runtime nell'app: un secondo avvio porta in primo piano quello aperto", async () => {
+    await writing();
+    const close = rt().getByRole('button', { name: 'Chiudi runtime' });
+    close.blur();
+    expect(focusOpenRuntime()).toBe(true);
+    expect(close).toHaveFocus();
+    fireEvent.click(close);
+    await waitFor(() => expect(screen.queryByTestId('hmi-runtime')).toBeNull());
+    expect(focusOpenRuntime()).toBe(false);
   });
 });

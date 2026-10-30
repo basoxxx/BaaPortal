@@ -290,9 +290,9 @@ export type PlcWriteVarsResult =
   | { ok: false; error: string }
   | { ok: false; cancelled: true };
 
-/** Esito di `plcHmiArm`: la conferma unica delle scritture del runtime HMI. */
+/** Esito di `plcHmiArm`: la conferma unica delle scritture di un runtime HMI, con il suo token. */
 export type PlcHmiArmResult =
-  { ok: true } | { ok: false; error: string } | { ok: false; cancelled: true };
+  { ok: true; token: string } | { ok: false; error: string } | { ok: false; cancelled: true };
 
 /** Registri di una riga osservata (solo quelli chiesti con la maschera). */
 export interface PlcRegs {

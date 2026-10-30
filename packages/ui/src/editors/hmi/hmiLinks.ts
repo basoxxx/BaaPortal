@@ -21,18 +21,22 @@ export interface HmiLink {
   setPlan(keys: string[], targets: WatchTarget[]): void;
   start(): void;
   stop(): void;
-  /** Scrive un valore; `null` se scritto, altrimenti il motivo. */
-  write(target: WatchTarget, data: Uint8Array): Promise<string | null>;
+  /** Scrive un valore; `null` se scritto, altrimenti il motivo. `jog`: pressione a impulsi. */
+  write(target: WatchTarget, data: Uint8Array, jog?: boolean): Promise<string | null>;
 }
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /**
  * PLC collegato: le letture passano dal giro condiviso con le tabelle di controllo (un solo giro
- * per CPU, al più 200 voci in tutto); le scritture da `plcHmiWrite`, che il processo principale
- * rifiuta senza la conferma del runtime in scrittura.
+ * per CPU, al più 200 voci in tutto); le scritture da `plcHmiWrite` con il token della conferma
+ * del runtime in scrittura (senza, il processo principale le rifiuta).
  */
-export function plcHmiLink(store: StoreApi<AppState>, bridge: BaaBridge): HmiLink {
+export function plcHmiLink(
+  store: StoreApi<AppState>,
+  bridge: BaaBridge,
+  token: string | undefined,
+): HmiLink {
   const c = watchHubFor(store, bridge).client();
   return {
     subscribe: c.subscribe,
@@ -40,10 +44,11 @@ export function plcHmiLink(store: StoreApi<AppState>, bridge: BaaBridge): HmiLin
     setPlan: c.setPlan,
     start: c.start,
     stop: c.stop,
-    write: async (target, data) => {
+    write: async (target, data, jog) => {
+      if (token === undefined) return 'Runtime in sola lettura';
       let r: Awaited<ReturnType<BaaBridge['plcHmiWrite']>>;
       try {
-        r = await bridge.plcHmiWrite([{ target, data }]);
+        r = await bridge.plcHmiWrite(token, [{ target, data }], jog);
       } catch (e) {
         return errorText(e);
       }

@@ -31,10 +31,11 @@ Il campo _Variabile_ accetta ciò che accetta una tabella di controllo: un simbo
 
 ## Runtime
 
-_Avvia runtime HMI_ (barra dell'editor) apre la schermata a tutta finestra, dentro la finestra di BaaPortal; _Chiudi runtime_ o Esc la chiudono. Il pulsante è attivo solo se la simulazione di quel PLC è accesa, oppure se si è online con quel PLC.
+_Avvia runtime HMI_ (barra dell'editor) apre la schermata a tutta finestra, dentro la finestra di BaaPortal; _Chiudi runtime_ o Esc la chiudono. Il pulsante è attivo solo se la simulazione di quel PLC è accesa, oppure se si è online con quel PLC. Nell'app c'è un solo runtime aperto alla volta, anche fra gli editor staccati: un secondo _Avvia runtime HMI_ porta in primo piano quello aperto e lo dice nella barra dell'editor.
 
 - **Letture:** un solo giro di lettura per le variabili della schermata mostrata, ciascuna una volta. Online è lo stesso giro delle tabelle di controllo (una richiesta alla volta, ogni 500 ms, al più 200 voci in tutto fra runtime e tabelle aperte; le voci in più danno un errore sull'oggetto); sul simulatore una lettura ogni 200 ms. Un valore che non si legge mostra `#####` (il motivo nel suggerimento). Se il collegamento o la simulazione si fermano, la barra del runtime lo dice e le letture non ripartono da sole.
-- **Scritture:** una alla volta, nell'ordine dei gesti (il rilascio di un pulsante a impulsi non sorpassa la pressione). Un errore compare nella barra del runtime. Chiudendo il runtime con un pulsante a impulsi ancora premuto si scrive prima lo 0.
+- **Scritture:** una alla volta, nell'ordine dei gesti (il rilascio di un pulsante a impulsi non sorpassa la pressione). Un errore compare nella barra del runtime. Un campo di immissione scrive solo il testo modificato: Invio senza aver scritto nulla non riscrive il valore letto.
+- **Rilascio dei pulsanti a impulsi:** lo 0 parte al rilascio del pulsante (puntatore o tasto), anche se il puntatore esce dal pulsante o il sistema lo annulla, se la finestra perde il focus o viene nascosta, e alla chiusura del runtime. Uno 0 non riuscito si ritenta fino a tre volte (ogni 200 ms); se non riesce mai, sotto la barra resta un avviso rosso «Uscita a impulsi forse rimasta a 1: …» con la variabile, che sparisce solo quando uno 0 su quella variabile va a buon fine (per esempio premendo e rilasciando di nuovo il pulsante).
 
 ### Sicurezza delle scritture sul PLC reale
 
@@ -42,12 +43,14 @@ Le scritture del runtime seguono le regole delle tabelle di controllo, con una d
 
 1. **Il runtime online parte in sola lettura.** Pulsanti e campi di immissione sono disattivati e non mandano nulla.
 2. Per scrivere si spunta **Consenti scritture nella CPU** prima di avviarlo. All'avvio il processo principale mostra **una** finestra di conferma nativa: «Il runtime HMI può scrivere nella CPU …: consentire?». Annullando, il runtime non parte.
-3. Dopo il sì, le scritture di quella finestra passano senza altre conferme **finché il runtime resta aperto e il collegamento online è lo stesso**. Chiudendo il runtime il permesso si revoca; scollegandosi o ricollegandosi non vale più (il processo principale rifiuta e il runtime va riavviato).
-4. Ogni scrittura passa dal processo principale come _Comanda_: stessi controlli (solo I, Q, M e DB; dati della lunghezza giusta; bit 0 o 1), stessa CPU verificata (numero d'ordinazione e di serie), su un collegamento `online-write` separato aperto e chiuso per ogni scrittura. Il collegamento di sola lettura della finestra e il suo filtro dei frame non si toccano mai. Il renderer non può scrivere senza il permesso: lo tiene il processo principale, non l'interfaccia.
+3. Dopo il sì, il processo principale dà al runtime un **token**: le scritture con quel token passano senza altre conferme **finché quel runtime resta aperto e il collegamento online è lo stesso**. Chiudendo il runtime si revoca solo il suo token (un runtime avviato dopo tiene il suo); scollegandosi o ricollegandosi, ricaricando la pagina o se il renderer cade, il processo principale revoca ogni token della finestra e il runtime va riavviato.
+4. Ogni scrittura passa dal processo principale come _Comanda_: stessi controlli (solo I, Q, M e DB; dati della lunghezza giusta; bit 0 o 1), stessa CPU verificata (numero d'ordinazione e di serie). Il collegamento `online-write` separato si apre alla conferma, con la verifica della CPU, e resta aperto finché il permesso vale: pressioni e rilasci non aspettano un collegamento nuovo. Se cade dopo un errore si riapre, con una nuova verifica, alla scrittura successiva. Il collegamento di sola lettura della finestra e il suo filtro dei frame non si toccano mai. Il renderer non può scrivere senza il permesso: lo tiene il processo principale, non l'interfaccia.
+5. Il processo principale ricorda i pulsanti a impulsi premuti di ogni token. Alla revoca (runtime chiuso, pagina ricaricata o renderer caduto, collegamento online finito o cambiato, uscita dall'app) scrive lui lo 0 a quelli ancora premuti, prima di chiudere il collegamento; un rilascio non riuscito finisce nel registro del processo principale (`[runtime HMI] … non riportato a 0`).
+6. Lo 0 di un pulsante a impulsi premuto non è mai rifiutato perché un'altra scrittura è in corso sulla stessa CPU (per esempio _Comanda_ in attesa di conferma, o un caricamento): aspetta fino a 2 s che finisca, poi scrive comunque sul collegamento del runtime. Una pressione o un'altra scrittura in quel momento sono invece rifiutate con «Operazione già in corso».
 
 Sul simulatore pulsanti e campi scrivono subito, come _Comanda_ nelle tabelle di controllo sul simulatore.
 
-**Attenzione:** se il collegamento cade mentre un pulsante a impulsi è premuto, lo 0 del rilascio non arriva e il bit resta a 1. Il programma del PLC deve proteggersi da sé (consenso, tempo massimo), come con qualunque pannello.
+**Attenzione:** se il PC si spegne o si blocca, o la rete verso la CPU cade, mentre un pulsante a impulsi è premuto, nessuno 0 arriva e il bit resta a 1. **Non usare i pulsanti a impulsi del runtime per movimenti pericolosi.** Il programma del PLC deve proteggersi da sé (consenso, finecorsa, tempo massimo o watchdog sul bit), come con qualunque pannello.
 
 ### Perché dentro la finestra e non in una finestra separata
 

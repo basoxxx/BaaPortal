@@ -27,9 +27,46 @@ export interface HmiRuntimeMode {
   source: 'sim' | 'plc';
   /** Pulsanti e campi di immissione scrivono (online solo dopo la conferma nel processo principale). */
   canWrite: boolean;
+  /** Online in scrittura: il token della conferma (`plcHmiArm`). */
+  token?: string;
 }
 
 type Ok = Extract<HmiBinding, { ok: true }>;
+
+/** Rilascio di un pulsante a impulsi non riuscito: altri tentativi, a questo intervallo (ms). */
+export const HMI_RELEASE_TRIES = 3;
+export const HMI_RELEASE_RETRY_MS = 200;
+
+/**
+ * Un solo runtime aperto nell'app (gli editor staccati girano in questo stesso renderer):
+ * `arming` durante la conferma, poi il pulsante «Chiudi runtime» di quello aperto.
+ */
+const openRuntime: { arming: boolean; close: HTMLButtonElement | null } = {
+  arming: false,
+  close: null,
+};
+
+/** C'è già un runtime (o se ne sta avviando uno): lo porta in primo piano e risponde `true`. */
+export function focusOpenRuntime(): boolean {
+  const el = openRuntime.close;
+  if (el) {
+    el.ownerDocument.defaultView?.focus();
+    el.focus();
+  }
+  return !!el || openRuntime.arming;
+}
+
+/** Mentre `fn` chiede la conferma, un secondo avvio è rifiutato. */
+export async function whileArming<R>(fn: () => Promise<R>): Promise<R> {
+  openRuntime.arming = true;
+  try {
+    return await fn();
+  } finally {
+    openRuntime.arming = false;
+  }
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
  * Runtime HMI a tutta finestra: le schermate del PLC con i valori letti in un solo giro (le
@@ -43,17 +80,19 @@ export function HmiRuntime(p: {
 }) {
   const { t } = useTranslation();
   const { store, bridge } = useServices();
-  const { source, canWrite } = p.mode;
+  const { source, canWrite, token } = p.mode;
   const dev = useAppStore((s) => (s.doc ? findDevice(s.doc.project, p.deviceId) : undefined));
   const [current, setCurrent] = useState(p.screenId);
   const screen = dev && findHmiScreen(dev, current);
   const link = useMemo(
-    () => (source === 'plc' ? plcHmiLink(store, bridge) : simHmiLink(store, p.deviceId)),
-    [source, store, bridge, p.deviceId],
+    () => (source === 'plc' ? plcHmiLink(store, bridge, token) : simHmiLink(store, p.deviceId)),
+    [source, store, bridge, p.deviceId, token],
   );
   const st = useSyncExternalStore(link.subscribe, link.getState);
   const [message, setMessage] = useState('');
   const [lost, setLost] = useState(false);
+  /** Impulsi il cui 0 non è riuscito: per chiave della variabile, il testo da mostrare. */
+  const [stuck, setStuck] = useState<ReadonlyMap<string, string>>(new Map());
   const closeRef = useRef<HTMLButtonElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -83,38 +122,94 @@ export function HmiRuntime(p: {
       (el): el is HTMLElement => el !== self && !(el as HTMLElement).inert,
     );
     for (const el of others) el.inert = true;
-    closeRef.current?.focus();
+    const closeBtn = closeRef.current;
+    closeBtn?.focus();
+    openRuntime.close = closeBtn;
     return () => {
       for (const el of others) el.inert = false;
+      if (openRuntime.close === closeBtn) openRuntime.close = null;
     };
   }, []);
 
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const markStuck = (key: string, label: string | null) =>
+    setStuck((m) => {
+      if (label === null ? !m.has(key) : m.get(key) === label) return m;
+      const next = new Map(m);
+      if (label === null) next.delete(key);
+      else next.set(key, label);
+      return next;
+    });
+
   // Le scritture vanno in fila: il rilascio di un pulsante a impulsi non sorpassa la pressione.
   const queue = useRef<Promise<void>>(Promise.resolve());
-  const write = (target: WatchTarget, data: Uint8Array): Promise<void> => {
+  const write = (target: WatchTarget, data: Uint8Array, jog = false): Promise<void> => {
     queue.current = queue.current.then(async () => {
-      const err = await link.write(target, data);
+      const err = await link.write(target, data, jog);
       setMessage(err ? t('hmi.runtime.writeFailed', { message: err }) : '');
+      // Uno 0 scritto: quell'impulso non è più rimasto a 1.
+      if (!err && target.size === 'X' && data[0] === 0) markStuck(targetKey(target), null);
     });
     return queue.current;
   };
   /** Pulsanti a impulsi tenuti premuti: si rilasciano anche alla chiusura. */
-  const held = useRef(new Map<string, WatchTarget>());
+  const held = useRef(new Map<string, { target: WatchTarget; label: string }>());
+  /** Lo 0 di un impulso, ritentato finché il runtime è aperto; se non riesce resta l'avviso. */
   const release = (id: string) => {
-    const target = held.current.get(id);
-    if (!target) return;
+    const h = held.current.get(id);
+    if (!h) return;
     held.current.delete(id);
-    void write(target, Uint8Array.of(0));
+    queue.current = queue.current.then(async () => {
+      let err: string | null = null;
+      for (let i = 0; i < HMI_RELEASE_TRIES; i++) {
+        if (i > 0) {
+          if (!mounted.current) break;
+          await sleep(HMI_RELEASE_RETRY_MS);
+        }
+        err = await link.write(h.target, Uint8Array.of(0));
+        if (!err) break;
+      }
+      if (!mounted.current) return;
+      setMessage(err ? t('hmi.runtime.writeFailed', { message: err }) : '');
+      markStuck(targetKey(h.target), err ? h.label : null);
+    });
   };
+  const releaseAll = useRef<() => void>(() => undefined);
+  releaseAll.current = () => {
+    for (const id of [...held.current.keys()]) release(id);
+  };
+  // Finestra che perde il focus o nascosta: un pulsante tenuto non riceverebbe il rilascio.
+  useEffect(() => {
+    const doc = rootRef.current?.ownerDocument;
+    const win = doc?.defaultView;
+    if (!doc || !win) return;
+    const all = () => releaseAll.current();
+    const vis = () => {
+      if (doc.visibilityState === 'hidden') all();
+    };
+    win.addEventListener('blur', all);
+    doc.addEventListener('visibilitychange', vis);
+    return () => {
+      win.removeEventListener('blur', all);
+      doc.removeEventListener('visibilitychange', vis);
+    };
+  }, []);
   // Alla fine (anche se l'editor si chiude senza «Chiudi runtime»): impulsi rilasciati, poi il
   // permesso di scrittura revocato nel processo principale.
   const armed = source === 'plc' && canWrite;
   const stopAll = useRef<() => void>(() => undefined);
   stopAll.current = () => {
-    for (const id of [...held.current.keys()]) release(id);
+    releaseAll.current();
     void queue.current.then(() => {
       link.stop();
-      if (armed) void bridge.plcHmiDisarm();
+      // Solo il proprio token: un runtime avviato nel frattempo tiene il suo permesso.
+      if (armed && token) void bridge.plcHmiDisarm(token);
     });
   };
   useEffect(() => {
@@ -123,7 +218,7 @@ export function HmiRuntime(p: {
     return () => stopAll.current();
   }, [link]);
   const close = async () => {
-    for (const id of [...held.current.keys()]) release(id);
+    releaseAll.current();
     await queue.current;
     p.onClose();
   };
@@ -136,8 +231,9 @@ export function HmiRuntime(p: {
       setMessage(t(`hmi.err.${d.code}`, { defaultValue: t('hmi.runtime.badValue') }));
       return;
     }
-    if (releaseData(o)) held.current.set(o.id, b.target);
-    void write(b.target, d.data);
+    const jog = !!releaseData(o);
+    if (jog) held.current.set(o.id, { target: b.target, label: o.tag?.trim() || o.text });
+    void write(b.target, d.data, jog);
   };
 
   const modeText =
@@ -172,6 +268,11 @@ export function HmiRuntime(p: {
           {t('hmi.runtime.close')}
         </button>
       </div>
+      {stuck.size > 0 ? (
+        <div className="baa-hmi-runtime-stuck" role="alert" data-testid="hmi-runtime-stuck">
+          {t('hmi.runtime.stuck', { address: [...stuck.values()].join(', ') })}
+        </div>
+      ) : null}
       <div className="baa-hmi-runtime-body">
         {screen ? (
           <div
@@ -258,6 +359,7 @@ function RuntimeObject(p: {
           }}
           onPointerUp={() => p.onRelease(o.id)}
           onPointerCancel={() => p.onRelease(o.id)}
+          onLostPointerCapture={() => p.onRelease(o.id)}
           onBlur={() => p.onRelease(o.id)}
           onKeyDown={(e) => {
             if ((e.key === ' ' || e.key === 'Enter') && !e.repeat && ok) {
@@ -325,7 +427,7 @@ function RuntimeObject(p: {
             className="baa-hmi-io is-input"
             aria-label={o.text || o.tag}
             value={draft ?? text}
-            onFocus={() => setDraft(text)}
+            // Il testo si scrive solo dopo averlo modificato: Invio da solo non riscrive il valore letto.
             onChange={(e) => setDraft(e.target.value)}
             onBlur={() => setDraft(null)}
             onKeyDown={(e) => {

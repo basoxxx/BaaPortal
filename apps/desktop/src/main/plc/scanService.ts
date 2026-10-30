@@ -3,8 +3,8 @@ import { hostsToScan, listInterfaces } from './interfaces';
 import { createIdentify, createProbe, scanSubnet, type IdentifyFn, type ProbeFn } from './scan';
 
 /** La pagina finisce: finestra distrutta, pagina ricaricata (un nuovo renderer) o renderer caduto. */
-const GONE = ['destroyed', 'did-navigate', 'render-process-gone'] as const;
-type GoneEvent = (typeof GONE)[number];
+export const GONE = ['destroyed', 'did-navigate', 'render-process-gone'] as const;
+export type GoneEvent = (typeof GONE)[number];
 
 /** Quanto serve di una finestra: abbastanza per i test senza Electron. */
 export interface ScanOwner {

@@ -37,7 +37,7 @@ import { useEditTarget } from '../../state/useEditTarget';
 import type { EditorRef } from '../../state/workArea';
 import { bindObject } from './hmiBinding';
 import { HmiObjectView } from './HmiObjectView';
-import { HmiRuntime, type HmiRuntimeMode } from './HmiRuntime';
+import { focusOpenRuntime, HmiRuntime, whileArming, type HmiRuntimeMode } from './HmiRuntime';
 import './hmi.css';
 
 const DRAG_KIND = 'application/x-baa-hmi-kind';
@@ -268,15 +268,22 @@ export function HmiScreenEditor({ editor }: { editor: EditorRef }) {
   const start = async () => {
     setNotice('');
     if (!source) return;
+    // Un runtime alla volta nell'app: il secondo avvio porta in primo piano il primo.
+    if (focusOpenRuntime()) {
+      setNotice(t('hmi.runtimeOpen'));
+      return;
+    }
+    let token: string | undefined;
     if (source === 'plc' && allowWrite) {
-      // La conferma è nativa, nel processo principale: vale finché il runtime resta aperto.
-      const r = await bridge.plcHmiArm();
+      // La conferma è nativa, nel processo principale: il token vale finché il runtime resta aperto.
+      const r = await whileArming(() => bridge.plcHmiArm());
       if (!r.ok) {
         if (!('cancelled' in r)) setNotice(r.error);
         return;
       }
+      token = r.token;
     }
-    setRuntime({ source, canWrite: source === 'sim' || allowWrite });
+    setRuntime({ source, canWrite: source === 'sim' || allowWrite, token });
   };
 
   return (

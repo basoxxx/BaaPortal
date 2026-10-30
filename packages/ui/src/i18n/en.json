@@ -2110,6 +2110,7 @@
     "manySelected": "{{count}} objects selected: arrows move them, Shift+arrows resize them, Delete removes them.",
     "allowWrite": "Allow writes to the CPU",
     "startRuntime": "Start HMI runtime",
+    "runtimeOpen": "An HMI runtime is already open: close it before starting another.",
     "noSource": "To run the HMI start the simulation or go online with this PLC.",
     "err": {
       "EMPTY": "Tag missing",
@@ -2135,7 +2136,8 @@
       "lost": "Reading stopped: connection or simulation no longer active.",
       "writeFailed": "Write failed: {{message}}",
       "badValue": "Value not valid for the tag format",
-      "noScreen": "The screen no longer exists."
+      "noScreen": "The screen no longer exists.",
+      "stuck": "Jog output may have stayed at 1: {{address}}. Check it on the machine."
     }
   }
 }

@@ -157,6 +157,12 @@ button.baa-hmi-button:disabled {
 .baa-hmi-runtime-bar [role='status'] {
   flex: 1;
 }
+.baa-hmi-runtime-stuck {
+  padding: 6px 12px;
+  background: #b3261e;
+  color: #fff;
+  font-weight: 600;
+}
 .baa-hmi-runtime-body {
   flex: 1;
   display: flex;

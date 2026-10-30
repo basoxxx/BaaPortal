@@ -207,13 +207,17 @@ export interface BaaBridge {
   /** Scrive valori negli operandi (I, Q, M, DB): conferma nativa nel processo principale. */
   plcWriteVars(items: PlcWriteVarItem[]): Promise<PlcWriteVarsResult>;
   /**
-   * Runtime HMI in scrittura: una conferma nativa sola, nel processo principale, che vale per
-   * questa finestra finché non si chiama `plcHmiDisarm` o il collegamento online cambia.
+   * Runtime HMI in scrittura: una conferma nativa sola, nel processo principale. Il token vale
+   * finché non si chiama `plcHmiDisarm` con lo stesso token, la pagina si ricarica o il
+   * collegamento online cambia; alla revoca il processo principale riporta a 0 gli impulsi premuti.
    */
   plcHmiArm(): Promise<PlcHmiArmResult>;
-  plcHmiDisarm(): Promise<void>;
-  /** Scrive dal runtime HMI (I, Q, M, DB) senza altre conferme: rifiutato se non confermato con `plcHmiArm`. */
-  plcHmiWrite(items: PlcWriteVarItem[]): Promise<PlcWriteVarsResult>;
+  plcHmiDisarm(token: string): Promise<void>;
+  /**
+   * Scrive dal runtime HMI (I, Q, M, DB) senza altre conferme: rifiutato senza un token valido.
+   * `jog`: pressione di un pulsante a impulsi (il processo principale ricorda il bit fino allo 0).
+   */
+  plcHmiWrite(token: string, items: PlcWriteVarItem[], jog?: boolean): Promise<PlcWriteVarsResult>;
   /** Elenco dei blocchi della CPU collegata (sola lettura); mai eccezioni: l'esito dice tutto. */
   plcBlocks(): Promise<PlcBlocksResult>;
   /** Carica un solo blocco OB, FB, FC o DB dalla CPU collegata (sola lettura); mai eccezioni. */
