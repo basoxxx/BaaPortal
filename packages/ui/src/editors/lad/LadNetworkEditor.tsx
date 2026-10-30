@@ -40,7 +40,7 @@ type Props = {
    * Un oggetto dell'albero rilasciato sulla rete (`TREE_DRAG_TYPE`, testo grezzo): restituisce
    * l'istanza del box CALL da creare, o `undefined` se non è un blocco chiamabile.
    */
-  callOfDrop?: (raw: string) => string | undefined;
+  callOfDrop?: (raw: string) => string | Promise<string | undefined> | undefined;
   /** Osservazione del programma: stato degli elementi, solo da mostrare. */
   monitor?: LadMonitor;
 };

@@ -189,4 +189,37 @@ describe('NetworksView di un blocco FUP', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Passa a FUP' }));
     expect(lang()).toBe('FUP');
   }, 30_000);
+
+  it('un FB senza DB di istanza: la finestra propone il DB, OK lo crea e inserisce il box', async () => {
+    const f = createCodeBlock({ kind: 'FC', number: 31, name: 'Fup', language: 'FUP' });
+    f.networks[0]!.lad = net();
+    const callee = createCodeBlock({ kind: 'FB', number: 5, name: 'Nastro', language: 'AWL' });
+    const app = await openEditor('block', f.id, (d) => void d.blocks.push(f, callee));
+    const drop = () => {
+      const tree = fakeDataTransfer();
+      tree.setData(
+        'application/x-baaportal',
+        JSON.stringify({ deviceId: PLC, refs: [{ kind: 'block', deviceId: PLC, id: callee.id }] }),
+      );
+      fireEvent.drop(screen.getByRole('group', { name: 'Vista FUP del segmento' }), {
+        dataTransfer: tree,
+      });
+    };
+    const lad = () => (dev(app).blocks.find((b) => b.id === f.id) as CodeBlock).networks[0]!.lad!;
+    // Annulla: niente DB, niente box
+    drop();
+    fireEvent.click(within(screen.getByTestId('dialog-instance-db')).getByText('Annulla'));
+    expect(dev(app).blocks.some((b) => b.kind === 'IDB')).toBe(false);
+    expect(JSON.stringify(lad())).not.toContain('CALL');
+    drop();
+    const dlg = screen.getByTestId('dialog-instance-db');
+    expect(within(dlg).getByDisplayValue('Nastro_DB')).toBeInTheDocument();
+    expect(within(dlg).getByDisplayValue('1')).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(within(dlg).getByText('OK'));
+    });
+    const idb = dev(app).blocks.find((b) => b.kind === 'IDB');
+    expect(idb).toMatchObject({ name: 'Nastro_DB', number: 1, instanceOf: 'Nastro' });
+    expect(JSON.stringify(lad())).toContain('\\"Nastro\\", \\"Nastro_DB\\"');
+  }, 30_000);
 });

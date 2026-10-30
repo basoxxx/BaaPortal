@@ -51,7 +51,7 @@ export type LadEditOpts = {
   newId: () => string;
   callParams?: CallParams;
   onActive?: (api: LadInsertApi, active: boolean) => void;
-  callOfDrop?: (raw: string) => string | undefined;
+  callOfDrop?: (raw: string) => string | Promise<string | undefined> | undefined;
   /** Contenitore della vista: dopo una modifica il fuoco va all'elemento selezionato o a lui. */
   root: RefObject<HTMLElement | null>;
   /** Attributo `data-…` con l'id dell'elemento, per ritrovarlo nel DOM. */
@@ -280,7 +280,9 @@ export function useLadEdit(o: LadEditOpts) {
       const tree = dt.getData(TREE_DRAG_TYPE);
       const instance = tree ? o.callOfDrop?.(tree) : undefined;
       if (instance === undefined) return false;
-      insertCall(instance, at);
+      // un FB senza DB di istanza: il box entra solo dopo la risposta alla finestra
+      if (typeof instance === 'string') insertCall(instance, at);
+      else void instance.then((i) => i !== undefined && insertCall(i, at));
       return true;
     }
     let payload: { palette?: string; box?: BoxKind };

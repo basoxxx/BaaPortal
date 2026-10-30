@@ -143,6 +143,13 @@
 .baa-lad-pin--in {
   left: 12px;
 }
+.baa-lad-pin-hint {
+  font-weight: 400;
+  color: var(--baa-text-muted);
+}
+.baa-lad-pin-hint--required {
+  color: var(--baa-error);
+}
 .baa-lad-pin--out {
   right: 12px;
   justify-content: flex-end;

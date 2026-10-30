@@ -16,7 +16,15 @@ import {
 import type { LadBox, LadElem, LadNetwork, LadNode, LadOut } from '@baaportal/ladfbd';
 import { LadToolbar } from '../lad/LadToolbar';
 import { LAD_TOOL_KEYS, ladAction, ladClipKey } from '../lad/ladKeys';
-import { fieldPatch, fieldValue, fieldsOf, flowPin, paletteIdOf, placeOf } from '../lad/ladOps';
+import {
+  callPinHint,
+  fieldPatch,
+  fieldValue,
+  fieldsOf,
+  flowPin,
+  paletteIdOf,
+  placeOf,
+} from '../lad/ladOps';
 import type { CallParams, LadField } from '../lad/ladOps';
 import { monAttr, monText, pinValues, type LadMonitor } from '../lad/ladMonitor';
 import { useLadEdit } from '../lad/useLadEdit';
@@ -32,7 +40,7 @@ type Props = {
   newId?: () => string;
   /** Come in `LadNetworkEditor`: la tavolozza inserisce nell'ultima vista attiva. */
   onActive?: (api: LadInsertApi, active: boolean) => void;
-  callOfDrop?: (raw: string) => string | undefined;
+  callOfDrop?: (raw: string) => string | Promise<string | undefined> | undefined;
   /** Osservazione del programma: stato degli elementi, solo da mostrare. */
   monitor?: LadMonitor;
 };
@@ -139,9 +147,11 @@ function Operand({ item, fld }: { item: Item; fld: LadField }) {
     );
   }
   const live = pinValues(c.monitor, item)[fld.key];
+  const hint = item.k === 'box' && fld.pin ? callPinHint(item, fld.key) : undefined;
   return (
     <span
-      className={`baa-fup-op${value === '' ? ' baa-fup-op--empty' : ''}`}
+      className={`baa-fup-op${value === '' && hint !== 'optional' ? ' baa-fup-op--empty' : ''}`}
+      title={hint ? t(hint === 'optional' ? 'lad.pinOptional' : 'lad.pinRequired') : undefined}
       onDoubleClick={() => c.edit(item.id, fld.key)}
     >
       {value || (hint === 'optional' ? '…' : EMPTY)}

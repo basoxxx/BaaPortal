@@ -1933,6 +1933,12 @@
     },
     "cannotClose": "Impossibile chiudere il ramo qui: scegli un elemento che segue il ramo aperto, nella stessa serie.",
     "cannotDo": "Operazione non possibile in questo punto.",
+    "instanceDb": {
+      "title": "DB di istanza",
+      "text": "Il FB «{{fb}}» non ha un DB di istanza. Crearlo per il box CALL?"
+    },
+    "pinOptional": "Facoltativo: senza operando resta il valore nel DB di istanza.",
+    "pinRequired": "Obbligatorio: una FC vuole tutti i parametri.",
     "cannotNegate": "Qui non si nega: scegli un contatto, un confronto, un POS/NEG, un `>=1` o un cerchietto di negazione.",
     "cannotExtend": "La selezione multipla vale solo per elementi vicini della stessa serie.",
     "multiSelected": "{{n}} elementi selezionati.",

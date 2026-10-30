@@ -31,7 +31,7 @@ import { FupNetworkView } from '../fbd/FupNetworkView';
 import { LadNetworkEditor } from '../lad/LadNetworkEditor';
 import { setLadActive } from '../lad/ladActive';
 import type { LadMonitor } from '../lad/ladMonitor';
-import { callInstanceOf } from './callInstance';
+import { useInstanceDbPrompt } from '../lad/useInstanceDbPrompt';
 import { convertAwl, convertToAwl } from './convertAwl';
 import { hasRawLines, isLockedImport, lockedBannerKey } from './readOnlyImport';
 import { useMnemonic } from '../awl/mnemonicPreference';
@@ -92,6 +92,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
     () => (block && dev && (isKop || isScl) ? kopSources(block, dev) : null),
     [block, dev, isKop, isScl],
   );
+  const dbPrompt = useInstanceDbPrompt(dev);
   const callParams = useMemo(
     () => (block && dev && isKop ? kopCallParams(block, dev) : undefined),
     [block, dev, isKop],
@@ -414,6 +415,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
   };
   return (
     <div className="baa-block-networks" ref={root}>
+      {dbPrompt.dialog}
       {locked ? (
         <p className="baa-readonly-banner" role="note" data-testid="readonly-banner">
           {t(lockedBannerKey(block))}
@@ -503,7 +505,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
                     onChange={(next, key) => editLad(n.id, next, key)}
                     callParams={callParams}
                     onActive={(api, on) => setLadActive(api, on, { deviceId, blockId })}
-                    callOfDrop={(raw) => callInstanceOf(dev, raw)}
+                    callOfDrop={dbPrompt.callOfDrop}
                     monitor={ladMonitors?.[i]}
                   />
                 ) : (
@@ -515,7 +517,7 @@ export function NetworksView({ deviceId, blockId }: Props) {
                     onChange={(next, key) => editLad(n.id, next, key)}
                     callParams={callParams}
                     onActive={(api, on) => setLadActive(api, on, { deviceId, blockId })}
-                    callOfDrop={(raw) => callInstanceOf(dev, raw)}
+                    callOfDrop={dbPrompt.callOfDrop}
                     monitor={ladMonitors?.[i]}
                   />
                 )}

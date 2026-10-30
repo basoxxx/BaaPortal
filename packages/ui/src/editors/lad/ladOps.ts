@@ -145,6 +145,17 @@ function boxFields(b: LadBox, callParams?: CallParams): LadField[] {
   return out;
 }
 
+/**
+ * Pin di dati vuoto di un box CALL: per un FB (`"FB", "DB"`, `FB 1, DB 1`, multi-istanza `#x`) è
+ * facoltativo, perché resta il valore nell'istanza; per una FC o SFC è obbligatorio (il controllo
+ * AWL dà CALL_PARAM_MISSING). `undefined` se il pin ha un operando o il box non è una CALL.
+ */
+export function callPinHint(b: LadBox, pin: string): 'optional' | 'required' | undefined {
+  if (b.box !== 'CALL' || !(pin in b.pins) || b.pins[pin]!.trim() !== '') return undefined;
+  const inst = b.instance.trim();
+  return inst.includes(',') || inst.startsWith('#') ? 'optional' : 'required';
+}
+
 export function fieldValue(e: LadElem | LadOut, fld: LadField): string {
   if (e.k === 'box') return fld.pin ? (e.pins[fld.key] ?? '') : e.instance;
   const v = (e as Record<string, unknown>)[fld.key];

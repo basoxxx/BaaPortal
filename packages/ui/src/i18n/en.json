@@ -1933,6 +1933,12 @@
     },
     "cannotClose": "Cannot close the branch here: pick an element that follows the open branch in the same series.",
     "cannotDo": "This operation is not possible here.",
+    "instanceDb": {
+      "title": "Instance DB",
+      "text": "FB \"{{fb}}\" has no instance DB. Create one for the CALL box?"
+    },
+    "pinOptional": "Optional: without an operand the value in the instance DB is kept.",
+    "pinRequired": "Required: an FC needs every parameter.",
     "cannotNegate": "Cannot negate here: pick a contact, a comparison, a POS/NEG, a `>=1` or a negation circle.",
     "cannotExtend": "Multiple selection works only on adjacent elements of the same series.",
     "multiSelected": "{{n}} elements selected.",

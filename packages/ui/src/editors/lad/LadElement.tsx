@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { LadBox, LadElem, LadOut } from '@baaportal/ladfbd';
 import type { LadCell } from './ladLayout';
-import { fieldValue, fieldsOf, flowPin, paletteIdOf } from './ladOps';
+import { callPinHint, fieldValue, fieldsOf, flowPin, paletteIdOf } from './ladOps';
 import { monAttr, monText, pinValues, type LadMonitor, type MonAttr } from './ladMonitor';
 
 /** Dimensioni in pixel di una cella della griglia. */
@@ -223,6 +223,19 @@ export function LadElement({ elem, cell, selected, messages, onSelect, onEdit, m
   );
 }
 
+/** Pin vuoto di un box CALL: «…» con il suggerimento (facoltativo per un FB, obbligatorio per una FC). */
+function PinHint({ b, pin }: { b: LadBox; pin: string }) {
+  const { t } = useTranslation();
+  const hint = callPinHint(b, pin);
+  if (!hint) return null;
+  const text = t(hint === 'optional' ? 'lad.pinOptional' : 'lad.pinRequired');
+  return (
+    <b className={`baa-lad-pin-hint baa-lad-pin-hint--${hint}`} title={text}>
+      …
+    </b>
+  );
+}
+
 function BoxLabels({ b, cell, live }: { b: LadBox; cell: LadCell; live: Record<string, string> }) {
   const flow = flowPin(b.box);
   const outs = Object.entries(cell.outRows ?? {});
@@ -237,7 +250,7 @@ function BoxLabels({ b, cell, live }: { b: LadBox; cell: LadCell; live: Record<s
           style={pinStyle(row)}
         >
           {name}
-          {b.pins[name] ? <b>{b.pins[name]}</b> : null}
+          {b.pins[name] ? <b>{b.pins[name]}</b> : <PinHint b={b} pin={name} />}
           {live[name] !== undefined ? <i className="baa-lad-val">{live[name]}</i> : null}
         </span>
       ))}
@@ -249,7 +262,11 @@ function BoxLabels({ b, cell, live }: { b: LadBox; cell: LadCell; live: Record<s
           style={pinStyle(row)}
         >
           {live[name] !== undefined ? <i className="baa-lad-val">{live[name]}</i> : null}
-          {b.pins[name] && name !== flow ? <b>{b.pins[name]}</b> : null}
+          {name === flow ? null : b.pins[name] ? (
+            <b>{b.pins[name]}</b>
+          ) : (
+            <PinHint b={b} pin={name} />
+          )}
           {name}
         </span>
       ))}
