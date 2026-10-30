@@ -333,7 +333,9 @@ export function ProjectTree() {
     editorOfNode(nodeId) !== null && !!rows.find((r) => r.node.id === nodeId)?.node.enabled;
   const openNode = (nodeId: string): boolean => {
     const target = openable(nodeId) ? editorOfNode(nodeId) : null;
-    if (target) store.getState().openEditor(target);
+    // i riferimenti incrociati dall'albero: tutto il programma, senza il filtro dell'ultima apertura
+    if (target?.kind === 'crossRef') openCrossRef(store, target.deviceId);
+    else if (target) store.getState().openEditor(target);
     return target !== null;
   };
 

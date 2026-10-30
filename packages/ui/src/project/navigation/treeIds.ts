@@ -18,7 +18,11 @@ export type PlcFolder =
   | 'watch'
   | 'watch-add'
   | 'backup'
-  | 'prog-info';
+  | 'prog-info'
+  | 'prog-xref'
+  | 'prog-calls'
+  | 'prog-assignment'
+  | 'prog-resources';
 export type TreeArea = 'blocks' | 'tags' | 'types';
 
 const FOLDERS: ReadonlySet<string> = new Set<PlcFolder>([
@@ -39,6 +43,10 @@ const FOLDERS: ReadonlySet<string> = new Set<PlcFolder>([
   'watch-add',
   'backup',
   'prog-info',
+  'prog-xref',
+  'prog-calls',
+  'prog-assignment',
+  'prog-resources',
 ]);
 const AREAS: ReadonlySet<string> = new Set<TreeArea>(['blocks', 'tags', 'types']);
 

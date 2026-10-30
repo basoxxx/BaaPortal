@@ -2,6 +2,7 @@ import { act, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { createCodeBlock, findDevice, type CodeBlock } from '@baaportal/project';
 import { commands } from '../src/commands/commands';
+import { nodeIdOfEditor } from '../src/state/workArea';
 import { renderApp, type RenderedApp } from './renderApp';
 
 const T = 30_000;
@@ -66,6 +67,37 @@ describe('Informazioni sul programma: assegnazione e risorse', () => {
       expect(within(row('FC1')).queryByTestId('resources-uncompiled')).toBeNull();
       expect(within(view).getByTestId('resources-path').textContent).toContain('OB1 → FC1');
       expect(within(view).getAllByTestId('resources-area')).toHaveLength(5);
+    },
+    T,
+  );
+
+  it(
+    'cartella Informazioni sul programma: ogni voce apre la sua vista e torna selezionata',
+    async () => {
+      const app = await setup();
+      const views = [
+        ['prog-xref', 'xref-view', 'crossRef'],
+        ['prog-calls', 'calls-view', 'callStructure'],
+        ['prog-assignment', 'assign-view', 'assignment'],
+        ['prog-resources', 'resources-view', 'resources'],
+      ] as const;
+      // la cartella si chiude e si riapre come le altre, senza aprire viste
+      const folder = screen.getByTestId(`tree-node-plc:${PLC}:prog-info`);
+      await app.user.dblClick(folder);
+      expect(folder).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByTestId('calls-view')).toBeNull();
+      await app.user.dblClick(folder);
+      expect(folder).toHaveAttribute('aria-expanded', 'true');
+      for (const [node, view] of views) {
+        await app.user.dblClick(await screen.findByTestId(`tree-node-plc:${PLC}:${node}`));
+        await screen.findByTestId(view);
+      }
+      // la scheda attiva riporta alla sua voce nell'albero
+      const wa = app.store.getState().workArea;
+      for (const [node, , kind] of views) {
+        const e = wa.editors.find((x) => x.kind === kind)!;
+        expect(nodeIdOfEditor(e)).toBe(`plc:${PLC}:${node}`);
+      }
     },
     T,
   );

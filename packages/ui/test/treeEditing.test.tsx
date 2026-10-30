@@ -426,6 +426,8 @@ describe('gruppi e menu contestuale', () => {
       'Esporta blocco compilato (.blk)…',
       'Riferimenti incrociati',
       'Struttura di richiamo',
+      'Elenco di assegnazione',
+      'Risorse',
       'Proprietà',
     ]);
     expect(items[0]).not.toHaveAttribute('aria-disabled'); // Apri: la tabella si apre

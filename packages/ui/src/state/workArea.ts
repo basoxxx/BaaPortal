@@ -1,4 +1,4 @@
-import { ids, parseNodeId } from '../project/navigation/treeIds';
+import { ids, parseNodeId, type PlcFolder } from '../project/navigation/treeIds';
 
 export type EditorKind =
   | 'tagTable'
@@ -55,6 +55,16 @@ export const toEditorRef = (t: EditorTarget): EditorRef => ({
   key: editorKey(t.kind, t.deviceId, t.objectId),
 });
 
+/** Voci della cartella «Informazioni sul programma» e l'editor che ciascuna apre. */
+const PROG_INFO_NODE = {
+  crossRef: 'prog-xref',
+  callStructure: 'prog-calls',
+  assignment: 'prog-assignment',
+  resources: 'prog-resources',
+} as const satisfies Partial<Record<EditorKind, PlcFolder>>;
+const PROG_INFO_EDITOR: Partial<Record<PlcFolder, keyof typeof PROG_INFO_NODE>> =
+  Object.fromEntries(Object.entries(PROG_INFO_NODE).map(([k, f]) => [f, k]));
+
 /** Nodo dell'albero che corrisponde all'editor. */
 export function nodeIdOfEditor(e: EditorTarget): string {
   switch (e.kind) {
@@ -78,7 +88,7 @@ export function nodeIdOfEditor(e: EditorTarget): string {
     case 'callStructure':
     case 'assignment':
     case 'resources':
-      return ids.folder(e.deviceId, 'prog-info');
+      return ids.folder(e.deviceId, PROG_INFO_NODE[e.kind]);
   }
 }
 
@@ -100,9 +110,8 @@ export function editorOfNode(nodeId: string): EditorTarget | null {
   if (p.kind === 'folder' && p.folder === 'online-diag') {
     return { kind: 'onlineDiag', deviceId: p.dev, objectId: '' };
   }
-  if (p.kind === 'folder' && p.folder === 'prog-info') {
-    return { kind: 'callStructure', deviceId: p.dev, objectId: '' };
-  }
+  const info = p.kind === 'folder' ? PROG_INFO_EDITOR[p.folder] : undefined;
+  if (p.kind === 'folder' && info) return { kind: info, deviceId: p.dev, objectId: '' };
   return null;
 }
 

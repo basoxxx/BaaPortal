@@ -285,7 +285,16 @@ function deviceNode(dev: PlcDevice, compare?: OnlineCompare): TreeNode {
         ...watchNodes,
       ]),
       folderNode(dev, 'backup', 'tree.plc.backup', 'treeBackup', false),
-      folderNode(dev, 'prog-info', 'tree.plc.progInfo', 'treeProgInfo', true),
+      folderNode(dev, 'prog-info', 'tree.plc.progInfo', 'treeProgInfo', true, [
+        leaf(ids.folder(dev.id, 'prog-xref'), 'commands.tools.crossReferences', 'treeProgInfo'),
+        leaf(ids.folder(dev.id, 'prog-calls'), 'commands.tools.callStructure', 'treeProgInfo'),
+        leaf(
+          ids.folder(dev.id, 'prog-assignment'),
+          'commands.tools.assignmentList',
+          'treeProgInfo',
+        ),
+        leaf(ids.folder(dev.id, 'prog-resources'), 'commands.tools.resources', 'treeProgInfo'),
+      ]),
     ],
   };
 }
