@@ -48,6 +48,47 @@ describe('dataLayout (mc7 §1.4.8)', () => {
     });
   });
 
+  it('valori di istanza: solo letterali che parseLiteral accetta e che ricompilati ridanno gli stessi byte', () => {
+    const iface = readSsb(
+      buildSsb(
+        {
+          ...empty(),
+          stat: [
+            el('r', E('Real')),
+            el('t', { kind: 'elementary', name: 'S5Time' }),
+            el('dt', { kind: 'dateAndTime' }),
+            el('d', { kind: 'elementary', name: 'Date' }),
+            el('s', { kind: 'string', length: 4 }),
+          ],
+        },
+        { dt: 'DT#2024-01-01-00:00:00' },
+        'DB',
+      ),
+      'DB',
+    );
+    // r 0, t 4, dt 6, d 14, s 16
+    const base = new Uint8Array(dataLayout(iface).size);
+    base.set([0x24, 0x01, 0x01, 0, 0, 0, 0, 0x02], 6);
+    base[16] = 4;
+    const at = (bytes: [number, number[]][]) => {
+      const x = base.slice();
+      for (const [o, b] of bytes) x.set(b, o);
+      return instanceValues(iface, x);
+    };
+    // REAL massimo float32, positivo e negativo: parseLiteral li accetta e tornano identici
+    expect(at([[0, [0x7f, 0x7f, 0xff, 0xff]]])).toEqual({ STAT0: '3.4028234663852886e+38' });
+    expect(at([[0, [0xff, 0x7f, 0xff, 0xff]]])).toEqual({ STAT0: '-3.4028234663852886e+38' });
+    expect(at([[4, [0x09, 0x99]]])).toEqual({ STAT1: 'S5T#9S990MS' });
+    // fuori: S5TIME non normalizzato, DT a zero o col giorno della settimana sbagliato, data oltre
+    // il 2168, STRING con byte oltre la lunghezza attuale
+    expect(at([[4, [0x10, 0x10]]])).toEqual({});
+    expect(at([[6, [0, 0, 0, 0, 0, 0, 0, 0]]])).toEqual({});
+    expect(at([[6, [0x24, 0x10, 0x30, 0x13, 0x45, 0x59, 0x99, 0x95]]])).toEqual({});
+    expect(at([[14, [0xff, 0xff]]])).toEqual({});
+    expect(at([[16, [4, 2, 0x41, 0x42, 0x43, 0x44]]])).toEqual({});
+    expect(at([[16, [4, 2, 0x41, 0x42, 0, 0]]])).toEqual({ STAT4: "'AB'" });
+  });
+
   it('dataLayout = lunghezza dei dati su tutti i DB globali e sul DB di istanza DB1806', ({
     skip,
   }) => {

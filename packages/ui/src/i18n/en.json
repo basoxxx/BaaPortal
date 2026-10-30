@@ -1302,7 +1302,7 @@
       "UNKNOWN_MEMBER": "Member not found: {{detail}}",
       "UNKNOWN_SYMBOL": "Unknown symbol: {{detail}}",
       "UNSUPPORTED": "Not supported by the compiler: {{detail}}",
-      "VALORI_ATTUALI_PERSI": "The recompiled DB uses the initial values (and, in an instance DB, the instance values): the other actual values of the original are not kept.",
+      "VALORI_ATTUALI_PERSI": "The recompiled DB uses the initial values (and, in an instance DB, the instance values): the actual values of the original that cannot be written there are not kept (in a global DB all of them; in an instance DB arrays, pointers, parameters and values whose literal does not give back the same bytes).",
       "VALORI_INIZIALI_DA_CAMPIONE": "Initial values of the SFB internal static data taken from the real block {{sample}}."
     }
   },

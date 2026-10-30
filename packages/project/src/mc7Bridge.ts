@@ -33,6 +33,7 @@ import {
 } from '@baaportal/mc7';
 import {
   formatType,
+  parseLiteral,
   parseType,
   sameName,
   type DataType,
@@ -41,7 +42,7 @@ import {
   type TypeResolver,
 } from '@baaportal/s7-types';
 import { createAwlContext } from './awlContext';
-import { findSystemFb, toTypedMembers } from './members';
+import { findSystemFb, toTypedMembers, typeResolver } from './members';
 import { convertBlockToGraphic } from './awlToGraphic';
 import { blockSources, kopSources, type KopNetworkResult } from './kopSources';
 import { isGraphic } from './model';
@@ -921,7 +922,7 @@ function finishModel(
         fbChanged
           ? "L'FB del DB di istanza è cambiato: il DB si rigenera dall'FB coi valori iniziali e i valori di istanza; gli altri valori attuali sono persi."
           : block.kind === 'IDB'
-            ? 'Il DB di istanza ricompilato usa i valori iniziali e i valori di istanza: i valori attuali che non vi compaiono (ARRAY, puntatori) sono persi.'
+            ? 'Il DB di istanza ricompilato usa i valori iniziali e i valori di istanza: i valori attuali che non vi si scrivono (ARRAY, puntatori, parametri, valori il cui letterale non ridà gli stessi byte) sono persi.'
             : 'I valori attuali del DB non sono modificabili: il file ricompilato usa i valori iniziali.',
       ),
     );
@@ -1943,6 +1944,8 @@ interface BuildCtx {
   notes: { code: ImportNote['code']; params?: Record<string, string> }[];
   /** Falso se qualcosa non si può riscrivere dai campi del modello. */
   rewritable: boolean;
+  /** Valori di istanza coi nomi generati → coi nomi dei membri dell'FB n (vedi `namedOverrides`). */
+  instanceNames: (fb: number, generated: Record<string, string>) => Record<string, string>;
 }
 
 /** Nota di importazione con un codice (testo in `mc7.diag.<codice>`), per blocco. */
@@ -2045,6 +2048,61 @@ export interface ImportContext {
   fbName?: (n: number) => string | undefined;
   /** Numeri degli FB noti (per riconoscere un DB di istanza). */
   hasFb: (n: number) => boolean;
+  /** Valori di istanza coi nomi generati → coi nomi dei membri dell'FB n; senza, restano generati. */
+  instanceNames?: (fb: number, generated: Record<string, string>) => Record<string, string>;
+}
+
+const SEGMENT = /^(IN_OUT|IN|OUT|STAT)(\d+)$/;
+const FB_SECTION = { IN: 'input', OUT: 'output', IN_OUT: 'inOut', STAT: 'static' } as const;
+
+/**
+ * Valori di istanza coi nomi generati dell'SSB (`STAT1.IN0`, da `instanceValues`) → coi nomi dei
+ * membri dell'FB n del dispositivo, per posizione nella stessa sezione (come `generatedNames`).
+ * Un percorso che non porta a un membro dove il valore vale si scarta: alla ricompilazione il
+ * confronto coi byte originali dà VALORI_ATTUALI_PERSI. Senza l'FB nel dispositivo restano come sono.
+ */
+function namedOverrides(
+  device: PlcDevice,
+  fbNumber: number,
+  generated: Record<string, string>,
+): Record<string, string> {
+  const fb = device.blocks.find((b) => b.kind === 'FB' && b.number === fbNumber);
+  if (!fb) return generated;
+  const resolve = typeResolver(device);
+  const top = resolve(fb.name);
+  const out: Record<string, string> = {};
+  for (const [path, value] of Object.entries(generated)) {
+    let scope: FbSections | TypedMember[] | undefined =
+      top?.kind === 'fb' ? top.sections : undefined;
+    let type: DataType | undefined;
+    const names: string[] = [];
+    for (const seg of path.split('.')) {
+      const m = SEGMENT.exec(seg);
+      const list: TypedMember[] | undefined =
+        !m || !scope
+          ? undefined
+          : Array.isArray(scope)
+            ? scope
+            : scope[FB_SECTION[m[1] as keyof typeof FB_SECTION]];
+      const member: TypedMember | undefined = m ? list?.[Number(m[2])] : undefined;
+      type = member?.type;
+      if (!member || !type) break;
+      names.push(member.name);
+      const found: ReturnType<TypeResolver> = type.kind === 'named' ? resolve(type.name) : null;
+      scope =
+        type.kind === 'struct'
+          ? type.members
+          : found?.kind === 'udt'
+            ? found.members
+            : found?.kind === 'fb'
+              ? found.sections
+              : undefined;
+    }
+    if (type && names.length === path.split('.').length && parseLiteral(type, value).ok) {
+      out[names.join('.')] = value;
+    }
+  }
+  return out;
 }
 
 /** Nomi dei parametri formali di una FC nell'ordine dei puntatori (#PARn = posizione n). */
@@ -2118,7 +2176,7 @@ function dbOf(d: Mc7Block, fbNumberKnown: boolean, c: BuildCtx): GlobalDb | Inst
     let overrides: Record<string, string> = {};
     try {
       // i valori del DB (i suoi dati) diversi da quelli dell'FB: una ricompilazione li riscrive
-      if (d.data) overrides = instanceValues(d.iface, d.data);
+      if (d.data) overrides = c.instanceNames(d.instanceOf.number, instanceValues(d.iface, d.data));
     } catch {
       /* layout non calcolabile: elenco vuoto, i byte originali restano */
     }
@@ -2167,6 +2225,7 @@ function decodedToBlock(
   const c: BuildCtx = {
     newId: ic.newId,
     fbName: (n) => ic.fbName?.(n) ?? `FB${n}`,
+    instanceNames: ic.instanceNames ?? ((_n, generated) => generated),
     warnings: [...d.warnings],
     notes: [],
     rewritable: true,
@@ -2233,6 +2292,7 @@ export function blockFromMc7(
     newId,
     fbName,
     hasFb: (n) => fbName(n) !== undefined,
+    instanceNames: (n, generated) => namedOverrides(device, n, generated),
   });
   for (const callee of rebuiltAgainst(d, deviceCallees(device, new Map()))) {
     r.notes.push({ code: 'CALL_RICOSTRUITA_CON_PROGETTO', params: { callee } });
@@ -2656,6 +2716,9 @@ export function planImport(
     } catch {
       return true;
     }
+    // stessi byte ma il modello salvato prima della 1.8 non li legge (attributi spenti, nessun
+    // valore di istanza): si reimporta e `keptDbModel` tiene il resto del modello
+    if ((ex.kind === 'DB' || ex.kind === 'IDB') && staleDbModel(ex, x.d)) return true;
     if (ex.kind === 'DB' && x.d.instanceOf && batchFbs.has(x.d.instanceOf.number)) {
       x.convert = true;
       return true;
@@ -2680,6 +2743,7 @@ export function planImport(
   });
   decoded.splice(0, decoded.length, ...kept);
   const fbNames = new Map<number, string>();
+  const batchFb = new Set(decoded.filter((x) => x.cls === 'FB').map((x) => x.d.number));
   for (const b of device.blocks) if (b.kind === 'FB') fbNames.set(b.number, b.name);
   for (const x of decoded) if (x.cls === 'FB') fbNames.set(x.d.number, x.name);
   const languageOf = new Map<Block, number>();
@@ -2689,6 +2753,9 @@ export function planImport(
         newId,
         fbName: (n) => fbNames.get(n),
         hasFb: (n) => fbNames.has(n),
+        // un FB del lotto ha i nomi generati; uno del progetto i suoi
+        instanceNames: (n, generated) =>
+          batchFb.has(n) ? generated : namedOverrides(device, n, generated),
       });
       block.name = x.name;
       if (x.existing) {
@@ -2952,8 +3019,13 @@ function keptDbModel(ex: Block, inc: Block, device: PlcDevice): Block | undefine
     return undefined;
   }
   const out = { ...structuredClone({ ...ex, mc7: undefined }), mc7: inc.mc7 } as Block;
-  // la protezione know-how viene dai byte (come l'intestazione)
+  // dai byte (come l'intestazione): protezione know-how, attributi compilati e valori attuali
+  // dell'istanza, già coi nomi dell'FB (`namedOverrides`); sola lettura non è nei byte e resta
   out.knowHowProtected = inc.knowHowProtected;
+  if ((out.kind === 'DB' || out.kind === 'IDB') && (inc.kind === 'DB' || inc.kind === 'IDB')) {
+    out.attributes = { ...inc.attributes, readOnly: out.attributes.readOnly };
+  }
+  if (out.kind === 'IDB' && inc.kind === 'IDB') out.overrides = { ...inc.overrides };
   const h = inc.header;
   out.header = {
     ...out.header,
@@ -2963,6 +3035,18 @@ function keptDbModel(ex: Block, inc: Block, device: PlcDevice): Block | undefine
     version: h.version,
   };
   return out;
+}
+
+/** Un DB del progetto con gli attributi diversi dai byte, o un DB di istanza senza i loro valori. */
+function staleDbModel(ex: GlobalDb | InstanceDb, d: Mc7Block): boolean {
+  const a = attributesOf(d);
+  if (a.unlinked !== ex.attributes.unlinked || a.nonRetain !== ex.attributes.nonRetain) return true;
+  if (ex.kind !== 'IDB' || Object.keys(ex.overrides).length > 0 || !d.data) return false;
+  try {
+    return Object.keys(instanceValues(d.iface, d.data)).length > 0;
+  } catch {
+    return false;
+  }
 }
 
 /** JSON con le chiavi in ordine (per confrontare metadati salvati e ricalcolati). */

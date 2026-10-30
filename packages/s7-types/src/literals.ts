@@ -63,12 +63,11 @@ function parseInteger(text: string, bits: 16 | 32, allowL: boolean): Result {
 
 // ---- Real ----
 
-const REAL_MAX = 3.402823e38;
-
 function parseReal(text: string): Result {
   if (!/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(text)) return fail('SYNTAX');
   const n = Number(text);
-  if (Math.abs(n) > REAL_MAX) return fail('OUT_OF_RANGE');
+  // fuori intervallo solo se non è un REAL finito: il massimo float32 (3.4028235e+38) vale
+  if (!Number.isFinite(Math.fround(n))) return fail('OUT_OF_RANGE');
   return ok(Number.isInteger(n) && Math.abs(n) < 1e21 ? `${n}.0` : String(n));
 }
 

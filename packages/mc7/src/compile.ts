@@ -28,6 +28,7 @@ import {
 } from './resolveSymbols';
 import {
   buildSsb,
+  encodeInitial,
   readSsb,
   type SsbElement,
   type SsbInterface,
@@ -723,9 +724,39 @@ function literalAt(t: SsbType, at: number, data: Uint8Array): string | undefined
   if (t.kind === 'dateAndTime') return initialLiteral(t, data.subarray(byte, byte + 8));
   if (t.kind !== 'elementary') return undefined;
   if (t.name === 'Bool') return initialLiteral(t, Uint8Array.of((data[byte]! >> (at & 7)) & 1));
-  const sizes: Record<string, number> = { Byte: 1, Char: 1, Word: 2, Int: 2, S5Time: 2, Date: 2 };
-  const n = sizes[t.name] ?? 4;
+  const n = SIZES[t.name] ?? 4;
   return initialLiteral(t, Uint8Array.from(data.subarray(byte, byte + n)).reverse());
+}
+
+const SIZES: Record<string, number> = { Byte: 1, Char: 1, Word: 2, Int: 2, S5Time: 2, Date: 2 };
+
+/**
+ * Il letterale del dato solo se `parseLiteral` lo accetta e la sua codifica riscrive esattamente gli
+ * stessi byte: restano fuori S5TIME non normalizzati, DT col giorno della settimana sbagliato o
+ * coi campi a zero, STRING con byte oltre la lunghezza attuale, date fuori intervallo.
+ */
+function exactLiteralAt(t: SsbType, at: number, data: Uint8Array): string | undefined {
+  const lit = literalAt(t, at, data);
+  if (lit === undefined || t.kind === 'raw') return undefined;
+  const enc = encodeInitial(t, lit);
+  if (!enc) return undefined;
+  const byte = at >> 3;
+  const bool = t.kind === 'elementary' && t.name === 'Bool';
+  const n =
+    t.kind === 'string'
+      ? 2 + t.length
+      : t.kind === 'dateAndTime'
+        ? 8
+        : bool
+          ? 1
+          : t.kind === 'elementary'
+            ? (SIZES[t.name] ?? 4)
+            : 0;
+  const probe = data.slice(byte, byte + n);
+  if (bool) probe[0]! &= ~(1 << (at & 7));
+  else probe.fill(0);
+  writeValue(probe, at & 7, t, enc);
+  return probe.every((b, k) => b === data[byte + k]) ? lit : undefined;
 }
 
 /**
@@ -733,7 +764,8 @@ function literalAt(t: SsbType, at: number, data: Uint8Array): string | undefined
  * (quelli dell'FB): per percorso, come gli `initials` di un IDB, così una ricompilazione li riscrive.
  * Restano fuori, e quindi non tornano identici, gli ARRAY e il loro contenuto (un valore per
  * elemento non si rappresenta), i puntatori degli IN_OUT complessi, i parametri (POINTER, ANY,
- * TIMER…), le multi-istanze di SFB (statiche non documentate) e i valori senza letterale (REAL NaN).
+ * TIMER…), le multi-istanze di SFB (statiche non documentate), i valori senza letterale (REAL NaN)
+ * e quelli il cui letterale non riscrive gli stessi byte (`exactLiteralAt`).
  */
 export function instanceValues(iface: SsbInterface, data: Uint8Array): Record<string, string> {
   const lay = dataLayout(iface);
@@ -754,7 +786,7 @@ export function instanceValues(iface: SsbInterface, data: Uint8Array): Record<st
         if (/^FB\d+$/.test(t.name)) walk(e.children?.[0]?.children ?? [], path);
       } else {
         const at = o.byte * 8 + (o.bit ?? 0);
-        const mine = literalAt(t, at, data);
+        const mine = exactLiteralAt(t, at, data);
         if (mine !== undefined && mine !== literalAt(t, at, image)) out[path] = mine;
       }
     });
