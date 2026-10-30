@@ -21,7 +21,8 @@ export function activeObjectRef(s: AppState): ObjectRef | null {
     e.kind === 'callStructure' ||
     e.kind === 'assignment' ||
     e.kind === 'resources' ||
-    e.kind === 'deviceView'
+    e.kind === 'deviceView' ||
+    e.kind === 'networkView'
   )
     return null;
   if (e.kind === 'allTags') return { kind: 'device', deviceId: e.deviceId };

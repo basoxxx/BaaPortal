@@ -590,7 +590,13 @@
     "hmiEdit": "Edit HMI screen",
     "projectLanguages": "Project languages",
     "editTranslation": "Edit translation",
-    "importTexts": "Import project texts"
+    "importTexts": "Import project texts",
+    "netAddSubnet": "New subnet",
+    "netDeleteSubnet": "Delete subnet",
+    "netConnect": "Connect interface",
+    "netEdit": "Network properties",
+    "netAddStation": "Insert ET 200 station",
+    "netDeleteStation": "Delete ET 200 station"
   },
   "inspector": {
     "tab": {
@@ -914,7 +920,17 @@
     "HW_SLOT_TAKEN": "The slot is already used by another module.",
     "HW_RACK_NOT_CONNECTED": "The rack is not connected: it needs an IM 360 in slot 3 of rack 0 and an IM 361 in slot 3 of this rack (or the IM 365 pair, rack 1 only).",
     "HW_ADDRESS_OVERLAP": "The addresses ({{area}}) overlap those of {{other}}.",
-    "HW_ADDRESS_OUT_OF_RANGE": "The addresses ({{area}}) are outside the CPU limits."
+    "HW_ADDRESS_OUT_OF_RANGE": "The addresses ({{area}}) are outside the CPU limits.",
+    "NET_NOT_CONNECTED": "The interface is not connected to any subnet.",
+    "NET_SUBNET_INVALID": "The subnet does not exist or does not match the interface type.",
+    "NET_ADDRESS_OUT_OF_RANGE": "Address missing or out of range (0 up to the highest address of the subnet, at most 126).",
+    "NET_ADDRESS_DUPLICATE": "Address already used on the subnet by {{other}}.",
+    "NET_IP_INVALID": "IP address not valid for the subnet.",
+    "NET_IP_DUPLICATE": "IP address already used on the subnet by {{other}}.",
+    "NET_STATION_NO_MASTER": "The station's CPU has no interface on this subnet.",
+    "NET_MASK_INVALID": "Invalid subnet mask.",
+    "NET_GATEWAY_INVALID": "Invalid router address.",
+    "NET_RATE_INVALID": "Transmission rate or highest address not allowed for the subnet."
   },
   "block": {
     "interface": "Block interface",
@@ -1608,7 +1624,9 @@
     "mpiSearching": "Searching the MPI bus nodes…",
     "mpiNoNodes": "No other node found on the MPI bus.",
     "mpiNodes": "Nodes on the MPI bus",
-    "mpiNode": "Address {{address}}"
+    "mpiNode": "Address {{address}}",
+    "useConfigured": "Use configured address",
+    "useConfiguredHint": "CPU address from the network view: {{address}}"
   },
   "download": {
     "title": "Download to device",
@@ -2063,7 +2081,9 @@
     "noSlot": "No suitable free slot for {{name}} in rack {{rack}}.",
     "cannotMove": "The module cannot go into slot {{slot}}.",
     "download": "Download hardware configuration to device",
-    "downloadDisabled": "The hardware configuration is edited and saved in the project, but it cannot be downloaded to the CPU: the format of the system data blocks (SDB) is not documented. Configure the CPU hardware with STEP 7 or TIA Portal. \"Download to device\" downloads only the program blocks, as before."
+    "downloadDisabled": "The hardware configuration is edited and saved in the project, but it cannot be downloaded to the CPU: the format of the system data blocks (SDB) is not documented. Configure the CPU hardware with STEP 7 or TIA Portal. \"Download to device\" downloads only the program blocks, as before.",
+    "noStationSlot": "No free slot suitable for {{name}} in the station.",
+    "stationOf": "distributed I/O of {{plc}}"
   },
   "library": {
     "project": "Project library",
@@ -2234,5 +2254,43 @@
     "search": "Search the help",
     "results": "Results",
     "noResults": "No results."
+  },
+  "net": {
+    "title": "Network view",
+    "addSubnet": "New subnet",
+    "add": "New {{type}} subnet",
+    "type": {
+      "MPI": "MPI",
+      "PROFIBUS": "PROFIBUS DP",
+      "ETHERNET": "Industrial Ethernet"
+    },
+    "station": "ET 200 station",
+    "master": "CPU",
+    "addStation": "Insert station",
+    "note": "Subnets, addresses and ET 200 stations are edited and saved in the project, but they are not downloaded to the CPU and not read from the CPU: the format of the system data blocks (SDB) is not documented. Drag an interface onto a subnet to connect it, or choose the subnet in the properties; Delete disconnects it. Double-click a device to open its device view.",
+    "openHint": "Double-click: device view",
+    "notConnected": "not connected",
+    "cannotConnect": "{{name}} cannot be connected to this subnet (different type).",
+    "overview": "Device overview",
+    "device": "Device",
+    "interface": "Interface",
+    "kind": "Type",
+    "subnet": "Subnet",
+    "address": "Address",
+    "problems": "Problems",
+    "noSelection": "Select a subnet or an interface to see its properties.",
+    "nameEmpty": "The name cannot be empty.",
+    "mask": "Subnet mask",
+    "gateway": "Router (optional)",
+    "rate": "Transmission rate",
+    "highest": "Highest address",
+    "deleteSubnet": "Delete subnet",
+    "ip": "IP address",
+    "mpiAddress": "MPI address",
+    "dpAddress": "PROFIBUS address",
+    "addressRange": "The address ranges from 0 to {{max}}.",
+    "deviceName": "PROFINET device name",
+    "openDeviceView": "Open device view",
+    "deleteStation": "Delete station"
   }
 }

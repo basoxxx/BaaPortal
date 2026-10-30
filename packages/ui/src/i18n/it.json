@@ -590,7 +590,13 @@
     "hmiEdit": "Modifica schermata HMI",
     "projectLanguages": "Lingue del progetto",
     "editTranslation": "Modifica traduzione",
-    "importTexts": "Importa testi di progetto"
+    "importTexts": "Importa testi di progetto",
+    "netAddSubnet": "Nuova sottorete",
+    "netDeleteSubnet": "Elimina sottorete",
+    "netConnect": "Collega interfaccia",
+    "netEdit": "Proprietà di rete",
+    "netAddStation": "Inserisci stazione ET 200",
+    "netDeleteStation": "Elimina stazione ET 200"
   },
   "inspector": {
     "tab": {
@@ -914,7 +920,17 @@
     "HW_SLOT_TAKEN": "Il posto è già occupato da un altro modulo.",
     "HW_RACK_NOT_CONNECTED": "Il rack non è collegato: servono una IM 360 nel posto 3 del rack 0 e una IM 361 nel posto 3 di questo rack (oppure la coppia IM 365, solo per il rack 1).",
     "HW_ADDRESS_OVERLAP": "Gli indirizzi ({{area}}) si sovrappongono a quelli di {{other}}.",
-    "HW_ADDRESS_OUT_OF_RANGE": "Gli indirizzi ({{area}}) sono fuori dai limiti della CPU."
+    "HW_ADDRESS_OUT_OF_RANGE": "Gli indirizzi ({{area}}) sono fuori dai limiti della CPU.",
+    "NET_NOT_CONNECTED": "L'interfaccia non è collegata a nessuna sottorete.",
+    "NET_SUBNET_INVALID": "La sottorete non esiste o non è del tipo dell'interfaccia.",
+    "NET_ADDRESS_OUT_OF_RANGE": "Indirizzo mancante o fuori campo (0 fino all'indirizzo più alto della sottorete, al massimo 126).",
+    "NET_ADDRESS_DUPLICATE": "Indirizzo già usato sulla sottorete da {{other}}.",
+    "NET_IP_INVALID": "Indirizzo IP non valido per la sottorete.",
+    "NET_IP_DUPLICATE": "Indirizzo IP già usato sulla sottorete da {{other}}.",
+    "NET_STATION_NO_MASTER": "La CPU della stazione non ha nessuna interfaccia su questa sottorete.",
+    "NET_MASK_INVALID": "Maschera di sottorete non valida.",
+    "NET_GATEWAY_INVALID": "Indirizzo del router non valido.",
+    "NET_RATE_INVALID": "Velocità di trasmissione o indirizzo più alto non ammessi per la sottorete."
   },
   "block": {
     "interface": "Interfaccia del blocco",
@@ -1608,7 +1624,9 @@
     "mpiSearching": "Ricerca dei nodi sul bus MPI…",
     "mpiNoNodes": "Nessun altro nodo trovato sul bus MPI.",
     "mpiNodes": "Nodi sul bus MPI",
-    "mpiNode": "Indirizzo {{address}}"
+    "mpiNode": "Indirizzo {{address}}",
+    "useConfigured": "Usa l'indirizzo configurato",
+    "useConfiguredHint": "Indirizzo della CPU dalla vista di rete: {{address}}"
   },
   "download": {
     "title": "Carica nel dispositivo",
@@ -2063,7 +2081,9 @@
     "noSlot": "Nessun posto libero adatto a {{name}} nel rack {{rack}}.",
     "cannotMove": "Il modulo non può andare nel posto {{slot}}.",
     "download": "Carica configurazione hardware nel dispositivo",
-    "downloadDisabled": "La configurazione hardware si modifica e si salva nel progetto, ma non si può caricare nella CPU: il formato dei blocchi dati di sistema (SDB) non è documentato. Configura l'hardware della CPU con STEP 7 o TIA Portal. «Carica nel dispositivo» carica solo i blocchi del programma, come prima."
+    "downloadDisabled": "La configurazione hardware si modifica e si salva nel progetto, ma non si può caricare nella CPU: il formato dei blocchi dati di sistema (SDB) non è documentato. Configura l'hardware della CPU con STEP 7 o TIA Portal. «Carica nel dispositivo» carica solo i blocchi del programma, come prima.",
+    "noStationSlot": "Nessun posto libero adatto a {{name}} nella stazione.",
+    "stationOf": "periferia decentrata di {{plc}}"
   },
   "library": {
     "project": "Libreria di progetto",
@@ -2234,5 +2254,43 @@
     "search": "Cerca nella guida",
     "results": "Risultati",
     "noResults": "Nessun risultato."
+  },
+  "net": {
+    "title": "Vista di rete",
+    "addSubnet": "Nuova sottorete",
+    "add": "Nuova sottorete {{type}}",
+    "type": {
+      "MPI": "MPI",
+      "PROFIBUS": "PROFIBUS DP",
+      "ETHERNET": "Industrial Ethernet"
+    },
+    "station": "Stazione ET 200",
+    "master": "CPU",
+    "addStation": "Inserisci stazione",
+    "note": "Sottoreti, indirizzi e stazioni ET 200 si modificano e si salvano nel progetto, ma non si caricano nella CPU e non si leggono dalla CPU: il formato dei blocchi dati di sistema (SDB) non è documentato. Trascina un'interfaccia su una sottorete per collegarla, oppure scegli la sottorete nelle proprietà; Canc la scollega. Doppio clic su un dispositivo apre la sua vista dispositivi.",
+    "openHint": "Doppio clic: vista dispositivi",
+    "notConnected": "non collegata",
+    "cannotConnect": "{{name}} non si può collegare a questa sottorete (tipo diverso).",
+    "overview": "Panoramica dispositivi",
+    "device": "Dispositivo",
+    "interface": "Interfaccia",
+    "kind": "Tipo",
+    "subnet": "Sottorete",
+    "address": "Indirizzo",
+    "problems": "Problemi",
+    "noSelection": "Seleziona una sottorete o un'interfaccia per vederne le proprietà.",
+    "nameEmpty": "Il nome non può essere vuoto.",
+    "mask": "Maschera di sottorete",
+    "gateway": "Router (facoltativo)",
+    "rate": "Velocità di trasmissione",
+    "highest": "Indirizzo più alto",
+    "deleteSubnet": "Elimina sottorete",
+    "ip": "Indirizzo IP",
+    "mpiAddress": "Indirizzo MPI",
+    "dpAddress": "Indirizzo PROFIBUS",
+    "addressRange": "L'indirizzo va da 0 a {{max}}.",
+    "deviceName": "Nome del dispositivo PROFINET",
+    "openDeviceView": "Apri vista dispositivi",
+    "deleteStation": "Elimina stazione"
   }
 }

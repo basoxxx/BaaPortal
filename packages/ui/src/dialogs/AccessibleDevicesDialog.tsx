@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  configuredAccess,
   MPI_BUS_SPEEDS,
   MPI_HIGHEST_ADDRESSES,
   type MpiLink,
@@ -254,6 +255,21 @@ export function AccessibleDevicesDialog({ onClose }: { onClose(): void }) {
   const tsapBad = kind === 'gateway' && tsap.trim() !== '' && tsapN === null;
   const row = rows.find((r) => rowKey(r) === selected);
   const cpu = projectDevices.find((d) => d.id === cpuId) ?? projectDevices[0];
+  // Indirizzo della CPU dalla vista di rete (solo lettura del progetto).
+  const openProject = useAppStore((s) => s.doc?.project);
+  const configured = openProject && cpu ? configuredAccess(openProject, cpu.id) : undefined;
+  const configuredText = linkKind === 'mpi' ? configured?.mpi?.toString() : configured?.ip;
+  const useConfigured = (): void => {
+    if (linkKind === 'mpi') {
+      if (configured?.mpi !== undefined) setMpiCpu(String(configured.mpi));
+    } else if (configured?.ip) {
+      const ip = configured.ip;
+      setRows((rs) =>
+        rs.some((x) => rowKey(x) === ip) ? rs : [...rs, { host: ip, manual: true }],
+      );
+      setSelected(ip);
+    }
+  };
   const accessOk =
     !!row &&
     rackN !== null &&
@@ -393,6 +409,14 @@ export function AccessibleDevicesDialog({ onClose }: { onClose(): void }) {
               ))}
             </select>
           </label>
+        ) : null}
+        {configuredText ? (
+          <div className="baa-access-actions">
+            <span>{t('accessDevices.useConfiguredHint', { address: configuredText })}</span>
+            <button type="button" data-testid="access-use-configured" onClick={useConfigured}>
+              {t('accessDevices.useConfigured')}
+            </button>
+          </div>
         ) : null}
         <label className="baa-settings-row" htmlFor={ids.link}>
           <span>{t('accessDevices.linkKind')}</span>

@@ -1,0 +1,105 @@
+.baa-net-tools {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.baa-net-main {
+  grid-template-columns: minmax(0, 1fr) 280px;
+}
+.baa-net-canvas {
+  position: relative;
+  margin-bottom: 12px;
+  border: 1px solid var(--baa-border);
+  background: var(--baa-panel-bg);
+  overflow: hidden;
+}
+.baa-hw-left:has(.baa-net-canvas) {
+  overflow-x: auto;
+}
+.baa-net-lines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.baa-net-wire {
+  fill: none;
+  stroke-width: 2;
+}
+/* Colori delle reti come nelle viste di rete abituali: MPI viola, PROFIBUS lilla, Ethernet verde. */
+.baa-net-wire.is-MPI {
+  stroke: #8a5cc2;
+}
+.baa-net-wire.is-PROFIBUS {
+  stroke: #b04fb0;
+}
+.baa-net-wire.is-ETHERNET {
+  stroke: #2e9b4f;
+}
+.baa-net-subnet {
+  position: absolute;
+  height: 22px;
+  padding: 0 6px;
+  border: none;
+  border-bottom: 4px solid currentColor;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.baa-net-subnet.is-MPI {
+  color: #8a5cc2;
+}
+.baa-net-subnet.is-PROFIBUS {
+  color: #b04fb0;
+}
+.baa-net-subnet.is-ETHERNET {
+  color: #2e9b4f;
+}
+.baa-net-subnet span {
+  color: var(--baa-text);
+}
+.baa-net-subnet.is-selected,
+.baa-net-port.is-selected {
+  background: var(--baa-selection);
+}
+.baa-net-subnet:focus-visible,
+.baa-net-port:focus-visible {
+  outline: 2px solid var(--baa-accent);
+}
+.baa-net-box {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--baa-border);
+  background: var(--baa-surface);
+}
+.baa-net-box.is-station {
+  border-style: dashed;
+}
+.baa-net-box-head {
+  display: flex;
+  flex-direction: column;
+  height: 36px;
+  overflow: hidden;
+  cursor: default;
+}
+.baa-net-port {
+  padding: 0 4px;
+  border: 1px solid var(--baa-border);
+  background: var(--baa-panel-bg);
+  color: var(--baa-text);
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: grab;
+}
+.baa-net-port.is-error {
+  border-color: var(--baa-error);
+}
