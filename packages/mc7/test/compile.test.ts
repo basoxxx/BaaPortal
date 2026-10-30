@@ -14,6 +14,7 @@ import {
   dataLayout,
   decodeBlock,
   encodeBlock,
+  instanceValues,
   readBlockFile,
   readSsb,
   type CompileInput,
@@ -660,6 +661,11 @@ describe('compilatore dei blocchi del progetto (Task 7)', () => {
     ]);
     // Vel 0, Abil 2.0, Ok 4.0, Cnt 6
     expect(hex(ib.data!)).toBe('00 0c 01 00 00 00 00 04');
+    // Valori di istanza riletti dai dati: solo quelli diversi dai valori iniziali dell'FB (nomi generati)
+    expect(instanceValues(ib.iface, ib.data!)).toEqual({ IN0: '12', STAT0: '4' });
+    const changed = ib.data!.slice();
+    changed[2] = 0; // Abil FALSE
+    expect(instanceValues(ib.iface, changed)).toEqual({ IN0: '12', IN1: 'FALSE', STAT0: '4' });
 
     // DB di istanza di un SFB: il genere SSB non è documentato (mc7 §1.9). Senza l'intestazione
     // dell'SSB di un DB reale dello stesso SFB non si compila (mai un genere indovinato).
@@ -685,6 +691,25 @@ describe('compilatore dei blocchi del progetto (Task 7)', () => {
     expect(readBlockFile(sfb.file!).ssb[0]).toBe(0x10);
     // CU 0.0, R 0.1, PV 2, Q 4.0, CV 6
     expect(hex(decodeBlock(sfb.file!).data!)).toBe('00 00 00 05 00 00 00 00');
+  });
+
+  it('attributi dei DB: non collegato spegne il bit0, non ritentivo accende il bit5 (mc7 §1.2)', () => {
+    const db = (attributes?: CompileInput['attributes']) =>
+      readBlockFile(
+        compile({
+          kind: 'DB',
+          number: 7,
+          sections: emptySections({ stat: [m('A', el('Int'))] }),
+          initials: {},
+          networks: [],
+          ctx: makeCtx('OB', emptySections()),
+          ...(attributes ? { attributes } : {}),
+        }).file!,
+      ).header.raw[3];
+    expect(db()).toBe(0x01);
+    expect(db({ unlinked: false, nonRetain: true })).toBe(0x21); // come il DB reale DB1806
+    expect(db({ unlinked: true, nonRetain: false })).toBe(0x00);
+    expect(db({ unlinked: true, nonRetain: true })).toBe(0x20);
   });
 
   it('codice con errori: nessun file, errori con segmento e riga', () => {

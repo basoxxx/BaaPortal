@@ -13,6 +13,7 @@ import {
   decodeBlock,
   generatedNames,
   initialLiteral,
+  instanceValues,
   sectionsFromSsb,
   SymbolError,
   toolsOf,
@@ -161,7 +162,7 @@ function interfaceKey(b: Block): unknown {
       i.returnType,
     ];
   }
-  return [b.kind, b.number, b.knowHowProtected, h, body];
+  return [b.kind, b.number, b.knowHowProtected, h, body, ...compiledAttributes(b)];
 }
 
 /** Impronta di intestazione e interfaccia (senza le reti). */
@@ -785,6 +786,7 @@ function compileModel(
         sections: noSections({ stat: toTypedMembers(block.members) }),
         initials,
         networks: [],
+        attributes: block.attributes,
       };
     } else if (block.kind === 'IDB') {
       const fb = instanceFbOf(block, device);
@@ -806,6 +808,7 @@ function compileModel(
         sections: noSections(),
         initials: { ...block.overrides },
         networks: [],
+        attributes: block.attributes,
         instanceOf: {
           kind: fb.kind,
           number: fb.number,
@@ -901,7 +904,13 @@ function finishModel(
   if (block.kind === 'FB' && block.mc7 && state?.layoutChanged) {
     diagnostics.push(...instanceAccessWarnings(block));
   }
-  if ((block.kind === 'DB' || block.kind === 'IDB') && block.mc7 && r.file) {
+  if (
+    (block.kind === 'DB' || block.kind === 'IDB') &&
+    block.mc7 &&
+    r.file &&
+    // con i valori di istanza riletti all'importazione i dati possono tornare identici
+    hexOf(readBlockFile(r.file).mc7) !== hexOf(readBlockFile(fromHex(block.mc7.original)).mc7)
+  ) {
     const fbChanged =
       block.kind === 'IDB' &&
       state !== undefined &&
@@ -910,8 +919,10 @@ function finishModel(
       warn(
         'VALORI_ATTUALI_PERSI',
         fbChanged
-          ? "L'FB del DB di istanza è cambiato: il DB si rigenera dall'FB e usa i valori iniziali; i valori attuali sono persi."
-          : `I valori attuali del ${block.kind === 'IDB' ? 'DB di istanza' : 'DB'} non sono modificabili: il file ricompilato usa i valori iniziali.`,
+          ? "L'FB del DB di istanza è cambiato: il DB si rigenera dall'FB coi valori iniziali e i valori di istanza; gli altri valori attuali sono persi."
+          : block.kind === 'IDB'
+            ? 'Il DB di istanza ricompilato usa i valori iniziali e i valori di istanza: i valori attuali che non vi compaiono (ARRAY, puntatori) sono persi.'
+            : 'I valori attuali del DB non sono modificabili: il file ricompilato usa i valori iniziali.',
       ),
     );
   }
@@ -1355,7 +1366,16 @@ function viewOf(b: Block, device: PlcDevice): BlockView {
       if (n) deps.add(`${n.block}${n.number}`);
     }
   }
-  const block = fnv(JSON.stringify([b.kind, layout, h, language, networks.map((n) => n.hash)]));
+  const block = fnv(
+    JSON.stringify([
+      b.kind,
+      layout,
+      h,
+      language,
+      networks.map((n) => n.hash),
+      ...compiledAttributes(b),
+    ]),
+  );
   return { block, layout, networks, deps: [...deps].sort() };
 }
 
@@ -2004,11 +2024,20 @@ function headerOf(d: Mc7Block): BlockHeader {
   };
 }
 
-const plainAttributes = (): DbAttributes => ({
-  unlinked: false,
-  readOnly: false,
-  nonRetain: false,
-});
+/** Attributi di un DB dal suo header[3] (mc7 §1.2); _sola lettura_ non ha un bit documentato. */
+function attributesOf(d: Mc7Block): DbAttributes {
+  const a = parseInt(d.meta.headerRaw.slice(6, 8), 16);
+  return { unlinked: (a & 0x01) === 0, readOnly: false, nonRetain: (a & 0x20) !== 0 };
+}
+
+/**
+ * Attributi che entrano nel file compilato, nelle impronte solo se accesi: le impronte dei progetti
+ * salvati prima (tutti spenti) restano le stesse.
+ */
+const compiledAttributes = (b: Block): unknown[] =>
+  (b.kind === 'DB' || b.kind === 'IDB') && (b.attributes.unlinked || b.attributes.nonRetain)
+    ? [[b.attributes.unlinked, b.attributes.nonRetain]]
+    : [];
 
 export interface ImportContext {
   newId: NewId;
@@ -2082,15 +2111,22 @@ function dbOf(d: Mc7Block, fbNumberKnown: boolean, c: BuildCtx): GlobalDb | Inst
     group: '',
     header: headerOf(d),
     knowHowProtected: d.knowHowProtected,
-    attributes: plainAttributes(),
+    attributes: attributesOf(d),
   };
   const genre = d.iface.header[0];
   if (d.instanceOf && fbNumberKnown) {
+    let overrides: Record<string, string> = {};
+    try {
+      // i valori del DB (i suoi dati) diversi da quelli dell'FB: una ricompilazione li riscrive
+      if (d.data) overrides = instanceValues(d.iface, d.data);
+    } catch {
+      /* layout non calcolabile: elenco vuoto, i byte originali restano */
+    }
     return {
       ...base,
       kind: 'IDB',
       instanceOf: c.fbName(d.instanceOf.number),
-      overrides: {},
+      overrides,
     };
   }
   if (d.instanceOf) {

@@ -987,6 +987,7 @@
     "knowHowLockedHint": "Il blocco importato è protetto: la protezione non si può togliere.",
     "unlinked": "Solo nella memoria di caricamento",
     "readOnly": "Protetto da scrittura nel dispositivo",
+    "readOnlyHint": "Resta nel progetto ma non si scrive nel blocco compilato: nessuna fonte pubblica ne documenta la codifica.",
     "nonRetain": "Non ritentivo",
     "group": "Gruppo",
     "tagCount": "Numero di variabili",
@@ -1301,7 +1302,7 @@
       "UNKNOWN_MEMBER": "Membro non trovato: {{detail}}",
       "UNKNOWN_SYMBOL": "Simbolo sconosciuto: {{detail}}",
       "UNSUPPORTED": "Non supportato dal compilatore: {{detail}}",
-      "VALORI_ATTUALI_PERSI": "Il DB ricompilato usa i valori iniziali: i valori attuali dell'originale non si conservano.",
+      "VALORI_ATTUALI_PERSI": "Il DB ricompilato usa i valori iniziali (e, in un DB di istanza, i valori di istanza): gli altri valori attuali dell'originale non si conservano.",
       "VALORI_INIZIALI_DA_CAMPIONE": "Valori iniziali dei dati statici interni degli SFB presi dal blocco reale {{sample}}."
     }
   },

@@ -958,12 +958,42 @@ describe('regola F: la fedeltà per rete richiede un contesto dei byte invariato
     fb.interface.input.unshift(member('Nuovo', 'Int'));
     const ri = exp(d, 'IDB11');
     expect(codesOf(ri.diagnostics)).toEqual(['VALORI_ATTUALI_PERSI']);
-    // Nuovo 0, IN0 2, STAT0 4, STAT1 6 = 5: valori iniziali, il 99 non c'è più
-    expect(hex(readBlockFile(ri.file!).mc7)).toBe('0000000000000005');
+    // Nuovo 0, IN0 2, STAT0 4, STAT1 6: il 99 resta, è un valore di istanza riletto all'importazione
+    expect(hex(readBlockFile(ri.file!).mc7)).toBe('0000000000000063');
     const ro = exp(d, 'OB1');
     expect(errorsOf(ro.diagnostics)).toEqual([]);
     expect(text(fO)[0]).toContain('T %DIW0;');
     expect(text(ro.file!)[0]).toContain('T %DIW2;');
+  });
+
+  it('valori di istanza: il valore attuale del DB importato entra nell elenco e torna identico ricompilando', () => {
+    const { d, fI } = motorProgram();
+    const idb = find(d, 'IDB11');
+    expect(idb.kind === 'IDB' && idb.overrides).toEqual({ STAT1: '99' });
+    idb.header.author = 'Altro'; // il DB si ricompila dal modello
+    const r = exp(d, 'IDB11');
+    expect(r.diagnostics).toEqual([]);
+    expect(hex(r.file!)).not.toBe(hex(fI));
+    expect(hex(readBlockFile(r.file!).mc7)).toBe('000000000063');
+  });
+
+  it('attributi dei DB: non collegato e non ritentivo in header[3], riletti all importazione; sola lettura no', () => {
+    const db = createGlobalDb({ number: 5, name: 'Dati', newId });
+    db.members.push(member('A', 'Int', '3'));
+    db.attributes = { unlinked: true, readOnly: false, nonRetain: true };
+    const [f] = compiled([db]);
+    expect(readBlockFile(f!).header.raw[3]).toBe(0x20);
+    const d = imported([f!]);
+    const g = find(d, 'DB5') as GlobalDb;
+    expect(g.attributes).toEqual({ unlinked: true, readOnly: false, nonRetain: true });
+    expect(hex(exp(d, 'DB5').file!)).toBe(hex(f!));
+    // sola lettura non entra nel file: il DB resta quello importato
+    g.attributes.readOnly = true;
+    expect(hex(exp(d, 'DB5').file!)).toBe(hex(f!));
+    g.attributes = { unlinked: false, readOnly: false, nonRetain: true };
+    const r = exp(d, 'DB5');
+    expect(r.diagnostics).toEqual([]);
+    expect(readBlockFile(r.file!).header.raw[3]).toBe(0x21);
   });
 
   it('p2 (regola S): FB e FC scritti nel progetto sono estranei: OB1 si ricompila dal testo, il DB di istanza è bloccato', () => {

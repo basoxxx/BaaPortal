@@ -1,6 +1,14 @@
 import type { DataType, TypedMember } from '@baaportal/s7-types';
 import { describe, expect, it } from 'vitest';
-import { buildSsb, dataLayout, readBlockFile, readSsb, type SsbSection } from '../src';
+import {
+  buildSsb,
+  dataLayout,
+  decodeBlock,
+  instanceValues,
+  readBlockFile,
+  readSsb,
+  type SsbSection,
+} from '../src';
 import { realBlocks } from './realBlocks';
 
 const el = (name: string, type: DataType): TypedMember => ({ name, type });
@@ -18,6 +26,28 @@ const empty = (): Record<SsbSection, TypedMember[]> => ({
 });
 
 describe('dataLayout (mc7 §1.4.8)', () => {
+  it('DB1806 (istanza reale): i valori di istanza sono i dati diversi dai valori iniziali', ({
+    skip,
+  }) => {
+    const real = realBlocks().find((x) => x.name === 'DB1806');
+    if (!real) return skip();
+    const b = decodeBlock(real.bytes);
+    const values = instanceValues(b.iface, b.data!);
+    const lay = new Map(dataLayout(b.iface).offsets.map((o) => [o.path, o]));
+    for (const path of Object.keys(values)) {
+      const kind = lay.get(path)?.type.kind;
+      expect(['elementary', 'string', 'dateAndTime'], path).toContain(kind);
+    }
+    // Gli unici dati diversi dai valori iniziali: tre DT senza valore iniziale, che STEP 7 scrive
+    // come 1990-01-01 nei dati (il compilatore li lascerebbe a zero, mc7 §1.9)
+    const dt = 'DT#1990-01-01-00:00:00.000';
+    expect(values).toEqual({
+      'STAT29.OUT9.OUT2.OUT5': dt,
+      'STAT29.OUT9.OUT2.OUT6': dt,
+      'STAT29.OUT9.OUT2.OUT7': dt,
+    });
+  });
+
   it('dataLayout = lunghezza dei dati su tutti i DB globali e sul DB di istanza DB1806', ({
     skip,
   }) => {

@@ -60,11 +60,12 @@ export function BlockProperties({ deviceId, blockId }: { deviceId: string; block
       onCommit={(v) => setBlock((b) => void (b.header[key] = v))}
     />
   );
-  const attr = (label: string, key: 'unlinked' | 'readOnly' | 'nonRetain') =>
+  const attr = (label: string, key: 'unlinked' | 'readOnly' | 'nonRetain', hint?: string) =>
     block.kind === 'DB' || block.kind === 'IDB' ? (
       <CheckField
         label={label}
         checked={block.attributes[key]}
+        {...(hint ? { hint } : {})}
         onChange={(v) =>
           setBlock((b) => {
             if (b.kind === 'DB' || b.kind === 'IDB') b.attributes[key] = v;
@@ -124,7 +125,7 @@ export function BlockProperties({ deviceId, blockId }: { deviceId: string; block
           onChange={(v) => setBlock((b) => void (b.knowHowProtected = v))}
         />
         {attr(t('props.unlinked'), 'unlinked')}
-        {attr(t('props.readOnly'), 'readOnly')}
+        {attr(t('props.readOnly'), 'readOnly', t('props.readOnlyHint'))}
         {attr(t('props.nonRetain'), 'nonRetain')}
       </PropertySection>
     </div>

@@ -987,6 +987,7 @@
     "knowHowLockedHint": "The imported block is protected: the protection cannot be removed.",
     "unlinked": "Only in load memory",
     "readOnly": "Write-protected in the device",
+    "readOnlyHint": "Kept in the project but not written to the compiled block: no public source documents its encoding.",
     "nonRetain": "Non-retentive",
     "group": "Group",
     "tagCount": "Number of tags",
@@ -1301,7 +1302,7 @@
       "UNKNOWN_MEMBER": "Member not found: {{detail}}",
       "UNKNOWN_SYMBOL": "Unknown symbol: {{detail}}",
       "UNSUPPORTED": "Not supported by the compiler: {{detail}}",
-      "VALORI_ATTUALI_PERSI": "The recompiled DB uses the initial values: the actual values of the original are not kept.",
+      "VALORI_ATTUALI_PERSI": "The recompiled DB uses the initial values (and, in an instance DB, the instance values): the other actual values of the original are not kept.",
       "VALORI_INIZIALI_DA_CAMPIONE": "Initial values of the SFB internal static data taken from the real block {{sample}}."
     }
   },

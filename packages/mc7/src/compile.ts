@@ -14,6 +14,7 @@ import { codeEnvironment, toolsOf, type CodeEnvironment } from './codeEnv';
 import { blockChecksum } from './crc';
 import type { CodeMeta } from './decode';
 import { encodeCode, sameText, type LineMapEntry, type Mc7Diagnostic } from './encode';
+import { initialLiteral } from './initialLiteral';
 import { dataLayout, generatedNames, type LayoutOffset } from './layout';
 import { absoluteLocalEnd, callBase, localDataLength } from './localData';
 import {
@@ -57,7 +58,8 @@ import {
  * dell'FB; dati = valori iniziali dell'FB sostituiti da `initials` (i valori del DB).
  *
  * Header: firma `70 70`, formato 01, attributo 01 (collegato) più il bit 2 negli FB con multi-istanze
- * (FB80 e FB3004 reali ⚠️ significato non documentato), linguaggio 01 AWL (05 nei DB), know-how
+ * (FB80 e FB3004 reali ⚠️ significato non documentato); nei DB `attributes` (mc7 §1.2): bit0 spento
+ * se _non collegato_, bit5 se _non ritentivo_. Linguaggio 01 AWL (05 nei DB), know-how
  * header[15] = 03 (mc7 §1.8). I due timestamp sono `now` nell'ora locale: ms dalla mezzanotte e
  * giorni dal 1984-01-01. SSB[1..2] = numero del blocco nelle FC e negli FB non protetti, 0 negli OB
  * e nei blocchi protetti (11 blocchi reali di codice su 12; regola ⚠️ ignota, mc7 §1.4.1).
@@ -73,6 +75,11 @@ export interface CompileInput {
   /** Valori iniziali per percorso (`a.b`); in un IDB i valori del DB, sopra quelli dell'FB. */
   initials: Record<string, string>;
   networks: string[];
+  /**
+   * DB e IDB: attributi scritti in header[3] (mc7 §1.2). _Sola lettura nel dispositivo_ non c'è:
+   * nessuna fonte ne documenta il bit, e il blocco si compila senza.
+   */
+  attributes?: { unlinked: boolean; nonRetain: boolean };
   /** Linguaggio scritto nell'intestazione del file (default AWL): un blocco KOP si compila dall'AWL generato. */
   language?: 'AWL' | 'KOP' | 'FUP' | 'SCL';
   /** Contesto AWL: `owner.iface` deve corrispondere a `sections`; i tag portano `address`. */
@@ -263,6 +270,10 @@ const LANGUAGE_SCL = 0x04;
 const LANGUAGE_DB = 0x05;
 const ATTR_LINKED = 0x01;
 const ATTR_MULTI = 0x04;
+// DB non ritentivo: [DN] `S7BlockAtributes.NonRetain = 32`, il commento "Bit : 5" del dissector
+// Wireshark (che però usa la maschera 0x08, il bit che [DN] dà al know-how) e header[3] = 21 nel DB
+// reale DB1806. Da verificare su CPU reale.
+const ATTR_NON_RETAIN = 0x20;
 const INSTANCE_GENRE = 0x0a;
 
 const AWL_TEXT: Partial<Record<AwlCode, string>> = {
@@ -702,6 +713,56 @@ function dataImage(iface: SsbInterface): Uint8Array {
   return out;
 }
 
+/** Letterale dei byte di un dato (big-endian, mc7 §1.4.8) nella forma dei valori iniziali. */
+function literalAt(t: SsbType, at: number, data: Uint8Array): string | undefined {
+  const byte = at >> 3;
+  if (t.kind === 'string') {
+    if (data[byte + 1]! > t.length) return undefined;
+    return initialLiteral(t, data.subarray(byte, byte + 2 + t.length));
+  }
+  if (t.kind === 'dateAndTime') return initialLiteral(t, data.subarray(byte, byte + 8));
+  if (t.kind !== 'elementary') return undefined;
+  if (t.name === 'Bool') return initialLiteral(t, Uint8Array.of((data[byte]! >> (at & 7)) & 1));
+  const sizes: Record<string, number> = { Byte: 1, Char: 1, Word: 2, Int: 2, S5Time: 2, Date: 2 };
+  const n = sizes[t.name] ?? 4;
+  return initialLiteral(t, Uint8Array.from(data.subarray(byte, byte + n)).reverse());
+}
+
+/**
+ * Valori di un DB d'istanza letti dai suoi dati, dove differiscono dai valori iniziali del suo SSB
+ * (quelli dell'FB): per percorso, come gli `initials` di un IDB, così una ricompilazione li riscrive.
+ * Restano fuori, e quindi non tornano identici, gli ARRAY e il loro contenuto (un valore per
+ * elemento non si rappresenta), i puntatori degli IN_OUT complessi, i parametri (POINTER, ANY,
+ * TIMER…), le multi-istanze di SFB (statiche non documentate) e i valori senza letterale (REAL NaN).
+ */
+export function instanceValues(iface: SsbInterface, data: Uint8Array): Record<string, string> {
+  const lay = dataLayout(iface);
+  if (data.length !== lay.size) return {};
+  const off = new Map(lay.offsets.map((o) => [o.path, o]));
+  const image = dataImage(iface);
+  const out: Record<string, string> = {};
+  const walk = (els: SsbElement[], prefix: string): void => {
+    const names = generatedNames(els);
+    els.forEach((e, k) => {
+      if (e.section === 'temp' || e.section === 'ret') return;
+      const path = prefix ? `${prefix}.${names[k]}` : names[k]!;
+      const o = off.get(path);
+      const t = e.type;
+      if (!o || (e.section === 'inOut' && isComplex(t))) return;
+      if (t.kind === 'struct') walk(e.children ?? [], path);
+      else if (t.kind === 'named') {
+        if (/^FB\d+$/.test(t.name)) walk(e.children?.[0]?.children ?? [], path);
+      } else {
+        const at = o.byte * 8 + (o.bit ?? 0);
+        const mine = literalAt(t, at, data);
+        if (mine !== undefined && mine !== literalAt(t, at, image)) out[path] = mine;
+      }
+    });
+  };
+  walk(iface.header[0] === 0x05 ? (iface.elements[0]?.children ?? []) : iface.elements, '');
+  return out;
+}
+
 function compileData(
   i: CompileInput,
   diagnostics: Mc7Diagnostic[],
@@ -756,7 +817,10 @@ function compileData(
   }
   return file({
     kindCode: KIND_CODE[i.kind],
-    attr: ATTR_LINKED,
+    // _Non collegato_ = bit0 spento: [DN] `Linked = 1` è "l'opposto dell'attributo Unlinked di
+    // Simatic Manager", come il bit "Linked" del dissector Wireshark. Da verificare su CPU reale.
+    attr:
+      (i.attributes?.unlinked ? 0 : ATTR_LINKED) | (i.attributes?.nonRetain ? ATTR_NON_RETAIN : 0),
     language: LANGUAGE_DB,
     number: i.number,
     knowHow: i.knowHowProtected,
