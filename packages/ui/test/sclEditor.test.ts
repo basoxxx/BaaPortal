@@ -138,6 +138,23 @@ describe('SCL: completamento', () => {
 });
 
 describe('SCL: diagnostiche', () => {
+  it('il controllo AWL anche quando il traduttore ha errori altrove', () => {
+    const small = makeCtx('FB', undefined, {
+      timers: 16,
+      counters: 16,
+      mBytes: 16,
+      inputBytes: 16,
+      outputBytes: 16,
+    });
+    const text = '#Contatore := #nessuno;\nMW100 := 1;\n#Pos := 1.0;';
+    const ps = sclProblems(text, small, 0, (d) => d.message);
+    expect(ps.map((p) => p.line)).toEqual([1, 2]);
+    expect(ps[1]!.col).toBe(1);
+    // sulla riga con l'errore del traduttore non si aggiunge altro
+    const same = sclProblems('MW100 := #nessuno;', small, 0, (d) => d.message);
+    expect(same).toHaveLength(1);
+  });
+
   it('tutti gli errori, sottolineati dalla colonna alla fine della parola', () => {
     const text = '#Contatore := #nessuno;\n#Pos := 1.0\n#Tmp := W#16#1;';
     const ps = sclProblems(text, ctx, 0, () => '');

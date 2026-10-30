@@ -41,11 +41,22 @@ export type SclType = 'BOOL' | 'BYTE' | 'WORD' | 'DWORD' | 'INT' | 'DINT' | 'REA
  * scritto da un'assegnazione (`T`/`=`), il risultato di una condizione (l'istruzione prima del salto,
  * che rimette RLO a 1), il selettore di CASE, la variabile di FOR al controllo in cima al ciclo.
  */
-export type SclLine = { line: number; sclLine: number; value?: SclType };
+export type SclLine = {
+  line: number;
+  sclLine: number;
+  value?: SclType;
+  /** Con `value`: la variabile scritta o letta (`max`, `a[i].x`), per «max = 120». */
+  name?: string;
+};
 export type SclAwl = {
   source: string;
   lines: SclLine[];
   diagnostics: SclDiag[];
+  /**
+   * Con errori: l'AWL delle sole istruzioni tradotte, per il controllo AWL nell'editor (non si
+   * compila).
+   */
+  partial?: { source: string; lines: SclLine[] };
 };
 
 /** Tipi elementari del sottoinsieme SCL in prova (TOD è TIME_OF_DAY). */
@@ -249,7 +260,7 @@ const WIDTH: Record<number, 'B' | 'W' | 'D'> = { 1: 'B', 2: 'W', 4: 'D' };
 type Loop = { at: Pos; exit?: string; cont?: string };
 
 class Gen {
-  readonly out: { text: string; sclLine: number; value?: Ty }[] = [];
+  readonly out: { text: string; sclLine: number; value?: Ty; name?: string }[] = [];
   readonly errors: SclError[] = [];
   private sclLine = 1;
   private labelNo = 1;
@@ -270,8 +281,9 @@ class Gen {
   }
 
   /** L'istruzione `at` (di solito l'ultima scritta) porta il valore della riga (`SclLine.value`). */
-  private mark(ty: Ty, at = this.out.length - 1): void {
+  private mark(ty: Ty, at = this.out.length - 1, name?: string): void {
     this.out[at]!.value = ty;
+    if (name) this.out[at]!.name = name;
   }
 
   private label(at: Pos): string {
@@ -1020,7 +1032,7 @@ class Gen {
     const [bad, end] = [this.label(at), this.label(at)];
     const op = this.address(dst, bad);
     this.emit(value, `${ty === 'BOOL' ? '=' : 'T'} ${op}`);
-    if (mark) this.mark(ty);
+    if (mark) this.mark(ty, undefined, nameOf(dst));
     this.emit(`JU ${end}`);
     this.place(bad);
     this.emit('CLR', 'SAVE');
@@ -1945,11 +1957,14 @@ class Gen {
   stmts(list: Stmt[]): void {
     for (const s of list) {
       const depth = this.depth;
+      const done = this.out.length;
       try {
         this.stmt(s);
       } catch (e) {
         if (!(e instanceof SclError)) throw e;
         this.depth = depth;
+        // l'AWL a metà dell'istruzione sbagliata non resta (`partial`)
+        this.out.length = done;
         this.errors.push(e);
       }
     }
@@ -1987,7 +2002,7 @@ class Gen {
           if (dst.ty === 'BOOL') this.cond(e, s);
           else this.num(e, dst.ty as Num);
           this.emit(`${dst.ty === 'BOOL' ? '=' : 'T'} ${dst.awl}`);
-          this.mark(dst.ty);
+          this.mark(dst.ty, undefined, nameOf(s.dst));
         });
       }
       case 'call':
@@ -2095,7 +2110,8 @@ class Gen {
         }
         return lab;
       });
-      if (simple && this.out.length > first) this.mark(n, first);
+      if (simple && this.out.length > first)
+        this.mark(n, first, isOperand(s.sel) ? nameOf(s.sel) : undefined);
       const otherwise = s.else ? this.label(s) : end;
       this.emit(`JU ${otherwise}`);
       s.arms.forEach((arm, i) => {
@@ -2152,7 +2168,7 @@ class Gen {
       const l: Loop = { at: s, exit };
       this.place(top);
       this.emit(`L ${v.awl}`, `L ${end}`, `${step > 0n ? '>' : '<'}${t}`, `JC ${exit}`);
-      this.mark(ty, this.out.length - 4);
+      this.mark(ty, this.out.length - 4, nameOf(s.v));
       this.loopBody(l, s.body);
       this.sclLine = s.line;
       if (l.cont) this.place(l.cont);
@@ -2205,6 +2221,25 @@ const overlaps = (x: { loc: Loc; max: number }, y: { loc: Loc; max: number }): b
   x.loc.bit / 8 < y.loc.bit / 8 + y.max + 2 &&
   y.loc.bit / 8 < x.loc.bit / 8 + x.max + 2;
 
+/** Il nome mostrato accanto al valore osservato: `max`, `"DB".v[i]`, `a[…].x`. */
+const nameOf = (o: Operand): string | undefined => {
+  if (o.k === 'temp') return undefined;
+  const ex = (e: Expr) =>
+    e.k === 'int' || e.k === 'id' || e.k === 'symbol' || e.k === 'addr'
+      ? e.text
+      : e.k === 'local'
+        ? e.text.slice(1)
+        : '…';
+  const idx = (i?: number[], v?: Expr[]) =>
+    i ? `[${i.join(',')}]` : v ? `[${v.map(ex).join(',')}]` : '';
+  const root = o.k === 'local' ? o.text.slice(1) : o.text;
+  return (
+    root +
+    idx(o.index, o.vindex) +
+    (o.path ?? []).map((p) => `.${p.name}${idx(p.index, p.vindex)}`).join('')
+  );
+};
+
 /** Indici e membri come in AWL: `[3]`, `[1,2]`, `.x`, `."con spazi"`. */
 const tail = (o: Operand): string => {
   if (o.k === 'temp') return '';
@@ -2216,6 +2251,14 @@ export function sclToAwl(text: string, ctx: AwlContext, tempEnd: number): SclAwl
   const gen = new Gen(ctx, tempEnd);
   const { stmts, errors } = parse(text);
   gen.stmts(stmts);
+  const plain = gen.out.map((l) => l.text).join('\n');
+  const lines = () =>
+    gen.out.map((l, line) => ({
+      line,
+      sclLine: l.sclLine,
+      ...(l.value ? { value: SHOWN[l.value] ?? (l.value as SclType) } : {}),
+      ...(l.value && l.name ? { name: l.name } : {}),
+    }));
   if (errors.length || gen.errors.length) {
     // Uno per posizione (un carattere sbagliato non dà anche l'errore del parser), in ordine.
     const seen = new Set<string>();
@@ -2224,18 +2267,13 @@ export function sclToAwl(text: string, ctx: AwlContext, tempEnd: number): SclAwl
       .sort((a, b) => a.line - b.line || a.col - b.col)
       .slice(0, MAX_ERRORS)
       .map((e) => ({ line: e.line, col: e.col, message: e.message }));
-    return { source: '', lines: [], diagnostics };
+    return { source: '', lines: [], diagnostics, partial: { source: plain, lines: lines() } };
   }
-  const plain = gen.out.map((l) => l.text).join('\n');
   // forma canonica come nel KOP; se cambia il numero di righe resta il testo grezzo
   const formatted = formatNetwork(plain, 'international');
   return {
     source: formatted.split('\n').length === gen.out.length ? formatted : plain,
-    lines: gen.out.map((l, line) => ({
-      line,
-      sclLine: l.sclLine,
-      ...(l.value ? { value: SHOWN[l.value] ?? (l.value as SclType) } : {}),
-    })),
+    lines: lines(),
     diagnostics: [],
   };
 }

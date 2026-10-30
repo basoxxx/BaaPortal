@@ -84,12 +84,18 @@ describe('sclLineStatus', () => {
             ? ran(true)
             : ran(),
     );
-    expect(st.get(1)).toEqual({ state: 'run', values: [{ ty: 'INT', cell: ran(false, 5) }] });
+    expect(st.get(1)).toEqual({
+      state: 'run',
+      values: [{ ty: 'INT', name: 'a', cell: ran(false, 5) }],
+    });
     expect(st.get(2)).toEqual({
       state: 'run',
-      values: [{ ty: 'REAL', cell: ran(false, 0x3fc00000) }],
+      values: [{ ty: 'REAL', name: 'r', cell: ran(false, 0x3fc00000) }],
     });
-    expect(st.get(3)).toEqual({ state: 'run', values: [{ ty: 'BOOL', cell: ran(true) }] });
+    expect(st.get(3)).toEqual({
+      state: 'run',
+      values: [{ ty: 'BOOL', name: 'x', cell: ran(true) }],
+    });
   });
 
   it('IF: condizione vera e falsa dall’istruzione prima del salto; ramo non eseguito', () => {
@@ -99,7 +105,7 @@ describe('sclLineStatus', () => {
       awl.startsWith('JCN') ? ran(true) : l.sclLine === 2 ? null : ran(false),
     );
     expect(st.get(1)).toEqual({ state: 'run', values: [{ ty: 'BOOL', cell: ran(false) }] });
-    expect(st.get(2)).toEqual({ state: 'notRun', values: [{ ty: 'INT', cell: null }] });
+    expect(st.get(2)).toEqual({ state: 'notRun', values: [{ ty: 'INT', name: 'a', cell: null }] });
     expect(st.get(4)!.state).toBe('run');
     const yes = statusOf(text, (l) => (l.sclLine === 4 ? null : ran(true)));
     expect(yes.get(1)!.values[0]!.cell).toEqual(ran(true));
@@ -109,7 +115,7 @@ describe('sclLineStatus', () => {
   it('CASE: il selettore, semplice o calcolato', () => {
     const text = 'CASE a OF\n  1: d := 10;\nEND_CASE;';
     const st = statusOf(text, (_l, awl) => (awl === 'L #a;' ? ran(false, 1) : ran()));
-    expect(st.get(1)!.values).toEqual([{ ty: 'INT', cell: ran(false, 1) }]);
+    expect(st.get(1)!.values).toEqual([{ ty: 'INT', name: 'a', cell: ran(false, 1) }]);
     const calc = statusOf('CASE a + 1 OF\n  1: d := 10;\nEND_CASE;', (_l, awl) =>
       awl === 'T %LW2;' ? ran(false, 4) : ran(),
     );
@@ -121,7 +127,7 @@ describe('sclLineStatus', () => {
     const st = statusOf('FOR d := 1 TO 10 DO\n  a := 0;\nEND_FOR;', (_l, awl) =>
       awl === 'L #d;' && seen++ === 0 ? ran(false, 11) : ran(),
     );
-    expect(st.get(1)!.values).toEqual([{ ty: 'DINT', cell: ran(false, 11) }]);
+    expect(st.get(1)!.values).toEqual([{ ty: 'DINT', name: 'd', cell: ran(false, 11) }]);
   });
 
   it('WHILE non eseguito: condizione falsa, corpo grigio', () => {
@@ -135,13 +141,13 @@ describe('sclLineStatus', () => {
   it('finestra tagliata: senza la cella dell’istruzione che decide, sconosciuto', () => {
     // il calcolo c'è, la T è fuori finestra: nessun valore inventato
     const st = statusOf('a := i + 1;', (_l, awl) => (awl === 'T #a;' ? 'absent' : ran(false, 7)));
-    expect(st.get(1)).toEqual({ state: 'unknown', values: [{ ty: 'INT' }] });
+    expect(st.get(1)).toEqual({ state: 'unknown', values: [{ ty: 'INT', name: 'a' }] });
   });
 
   it('null: non elaborato; con nullUnknown (risposta parziale, in attesa) sconosciuto', () => {
     expect(statusOf('a := 1;', () => null).get(1)!.state).toBe('notRun');
     const wait = statusOf('a := 1;', () => null, { nullUnknown: true });
-    expect(wait.get(1)).toEqual({ state: 'unknown', values: [{ ty: 'INT' }] });
+    expect(wait.get(1)).toEqual({ state: 'unknown', values: [{ ty: 'INT', name: 'a' }] });
   });
 
   it('righe senza valore (chiamate, etichette di CASE): decide la prima istruzione', () => {

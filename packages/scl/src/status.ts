@@ -8,7 +8,12 @@ import type { SclLine, SclType } from './toAwl.js';
 export type SclCell = { rlo: boolean; accu1: number } | null;
 
 /** Un valore della riga: `cell` assente = sconosciuto, `null` = non elaborato. */
-export type SclValue = { ty: SclType; cell?: { rlo: boolean; accu1: number } | null };
+export type SclValue = {
+  ty: SclType;
+  /** La variabile scritta o letta, se la riga ne ha una (`SclLine.name`). */
+  name?: string;
+  cell?: { rlo: boolean; accu1: number } | null;
+};
 
 export type SclLineStatus = {
   /** `unknown`: l'istruzione che decide non ha cella (fuori finestra, in attesa). */
@@ -43,7 +48,8 @@ export function sclLineStatus(
     const values: SclValue[] = own.flatMap((l) => {
       if (!l.value) return [];
       const c = cellOf(l.line);
-      return [c === undefined ? { ty: l.value } : { ty: l.value, cell: c }];
+      const v: SclValue = l.name ? { ty: l.value, name: l.name } : { ty: l.value };
+      return [c === undefined ? v : { ...v, cell: c }];
     });
     const states = values.length ? values.map((v) => v.cell) : [cellOf(own[0]!.line)];
     const state = states.some((c) => c)

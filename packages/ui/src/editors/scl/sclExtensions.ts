@@ -82,8 +82,9 @@ export interface SclProblem {
 }
 
 /**
- * Gli errori del testo SCL (anche non confermato): quelli del traduttore; se non ce ne sono,
- * quelli del controllo AWL sull'AWL generato, alla riga SCL che ha prodotto la riga AWL.
+ * Gli errori del testo SCL (anche non confermato): quelli del traduttore e quelli del controllo AWL
+ * sull'AWL generato, alla riga SCL che ha prodotto la riga AWL. Con errori del traduttore si
+ * controlla l'AWL delle istruzioni tradotte, sulle righe senza errori del traduttore.
  */
 export function sclProblems(
   text: string,
@@ -92,13 +93,20 @@ export function sclProblems(
   awlMessage: (d: ReturnType<typeof checkBlockCode>[number]) => string,
 ): SclProblem[] {
   const r = sclToAwl(text, ctx, tempEnd);
-  if (r.diagnostics.length) return r.diagnostics.map((d) => ({ ...d, severity: 'error' }));
-  return checkBlockCode([r.source], ctx, 'international').map((d) => ({
-    line: r.lines.filter((l) => l.line <= d.range.from.line).at(-1)?.sclLine ?? 1,
-    col: 1,
-    severity: d.severity,
-    message: awlMessage(d),
-  }));
+  const awl = r.partial ?? r;
+  const bad = new Set(r.diagnostics.map((d) => d.line));
+  const checked: SclProblem[] = awl.source
+    ? checkBlockCode([awl.source], ctx, 'international').map((d) => ({
+        line: awl.lines.filter((l) => l.line <= d.range.from.line).at(-1)?.sclLine ?? 1,
+        col: 1,
+        severity: d.severity,
+        message: awlMessage(d),
+      }))
+    : [];
+  return [
+    ...r.diagnostics.map((d): SclProblem => ({ ...d, severity: 'error' })),
+    ...checked.filter((p) => !bad.has(p.line)),
+  ].sort((a, b) => a.line - b.line || a.col - b.col);
 }
 
 /** Le diagnostiche sul documento: dalla colonna alla fine della parola (almeno un carattere). */

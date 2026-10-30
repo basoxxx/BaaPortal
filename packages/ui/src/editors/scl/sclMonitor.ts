@@ -35,7 +35,9 @@ export function sclLineText(
   if (st.state === 'notRun') return { shown: t('lad.mon.none'), full: t('lad.mon.none') };
   if (st.state === 'unknown') return { shown: '?', full: t('lad.mon.outside') };
   if (st.values.length === 0) return undefined;
-  const shown = st.values.map((v) => sclValueText(v, hex)).join('   ');
+  const shown = st.values
+    .map((v) => (v.name ? `${v.name} = ` : '') + sclValueText(v, hex))
+    .join('   ');
   return { shown, full: shown };
 }
 
