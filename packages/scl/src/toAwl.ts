@@ -12,8 +12,14 @@ import {
 } from '@baaportal/awl';
 import { callLines } from '@baaportal/ladfbd';
 import { NO_RANGE, ownOperandResolver, type ResolvedOperand } from '@baaportal/mc7';
-import { formatType, sameName, type DataType, type TypedMember } from '@baaportal/s7-types';
-import { intLiteral, parseAddress, SclError } from './lexer.js';
+import {
+  formatType,
+  layoutStruct,
+  sameName,
+  type DataType,
+  type TypedMember,
+} from '@baaportal/s7-types';
+import { intLiteral, parseAddress, SclError, timeLiteral } from './lexer.js';
 import {
   MAX_ERRORS,
   parse,
@@ -26,7 +32,8 @@ import {
 } from './parser.js';
 
 export type SclDiag = { line: number; col: number; message: string }; // line 1-based
-/** Tipi elementari del sottoinsieme SCL in prova. */
+/** Formati dei valori osservati (`SclLine.value`): TIME e TOD come DINT (ms), DATE come INT (giorni
+ * dal 1990), S5TIME come WORD, CHAR come BYTE. */
 export type SclType = 'BOOL' | 'BYTE' | 'WORD' | 'DWORD' | 'INT' | 'DINT' | 'REAL';
 /**
  * Riga 0-based dell'AWL generato → riga 1-based del testo SCL. `value`: lo stato dopo questa
@@ -41,7 +48,15 @@ export type SclAwl = {
   diagnostics: SclDiag[];
 };
 
-type Ty = SclType;
+/** Tipi elementari del sottoinsieme SCL in prova (TOD è TIME_OF_DAY). */
+type Ty = SclType | 'TIME' | 'S5TIME' | 'DATE' | 'TOD' | 'CHAR';
+const SHOWN: Partial<Record<Ty, SclType>> = {
+  TIME: 'DINT',
+  TOD: 'DINT',
+  DATE: 'INT',
+  S5TIME: 'WORD',
+  CHAR: 'BYTE',
+};
 type Num = Exclude<Ty, 'BOOL'>;
 type Bits = 'BYTE' | 'WORD' | 'DWORD';
 type Conn = 'A' | 'O' | 'X';
@@ -49,7 +64,10 @@ type Dim = { lo: number; hi: number };
 
 const MAX_BRACKETS = 7;
 const MAX_LABEL = 999;
-const SUPPORTED = 'solo BOOL, BYTE, WORD, DWORD, INT, DINT, REAL';
+const SUPPORTED =
+  'solo BOOL, BYTE, WORD, DWORD, INT, DINT, REAL, TIME, S5TIME, DATE, TIME_OF_DAY, CHAR; STRING, STRUCT, ARRAY e UDT interi solo in :=';
+/** Copia di STRUCT, ARRAY e UDT interi a istruzioni L/T: oltre, il codice diventa troppo lungo. */
+const MAX_COPY = 1024;
 const ELEMENTARY: Record<string, Ty> = {
   Bool: 'BOOL',
   Byte: 'BYTE',
@@ -58,8 +76,14 @@ const ELEMENTARY: Record<string, Ty> = {
   Int: 'INT',
   DInt: 'DINT',
   Real: 'REAL',
+  Time: 'TIME',
+  S5Time: 'S5TIME',
+  Date: 'DATE',
+  Time_Of_Day: 'TOD',
+  Char: 'CHAR',
 };
 const isBits = (t: Ty): t is Bits => t === 'BYTE' || t === 'WORD' || t === 'DWORD';
+/** DATE si confronta a 32 bit: `L` di una parola azzera la parola alta, così vale senza segno. */
 const SUFFIX: Record<Num, string> = {
   BYTE: 'I',
   WORD: 'I',
@@ -67,8 +91,25 @@ const SUFFIX: Record<Num, string> = {
   INT: 'I',
   DINT: 'D',
   REAL: 'R',
+  TIME: 'D',
+  S5TIME: 'I',
+  DATE: 'D',
+  TOD: 'D',
+  CHAR: 'I',
 };
-const SIZE: Record<Num, number> = { BYTE: 1, WORD: 2, DWORD: 4, INT: 2, DINT: 4, REAL: 4 };
+const SIZE: Record<Num, number> = {
+  BYTE: 1,
+  WORD: 2,
+  DWORD: 4,
+  INT: 2,
+  DINT: 4,
+  REAL: 4,
+  TIME: 4,
+  S5TIME: 2,
+  DATE: 2,
+  TOD: 4,
+  CHAR: 1,
+};
 /** Intervallo dei valori interi di ogni tipo. */
 const RANGE: Partial<Record<Ty, [bigint, bigint]>> = {
   INT: [-32768n, 32767n],
@@ -100,6 +141,12 @@ const INVERT: Record<Bits, string> = { BYTE: 'XOW W#16#FF', WORD: 'INVI', DWORD:
  * no). Le conversioni verso un tipo più largo azzerano i bit che la parola bassa non ha.
  */
 const CONV: Record<string, [Num, Num, string[]]> = {
+  TIME_TO_DINT: ['TIME', 'DINT', []],
+  DINT_TO_TIME: ['DINT', 'TIME', []],
+  CHAR_TO_INT: ['CHAR', 'INT', []],
+  CHAR_TO_BYTE: ['CHAR', 'BYTE', []],
+  BYTE_TO_CHAR: ['BYTE', 'CHAR', []],
+  INT_TO_CHAR: ['INT', 'CHAR', ['AW W#16#FF']],
   INT_TO_DINT: ['INT', 'DINT', ['ITD']],
   INT_TO_REAL: ['INT', 'REAL', ['ITD', 'DTR']],
   DINT_TO_REAL: ['DINT', 'REAL', ['DTR']],
@@ -118,10 +165,29 @@ const CONV: Record<string, [Num, Num, string[]]> = {
   WORD_TO_DWORD: ['WORD', 'DWORD', ['AD DW#16#FFFF']],
   BYTE_TO_DWORD: ['BYTE', 'DWORD', ['AD DW#16#FF']],
 };
+/**
+ * Conversioni che come in STEP 7 mettono a 0 il bit OK (qui BR, quindi l'ENO del blocco) se il
+ * valore non ci sta: istruzioni dopo `T` nella TEMP del risultato, che tiene comunque i bit bassi.
+ */
+const CHECKED: Record<string, (bad: string, ok: string) => string[]> = {
+  DINT_TO_INT: (bad, ok) => [
+    'L L#32767',
+    '>D',
+    `JC ${bad}`,
+    'TAK',
+    'L L#-32768',
+    '<D',
+    `JCN ${ok}`,
+  ],
+  ROUND: (bad, ok) => [`JO ${bad}`, `JU ${ok}`],
+  TRUNC: (bad, ok) => [`JO ${bad}`, `JU ${ok}`],
+};
 const HINT: Partial<Record<string, string>> = {
   'DINT→REAL': 'DINT_TO_REAL (valore) o DWORD_TO_REAL (bit)',
   'REAL→DINT': 'ROUND o TRUNC',
   'REAL→INT': 'DINT_TO_INT(ROUND(…)) o DINT_TO_INT(TRUNC(…))',
+  'INT→TIME': 'DINT_TO_TIME(INT_TO_DINT(…))',
+  'TIME→INT': 'DINT_TO_INT(TIME_TO_DINT(…))',
 };
 
 const fail = (at: Pos, message: string): never => {
@@ -142,7 +208,8 @@ function mismatch(at: Pos, want: Ty, got: Ty): never {
 const typed = (t: DataType | null | undefined) =>
   t?.kind === 'elementary' ? ELEMENTARY[t.name] : undefined;
 const unquote = (s: string) => s.replace(/^"|"$/g, '');
-const isLiteral = (e: Expr) => e.k === 'int' || e.k === 'real';
+const isLiteral = (e: Expr) =>
+  e.k === 'int' || e.k === 'real' || e.k === 'tlit' || (e.k === 'str' && e.text.length === 1);
 /** Operando che si carica con un solo `L` (variabile, TEMP di appoggio o letterale). */
 const isSimple = (e: Expr) =>
   isLiteral(e) ||
@@ -155,6 +222,11 @@ const isOperand = (e: Expr): e is Operand => isSimple(e) && !isLiteral(e);
 /** Un elemento di ARRAY con indici variabili: si legge e si scrive passando da AR1. */
 type Indexed = Exclude<Operand, { k: 'temp' }> & { vindex: Expr[] };
 const isIndexed = (e: Expr): e is Indexed => isOperand(e) && e.k !== 'temp' && !!e.vindex;
+
+/** Posizione di una variabile come la risolve il compilatore; `at` per gli errori. */
+type Loc = { area: string; bit: number; db?: number; at: Pos };
+type Located = Exclude<Operand, { k: 'temp' | 'addr' }>;
+const WIDTH: Record<number, 'B' | 'W' | 'D'> = { 1: 'B', 2: 'W', 4: 'D' };
 
 /** Un ciclo aperto: le etichette di EXIT e CONTINUE nascono solo se servono. */
 type Loop = { at: Pos; exit?: string; cont?: string };
@@ -212,7 +284,7 @@ class Gen {
       this.tempTop += 1;
       return `L ${at}.0`;
     }
-    if (ty === 'BYTE') {
+    if (SIZE[ty] === 1) {
       this.tempTop += 1;
       return `LB ${at}`;
     }
@@ -252,33 +324,51 @@ class Gen {
       return { awl: a.awl, ty, constant: false };
     }
     const shown = o.k === 'local' ? o.text.slice(1) : o.text;
-    const elem = (t: DataType | null, awl: string, constant: boolean) => {
-      // indici variabili: tipo e limiti dell'elemento (l'indirizzo lo fa `address`)
-      let dims: Dim[] | undefined;
-      if (o.vindex) {
-        if (t?.kind !== 'array')
-          return fail(o, `${o.text}${tail(o)} non è un ARRAY: niente indici [ ]`);
-        if (t.dims.length !== o.vindex.length)
-          fail(o, `L'ARRAY ha ${t.dims.length} dimensioni, gli indici sono ${o.vindex.length}`);
-        dims = t.dims;
-        t = t.element;
-      }
-      const ty = typed(t);
-      if (!ty) fail(o, `Tipo di ${shown}${tail(o)} non supportato in SCL in prova (${SUPPORTED})`);
-      return { awl, ty: ty!, constant, ...(dims ? { dims } : {}) };
-    };
+    const d = this.declared(o, dest);
+    let t = d.type;
+    // indici variabili: tipo e limiti dell'elemento (l'indirizzo lo fa `address`)
+    let dims: Dim[] | undefined;
+    if (o.vindex) {
+      if (t?.kind !== 'array')
+        return fail(o, `${o.text}${tail(o)} non è un ARRAY: niente indici [ ]`);
+      if (t.dims.length !== o.vindex.length)
+        fail(o, `L'ARRAY ha ${t.dims.length} dimensioni, gli indici sono ${o.vindex.length}`);
+      dims = t.dims;
+      t = t.element;
+    }
+    const ty = typed(t);
+    if (!ty) fail(o, `Tipo di ${shown}${tail(o)} non supportato in SCL in prova (${SUPPORTED})`);
+    return { awl: d.awl, ty: ty!, constant: d.constant, ...(dims ? { dims } : {}) };
+  }
+
+  /**
+   * Tipo dichiarato di una variabile, dopo indici costanti e membri, e la sua forma AWL. `dest`:
+   * la variabile si scrive (un ingresso di FC no).
+   */
+  private declared(
+    o: Exclude<Operand, { k: 'temp' | 'addr' }>,
+    dest = false,
+  ): { type: DataType | null; awl: string; constant: boolean; formal?: TypedMember } {
     if (o.k === 'symbol') {
       const name = unquote(o.text);
       const s = this.ctx.symbol(name);
       if (s)
-        return elem(this.walk(o, s.type, o.index, o.path), o.text + tail(o), s.kind === 'constant');
+        return {
+          type: this.walk(o, s.type, o.index, o.path),
+          awl: o.text + tail(o),
+          constant: s.kind === 'constant',
+        };
       const db = this.ctx.block({ name });
       const members = db ? this.dbMembers(db) : undefined;
       if (!members) fail(o, `Operando sconosciuto: ${o.text}`);
       const [first, ...rest] = o.path ?? [];
       if (!first || o.index) fail(o, `Di un DB si usa un membro: ${o.text}.nome`);
       const m = this.member(o, members!, first!);
-      return elem(this.walk(o, m.type, first!.index, rest), o.text + tail(o), false);
+      return {
+        type: this.walk(o, m.type, first!.index, rest),
+        awl: o.text + tail(o),
+        constant: false,
+      };
     }
     const name = o.k === 'local' ? o.text.slice(1) : o.text;
     const own = this.ctx.owner;
@@ -299,7 +389,14 @@ class Gen {
         o,
         `Membri ed elementi di un parametro ${own.kind === 'FC' ? 'di FC' : 'IN_OUT'} (#${m!.name}) non sono supportati in prova: il parametro è un puntatore`,
       );
-    return elem(this.walk(o, m!.type, o.index, o.path), `#${m!.name}${tail(o)}`, false);
+    if (dest && formal && own.kind === 'FC' && i.input.includes(formal))
+      fail(o, `#${m!.name} è un ingresso della FC: non si scrive (usa una TEMP)`);
+    return {
+      type: this.walk(o, m!.type, o.index, o.path),
+      awl: `#${m!.name}${tail(o)}`,
+      constant: false,
+      ...(formal || m!.name === 'RET_VAL' ? { formal: m as TypedMember } : {}),
+    };
   }
 
   /** I membri di un DB globale o di istanza (le sezioni dell'FB, senza TEMP). */
@@ -355,6 +452,8 @@ class Gen {
     switch (e.k) {
       case 'int':
       case 'real':
+      case 'tlit':
+      case 'str':
         return this.literal(e, hint).ty;
       case 'bool':
         return 'BOOL';
@@ -381,17 +480,23 @@ class Gen {
       }
       case 'neg': {
         const t = this.typeOf(e.e, hint);
-        if (t === 'BOOL' || isBits(t)) fail(e, 'Il meno si usa solo con INT, DINT e REAL');
+        if (!['INT', 'DINT', 'REAL', 'TIME'].includes(t))
+          fail(e, 'Il meno si usa solo con INT, DINT, REAL e TIME');
         return t;
       }
       case 'call': {
+        if (e.name === 'LEN') {
+          if (!this.strSide(e.arg)) fail(e.arg, 'LEN vuole una STRING');
+          return 'INT';
+        }
         const c = CONV[e.name];
-        if (!c) fail(e, `Funzione non supportata in SCL in prova: ${e.name}`);
-        this.want(e.arg, c![0]);
-        return c![1];
+        if (!c) return this.typeOf(this.blockCall(e));
+        this.want(e.arg, c[0]);
+        return c[1];
       }
       case 'bin': {
         const cmp = e.op in CMP;
+        if (cmp && this.isStrCmp(e)) return 'BOOL';
         const t = this.pair(e, cmp ? undefined : hint);
         if (e.op in BOOL_OP) {
           if (t !== 'BOOL' && !isBits(t))
@@ -401,6 +506,12 @@ class Gen {
         if (t === 'BOOL') fail(e, `L'operatore ${e.op} non si usa con BOOL: usa AND, OR, XOR, NOT`);
         if (isBits(t) && !(e.op === '=' || e.op === '<>'))
           fail(e, `Con ${t} si usano solo = e <> e AND, OR, XOR, NOT`);
+        if (t === 'S5TIME' && !(e.op === '=' || e.op === '<>'))
+          fail(e, 'Con S5TIME si usano solo = e <>: per i calcoli usa TIME');
+        if ((t === 'DATE' || t === 'TOD' || t === 'CHAR') && !cmp)
+          fail(e, `Con ${t === 'TOD' ? 'TIME_OF_DAY' : t} si usano solo i confronti`);
+        if (t === 'TIME' && !cmp && e.op !== '+' && e.op !== '-')
+          fail(e, 'Con TIME si usano + e - fra due TIME e i confronti: per altro usa TIME_TO_DINT');
         if (e.op === 'MOD' && t !== 'DINT')
           fail(
             e,
@@ -432,6 +543,20 @@ class Gen {
    * altrimenti nel suo tipo naturale (INT o DINT); testo per `L`.
    */
   private literal(e: Expr & { text: string }, hint?: Ty): { ty: Num; awl: string } {
+    if (e.k === 'tlit') return timeLiteral(e.text) ?? fail(e, `Costante non valida: ${e.text}`);
+    if (e.k === 'str') {
+      if (e.text.length !== 1)
+        fail(
+          e,
+          `Una costante CHAR ha un solo carattere: '${e.text}' (le STRING solo in :=, =, <> e LEN)`,
+        );
+      const code = this.chars(e)[0]!;
+      const c = String.fromCharCode(code);
+      return {
+        ty: 'CHAR',
+        awl: /^[ -~]$/.test(c) ? `'${c}'` : `B#16#${code.toString(16).toUpperCase()}`,
+      };
+    }
     if (e.k === 'real') {
       const v = Number(e.text);
       if (!Number.isFinite(Math.fround(v))) fail(e, `Costante REAL fuori intervallo: ${e.text}`);
@@ -470,6 +595,12 @@ class Gen {
     if (e.k === 'not' && isBits(ty)) {
       this.num(e.e, ty);
       return this.emit(INVERT[ty]);
+    }
+    if (e.k === 'call' && e.name === 'LEN') {
+      const s = this.strSide(e.arg)!;
+      if ('codes' in s) return this.emit(`L ${s.codes.length}`);
+      this.opn(s.loc);
+      return this.emit(`L ${this.at(s.loc, 'B', 1)}`);
     }
     if (e.k === 'call') {
       const [from, , code] = CONV[e.name]!;
@@ -615,7 +746,18 @@ class Gen {
       ...i.inOut.map((m) => ({ m, dir: 'inout' as const })),
     ];
     const given = new Map<TypedMember, Call['args'][number]>();
-    for (const a of c.args) {
+    // per posizione: tutti i parametri, nell'ordine dell'interfaccia
+    const positional = c.args.length > 0 && c.args[0]!.name === '';
+    if (positional && c.args.length !== formals.length)
+      fail(
+        c,
+        `${k.shown} ha ${formals.length} parametri, ne sono dati ${c.args.length}: per posizione servono tutti nell'ordine dell'interfaccia, altrimenti si passano per nome (p := valore)`,
+      );
+    const args = positional
+      ? c.args.map((a, n) => ({ ...a, name: formals[n]!.m.name, out: formals[n]!.dir === 'out' }))
+      : c.args;
+    const after: (() => void)[] = [];
+    for (const a of args) {
       const f = formals.find((x) => sameName(x.m.name, a.name));
       if (!f) fail(a, `${k.shown} non ha il parametro ${a.name}`);
       if (given.has(f!.m)) fail(a, `Parametro ${a.name} ripetuto`);
@@ -637,17 +779,59 @@ class Gen {
         continue;
       }
       const ty = typed(m.type);
-      if (!ty)
-        fail(
-          a,
-          `Parametro ${m.name} di tipo ${formatType(m.type)}: non supportato in prova (${SUPPORTED})`,
-        );
+      if (!ty) {
+        this.complexParam(c, k.fc, m, dir, a, after);
+        continue;
+      }
       params.push(
-        `${m.name} := ${dir === 'in' ? this.actual(a.e, ty!) : this.variable(a.e, ty!, m.name)}`,
+        `${m.name} := ${dir === 'in' ? this.actual(a.e, ty) : this.variable(a.e, ty, m.name)}`,
       );
     }
     if (formals.every((f) => f.dir === 'in')) retParam();
     this.emit(...callLines(k.instance, params));
+    for (const f of after) f();
+  }
+
+  /**
+   * Un parametro STRUCT, ARRAY, UDT o STRING di un FB, come fa STEP 7: un ingresso si copia
+   * nell'istanza prima della CALL, un'uscita dall'istanza dopo (in `after`). Gli IN_OUT sono
+   * puntatori e i parametri complessi delle FC la compilazione non li supporta: errore.
+   */
+  private complexParam(
+    c: Call,
+    fc: boolean,
+    m: TypedMember,
+    dir: 'in' | 'out' | 'inout',
+    a: Call['args'][number],
+    after: (() => void)[],
+  ): void {
+    const t = m.type;
+    const shown = `Parametro ${m.name} di tipo ${formatType(t)}`;
+    const complex =
+      ['string', 'struct', 'array'].includes(t.kind) ||
+      (t.kind === 'named' && this.ctx.resolve(t.name)?.kind === 'udt');
+    if (!complex) fail(a, `${shown}: non supportato in prova (${SUPPORTED})`);
+    if (fc) fail(a, `${shown}: la compilazione non supporta i parametri complessi delle FC`);
+    if (dir === 'inout') fail(a, `${shown}: un IN_OUT complesso è un puntatore, non supportato`);
+    const name = /^[A-Za-z_][A-Za-z0-9_]*$/.test(m.name) ? m.name : `"${m.name}"`;
+    const o = c.callee as Located;
+    const formal: Located =
+      o.k === 'local'
+        ? { k: 'local', text: o.text, path: [{ name }], line: a.line, col: a.col }
+        : { k: 'symbol', text: `"${unquote(o.text)}"`, path: [{ name }], line: a.line, col: a.col };
+    if (dir === 'in') return this.assignComplex(formal, t, a.e, a);
+    const to =
+      this.complexOf(a.e) ?? fail(a.e, `Per ${m.name} serve una variabile ${formatType(t)}`);
+    after.push(() => this.assignComplex(a.e as Located, to, formal, a));
+  }
+
+  /** `Fc(x)` scritto come una conversione: la chiamata di un blocco con un parametro per posizione. */
+  private blockCall(e: Extract<Expr, { k: 'call' }>): Call {
+    if (!this.ctx.block({ name: e.raw }))
+      fail(e, `Funzione non supportata in SCL in prova: ${e.name}`);
+    const at = { line: e.line, col: e.col };
+    const arg = { name: '', out: false, e: e.arg, line: e.arg.line, col: e.arg.col };
+    return { k: 'fcall', callee: { k: 'id', text: e.raw, ...at }, args: [arg], ...at };
   }
 
   /** Il parametro attuale di un ingresso: operando, letterale o TEMP già calcolata. */
@@ -690,9 +874,24 @@ class Gen {
       case 'not':
         return { ...e, e: this.hoist(e.e) };
       case 'bin':
+        if (e.op in CMP && this.isStrCmp(e)) return this.strCompare(e);
         return { ...e, l: this.hoist(e.l), r: this.hoist(e.r) };
-      case 'call':
-        return { ...e, arg: this.hoist(e.arg) };
+      case 'call': {
+        if (e.name === 'LEN') return e;
+        if (!CONV[e.name]) return this.hoist(this.blockCall(e));
+        const c = { ...e, arg: this.hoist(e.arg) };
+        const check = CHECKED[e.name];
+        if (!check) return c;
+        const ty = CONV[e.name]![1];
+        const text = this.temp(ty);
+        const [bad, ok] = [this.label(e), this.label(e)];
+        this.num(c, ty);
+        this.emit(`T ${text}`, ...check(bad, ok));
+        this.place(bad);
+        this.emit('CLR', 'SAVE');
+        this.place(ok);
+        return { k: 'temp', text, ty, line: e.line, col: e.col };
+      }
       default:
         return isIndexed(e) ? this.readIndexed(e) : e;
     }
@@ -738,7 +937,7 @@ class Gen {
   }
 
   /** L'elemento `index` dell'ARRAY di `o`, risolto come nel compilatore (area, bit, DB). */
-  private located(o: Indexed, index: number[]): { area: string; bit: number; db?: number } {
+  private located(o: Located, index?: number[]): Loc {
     const seg = (name: string, i?: number[]): PathSegment => ({
       name: unquote(name),
       quoted: name.startsWith('"'),
@@ -749,9 +948,9 @@ class Gen {
       seg(o.k === 'local' ? o.text.slice(1) : o.text, o.index),
       ...(o.path ?? []).map((s) => seg(s.name, s.index)),
     ];
-    path[path.length - 1]!.index = index;
+    if (index) path[path.length - 1]!.index = index;
     const op: AwlOperand = { kind: o.k === 'symbol' ? 'symbol' : 'local', path, range: NO_RANGE };
-    const shown = `${o.text}${tail(o)}[${index.join(',')}]`;
+    const shown = `${o.text}${tail(o)}${index ? `[${index.join(',')}]` : ''}`;
     let v: ResolvedOperand;
     try {
       this.resolver ??= ownOperandResolver(this.ctx);
@@ -761,10 +960,299 @@ class Gen {
       if (e instanceof Error) return fail(o, e.message);
       throw e;
     }
-    if (v.k === 'inst') return { area: 'DI', bit: v.bit };
+    const at = { line: o.line, col: o.col };
+    if (v.k === 'inst') return { area: 'DI', bit: v.bit, at };
     if (v.k === 'area' && ['L', 'M', 'I', 'Q', 'DB'].includes(v.area))
-      return { area: v.area, bit: v.bit, ...(v.db !== undefined ? { db: v.db } : {}) };
-    return fail(o, `${shown}: ARRAY non raggiungibile con un indice variabile`);
+      return { area: v.area, bit: v.bit, at, ...(v.db !== undefined ? { db: v.db } : {}) };
+    return fail(
+      o,
+      index
+        ? `${shown}: ARRAY non raggiungibile con un indice variabile`
+        : `${shown}: non raggiungibile per copiarlo intero`,
+    );
+  }
+
+  // ---- STRING, STRUCT, ARRAY e UDT interi: a byte, dagli indirizzi del compilatore ----
+
+  /** Il byte `k` dall'inizio di `l`, largo `sz`: `LD 4`, `DBW 2` (dopo `OPN DB`), `DIB [AR2,P#…]`. */
+  private at(l: Loc, sz: 'B' | 'W' | 'D', k: number, ar1 = false): string {
+    const byte = (l.bit >> 3) + k;
+    if (ar1 || l.area === 'DI') {
+      if (byte > 8191) fail(l.at, `Offset ${byte} oltre P#8191.7: non raggiungibile con [AR…,P#…]`);
+      return `${l.area}${sz} [${ar1 ? 'AR1' : 'AR2'},P#${byte}.0]`;
+    }
+    return `${l.area}${sz} ${byte}`;
+  }
+
+  private opn(l: Loc): void {
+    if (l.area === 'DB') this.emit(`OPN DB ${l.db}`);
+  }
+
+  /**
+   * Tipo dichiarato di un operando STRING, STRUCT, ARRAY o UDT intero; `undefined` per gli altri.
+   * I parametri complessi delle FC e gli IN_OUT complessi degli FB sono puntatori: errore.
+   */
+  private complexOf(e: Expr): DataType | undefined {
+    if (!isOperand(e) || e.k === 'temp' || e.k === 'addr' || e.vindex) return undefined;
+    const d = this.declared(e);
+    const t = d.type;
+    if (!t || typed(t) || !['string', 'struct', 'array', 'named'].includes(t.kind))
+      return undefined;
+    if (t.kind === 'named' && this.ctx.resolve(t.name)?.kind !== 'udt')
+      fail(e, `${e.text}${tail(e)}: si copiano interi solo STRUCT, ARRAY, UDT e STRING`);
+    const own = this.ctx.owner;
+    if (d.formal && !e.index && !e.path) {
+      if (own.kind === 'FC')
+        fail(
+          e,
+          `#${d.formal.name} è un parametro ${formatType(t)} di FC: la compilazione non supporta i parametri complessi delle FC`,
+        );
+      if (own.iface.inOut.includes(d.formal))
+        fail(
+          e,
+          `#${d.formal.name} è un IN_OUT ${formatType(t)}: è un puntatore, non supportato in prova`,
+        );
+    }
+    return t;
+  }
+
+  /** Lunghezza in byte di un tipo, dal layout del compilatore. */
+  private bytesOf(t: DataType, at: Pos): number {
+    const r = layoutStruct([{ name: 'x', type: t }], this.ctx.resolve);
+    const e = r.ok ? r.entries.find((x) => x.path === 'x') : undefined;
+    return e ? Math.ceil(e.sizeBits / 8) : fail(at, `Tipo ${formatType(t)} senza layout`);
+  }
+
+  /** Stesso tipo: gli UDT si confrontano coi loro membri, nomi compresi. */
+  private sameType(a: DataType, b: DataType): boolean {
+    const flat = (t: DataType): DataType => {
+      if (t.kind !== 'named') return t;
+      const r = this.ctx.resolve(t.name);
+      return r?.kind === 'udt' ? { kind: 'struct', members: r.members } : t;
+    };
+    const [x, y] = [flat(a), flat(b)];
+    if (x.kind === 'elementary' && y.kind === 'elementary') return x.name === y.name;
+    if (x.kind === 'string' && y.kind === 'string') return x.length === y.length;
+    if (x.kind === 'array' && y.kind === 'array')
+      return (
+        x.dims.length === y.dims.length &&
+        x.dims.every((d, n) => d.lo === y.dims[n]!.lo && d.hi === y.dims[n]!.hi) &&
+        this.sameType(x.element, y.element)
+      );
+    if (x.kind === 'struct' && y.kind === 'struct')
+      return (
+        x.members.length === y.members.length &&
+        x.members.every(
+          (m, n) =>
+            sameName(m.name, y.members[n]!.name) && this.sameType(m.type, y.members[n]!.type),
+        )
+      );
+    if (x.kind === 'named' && y.kind === 'named') return sameName(x.name, y.name);
+    return x.kind === 'dateAndTime' && y.kind === 'dateAndTime';
+  }
+
+  /**
+   * `dst := e` con `dst` di tipo `t`: una STRING con `assignString`, STRUCT, ARRAY e UDT dello
+   * stesso tipo a istruzioni `L`/`T` di doppie parole (poi parola), sugli indirizzi del compilatore.
+   */
+  private assignComplex(dst: Located, t: DataType, e: Expr, at: Pos): void {
+    if (this.declared(dst, true).constant)
+      fail(dst, `Non si può scrivere in una costante: ${dst.text}`);
+    if (t.kind === 'string') return this.assignString(dst, t.length, e, at);
+    const src = this.complexOf(e);
+    if (!src || !this.sameType(src, t))
+      return fail(
+        e,
+        `Tipi diversi: serve ${formatType(t)}${src ? `, c'è ${formatType(src)}` : ' (una variabile dello stesso tipo)'}`,
+      );
+    const bytes = this.bytesOf(t, at);
+    if (bytes > MAX_COPY)
+      fail(
+        at,
+        `Copia di ${bytes} byte: in prova al massimo ${MAX_COPY} (si copia a istruzioni L/T)`,
+      );
+    const [from, to] = [this.located(e as Located), this.located(dst)];
+    if (from.bit % 8 || to.bit % 8) fail(at, 'Copia non allineata al byte');
+    let open: number | undefined;
+    const move = (op: 'L' | 'T', l: Loc, operand: string) => {
+      if (l.area === 'DB' && l.db !== open) {
+        this.emit(`OPN DB ${l.db}`);
+        open = l.db;
+      }
+      this.emit(`${op} ${operand}`);
+    };
+    for (let k = 0; k < bytes;) {
+      const n = bytes - k >= 4 ? 4 : bytes - k >= 2 ? 2 : 1;
+      move('L', from, this.at(from, WIDTH[n]!, k));
+      move('T', to, this.at(to, WIDTH[n]!, k));
+      k += n;
+    }
+  }
+
+  /** I codici dei caratteri di una costante fra apici (niente sequenze `$`). */
+  private chars(e: Extract<Expr, { k: 'str' }>): number[] {
+    if (e.text.includes('$'))
+      fail(e, 'Le sequenze $ nelle costanti fra apici non sono supportate in prova');
+    const codes = Array.from(e.text, (c) => c.codePointAt(0)!);
+    if (codes.some((c) => c > 0xff)) fail(e, `Carattere fuori da Latin-1 in '${e.text}'`);
+    if (codes.length > 254) fail(e, 'Una STRING ha al massimo 254 caratteri');
+    return codes;
+  }
+
+  /** Un lato STRING: una costante (codici) o una variabile (posizione e lunghezza massima). */
+  private strSide(e: Expr): { codes: number[] } | { loc: Loc; max: number } | undefined {
+    if (e.k === 'str') return { codes: this.chars(e) };
+    const t = this.complexOf(e);
+    if (t?.kind !== 'string') return undefined;
+    const loc = this.located(e as Located);
+    if (loc.bit % 8) fail(e, 'STRING non allineata al byte');
+    return { loc, max: t.length };
+  }
+
+  /** Un confronto con un lato STRING: una costante che non è di un carattere o una variabile. */
+  private isStrCmp(e: Extract<Expr, { k: 'bin' }>): boolean {
+    const str = (x: Expr) =>
+      (x.k === 'str' && x.text.length !== 1) || this.complexOf(x)?.kind === 'string';
+    if (!str(e.l) && !str(e.r)) return false;
+    if (e.op !== '=' && e.op !== '<>') fail(e, `Con STRING si usano solo = e <>, non ${e.op}`);
+    if (!this.strSide(e.l) || !this.strSide(e.r))
+      fail(e, 'Una STRING si confronta solo con una STRING');
+    if (e.l.k === 'str' && e.r.k === 'str') fail(e, 'Confronto fra due costanti');
+    return true;
+  }
+
+  /** `AR1 = i · 8`, più AR2 nei dati d'istanza: il carattere `i` con `[AR1,P#…]`. */
+  private pointAt(i: string, l: Loc): void {
+    this.emit(`L ${i}`, 'SLD 3');
+    if (l.area === 'DI') this.emit('TAR2', '+D');
+    this.emit('LAR1');
+  }
+
+  /**
+   * Ciclo sui caratteri `0 … n-1`: il carattere di `a` in ACCU1, poi `bOp` (`T` lo scrive in `b`,
+   * `L` carica quello di `b` e `after` li confronta). Finito, salta a `done`.
+   */
+  private charLoop(n: string, a: Loc, b: Loc, bOp: 'L' | 'T', after: () => void, done: string) {
+    const i = this.temp('INT');
+    const top = this.label(a.at);
+    this.emit('L 0', `T ${i}`);
+    this.place(top);
+    this.emit(`L ${i}`, `L ${n}`, '>=I', `JC ${done}`);
+    this.pointAt(i, a);
+    this.opn(a);
+    this.emit(`L ${this.at(a, 'B', 2, true)}`);
+    if ((a.area === 'DI') !== (b.area === 'DI')) {
+      // AR1 diverso per i due lati: il carattere aspetta in una TEMP
+      const c = this.temp('BYTE');
+      this.emit(`T ${c}`);
+      this.pointAt(i, b);
+      this.emit(`L ${c}`);
+    }
+    this.opn(b);
+    this.emit(`${bOp} ${this.at(b, 'B', 2, true)}`);
+    after();
+    this.emit(`L ${i}`, 'L 1', '+I', `T ${i}`, `JU ${top}`);
+  }
+
+  /** `n` = lunghezza attuale di `l` (byte 1), al massimo `max`. */
+  private curLen(l: Loc, max: number, n: string): void {
+    const small = this.label(l.at);
+    this.opn(l);
+    this.emit(`L ${this.at(l, 'B', 1)}`, `L ${max}`, '>I', `JC ${small}`, 'TAK');
+    this.place(small);
+    this.emit(`T ${n}`);
+  }
+
+  /** `L`/compare di una costante di 1, 2 o 4 caratteri. */
+  private charConst(c: number[]): string {
+    const v = c
+      .reduce((a, b) => a * 256 + b, 0)
+      .toString(16)
+      .toUpperCase();
+    return `${{ 1: 'B#16#', 2: 'W#16#', 4: 'DW#16#' }[c.length]}${v}`;
+  }
+
+  /** Pezzi di 4, 2 e 1 caratteri dall'inizio. */
+  private pieces(c: number[]): { k: number; part: number[] }[] {
+    const out: { k: number; part: number[] }[] = [];
+    for (let k = 0; k < c.length;) {
+      const n = c.length - k >= 4 ? 4 : c.length - k >= 2 ? 2 : 1;
+      out.push({ k, part: c.slice(k, k + n) });
+      k += n;
+    }
+    return out;
+  }
+
+  /**
+   * `s := 'testo'` o `s := t`: come STEP 7 si copiano la lunghezza attuale (al massimo quella di
+   * `s`) e i caratteri; il byte 0 riceve la lunghezza massima dichiarata di `s`.
+   */
+  private assignString(dst: Located, max: number, e: Expr, at: Pos): void {
+    const src = this.strSide(e) ?? fail(e, "Per una STRING serve una costante '…' o una STRING");
+    const to = this.located(dst);
+    if (to.bit % 8) fail(dst, 'STRING non allineata al byte');
+    if ('codes' in src) {
+      const c = src.codes;
+      if (c.length > max)
+        fail(e, `La costante ha ${c.length} caratteri, ${dst.text}${tail(dst)} ne tiene ${max}`);
+      this.opn(to);
+      this.emit(
+        `L ${max}`,
+        `T ${this.at(to, 'B', 0)}`,
+        `L ${c.length}`,
+        `T ${this.at(to, 'B', 1)}`,
+      );
+      for (const { k, part } of this.pieces(c))
+        this.emit(`L ${this.charConst(part)}`, `T ${this.at(to, WIDTH[part.length]!, 2 + k)}`);
+      return;
+    }
+    const n = this.temp('INT');
+    this.curLen(src.loc, Math.min(src.max, max), n);
+    this.opn(to);
+    this.emit(`T ${this.at(to, 'B', 1)}`, `L ${max}`, `T ${this.at(to, 'B', 0)}`);
+    const done = this.label(at);
+    this.charLoop(n, src.loc, to, 'T', () => undefined, done);
+    this.place(done);
+  }
+
+  /** `a = b` / `a <> b` fra STRING: stessa lunghezza attuale e stessi caratteri, in una TEMP BOOL. */
+  private strCompare(e: Extract<Expr, { k: 'bin' }>): Expr {
+    const [a, b] = [this.strSide(e.l)!, this.strSide(e.r)!];
+    const r = this.temp('BOOL');
+    const end = this.label(e);
+    this.emit('CLR', `= ${r}`);
+    if ('codes' in a || 'codes' in b) {
+      const [v, c] =
+        'codes' in a
+          ? [b as { loc: Loc; max: number }, a.codes]
+          : [a, (b as { codes: number[] }).codes];
+      // una costante più lunga della STRING non è mai uguale
+      if (c.length <= v.max) {
+        this.opn(v.loc);
+        this.emit(`L ${this.at(v.loc, 'B', 1)}`, `L ${c.length}`, '<>I', `JC ${end}`);
+        for (const { k, part } of this.pieces(c))
+          this.emit(
+            `L ${this.at(v.loc, WIDTH[part.length]!, 2 + k)}`,
+            `L ${this.charConst(part)}`,
+            part.length === 4 ? '<>D' : '<>I',
+            `JC ${end}`,
+          );
+        this.emit('SET', `= ${r}`);
+      }
+    } else {
+      const eq = this.label(e);
+      const n = this.temp('INT');
+      // n = lunghezza di a; diversa da quella di b, le STRING sono diverse
+      this.curLen(a.loc, a.max, n);
+      this.opn(b.loc);
+      this.emit(`L ${this.at(b.loc, 'B', 1)}`, '<>I', `JC ${end}`);
+      this.charLoop(n, a.loc, b.loc, 'L', () => this.emit('<>I', `JC ${end}`), eq);
+      this.place(eq);
+      this.emit('SET', `= ${r}`);
+    }
+    this.place(end);
+    const t: Expr = { k: 'temp', text: r, ty: 'BOOL', line: e.line, col: e.col };
+    return e.op === '=' ? t : { k: 'not', e: t, line: e.line, col: e.col };
   }
 
   /**
@@ -816,7 +1304,15 @@ class Gen {
   /** Un indice come DINT: un INT si allarga con ITD. */
   private dint(e: Expr): Expr {
     const t = this.typeOf(e, 'DINT');
-    if (t === 'INT') return { k: 'call', name: 'INT_TO_DINT', arg: e, line: e.line, col: e.col };
+    if (t === 'INT')
+      return {
+        k: 'call',
+        name: 'INT_TO_DINT',
+        raw: 'INT_TO_DINT',
+        arg: e,
+        line: e.line,
+        col: e.col,
+      };
     if (t !== 'DINT') fail(e, `Un indice dev'essere INT o DINT, c'è ${t}`);
     return e;
   }
@@ -856,6 +1352,8 @@ class Gen {
     this.sclLine = s.line;
     switch (s.k) {
       case 'assign': {
+        const whole = this.complexOf(s.dst);
+        if (whole) return this.scoped(() => this.assignComplex(s.dst as Located, whole, s.e, s));
         // un indirizzo prende il tipo dell'espressione se ci sta (MW10 := una WORD)
         const dst = this.resolve(s.dst, s.dst.k === 'addr' ? this.typeOf(s.e) : undefined, true);
         if (dst.constant) fail(s.dst, `Non si può scrivere in una costante: ${s.dst.text}`);
@@ -1013,7 +1511,7 @@ class Gen {
   private forStmt(s: Extract<Stmt, { k: 'for' }>): void {
     if (s.v.k !== 'temp' && s.v.vindex)
       fail(s.v, 'La variabile del FOR non può avere indici variabili');
-    const v = this.resolve(s.v);
+    const v = this.resolve(s.v, undefined, true);
     if (v.ty !== 'INT' && v.ty !== 'DINT')
       fail(s.v, `La variabile del FOR dev'essere INT o DINT, c'è ${v.ty}`);
     if (v.constant) fail(s.v, `Non si può scrivere in una costante: ${s.v.text}`);
@@ -1080,7 +1578,7 @@ export function sclToAwl(text: string, ctx: AwlContext, tempEnd: number): SclAwl
     lines: gen.out.map((l, line) => ({
       line,
       sclLine: l.sclLine,
-      ...(l.value ? { value: l.value } : {}),
+      ...(l.value ? { value: SHOWN[l.value] ?? (l.value as SclType) } : {}),
     })),
     diagnostics: [],
   };

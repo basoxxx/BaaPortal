@@ -1,9 +1,22 @@
 // Lexer SCL del sottoinsieme in prova: parole chiave senza distinzione di maiuscole, commenti
 // `//` e `(* *)` (non annidati), simboli "…", locali #nome, indirizzi assoluti I/Q/M, interi in
-// base 2/8/16 (`16#FF`) e tipizzati (`INT#5`, `W#16#FF`, `L#5`).
+// base 2/8/16 (`16#FF`) e tipizzati (`INT#5`, `W#16#FF`, `L#5`), durate e date (`T#5s`, `S5T#2s`,
+// `D#2024-01-01`, `TOD#12:00:00`), stringhe e caratteri fra apici.
+import { parseLiteral, type ElementaryTypeName } from '@baaportal/s7-types';
 
 export type TokKind =
-  'id' | 'kw' | 'local' | 'symbol' | 'addr' | 'int' | 'real' | 'op' | 'string' | 'comment' | 'eof';
+  | 'id'
+  | 'kw'
+  | 'local'
+  | 'symbol'
+  | 'addr'
+  | 'int'
+  | 'real'
+  | 'time'
+  | 'op'
+  | 'string'
+  | 'comment'
+  | 'eof';
 /** `from`: posizione nel testo (da 0); `col` da 1. */
 export type Tok = { kind: TokKind; text: string; line: number; col: number; from: number };
 export type LexOptions = {
@@ -37,6 +50,25 @@ const ADDR = /^%?([IQM])(?:X?(\d+)\.([0-7])|([BWD])(\d+))$/i;
 /** Intero: decimale o in base 2/8/16, col tipo davanti se c'è; `_` separa le cifre. */
 const INT_LIT =
   /^(?:(?:D?INT|D?WORD|BYTE|DW|W|B|L)#-?)?(?:(?:2|8|16)#[0-9A-Za-z_]+|\d[\d_]*)(?![0-9A-Za-z_#]|\.\d)/i;
+/** Durata o data tipizzata: `T#5s`, `TIME#1h2m`, `S5T#2s`, `D#2024-01-01`, `TOD#12:00:00.5`. */
+const TIME_LIT =
+  /^(?:(?:T|TIME|S5T|S5TIME)#-?[0-9A-Za-z_]+|(?:D|DATE)#[0-9-]+|(?:TOD|TIME_OF_DAY)#[0-9:.]+)(?![0-9A-Za-z_#])/i;
+const TIME_TYPES: [RegExp, TimeType, ElementaryTypeName][] = [
+  [/^S5T(?:IME)?#/i, 'S5TIME', 'S5Time'],
+  [/^T(?:IME)?#/i, 'TIME', 'Time'],
+  [/^D(?:ATE)?#/i, 'DATE', 'Date'],
+  [/^(?:TOD|TIME_OF_DAY)#/i, 'TOD', 'Time_Of_Day'],
+];
+export type TimeType = 'TIME' | 'S5TIME' | 'DATE' | 'TOD';
+
+/** Tipo e forma AWL (`T#1H2M`, `D#2024-01-01`) di una durata o data; `undefined` se non è valida. */
+export function timeLiteral(text: string): { ty: TimeType; awl: string } | undefined {
+  const k = TIME_TYPES.find(([re]) => re.test(text));
+  if (!k) return undefined;
+  const r = parseLiteral({ kind: 'elementary', name: k[2] }, text);
+  return r.ok ? { ty: k[1], awl: r.canonical } : undefined;
+}
+
 const LIT_TYPE: Record<string, string> = {
   INT: 'INT',
   DINT: 'DINT',
@@ -140,9 +172,13 @@ export function lex(text: string, opts: LexOptions = {}): Tok[] {
       continue;
     }
     if (c === "'") {
-      const s = quoted("'", "Stringa senza l'apice di chiusura");
-      if (s.length > 1 && s.endsWith("'")) err('Le stringhe non sono supportate in prova');
-      push('string', s);
+      push('string', quoted("'", "Stringa senza l'apice di chiusura"));
+      continue;
+    }
+    const tl = TIME_LIT.exec(text.slice(i))?.[0];
+    if (tl) {
+      if (!timeLiteral(tl)) err(`Costante non valida: ${tl}`);
+      push('time', tl);
       continue;
     }
     const lit = INT_LIT.exec(text.slice(i))?.[0];
