@@ -246,3 +246,23 @@ describe('SCL 1.8: STRUCT, ARRAY, UDT e STRING interi', () => {
     expect(d[1]).toContain('IN_OUT');
   });
 });
+
+describe('SCL 1.8: ARRAY OF CHAR con indice variabile', () => {
+  it('legge e scrive un solo byte, i vicini restano', () => {
+    const dev = makeDevice(seq('k'));
+    dev.blocks.length = 0;
+    const ob = scl('OB', 1, 'Main', [
+      "ac[0] := 'a'; ac[1] := 'b'; ac[2] := 'c'; ac[3] := 'd'; ac[4] := 'e';",
+      'MW30 := 1;',
+      "ac[MW30] := 'X';",
+      'MW30 := 2;',
+      'c := ac[MW30];',
+      'MB0 := CHAR_TO_BYTE(ac[0]); MB1 := CHAR_TO_BYTE(ac[1]); MB2 := CHAR_TO_BYTE(ac[2]);',
+      'MB3 := CHAR_TO_BYTE(ac[3]); MB4 := CHAR_TO_BYTE(ac[4]); MB5 := CHAR_TO_BYTE(c);',
+    ]);
+    ob.interface.temp.push(member('ac', 'Array[0..4] of Char'), member('c', 'Char'));
+    dev.blocks.push(ob);
+    const v = cycle(dev);
+    expect(String.fromCharCode(...[0, 1, 2, 3, 4, 5].map((i) => v.getUint8(i)))).toBe('aXcdec');
+  });
+});

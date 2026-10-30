@@ -1295,8 +1295,7 @@ class Gen {
     if (first.area === 'DI') this.emit('TAR2', '+D');
     this.emit('LAR1');
     if (first.area === 'DB') this.emit(`OPN DB ${first.db}`);
-    const size =
-      r.ty === 'BOOL' ? 'X' : r.ty === 'BYTE' ? 'B' : SIZE[r.ty as Num] === 2 ? 'W' : 'D';
+    const size = r.ty === 'BOOL' ? 'X' : WIDTH[SIZE[r.ty as Num]]!;
     const mnem = first.area + (size === 'X' && first.area.length === 1 ? '' : size);
     return `${mnem} [AR1,P#${first.bit >> 3}.${first.bit & 7}]`;
   }
