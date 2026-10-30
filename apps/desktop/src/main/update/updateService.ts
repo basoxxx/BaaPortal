@@ -253,8 +253,9 @@ export class UpdateService {
     this.clearTimer();
     this.timer = this.d.setTimeout(() => {
       this.timer = null;
-      // Con uno scaricamento in corso o un aggiornamento pronto non serve cercare altro.
-      if (this.downloading || this.downloadedVersion || this.last?.type === 'macReady') {
+      // Con uno scaricamento in corso o un aggiornamento scaricato non serve cercare altro. Il DMG
+      // pronto di macOS no: lo si sostituisce a mano e intanto può uscire una versione più nuova.
+      if (this.downloading || this.downloadedVersion) {
         this.schedule(CHECK_EVERY_MS);
         return;
       }
@@ -299,7 +300,13 @@ export class UpdateService {
       const r = await u.checkForUpdates();
       const version = r?.updateInfo.version;
       // Con uno scaricamento in corso o già fatto lo stato non si tocca: prima si installa o si scarta.
-      if (this.downloading || this.downloadedVersion || this.last?.type === 'macReady') {
+      // Un DMG pronto vale finché non esce una versione più nuova della sua.
+      const ready = this.last?.type === 'macReady' ? this.last : null;
+      if (
+        this.downloading ||
+        this.downloadedVersion ||
+        (ready && (!version || !isNewer(version, ready.version)))
+      ) {
         if (run.manual && this.last?.type === 'macReady') this.d.send(this.last);
         else if (run.manual && this.last?.type === 'downloaded') this.d.send(this.last);
         return;

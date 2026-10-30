@@ -410,7 +410,7 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
 - **Controllo a mano durante uno scaricamento:** non mostra nulla (nessun «aggiornato» né altro avviso); lo scaricamento prosegue e il suo avanzamento resta visibile.
 - **Release non ancora completa:** fra la pubblicazione di una release e il caricamento di `latest*.yml` da parte della CI, o se il lavoro di una piattaforma fallisce, i controlli su quella release falliscono. Quello automatico tace; quello a mano mostra «La release non ha il file di aggiornamento».
 - **Da prova a stabile su GitHub:** cambiare una release da pre-release a stabile non cambia il canale delle build già fatte; serve rifarle con workflow_dispatch.
-- **macOS, DMG pronto:** finché l'app non viene riavviata, i controlli automatici non ripartono.
+- **macOS, DMG pronto:** i controlli automatici continuano; avvisano solo di una versione più nuova di quella del DMG, che resta pronto altrimenti.
 - **Installazione fallita dopo «Non salvare»:** la copia di recupero era già stata cancellata (`beforeWindowClose`).
 - **Installazione fallita:** se l'installatore non parte, l'app riabilita le operazioni online e mostra l'errore; la finestra di salvataggio e l'offline erano già stati eseguiti.
 
