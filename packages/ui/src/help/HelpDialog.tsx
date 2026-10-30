@@ -2,7 +2,14 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from '
 import { useTranslation } from 'react-i18next';
 import { Dialog } from '../components/Dialog';
 import type { Block, Inline } from './markdown';
-import { HELP_PAGES, findHelpPage, linkTarget, searchHelp, type HelpPage } from './pages';
+import {
+  HELP_PAGES,
+  findHelpPage,
+  helpImage,
+  linkTarget,
+  searchHelp,
+  type HelpPage,
+} from './pages';
 import './help.css';
 
 type Go = (slug: string, anchor?: string) => void;
@@ -26,6 +33,15 @@ function Inlines({ xs, go, pages }: { xs: Inline[]; go: Go; pages: HelpPage[] })
             <Inlines xs={x.children} go={go} pages={pages} />
           </em>
         );
+      case 'image': {
+        const url = helpImage(x.src);
+        // Un'immagine che non è nella cartella dei documenti resta il suo testo alternativo.
+        return url ? (
+          <img key={i} src={url} alt={x.alt} className="baa-help-img" />
+        ) : (
+          <Fragment key={i}>{x.alt}</Fragment>
+        );
+      }
       case 'link': {
         const target = linkTarget(x.href, pages);
         const inner = <Inlines xs={x.children} go={go} pages={pages} />;
@@ -83,6 +99,12 @@ function Blocks({
         );
       case 'rule':
         return <hr key={i} />;
+      case 'quote':
+        return (
+          <blockquote key={i}>
+            <Blocks blocks={b.blocks} slug={slug} go={go} pages={pages} />
+          </blockquote>
+        );
       case 'list': {
         const L = b.ordered ? 'ol' : 'ul';
         return (

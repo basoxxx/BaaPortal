@@ -4,7 +4,14 @@ import { describe, expect, it } from 'vitest';
 import { initI18n } from '../src/i18n';
 import { HelpContent, HelpDialog } from '../src/help/HelpDialog';
 import { parseMarkdown } from '../src/help/markdown';
-import { HELP_PAGES, buildPage, contextPage, linkTarget, searchHelp } from '../src/help/pages';
+import {
+  HELP_PAGES,
+  buildPage,
+  contextPage,
+  helpImage,
+  linkTarget,
+  searchHelp,
+} from '../src/help/pages';
 import { renderApp } from './renderApp';
 
 const A = buildPage(
@@ -60,7 +67,23 @@ describe('guida: markdown', () => {
     expect(linkTarget('nonesiste.md')).toBeNull();
   });
 
+  it('citazioni e immagini: la citazione si legge, l\u2019immagine fuori dalla cartella resta il suo testo', () => {
+    const page = buildPage(
+      'x',
+      '# T\n\n> Nota importante\n> su due righe\n\n![logo](../../etc/x.png) ![web](https://x.example/a.png) ![assente](nessuna.png)\n',
+    );
+    expect(page.blocks.map((b) => b.t)).toEqual(['heading', 'quote', 'para']);
+    const { container } = render(<HelpContent page={page} go={() => undefined} pages={[page]} />);
+    expect(container.querySelector('blockquote')?.textContent).toContain('Nota importante su due');
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.textContent).toContain('logo');
+    expect(helpImage('../x.png')).toBeUndefined();
+    expect(helpImage('https://x.example/a.png')).toBeUndefined();
+  });
+
   it('pagina di contesto per editor e linguaggio', () => {
+    expect(contextPage('block', 'AWL')).toBe('awl');
+    expect(HELP_PAGES.some((p) => p.slug === 'awl')).toBe(true);
     expect(contextPage('block', 'KOP')).toBe('kop');
     expect(contextPage('block', 'SCL')).toBe('fup-scl');
     expect(contextPage('hmiScreen')).toBe('hmi');

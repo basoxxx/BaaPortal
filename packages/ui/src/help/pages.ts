@@ -20,6 +20,8 @@ const sources = import.meta.glob(['../../../../docs/uso/*.md', '../../../../docs
 
 const blockText = (b: Block): string => {
   switch (b.t) {
+    case 'quote':
+      return b.blocks.map(blockText).join(' ');
     case 'heading':
     case 'para':
       return inlineText(b.inline);
@@ -35,6 +37,19 @@ const blockText = (b: Block): string => {
       return [b.head, ...b.rows].map((r) => r.map(inlineText).join(' ')).join(' ');
   }
 };
+
+// Immagini della guida: solo file della cartella dei documenti d'uso, incluse nella build.
+const images = import.meta.glob('../../../../docs/uso/**/*.{png,jpg,jpeg,gif,svg,webp}', {
+  query: '?url',
+  import: 'default',
+  eager: true,
+}) as Record<string, string>;
+
+/** L'indirizzo di un'immagine della guida (percorso relativo semplice, mai `..`, schemi o `/`), se c'è. */
+export function helpImage(src: string): string | undefined {
+  if (!/^[\w.-]+(\/[\w.-]+)*$/.test(src) || src.split('/').includes('..')) return undefined;
+  return images[`../../../../docs/uso/${src}`];
+}
 
 export function buildPage(slug: string, markdown: string): HelpPage {
   const blocks = parseMarkdown(markdown);
@@ -98,7 +113,6 @@ export function searchHelp(query: string, pages: HelpPage[] = HELP_PAGES): HelpH
 }
 
 const CONTEXT: Partial<Record<EditorKind, string>> = {
-  block: 'riferimenti',
   hmiScreen: 'hmi',
   deviceView: 'dispositivi',
   crossRef: 'riferimenti',
@@ -116,6 +130,6 @@ export function contextPage(kind: EditorKind | undefined, language?: string): st
       ? 'kop'
       : language === 'FUP' || language === 'SCL'
         ? 'fup-scl'
-        : 'riferimenti';
+        : 'awl';
   return kind ? CONTEXT[kind] : undefined;
 }
