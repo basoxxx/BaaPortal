@@ -449,6 +449,13 @@ class Parser {
         if (this.bare(j, ')')) yield [par(bs), j + 1];
     }
     if (fresh) for (const [bs, j] of this.branches(i, pre)) yield [par(bs), j];
+    // gruppo `A( … NOT )`: la negazione di un'entrata in mezzo alla serie (un solo ramo)
+    if (this.bare(i, 'A('))
+      for (const [s, j] of this.series(i + 1, true, pre, 'none')) {
+        if (!s || !this.bare(j, ')')) continue;
+        const g = this.list(s);
+        if (g.length >= 2 && g.at(-1)!.k === 'not') yield [par([g]), j + 1];
+      }
   }
 
   private *branches(i: number, pre: Pre): Gen<LadElem[][]> {

@@ -8,7 +8,7 @@ Guida breve all'editor a contatti (KOP, piano 4A). Un blocco KOP si disegna; Baa
    - **F2** contatto normalmente aperto, **F3** contatto normalmente chiuso, **F7** bobina, **Maiusc+F7** nuovo ramo a T;
    - **F8** apre un ramo parallelo, **F9** lo chiude;
    - **Invio** modifica l'operando dell'elemento selezionato, **Tab** passa al campo successivo, **Esc** annulla;
-   - **Canc** elimina l'elemento; le **frecce** spostano la selezione.
+   - **Canc** elimina l'elemento; le **frecce** spostano la selezione; **Maiusc+clic** (o Ctrl/Cmd+clic, Maiusc+frecce) la estende agli elementi vicini della stessa serie, e Canc, Ctrl/Cmd+C, Ctrl/Cmd+X e Ctrl/Cmd+V eliminano, copiano, tagliano e incollano l'intervallo.
 4. **Operandi.** Si scrivono come in AWL (`I 0.0`, `M 1.2`, un simbolo tra virgolette) e si controllano a ogni modifica. Un operando mancante o una forma non ammessa appare in _Problemi_ come «Segmento n: …» e sull'elemento. Un clic sulla voce di _Problemi_, su un messaggio di compilazione o su un risultato di _Trova_ seleziona l'elemento nel grafico (KOP e FUP) e lo porta in vista.
 5. **Tavolozza.** Con un blocco KOP in primo piano, la task card _Istruzioni → Istruzioni di base_ mostra gruppi (logica a bit, temporizzatori, contatori, confronto, trasferimento, matematica, conversione, logica a parola, scorrimento, salti, controllo del programma). Un clic inserisce nel segmento attivo, oppure si trascina sul segmento.
 6. **Chiamare un blocco.** Si trascina un FC o un FB dall'albero sul segmento: nasce un box _CALL_ con i parametri del blocco chiamato. Per un FB senza DB di istanza, il DB va scritto a mano.

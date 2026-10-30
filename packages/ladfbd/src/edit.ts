@@ -131,7 +131,21 @@ function emptyContact(newId: () => string): LadElem {
 
 // ---- operazioni ----
 
+const ELEM_KINDS = new Set([
+  'contact',
+  'not',
+  'cmp',
+  'edge',
+  'posneg',
+  'midline',
+  'parallel',
+  'box',
+]);
+
 export function insertElem(net: LadNetwork, at: InsertPoint, elem: LadElem): LadNetwork {
+  // un'uscita o un nodo copiati per errore farebbero una serie non valida
+  if (!ELEM_KINDS.has((elem as { k?: string }).k ?? ''))
+    throw new Error(`Rete KOP: ${elem.id} non è un elemento di serie`);
   const n = clone(net);
   let list: LadElem[];
   if ('node' in at) list = must(findNode(n.root, at.node), `nodo ${at.node}`).series;
@@ -225,13 +239,20 @@ export function removeElem(net: LadNetwork, id: string, newId: () => string): La
   const loc = locateElem(n.root, id);
   if (loc) {
     loc.list.splice(loc.index, 1);
-    if (loc.owner.t === 'branch' && loc.list.length === 0) {
+    if (loc.owner.t === 'branch') {
       const { par, branch } = loc.owner;
-      par.branches.splice(branch, 1);
-      if (par.branches.length === 1) {
-        // Un parallelo con un solo ramo si scioglie nella serie che lo contiene.
+      const emptied = loc.list.length === 0;
+      if (emptied) par.branches.splice(branch, 1);
+      // Un parallelo con un solo ramo si scioglie nella serie che lo contiene; un gruppo
+      // (un ramo solo, dopo `negateElem`) anche quando gli resta un elemento solo. Un gruppo
+      // rimasto con soli NOT sparisce: sciolto, il NOT negherebbe la logica che lo precede.
+      const rest = par.branches[0] ?? [];
+      if (
+        par.branches.length <= 1 &&
+        (emptied || rest.length <= 1 || rest.every((e) => e.k === 'not'))
+      ) {
         const outer = must(locateElem(n.root, par.id), `parallelo ${par.id}`);
-        outer.list.splice(outer.index, 1, ...par.branches[0]!);
+        outer.list.splice(outer.index, 1, ...rest.filter((e) => e.k !== 'not'));
       }
     }
     return n;
@@ -243,6 +264,22 @@ export function removeElem(net: LadNetwork, id: string, newId: () => string): La
     return n;
   }
   throw new Error(`Rete KOP: elemento ${id} non trovato`);
+}
+
+/**
+ * Nega un'entrata che apre una logica propria (confronto, box POS/NEG, parallelo) mettendola in
+ * un gruppo `[elemento, NOT]` (parallelo di un solo ramo, AWL `A(` … `NOT` `)`): il `NOT` nega
+ * solo lei, non la logica che la precede. Se l'elemento è già l'unico di un gruppo con `NOT`
+ * il gruppo si scioglie.
+ */
+export function negateElem(net: LadNetwork, id: string, newId: () => string): LadNetwork {
+  const n = clone(net);
+  const loc = must(locateElem(n.root, id), `elemento ${id}`);
+  const e = loc.list[loc.index]!;
+  if (!(e.k === 'cmp' || e.k === 'posneg' || e.k === 'parallel'))
+    throw new Error(`Rete KOP: ${id} non si nega da solo`);
+  loc.list[loc.index] = { id: newId(), k: 'parallel', branches: [[e, { id: newId(), k: 'not' }]] };
+  return n;
 }
 
 /**

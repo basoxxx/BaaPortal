@@ -27,7 +27,7 @@ export const ladElemSchema: z.ZodType<LadElem> = z.lazy(() =>
     obj({ id, k: z.literal('edge'), dir, mem: z.string() }),
     obj({ id, k: z.literal('posneg'), dir, bit: z.string(), mem: z.string() }),
     obj({ id, k: z.literal('midline'), op: z.string() }),
-    obj({ id, k: z.literal('parallel'), branches: z.array(z.array(ladElemSchema)).min(2) }),
+    obj({ id, k: z.literal('parallel'), branches: z.array(z.array(ladElemSchema)).min(1) }),
     ladBoxSchema,
   ]),
 ) as z.ZodType<LadElem>;

@@ -572,6 +572,12 @@ function unescapeText(text: string): number[] {
   return out;
 }
 
+/** Byte di un valore iniziale (mc7 §1.4.6) dal suo letterale; undefined se `parseLiteral` lo rifiuta. */
+export function encodeInitial(type: DataType, text: string): Uint8Array | undefined {
+  const r = parseLiteral(type, text);
+  return r.ok ? Uint8Array.from(encodeCanonical(type, r.canonical)) : undefined;
+}
+
 /** Codifica un letterale canonico (uscita di `parseLiteral`) come in mc7 §1.4.6. */
 function encodeCanonical(type: DataType, canon: string): number[] {
   const le = (n: bigint, bytes: number): number[] => {

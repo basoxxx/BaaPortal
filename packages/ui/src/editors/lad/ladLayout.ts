@@ -39,9 +39,12 @@ export type LadWire = {
 };
 /** Dove si può inserire (per clic e trascinamento); `col` può essere frazionario. */
 export type LadInsertSlot = { at: InsertPoint; col: number; row: number };
+/** Cornice di un gruppo (parallelo di un ramo solo, `A(` … `NOT` `)`): fin dove nega il NOT. */
+export type LadGroup = { elemId: string; col: number; row: number; w: number; h: number };
 export type LadLayout = {
   cells: LadCell[];
   wires: LadWire[];
+  groups: LadGroup[];
   slots: LadInsertSlot[];
   cols: number;
   rows: number;
@@ -164,6 +167,7 @@ function nodeInfo(n: LadNode): NodeInfo {
 type Ctx = {
   cells: LadCell[];
   wires: LadWire[];
+  groups: LadGroup[];
   slots: LadLayout['slots'];
   /** Uscite da collocare nell'ultima colonna, nota solo alla fine. */
   outs: { cell: LadCell; end: number; node: string }[];
@@ -233,6 +237,8 @@ function placeElem(c: Ctx, e: LadElem, col: number, row: number, depth: number):
     });
     wire(c, col, row, col, last, { id: e.id, side: 'in' });
     wire(c, end, row, end, last, { id: e.id, side: 'out' });
+    if (e.branches.length === 1)
+      c.groups.push({ elemId: e.id, col, row, w: end - col, h: elemH(e) });
     return end;
   }
   if (e.k === 'box') return placeBox(c, e, col, row);
@@ -311,7 +317,15 @@ function separate(slots: LadLayout['slots']): void {
 }
 
 export function layoutNetwork(net: LadNetwork): LadLayout {
-  const c: Ctx = { cells: [], wires: [], slots: [], outs: [], maxEnd: 0, poolNext: 0 };
+  const c: Ctx = {
+    cells: [],
+    wires: [],
+    groups: [],
+    slots: [],
+    outs: [],
+    maxEnd: 0,
+    poolNext: 0,
+  };
   placeNode(c, net.root, 0, 0);
   const cols = c.maxEnd + 1;
   for (const { cell, end, node } of c.outs) {
@@ -319,5 +333,6 @@ export function layoutNetwork(net: LadNetwork): LadLayout {
     if (cols - 1 > end) wire(c, end, cell.row, cols - 1, cell.row, { id: node, side: 'out' });
   }
   separate(c.slots);
-  return { cells: c.cells, wires: c.wires, slots: c.slots, cols, rows: nodeInfo(net.root).h };
+  const { cells, wires, groups, slots } = c;
+  return { cells, wires, groups, slots, cols, rows: nodeInfo(net.root).h };
 }

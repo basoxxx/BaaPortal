@@ -146,15 +146,15 @@ describe('FupNetworkView: inserimento', () => {
       },
     }));
     group.focus();
-    // Un NOT dopo il confronto negherebbe anche I 0.0 (A L0.0, A(…), NOT): si rifiuta.
+    // Un NOT dopo il confronto negherebbe anche I 0.0: il confronto va in un gruppo A( … NOT ).
     await user.click(screen.getByRole('button', { name: /^Confronto/ }));
     await user.keyboard('n');
-    expect(screen.getByRole('status')).toHaveTextContent('Qui non si nega');
-    expect(awl(net())).not.toContain('NOT');
+    expect(awl(net())).toMatch(/NOT[\s\S]*\)/);
+    expect(awl(net())).toContain('A(');
+    await user.keyboard('n');
     await user.click(screen.getByRole('button', { name: 'Contatto NA I 0.1' }));
     await user.keyboard('n');
     expect(awl(net())).toContain('AN %I0.1');
-    expect(awl(net())).not.toContain('NOT');
   });
 
   it('F7 seleziona la bobina vuota; la tavolozza aggiunge un’uscita S', async () => {
@@ -241,5 +241,115 @@ describe('FupNetworkView: inserimento', () => {
     expect(fup).toEqual(kop);
     expect(awl(fup)).toBe(awl(kop));
     expect(awl(fup)).toContain('O %M0.0;');
+  });
+});
+
+const contacts = (id: () => string): LadNetwork => ({
+  root: {
+    id: id(),
+    series: ['I 0.0', 'I 0.1', 'I 0.2', 'I 0.3'].map(
+      (op) => ({ id: id(), k: 'contact', neg: false, op }) as const,
+    ),
+    outs: [{ id: id(), k: 'coil', op: 'Q 0.0' }],
+  },
+});
+
+describe('FUP: negazione di un’entrata in mezzo alla serie', () => {
+  it('N su un confronto dopo un contatto lo mette in A( … NOT ), con il cerchietto sul suo pin', async () => {
+    const { user, net } = setup((id) => ({
+      root: {
+        id: id(),
+        series: [
+          { id: id(), k: 'contact', neg: false, op: 'I 0.0' },
+          { id: id(), k: 'cmp', fn: '>I', in1: 'MW 0', in2: 'MW 2' },
+        ],
+        outs: [{ id: id(), k: 'coil', op: 'Q 0.0' }],
+      },
+    }));
+    await user.click(screen.getByRole('button', { name: /^Confronto/ }));
+    await user.keyboard('n');
+    expect(net().root.series.map((e) => e.k)).toEqual(['contact', 'parallel']);
+    expect(awl(net()).replace(/\s+/g, ' ')).toContain('A %I0.0; A(; L %MW0; L %MW2; >I; NOT; );');
+    const not = screen.getByRole('button', { name: 'Negazione (NOT)' });
+    expect(not.closest('.baa-fup-in')?.textContent).toContain('CMP >I');
+    await user.click(not);
+    await user.keyboard('n');
+    expect(net().root.series.map((e) => e.k)).toEqual(['contact', 'cmp']);
+  });
+});
+
+describe.each([
+  ['FUP', false],
+  ['KOP', true],
+])('%s: selezione multipla di una serie', (_n, kop) => {
+  const names = ['I 0.0', 'I 0.1', 'I 0.2', 'I 0.3'];
+  const ops = (n: LadNetwork) => n.root.series.map((e) => (e as { op: string }).op);
+  const btn = (op: string) => screen.getByRole('button', { name: `Contatto NA ${op}` });
+
+  it('Maiusc+clic e Canc tolgono l’intervallo; Maiusc+frecce lo estendono', async () => {
+    const { user, net } = setup(contacts, { kop });
+    await user.click(btn(names[0]!));
+    await user.keyboard('{Shift>}');
+    await user.click(btn(names[2]!));
+    await user.keyboard('{/Shift}');
+    expect(screen.getByRole('status')).toHaveTextContent('3 elementi selezionati.');
+    expect(btn(names[1]!)).toHaveAttribute('aria-pressed', 'true');
+    expect(btn(names[3]!)).toHaveAttribute('aria-pressed', 'false');
+    await user.keyboard('{Delete}');
+    expect(ops(net())).toEqual(['I 0.3']);
+  });
+
+  it('Maiusc+freccia estende la selezione', async () => {
+    const { user, net } = setup(contacts, { kop });
+    await user.click(btn(names[1]!));
+    await user.keyboard('{Shift>}{ArrowRight}{ArrowRight}{/Shift}');
+    expect(screen.getByRole('status')).toHaveTextContent('3 elementi selezionati.');
+    await user.keyboard('{Delete}');
+    expect(ops(net())).toEqual(['I 0.0']);
+  });
+
+  it('copia e incolla duplicano l’intervallo con id nuovi; taglia lo toglie', async () => {
+    const { user, net } = setup(contacts, { kop });
+    await user.click(btn(names[1]!));
+    await user.keyboard('{Shift>}');
+    await user.click(btn(names[2]!));
+    await user.keyboard('{/Shift}');
+    await user.keyboard('{Control>}c{/Control}');
+    await user.click(btn(names[3]!));
+    await user.keyboard('{Control>}v{/Control}');
+    expect(ops(net())).toEqual([...names, 'I 0.1', 'I 0.2']);
+    const ids = net().root.series.map((e) => e.id);
+    expect(new Set(ids).size).toBe(6);
+    await user.click(screen.getAllByRole('button', { name: 'Contatto NA I 0.2' })[0]!);
+    await user.keyboard('{Control>}x{/Control}');
+    expect(ops(net())).toEqual(['I 0.0', 'I 0.1', 'I 0.3', 'I 0.1', 'I 0.2']);
+  });
+
+  it('un elemento di un’altra serie non si aggiunge alla selezione', async () => {
+    const { user } = setup(
+      (id) => ({
+        root: {
+          id: id(),
+          series: [
+            { id: id(), k: 'contact', neg: false, op: 'I 0.0' },
+            {
+              id: id(),
+              k: 'parallel',
+              branches: [
+                [{ id: id(), k: 'contact', neg: false, op: 'I 0.1' }],
+                [{ id: id(), k: 'contact', neg: false, op: 'I 0.2' }],
+              ],
+            },
+          ],
+          outs: [{ id: id(), k: 'coil', op: 'Q 0.0' }],
+        },
+      }),
+      { kop },
+    );
+    await user.click(btn('I 0.0'));
+    await user.keyboard('{Shift>}');
+    await user.click(btn('I 0.1'));
+    await user.keyboard('{/Shift}');
+    expect(screen.getByRole('status')).toHaveTextContent('La selezione multipla vale solo');
   });
 });

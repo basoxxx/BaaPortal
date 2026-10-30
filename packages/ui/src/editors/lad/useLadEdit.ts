@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import {
   BOX_CATALOG,
   PALETTE,
+  findElem,
   addOutput,
   closeBranchAfter,
   insertElem,
@@ -22,14 +23,18 @@ import {
   fieldsOf,
   findNodeById,
   newBox,
+  cloneFresh,
   nodeOfPoint,
   placeOf,
+  rangeBetween,
 } from './ladOps';
 
 export const LAD_DRAG_TYPE = 'application/x-baaportal-lad';
 /** Trascinamento di oggetti dall'albero del progetto (`beginDrag`), accettato per creare un CALL. */
 export const TREE_DRAG_TYPE = 'application/x-baaportal';
 const HISTORY_KEY = 'history.editLad';
+/** Appunti interni di KOP e FUP: una serie contigua di elementi copiata o tagliata. */
+let clipboard: LadElem[] = [];
 
 export type LadSelection = { t: 'elem'; id: string } | { t: 'slot'; at: InsertPoint } | null;
 
@@ -58,7 +63,13 @@ export type LadEditOpts = {
 export function useLadEdit(o: LadEditOpts) {
   const { t } = useTranslation();
   const { net, readOnly, newId } = o;
-  const [sel, setSel] = useState<LadSelection>(null);
+  const [sel, setSelRaw] = useState<LadSelection>(null);
+  /** Selezione multipla: l'ancora e gli id contigui della stessa serie (almeno due). */
+  const [multi, setMulti] = useState<{ anchor: string; ids: string[] } | null>(null);
+  const setSel = (s: LadSelection) => {
+    setMulti(null);
+    setSelRaw(s);
+  };
   const [status, setStatus] = useState('');
   const wantFocus = useRef(false);
   const rootId = net.root.id;
@@ -187,10 +198,54 @@ export function useLadEdit(o: LadEditOpts) {
     apply(() => closeBranchAfter(net, from, to, newId), undefined, 'lad.cannotClose');
   }
 
+  /** Maiusc/Ctrl+clic o Maiusc+frecce: estende la selezione fino a `id`, nella stessa serie. */
+  function extendTo(id: string) {
+    const anchor = multi?.anchor ?? (sel?.t === 'elem' ? sel.id : undefined);
+    const ids = anchor ? rangeBetween(net, anchor, id) : undefined;
+    if (!anchor || !ids) {
+      setStatus(t('lad.cannotExtend'));
+      return false;
+    }
+    setStatus(ids.length > 1 ? t('lad.multiSelected', { n: ids.length }) : '');
+    setSelRaw({ t: 'elem', id });
+    setMulti(ids.length > 1 ? { anchor, ids } : null);
+    wantFocus.current = true;
+    return true;
+  }
+
+  /** Elementi su cui agiscono elimina, copia e taglia: la selezione multipla o l'elemento solo. */
+  function picked(): string[] {
+    if (multi) return multi.ids;
+    return sel?.t === 'elem' && sel.id !== rootId ? [sel.id] : [];
+  }
+
   function doDelete() {
-    if (sel?.t !== 'elem' || sel.id === rootId) return;
-    const id = sel.id;
-    apply(() => removeElem(net, id, newId), null);
+    const ids = picked();
+    if (ids.length === 0) return;
+    apply(() => ids.reduce((n, id) => removeElem(n, id, newId), net), null);
+  }
+
+  function clip(kind: 'copy' | 'cut' | 'paste') {
+    if (kind === 'paste') {
+      if (readOnly || clipboard.length === 0) return;
+      const at = target().at;
+      const fresh = clipboard.map((e) => cloneFresh(e, newId));
+      apply(
+        () => fresh.reduce((n, e, i) => insertElem(n, { ...at, index: at.index + i }, e), net),
+        { t: 'elem', id: fresh.at(-1)!.id },
+      );
+      return;
+    }
+    const ids = picked();
+    if (ids.length === 0) return;
+    // solo elementi di serie: un'uscita incollata in serie farebbe una rete non valida
+    if (ids.some((id) => placeOf(net, id)?.t !== 'elem')) {
+      setStatus(t('lad.cannotDo'));
+      return;
+    }
+    clipboard = ids.map((id) => structuredClone(findElem(net, id) as LadElem));
+    setStatus(t('lad.copied', { n: ids.length }));
+    if (kind === 'cut' && !readOnly) doDelete();
   }
 
   /** Azioni di modifica dei tasti (`ladAction`); spostamento e modifica dell'operando sono della vista. */
@@ -242,6 +297,9 @@ export function useLadEdit(o: LadEditOpts) {
   return {
     sel,
     setSel,
+    multi,
+    extendTo,
+    clip,
     status,
     setStatus,
     wantFocus,

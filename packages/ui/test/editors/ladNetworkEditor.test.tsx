@@ -323,6 +323,17 @@ describe('LadNetworkEditor: ramo a T, barra, CALL, pin, F9, Tab', () => {
     // il campo successivo è il primo dato (non l'ingresso BOOL)
     expect(screen.getByRole('textbox', { name: 'speed' })).toBeTruthy();
   });
+
+  it('copiare o tagliare una bobina non riempie gli appunti: niente uscita incollata in serie', async () => {
+    const { onChange, user, canvas } = setup();
+    await user.click(screen.getByRole('button', { name: /^Bobina / }));
+    await user.keyboard('{Control>}x{/Control}');
+    expect(screen.getByRole('status').textContent).toContain('Operazione non possibile');
+    canvas.focus();
+    await user.keyboard('{Control>}v{/Control}');
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getAllByRole('button', { name: /^Bobina / })).toHaveLength(1);
+  });
 });
 
 describe('chiavi i18n lad.*', () => {

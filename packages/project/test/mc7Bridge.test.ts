@@ -19,6 +19,7 @@ import {
   blockFromMc7,
   blockToMc7File,
   calleeResolver,
+  checkDevice,
   compileDevice,
   createAwlContext,
   createCodeBlock,
@@ -30,6 +31,8 @@ import {
   planImport,
   readBaap,
   renameWithReferences,
+  interfaceHashOf,
+  sourceHashOf,
   writeBaap,
   type Block,
   type BlockInterface,
@@ -958,12 +961,175 @@ describe('regola F: la fedeltà per rete richiede un contesto dei byte invariato
     fb.interface.input.unshift(member('Nuovo', 'Int'));
     const ri = exp(d, 'IDB11');
     expect(codesOf(ri.diagnostics)).toEqual(['VALORI_ATTUALI_PERSI']);
-    // Nuovo 0, IN0 2, STAT0 4, STAT1 6 = 5: valori iniziali, il 99 non c'è più
-    expect(hex(readBlockFile(ri.file!).mc7)).toBe('0000000000000005');
+    // Nuovo 0, IN0 2, STAT0 4, STAT1 6: il 99 resta, è un valore di istanza riletto all'importazione
+    expect(hex(readBlockFile(ri.file!).mc7)).toBe('0000000000000063');
     const ro = exp(d, 'OB1');
     expect(errorsOf(ro.diagnostics)).toEqual([]);
     expect(text(fO)[0]).toContain('T %DIW0;');
     expect(text(ro.file!)[0]).toContain('T %DIW2;');
+  });
+
+  it('valori di istanza: il valore attuale del DB importato entra nell elenco e torna identico ricompilando', () => {
+    const { d, fI } = motorProgram();
+    const idb = find(d, 'IDB11');
+    expect(idb.kind === 'IDB' && idb.overrides).toEqual({ STAT1: '99' });
+    idb.header.author = 'Altro'; // il DB si ricompila dal modello
+    const r = exp(d, 'IDB11');
+    expect(r.diagnostics).toEqual([]);
+    expect(hex(r.file!)).not.toBe(hex(fI));
+    expect(hex(readBlockFile(r.file!).mc7)).toBe('000000000063');
+  });
+
+  it('attributi dei DB: non collegato e non ritentivo in header[3], riletti all importazione; sola lettura no', () => {
+    const db = createGlobalDb({ number: 5, name: 'Dati', newId });
+    db.members.push(member('A', 'Int', '3'));
+    db.attributes = { unlinked: true, readOnly: false, nonRetain: true };
+    const [f] = compiled([db]);
+    expect(readBlockFile(f!).header.raw[3]).toBe(0x20);
+    const d = imported([f!]);
+    const g = find(d, 'DB5') as GlobalDb;
+    expect(g.attributes).toEqual({ unlinked: true, readOnly: false, nonRetain: true });
+    expect(hex(exp(d, 'DB5').file!)).toBe(hex(f!));
+    // sola lettura non entra nel file: il DB resta quello importato
+    g.attributes.readOnly = true;
+    expect(hex(exp(d, 'DB5').file!)).toBe(hex(f!));
+    g.attributes = { unlinked: false, readOnly: false, nonRetain: true };
+    const r = exp(d, 'DB5');
+    expect(r.diagnostics).toEqual([]);
+    expect(readBlockFile(r.file!).header.raw[3]).toBe(0x21);
+  });
+
+  const renameStatic = (d: PlcDevice, fb: CodeBlock, i: number, name: string) =>
+    renameWithReferences(
+      d,
+      {
+        kind: 'member',
+        deviceId: d.id,
+        ownerKind: 'block',
+        ownerId: fb.id,
+        memberId: fb.interface.static[i]!.id,
+      },
+      name,
+    );
+  const checkErrors = (d: PlcDevice) =>
+    checkDevice(d, cpu315pn)
+      .filter((x) => x.severity === 'error')
+      .map((x) => [x.code, x.params]);
+
+  it('valori di istanza di un nuovo DB d istanza di un FB del progetto: coi nomi dei suoi membri, per posizione', () => {
+    const { d, fF, fb } = motorProgram();
+    renameStatic(d, fb, 1, 'Velocita');
+    const [, f12] = compiled([
+      motore(),
+      createInstanceDb({ number: 12, name: 'M2', instanceOf: 'Motore', newId }),
+    ]);
+    const actual = f12!.slice();
+    actual[36 + 5] = 0x07;
+    applyImport(d, planImport(d, [fF, actual], newId)); // FB10 uguale: resta quello del progetto
+    const g = find(d, 'IDB12');
+    expect(g.kind === 'IDB' && g.overrides).toEqual({ Velocita: '7' });
+    expect(checkErrors(d)).toEqual([]);
+    g.header.author = 'Altro'; // il DB si ricompila dal modello
+    const r = exp(d, 'IDB12');
+    expect(r.diagnostics).toEqual([]);
+    expect(hex(readBlockFile(r.file!).mc7)).toBe('000000000007');
+  });
+
+  it('valori di istanza coi nomi dell FB del progetto anche dentro STRUCT e multi-istanze', () => {
+    const inner = code('FB', 10, 'In', ['L #A;\nT #A;'], {
+      static: [member('A', 'Int', '3'), member('R', 'Real')],
+    });
+    const outer = code('FB', 20, 'Out', ['CALL #Sub;'], {
+      static: [
+        member('X', 'Bool'),
+        member('Sub', '"In"'),
+        { ...member('S', 'Struct'), members: [member('q', 'Word')] },
+      ],
+    });
+    const [, , f21] = compiled([
+      inner,
+      outer,
+      createInstanceDb({ number: 21, name: 'I', instanceOf: 'Out', newId }),
+    ]);
+    const actual = f21!.slice();
+    actual.set([1, 0, 0, 7, 0x3f, 0x80, 0, 0, 0x12, 0x34], 36);
+    const d = bareDevice(newId);
+    d.blocks.push(structuredClone(inner), structuredClone(outer));
+    applyImport(d, planImport(d, [actual], newId));
+    const g = find(d, 'IDB21');
+    expect(g.kind === 'IDB' && g.overrides).toEqual({
+      X: 'TRUE',
+      'Sub.A': '7',
+      'Sub.R': '1',
+      'S.q': '16#1234',
+    });
+    expect(checkErrors(d)).toEqual([]);
+  });
+
+  it('reimportazione di un DB d istanza con lo stesso SSB: i valori attuali nuovi, coi nomi del progetto', () => {
+    const { d, fF, fI, fb } = motorProgram();
+    renameStatic(d, fb, 1, 'Velocita');
+    const again = fI.slice();
+    again[36 + 5] = 0x64;
+    applyImport(d, planImport(d, [fF, again], newId));
+    const g = find(d, 'IDB11');
+    expect(g.kind === 'IDB' && g.overrides).toEqual({ Velocita: '100' });
+    expect(checkErrors(d)).toEqual([]);
+    g.header.author = 'Altro';
+    const r = exp(d, 'IDB11');
+    expect(r.diagnostics).toEqual([]);
+    expect(hex(readBlockFile(r.file!).mc7)).toBe('000000000064');
+  });
+
+  it('DB salvati prima della 1.8 (attributi spenti, nessun valore di istanza): la reimportazione li rilegge', () => {
+    const dati = (nonRetain: boolean) => {
+      const db = createGlobalDb({ number: 5, name: 'Dati', newId });
+      db.members.push(member('A', 'Int', '3'));
+      db.attributes = { unlinked: false, readOnly: false, nonRetain };
+      return compiled([db])[0]!;
+    };
+    const f = dati(true);
+    const { d, fF, fI, fO } = motorProgram();
+    imported([f], d);
+    // Il modello come lo salvava la 1.7: attributi spenti, nessun valore di istanza, e le impronte
+    // calcolate così (quelle di un gemello importato senza attributi e senza valore attuale).
+    const plain = fI.slice();
+    plain[36 + 5] = 5;
+    const twin = imported([fF, plain, fO, dati(false)]);
+    const v17 = () => {
+      const db = find(d, 'DB5') as GlobalDb;
+      db.attributes = { unlinked: false, readOnly: true, nonRetain: false };
+      const idb = find(d, 'IDB11');
+      if (idb.kind === 'IDB') idb.overrides = {};
+      for (const tag of ['DB5', 'IDB11']) {
+        const [b, t] = [find(d, tag), find(twin, tag)];
+        b.mc7!.fidelity = {
+          ...b.mc7!.fidelity!,
+          block: t.mc7!.fidelity!.block,
+          layout: t.mc7!.fidelity!.layout,
+        };
+        b.mc7!.sourceHash = sourceHashOf(b);
+        b.mc7!.interfaceHash = interfaceHashOf(b);
+      }
+    };
+    v17();
+    expect(exp(d, 'DB5').diagnostics).toEqual([]); // non modificato
+    // stessi byte
+    applyImport(d, planImport(d, [fF, fI, f], newId));
+    expect((find(d, 'DB5') as GlobalDb).attributes).toEqual({
+      unlinked: false,
+      readOnly: true, // non è nei byte: resta quello del progetto
+      nonRetain: true,
+    });
+    const idb = find(d, 'IDB11');
+    expect(idb.kind === 'IDB' && idb.overrides).toEqual({ STAT1: '99' });
+    // valori attuali cambiati
+    v17();
+    const changed = f.slice();
+    changed[36 + 1] = 9;
+    applyImport(d, planImport(d, [changed], newId));
+    expect((find(d, 'DB5') as GlobalDb).attributes.nonRetain).toBe(true);
+    expect(readBlockFile(exp(d, 'DB5').file!).header.raw[3]).toBe(0x21);
   });
 
   it('p2 (regola S): FB e FC scritti nel progetto sono estranei: OB1 si ricompila dal testo, il DB di istanza è bloccato', () => {

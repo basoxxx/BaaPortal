@@ -333,6 +333,8 @@ class Emitter {
   }
 
   private branches(p: Parallel): void {
+    // un solo ramo = gruppo `A( … )` (negazione di un'entrata in mezzo alla serie): niente OR
+    if (p.branches.length === 1) return this.series(p.branches[0]!, true);
     const single = (b: LadElem[]) => b.length === 1 && isContact(b[0]!);
     const simple = (b: LadElem[]) => b.every(isContact);
     if (p.branches.every(single)) {

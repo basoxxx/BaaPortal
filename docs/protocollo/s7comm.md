@@ -1239,7 +1239,7 @@ Risposta (parte dati, dopo i 4 byte return/TS/len; ~78 byte):
 | 4   | 2   | unknown2                |                                                                   |
 | 6   | 2   | const "pp"              | costante `0x7070` ASCII `"pp"` (magic, vedi §13)                  |
 | 8   | 1   | unknown                 |                                                                   |
-| 9   | 1   | **block flags**         | bit0 DB linked, bit1 standard block, bit3 non-retain              |
+| 9   | 1   | **block flags**         | bit0 DB linked, bit1 standard, bit5 non-retain (mc7 §1.2)         |
 | 10  | 1   | **language**            | §8.5                                                              |
 | 11  | 1   | **subblk type**         | `0x08`OB `0x0A`DB `0x0B`SDB `0x0C`FC `0x0D`SFC `0x0E`FB `0x0F`SFB |
 | 12  | 2   | **block number**        | intero                                                            |

@@ -45,6 +45,13 @@ export type KeyLike = {
   shiftKey?: boolean;
 };
 
+/** Ctrl/Cmd + C, X, V: copia, taglia e incolla degli elementi selezionati. */
+export function ladClipKey(e: KeyLike): 'copy' | 'cut' | 'paste' | undefined {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return undefined;
+  const k = e.key.toLowerCase();
+  return k === 'c' ? 'copy' : k === 'x' ? 'cut' : k === 'v' ? 'paste' : undefined;
+}
+
 /** Azione del tasto premuto; con Ctrl, Cmd o Alt premuti non c'è nessuna azione. */
 export function ladAction(e: KeyLike): LadAction | undefined {
   if (e.ctrlKey || e.metaKey || e.altKey) return undefined;

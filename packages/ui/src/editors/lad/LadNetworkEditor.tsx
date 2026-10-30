@@ -6,7 +6,7 @@ import { findElem, updateElem } from '@baaportal/ladfbd';
 import type { LadElem, LadNetwork, LadOut } from '@baaportal/ladfbd';
 import { CELL_H, CELL_W, LadElement } from './LadElement';
 import { LadToolbar } from './LadToolbar';
-import { LAD_TOOL_KEYS, ladAction } from './ladKeys';
+import { LAD_TOOL_KEYS, ladAction, ladClipKey } from './ladKeys';
 import type { LadAction } from './ladKeys';
 import { layoutNetwork } from './ladLayout';
 import type { LadCell } from './ladLayout';
@@ -20,6 +20,7 @@ import './lad.css';
 export { LAD_DRAG_TYPE, TREE_DRAG_TYPE } from './useLadEdit';
 export type { LadInsertApi } from './useLadEdit';
 const PAD = 12;
+const GROUP_INSET = 4;
 
 type Editing = { id: string; key: string; value: string };
 
@@ -151,19 +152,20 @@ export function LadNetworkEditor({
     wantFocus.current = true;
   }
 
-  function move(dir: 'left' | 'right' | 'up' | 'down') {
+  function move(dir: 'left' | 'right' | 'up' | 'down', extend = false) {
     const cells = layout.cells;
     if (cells.length === 0) return;
     const cur = sel?.t === 'elem' ? cells.find((c) => c.elemId === sel.id) : undefined;
     const to = cur ? neighbour(cells, cur, dir) : cells[0];
     if (to) {
+      if (extend && cur && ed.extendTo(to.elemId)) return;
       setSel({ t: 'elem', id: to.elemId });
       wantFocus.current = true;
     }
   }
 
-  function run(a: LadAction) {
-    if (a === 'left' || a === 'right' || a === 'up' || a === 'down') return move(a);
+  function run(a: LadAction, extend = false) {
+    if (a === 'left' || a === 'right' || a === 'up' || a === 'down') return move(a, extend);
     if (a === 'edit') {
       if (!readOnly && sel?.t === 'elem') startEdit(sel.id);
     } else ed.run(a);
@@ -171,11 +173,17 @@ export function LadNetworkEditor({
 
   function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
     if ((e.target as HTMLElement).tagName === 'INPUT') return;
+    const clipKey = ladClipKey(e);
+    if (clipKey) {
+      e.preventDefault();
+      ed.clip(clipKey);
+      return;
+    }
     const a = ladAction(e);
     if (!a) return;
     if (a === 'edit' && sel?.t !== 'elem') return;
     e.preventDefault();
-    run(a);
+    run(a, e.shiftKey);
   }
 
   /** Il punto di inserimento più vicino al rilascio. */
@@ -273,6 +281,16 @@ export function LadNetworkEditor({
                   data-mon={w.flow && monAttr(monitor, w.flow.id, w.flow.side)}
                 />
               ))}
+              {layout.groups.map((g) => (
+                <rect
+                  key={g.elemId}
+                  className="baa-lad-group"
+                  x={g.col * CELL_W + GROUP_INSET}
+                  y={g.row * CELL_H + GROUP_INSET}
+                  width={g.w * CELL_W - 2 * GROUP_INSET}
+                  height={g.h * CELL_H - 2 * GROUP_INSET}
+                />
+              ))}
             </svg>
             {layout.cells.map((cell) => {
               const el = elemOf(cell.elemId);
@@ -282,9 +300,15 @@ export function LadNetworkEditor({
                   key={cell.elemId}
                   elem={el}
                   cell={cell}
-                  selected={sel?.t === 'elem' && sel.id === cell.elemId}
+                  selected={
+                    (sel?.t === 'elem' && sel.id === cell.elemId) ||
+                    (ed.multi?.ids.includes(cell.elemId) ?? false)
+                  }
                   messages={diagnostics.get(cell.elemId) ?? []}
-                  onSelect={() => setSel({ t: 'elem', id: cell.elemId })}
+                  onSelect={(extend) => {
+                    if (!extend || !ed.extendTo(cell.elemId))
+                      setSel({ t: 'elem', id: cell.elemId });
+                  }}
                   onEdit={(pin) => startEdit(cell.elemId, pin)}
                   monitor={monitor}
                 />

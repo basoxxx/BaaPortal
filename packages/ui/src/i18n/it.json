@@ -987,6 +987,7 @@
     "knowHowLockedHint": "Il blocco importato è protetto: la protezione non si può togliere.",
     "unlinked": "Solo nella memoria di caricamento",
     "readOnly": "Protetto da scrittura nel dispositivo",
+    "readOnlyHint": "Resta nel progetto ma non si scrive nel blocco compilato: nessuna fonte pubblica ne documenta la codifica.",
     "nonRetain": "Non ritentivo",
     "group": "Gruppo",
     "tagCount": "Numero di variabili",
@@ -1301,7 +1302,7 @@
       "UNKNOWN_MEMBER": "Membro non trovato: {{detail}}",
       "UNKNOWN_SYMBOL": "Simbolo sconosciuto: {{detail}}",
       "UNSUPPORTED": "Non supportato dal compilatore: {{detail}}",
-      "VALORI_ATTUALI_PERSI": "Il DB ricompilato usa i valori iniziali: i valori attuali dell'originale non si conservano.",
+      "VALORI_ATTUALI_PERSI": "Il DB ricompilato usa i valori iniziali (e, in un DB di istanza, i valori di istanza): i valori attuali dell'originale che non vi si scrivono non si conservano (in un DB globale tutti; in un DB di istanza ARRAY, puntatori, parametri e valori il cui letterale non ridà gli stessi byte).",
       "VALORI_INIZIALI_DA_CAMPIONE": "Valori iniziali dei dati statici interni degli SFB presi dal blocco reale {{sample}}."
     }
   },
@@ -1827,7 +1828,10 @@
     },
     "cannotClose": "Impossibile chiudere il ramo qui: scegli un elemento che segue il ramo aperto, nella stessa serie.",
     "cannotDo": "Operazione non possibile in questo punto.",
-    "cannotNegate": "Qui non si nega: scegli un contatto, la prima entrata di un riquadro o un cerchietto di negazione.",
+    "cannotNegate": "Qui non si nega: scegli un contatto, un confronto, un POS/NEG, un `>=1` o un cerchietto di negazione.",
+    "cannotExtend": "La selezione multipla vale solo per elementi vicini della stessa serie.",
+    "multiSelected": "{{n}} elementi selezionati.",
+    "copied": "{{n}} elementi copiati.",
     "tool": {
       "contactNo": "NA",
       "contactNc": "NC",

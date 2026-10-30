@@ -19,7 +19,10 @@ export type Operand =
     })
   /** Solo dalla traduzione: una TEMP di appoggio già calcolata, di tipo `ty`. */
   | (Pos & { k: 'temp'; text: string; ty: string });
-/** Parametro attuale per nome: `p := espressione` oppure `p => variabile` (`out`). */
+/**
+ * Parametro attuale per nome: `p := espressione` oppure `p => variabile` (`out`); per posizione
+ * (`"Fc"(1, #x)`) `name` è vuoto.
+ */
 export type Arg = Pos & { name: string; out: boolean; e: Expr };
 /** Chiamata di un blocco: `"Fc"(a := 1, b => #x)`, `"Inst_DB"(…)`, `#multi(…)`. */
 export type Call = Pos & { k: 'fcall'; callee: Operand; args: Arg[] };
@@ -29,10 +32,15 @@ export type Expr =
   | Operand
   | Call
   | (Pos & { k: 'int' | 'real'; text: string })
+  /** Durata o data (`T#5s`, `D#2024-01-01`), come scritta. */
+  | (Pos & { k: 'tlit'; text: string })
+  /** Costante fra apici, senza gli apici: un CHAR (`'A'`) o una STRING. */
+  | (Pos & { k: 'str'; text: string })
   | (Pos & { k: 'bool'; value: boolean })
   | (Pos & { k: 'neg' | 'not'; e: Expr })
   | (Pos & { k: 'bin'; op: string; l: Expr; r: Expr })
-  | (Pos & { k: 'call'; name: string; arg: Expr });
+  /** `NOME(x)`: `name` in maiuscolo, `raw` come scritto (può essere una FC chiamata per posizione). */
+  | (Pos & { k: 'call'; name: string; raw: string; arg: Expr });
 export type Stmt =
   | (Pos & { k: 'assign'; dst: Operand; e: Expr })
   | (Pos & { k: 'call'; c: Call })
@@ -380,21 +388,26 @@ export function parse(text: string): { stmts: Stmt[]; errors: SclError[] } {
   function call(callee: Operand): Call {
     expect('(');
     const args: Arg[] = [];
-    while (!is(')')) {
-      const n = peek();
-      if (!namedAt(p))
-        fail(
-          n,
-          'Nella chiamata di un blocco i parametri vanno per nome: p := valore, q => variabile',
-        );
-      p++;
-      const out = toks[p++]!.text === '=>';
-      args.push({ name: n.text, out, e: out ? operand() : expr(), ...pos(n) });
-      if (!is(',')) break;
-      p++;
-    }
+    while (!is(')')) args.push(arg(args));
     expect(')');
     return { k: 'fcall', callee, args, ...pos(callee) };
+  }
+
+  /** Un parametro attuale e la `,` dopo; per nome o per posizione come i parametri prima. */
+  function arg(args: Arg[]): Arg {
+    const n = peek();
+    const named = namedAt(p);
+    if (args.length && named !== (args[0]!.name !== ''))
+      fail(n, 'Parametri per nome e per posizione non si mescolano nella stessa chiamata');
+    let a: Arg;
+    if (named) {
+      p++;
+      const out = toks[p++]!.text === '=>';
+      a = { name: n.text, out, e: out ? operand() : expr(), ...pos(n) };
+    } else a = { name: '', out: false, e: expr(), ...pos(n) };
+    if (is(',')) p++;
+    else if (!is(')')) expect(')');
+    return a;
   }
 
   function expr(level = 0): Expr {
@@ -465,11 +478,20 @@ export function parse(text: string): { stmts: Stmt[]; errors: SclError[] } {
       p++;
       return { k: t.kind, text: t.text, ...pos(t) };
     }
+    if (t.kind === 'time') {
+      p++;
+      return { k: 'tlit', text: t.text, ...pos(t) };
+    }
+    if (t.kind === 'string') {
+      p++;
+      return { k: 'str', text: t.text.slice(1, -1), ...pos(t) };
+    }
     if (is('TRUE', 'FALSE')) {
       p++;
       return { k: 'bool', value: up(t) === 'TRUE', ...pos(t) };
     }
-    // conversione `INT_TO_DINT(x)`: un nome con un solo argomento senza nome
+    // conversione `INT_TO_DINT(x)`: un nome con un solo argomento senza nome; con più argomenti
+    // è un blocco chiamato per posizione
     if (
       t.kind === 'id' &&
       toks[p + 1]?.text === '(' &&
@@ -477,9 +499,16 @@ export function parse(text: string): { stmts: Stmt[]; errors: SclError[] } {
       toks[p + 2]?.text !== ')'
     ) {
       p += 2;
-      const arg = expr();
+      const first = expr();
+      if (!is(',')) {
+        expect(')');
+        return { k: 'call', name: up(t), raw: t.text, arg: first, ...pos(t) };
+      }
+      p++;
+      const args: Arg[] = [{ name: '', out: false, e: first, ...pos(first) }];
+      while (!is(')')) args.push(arg(args));
       expect(')');
-      return { k: 'call', name: up(t), arg, ...pos(t) };
+      return { k: 'fcall', callee: { k: 'id', text: t.text, ...pos(t) }, args, ...pos(t) };
     }
     const o = operand();
     return is('(') ? call(o) : o;
