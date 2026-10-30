@@ -3,7 +3,7 @@
 Guida breve all'editor a contatti (KOP, piano 4A). Un blocco KOP si disegna; BaaPortal ne ricava il codice AWL e compila quello.
 
 1. **Creare un blocco KOP.** _Inserisci → Nuovo blocco…_, scegli OB, FB o FC e come linguaggio _KOP_. Il blocco si apre con un segmento vuoto: c'è già una bobina senza operando. I DB non hanno KOP.
-2. **Disegnare.** Ogni segmento ha la sua barra degli strumenti: _NA_, _NC_, _Bobina_, _Nuovo ramo a T_, _Apri ramo_, _Chiudi ramo_ e _Box vuoto_ (menu con tutti i box). Gli elementi si inseriscono dopo quello selezionato.
+2. **Disegnare.** Ogni segmento ha la sua barra degli strumenti: _NA_, _NC_, _Bobina_, _Nuovo ramo a T_, _Apri ramo_, _Chiudi ramo_ e _Box vuoto_ (menu con tutti i box). Gli elementi si inseriscono dopo quello selezionato. NOT, `(#)` e fronti stanno anche nei rami di un parallelo, dopo la logica del ramo o al suo inizio: lavorano sul flusso che arriva lì, compreso quello davanti al parallelo.
 3. **Tasti.** Con il segmento in primo piano:
    - **F2** contatto normalmente aperto, **F3** contatto normalmente chiuso, **F7** bobina, **Maiusc+F7** nuovo ramo a T;
    - **F8** apre un ramo parallelo, **F9** lo chiude;

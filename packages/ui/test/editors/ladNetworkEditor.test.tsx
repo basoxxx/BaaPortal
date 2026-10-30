@@ -351,7 +351,6 @@ describe('chiavi i18n lad.*', () => {
         'RET_ON_RAIL',
         'EDGE_ON_RAIL',
         'NOT_ON_RAIL',
-        'FLOW_IN_BRANCH',
         'BOX_IN_PARALLEL',
         'BOX_IN_TBRANCH',
         'BAD_LABEL',

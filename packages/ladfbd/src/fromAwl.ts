@@ -449,6 +449,11 @@ class Parser {
         if (this.bare(j, ')')) yield [par(bs), j + 1];
     }
     if (fresh) for (const [bs, j] of this.branches(i, pre)) yield [par(bs), j];
+    // H21: `= bit` e ogni ramo in `O( A bit … )` (NOT, (#) o fronti nei rami con logica davanti)
+    const bit = fresh ? undefined : this.arg(i, '=');
+    if (this.hidden(bit))
+      for (const [bs, j] of this.flowBranches(i + 1, bit, pre))
+        if (bs.length >= 2) yield [par(bs), j];
     // gruppo `A( … NOT )`: la negazione di un'entrata in mezzo alla serie (un solo ramo)
     if (this.bare(i, 'A('))
       for (const [s, j] of this.series(i + 1, true, pre, 'none')) {
@@ -479,6 +484,16 @@ class Parser {
     if (groups.length >= 2 && !this.bare(j - 1, 'O')) yield [groups, j];
     // regole 1 e 3: O x per un contatto solo, O( … ) per gli altri rami
     for (const [bs, k] of this.orBranches(i, pre)) if (bs.length >= 2) yield [bs, k];
+  }
+
+  private *flowBranches(i: number, bit: string, pre: Pre): Gen<LadElem[][]> {
+    if (this.bare(i, 'O(') && this.arg(i + 1, 'A') === bit)
+      for (const [s, j] of this.series(i + 2, false, pre, 'none')) {
+        if (!s || !this.bare(j, ')')) continue;
+        const branch = this.list(s);
+        for (const [rest, k] of this.flowBranches(j + 1, bit, pre)) yield [[branch, ...rest], k];
+      }
+    yield [[], i];
   }
 
   private *orBranches(i: number, pre: Pre): Gen<LadElem[][]> {

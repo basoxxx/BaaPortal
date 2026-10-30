@@ -9,6 +9,7 @@ import {
   findElem,
   insertElem,
   isNode,
+  needsFlowBit,
   negateElem,
   updateElem,
 } from '@baaportal/ladfbd';
@@ -143,7 +144,7 @@ function Operand({ item, fld }: { item: Item; fld: LadField }) {
       className={`baa-fup-op${value === '' ? ' baa-fup-op--empty' : ''}`}
       onDoubleClick={() => c.edit(item.id, fld.key)}
     >
-      {value || EMPTY}
+      {value || (hint === 'optional' ? '…' : EMPTY)}
       {live !== undefined ? <i className="baa-lad-val">{live}</i> : null}
     </span>
   );
@@ -272,12 +273,27 @@ function Input({ e }: { e: LadElem }) {
   }
 }
 
-type Chain = Extract<LadElem, { k: 'edge' | 'midline' | 'box' }>;
-/** Elementi che in AWL lavorano sull'RLO di ciò che li precede (FP/FN, `= op`, EN o primo pin). */
-const isChain = (e: LadElem): e is Chain => e.k === 'edge' || e.k === 'midline' || e.k === 'box';
+type Chain = Extract<LadElem, { k: 'edge' | 'midline' | 'box' | 'parallel' }>;
+/**
+ * Elementi che in AWL lavorano sull'RLO di ciò che li precede (FP/FN, `= op`, EN o primo pin) e
+ * i paralleli con NOT, (#) o fronti nei rami (H21): ogni ramo parte dal flusso davanti.
+ */
+const isChain = (e: LadElem): e is Chain =>
+  e.k === 'edge' || e.k === 'midline' || e.k === 'box' || (e.k === 'parallel' && needsFlowBit(e));
 
 /** Un elemento a catena con la logica che lo precede come entrata. */
 function Chained({ e, before }: { e: Chain; before: LadElem[] }) {
+  if (e.k === 'parallel')
+    return (
+      <Sel item={e} className="baa-fup-boxel">
+        <Gate
+          title=">=1"
+          ins={e.branches.map((br, i) => (
+            <Logic key={i} elems={[...before, ...br]} />
+          ))}
+        />
+      </Sel>
+    );
   const input = <Logic elems={before} />;
   if (e.k === 'box') return <BoxView b={e} input={input} />;
   return (
@@ -292,7 +308,8 @@ function Chained({ e, before }: { e: Chain; before: LadElem[] }) {
  * La logica di una serie: vuota = sempre vera, una voce sola = l'entrata, più voci = riquadro `&`.
  * Un `NOT` nega tutto ciò che lo precede nella serie: è il cerchietto sull'uscita di quella
  * logica, cioè sul pin con cui entra, negata, nel resto della serie. Allo stesso modo un fronte
- * (P)/(N), un `#` o un box dopo la prima voce prendono come entrata tutto ciò che li precede.
+ * (P)/(N), un `#` o un box dopo la prima voce prendono come entrata tutto ciò che li precede; un
+ * `>=1` con NOT, `#` o fronti nei rami la ripete in ogni ramo.
  */
 function Logic({ elems }: { elems: LadElem[] }) {
   let k = elems.length - 1;

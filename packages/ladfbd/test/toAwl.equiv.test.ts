@@ -608,6 +608,23 @@ describe('equivalenza KOP ↔ AWL generato', () => {
     );
   });
 
+  it('NOT, (#) e fronti nei rami di un parallelo con logica davanti (H21)', () => {
+    expectEquivalent(
+      net(
+        [c('I 0.0'), par([c('I 0.1'), not()], [not(), c('I 0.2')], [c('I 0.3')])],
+        [coil('Q 4.0')],
+      ),
+      net(
+        [nc('I 0.4'), par([edge('P', 'M 0.0')], [c('I 0.5'), mid('M 0.1')]), c('I 0.6')],
+        [coil('Q 4.1')],
+      ),
+      net(
+        [c('I 0.7'), par([c('I 1.0'), par([not()], [c('I 1.1')])], [edge('N', 'M 0.2')])],
+        [coil('Q 4.2'), node([par([not()], [c('I 1.2')])], [coil('Q 4.3')])],
+      ),
+    );
+  });
+
   it('fronti in linea e box POS/NEG', () => {
     expectEquivalent(
       net(

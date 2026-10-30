@@ -92,6 +92,21 @@ describe('awlToLad: forme di networkToAwl', () => {
       net([c('I 0.0'), not(), edge('P', 'M 1.0'), mid('M 2.0'), c('I 0.1')], [coil('Q 4.0')]),
     ],
     [
+      'NOT, fronti e (#) nei rami con logica davanti (H21), anche annidati',
+      net(
+        [
+          c('I 0.0'),
+          par(
+            [not()],
+            [c('I 0.1'), edge('P', 'M 1.0')],
+            [mid('M 2.0'), par([not()], [c('I 0.2')])],
+          ),
+          c('I 0.3'),
+        ],
+        [coil('Q 4.0')],
+      ),
+    ],
+    [
       'box POS con logica davanti',
       net([c('I 0.0'), posneg('N', 'I 0.3', 'M 1.1')], [coil('Q 4.0')]),
     ],
@@ -263,10 +278,13 @@ function randomNetwork(rand: () => number): LadNetwork {
   const pick = <T>(xs: readonly T[]): T => xs[Math.floor(rand() * xs.length)]!;
   const bit = () => `${pick(['I', 'M', 'Q'])} ${Math.floor(rand() * 4)}.${Math.floor(rand() * 8)}`;
   const contact = () => (rand() < 0.3 ? nc(bit()) : c(bit()));
+  const flowElem = (): LadElem =>
+    pick([not, () => edge(pick(['P', 'N']), bit()), () => mid(bit())])();
   const branch = (depth: number): LadElem[] =>
-    Array.from({ length: 1 + Math.floor(rand() * 2) }, () =>
-      depth > 0 && rand() < 0.3 ? parallel(depth - 1) : contact(),
-    );
+    Array.from({ length: 1 + Math.floor(rand() * 2) }, () => {
+      const r = rand();
+      return depth > 0 && r < 0.3 ? parallel(depth - 1) : r < 0.4 ? flowElem() : contact();
+    });
   const parallel = (depth: number): LadElem =>
     par(...Array.from({ length: 2 + Math.floor(rand() * 2) }, () => branch(depth)));
   const elem = (): LadElem => {

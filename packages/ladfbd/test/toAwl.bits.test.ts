@@ -45,6 +45,25 @@ function awl(n: LadNetwork, tempEnd = 20): string {
 }
 
 describe('contatti e rami (§2.1–§2.7)', () => {
+  it('H21: NOT in un ramo con logica davanti, il flusso in un bit L e ogni ramo in O( A bit … )', () => {
+    expect(awl(net([c('I 0.0'), par([c('I 0.1'), not()], [not()])], [coil('Q 4.0')]))).toBe(
+      fmt(
+        'A I 0.0',
+        '= L 20.0',
+        'O(',
+        'A L 20.0',
+        'A I 0.1',
+        'NOT',
+        ')',
+        'O(',
+        'A L 20.0',
+        'NOT',
+        ')',
+        '= Q 4.0',
+      ),
+    );
+  });
+
   it('§2.1 contatti in serie', () => {
     expect(awl(net([c('I 0.0'), nc('I 0.1')], [coil('Q 4.0')]))).toBe(
       fmt('A I 0.0', 'AN I 0.1', '= Q 4.0'),

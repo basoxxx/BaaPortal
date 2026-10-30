@@ -13,7 +13,6 @@ export type LadDiagCode =
   | 'RET_ON_RAIL'
   | 'EDGE_ON_RAIL'
   | 'NOT_ON_RAIL'
-  | 'FLOW_IN_BRANCH'
   | 'MUST_BE_ALONE'
   | 'BOX_IN_PARALLEL'
   | 'BOX_IN_TBRANCH'
@@ -72,9 +71,9 @@ function checkBox(b: LadBox, add: Add): void {
 }
 
 /**
- * Elementi che trasformano il flusso che ricevono (NOT, (#), fronti): in un ramo parallelo
- * si traducono bene solo se il ramo parte dalla barra, perché il parallelo con logica davanti
- * diventa A( … ) e dentro la parentesi il flusso in ingresso non c'è.
+ * Elementi che trasformano il flusso che ricevono (NOT, (#), fronti): vogliono un flusso che non
+ * sia quello della barra. In un ramo di un parallelo con logica davanti il flusso arriva dal bit L
+ * del parallelo (`needsFlowBit`), anche all'inizio del ramo.
  */
 const FLOW_CODE = { not: 'NOT_ON_RAIL', midline: 'MIDLINE_ON_RAIL', edge: 'EDGE_ON_RAIL' } as const;
 
@@ -107,8 +106,7 @@ function checkSeries(
       case 'edge':
         if ((e.k === 'midline' && blank(e.op)) || (e.k === 'edge' && blank(e.mem)))
           add(e.id, 'EMPTY_OPERAND');
-        if (inBranch && !railInput) add(e.id, 'FLOW_IN_BRANCH');
-        else if (!logic) add(e.id, FLOW_CODE[e.k]);
+        if (!logic) add(e.id, FLOW_CODE[e.k]);
         break;
       case 'parallel':
         e.branches.forEach((b, i) => {

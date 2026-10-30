@@ -66,28 +66,7 @@ describe('blocchi KOP compilati dall AWL generato', () => {
   });
 
   it('simulatore: FC KOP «I 0.0 AND I 0.1 → Q 4.0» richiamato da OB1 AWL', () => {
-    const dev = makeDevice(seq('s'));
-    dev.blocks.length = 0;
-    kopFc(dev, 1, andNet('I 0.0', 'I 0.1', 'Q 4.0'));
-    const ob = createCodeBlock({ kind: 'OB', number: 1, name: 'Main', language: 'AWL' });
-    ob.networks[0]!.source = '\tCALL FC 1;';
-    dev.blocks.push(ob);
-    const cpu = new SimCpu({
-      cpuTypeId: 'cpu-315-2-pn-dp',
-      props: {
-        maxCycleMs: 150,
-        minCycleMs: 0,
-        clockMemory: { enabled: false, byte: 0 },
-        retentivity: { mBytes: 16, timers: 2, counters: 2 },
-        cyclicInterruptMs: 100,
-      },
-    });
-    for (const b of dev.blocks) {
-      const r = blockToMc7File(b, dev, cpu315pn, now);
-      expect(r.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
-      cpu.loadBlock(r.file!);
-    }
-    cpu.run();
+    const cpu = simKop(andNet('I 0.0', 'I 0.1', 'Q 4.0'));
     cpu.memory.physIn[0] = 0b11;
     expect(cpu.cycle().ok).toBe(true);
     expect(cpu.memory.physOut[4]! & 1).toBe(1);
@@ -95,7 +74,78 @@ describe('blocchi KOP compilati dall AWL generato', () => {
     cpu.cycle();
     expect(cpu.memory.physOut[4]! & 1).toBe(0);
   });
+
+  it('simulatore: NOT e fronte nei rami di un parallelo con logica davanti (H21)', () => {
+    const not = (): LadElem => ({ id: id(), k: 'not' });
+    const par = (...branches: LadElem[][]): LadElem => ({ id: id(), k: 'parallel', branches });
+    const coil = (op: string) => ({ id: id(), k: 'coil' as const, op });
+    // Q 4.0 = NOT(I0.0 AND I0.1) OR NOT I0.0 = NOT(I0.0 AND I0.1)
+    const n1: LadNetwork = {
+      root: {
+        id: id(),
+        series: [contact('I 0.0'), par([contact('I 0.1'), not()], [not()])],
+        outs: [coil('Q 4.0')],
+      },
+    };
+    // Q 4.1 = fronte di salita di I0.2 OR (I0.2 AND I0.3)
+    const edge: LadElem = { id: id(), k: 'edge', dir: 'P', mem: 'M 10.0' };
+    const n2: LadNetwork = {
+      root: {
+        id: id(),
+        series: [contact('I 0.2'), par([edge], [contact('I 0.3')])],
+        outs: [coil('Q 4.1')],
+      },
+    };
+    const cpu = simKop(n1, n2);
+    const q = (bit: number) => (cpu.memory.physOut[4]! >> bit) & 1;
+    for (const [inp, q0] of [
+      [0b00, 1],
+      [0b01, 1],
+      [0b10, 1],
+      [0b11, 0],
+    ] as const) {
+      cpu.memory.physIn[0] = inp;
+      expect(cpu.cycle().ok).toBe(true);
+      expect(q(0)).toBe(q0);
+    }
+    cpu.memory.physIn[0] = 0b0100; // salita di I 0.2
+    cpu.cycle();
+    expect(q(1)).toBe(1);
+    cpu.cycle(); // I 0.2 resta a 1, I 0.3 a 0
+    expect(q(1)).toBe(0);
+    cpu.memory.physIn[0] = 0b1100;
+    cpu.cycle();
+    expect(q(1)).toBe(1);
+  });
 });
+
+/** FC 1 KOP con i segmenti dati, richiamato da OB1 AWL, compilato e caricato nel simulatore. */
+function simKop(...nets: LadNetwork[]): SimCpu {
+  const dev = makeDevice(seq('s'));
+  dev.blocks.length = 0;
+  const fc = kopFc(dev, 1, nets[0]!);
+  fc.networks = nets.map((lad, i) => ({ ...fc.networks[0]!, id: `n${i}`, lad }));
+  const ob = createCodeBlock({ kind: 'OB', number: 1, name: 'Main', language: 'AWL' });
+  ob.networks[0]!.source = '\tCALL FC 1;';
+  dev.blocks.push(ob);
+  const cpu = new SimCpu({
+    cpuTypeId: 'cpu-315-2-pn-dp',
+    props: {
+      maxCycleMs: 150,
+      minCycleMs: 0,
+      clockMemory: { enabled: false, byte: 0 },
+      retentivity: { mBytes: 16, timers: 2, counters: 2 },
+      cyclicInterruptMs: 100,
+    },
+  });
+  for (const b of dev.blocks) {
+    const r = blockToMc7File(b, dev, cpu315pn, now);
+    expect(r.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
+    cpu.loadBlock(r.file!);
+  }
+  cpu.run();
+  return cpu;
+}
 
 describe('FUP come vista del modello KOP', () => {
   const pair = (): { dev: PlcDevice; kop: CodeBlock; fup: CodeBlock } => {

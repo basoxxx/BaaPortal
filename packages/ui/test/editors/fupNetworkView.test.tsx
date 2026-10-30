@@ -137,6 +137,20 @@ describe('FupNetworkView: elementi che lavorano sulla logica davanti', () => {
     ]);
     expect(el(root, 'e').contains(el(root, 'a'))).toBe(false);
   });
+
+  it('un >=1 con un NOT in un ramo ripete in ogni ramo la logica davanti (H21)', () => {
+    const p = {
+      id: 'p',
+      k: 'parallel',
+      branches: [[c('b', 'I 0.1'), { id: 'n', k: 'not' }], [c('d', 'I 0.2')]],
+    } as const;
+    const root = show([c('a', 'I 0.0'), p]);
+    const or = el(root, 'p');
+    // I 0.0 compare in tutti e due i rami, dentro il >=1
+    expect(or.querySelectorAll('[data-fup-id="a"]')).toHaveLength(2);
+    expect(root.querySelectorAll('[data-fup-id="a"]')).toHaveLength(2);
+    expect(or.querySelectorAll('.baa-fup-neg')).toHaveLength(1);
+  });
 });
 
 describe('NetworksView di un blocco FUP', () => {

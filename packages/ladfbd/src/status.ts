@@ -6,6 +6,7 @@
 import { BOX_CATALOG } from './catalog.js';
 import { isNode } from './model.js';
 import type { LadElem, LadNetwork, LadNode, LadOut } from './model.js';
+import { needsFlowBit } from './toAwl.js';
 import type { LineOwner } from './toAwl.js';
 
 /** Stato dopo un'istruzione della riga; `null` = chiesta ma non elaborata in questo ciclo. */
@@ -85,8 +86,10 @@ export function networkStatus(
 
   function elem(e: LadElem, flow: Flow, ctx: Flow, connected: boolean): Flow {
     if (e.k === 'parallel') {
-      // ogni ramo riparte dal flusso davanti al parallelo; l'uscita è l'OR dei rami
-      const outs = e.branches.map((b) => series(b, flow, flow, false));
+      // ogni ramo riparte dal flusso davanti al parallelo; l'uscita è l'OR dei rami. Con il bit
+      // del flusso (H21) l'RLO del ramo lo contiene già; sulla barra il flusso è comunque 1.
+      const bctx = needsFlowBit(e) ? true : flow;
+      const outs = e.branches.map((b) => series(b, flow, bctx, false));
       // un ramo sconosciuto lascia sconosciuto l'OR, se nessun altro ramo dà 1
       const res = outs.includes(true) ? true : outs.includes(undefined) ? undefined : false;
       if (res !== undefined)

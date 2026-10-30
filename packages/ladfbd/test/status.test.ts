@@ -130,3 +130,28 @@ describe('networkStatus: elemento tagliato dalla finestra', () => {
     expect(st.get('e')!.sta).toBeUndefined();
   });
 });
+
+describe('networkStatus: NOT in un ramo con il bit del flusso (H21)', () => {
+  it('il NOT dà 1 con il flusso davanti a 0: l’RLO del ramo contiene già il flusso', () => {
+    const n: LadElem = { id: 'n', k: 'not' };
+    const b: LadElem = { id: 'b', k: 'contact', neg: false, op: 'I 0.1' };
+    const p: LadElem = { id: 'p', k: 'parallel', branches: [[n], [b]] };
+    const net: LadNetwork = {
+      root: {
+        id: 'r',
+        series: [{ id: 'a', k: 'contact', neg: false, op: 'I 0.0' }, p],
+        outs: [{ id: 'q', k: 'coil', op: 'Q 4.0' }],
+      },
+    };
+    const r = networkToAwl(net, { tempEnd: 0, firstLabel: 1 });
+    // I 0.0 = 0: l'RLO è 0 fino al NOT, che lo porta a 1
+    const high = new Set(['n', 'p', 'q']);
+    const cells = new Map<number, LineState>(
+      r.lines.map((l) => [l.line, { rlo: high.has(l.elemId), sta: false, accu1: 0 }]),
+    );
+    const st = networkStatus(net, r.lines, cells);
+    expect(st.get('a')).toMatchObject({ out: false });
+    expect(st.get('n')).toMatchObject({ in: false, out: true });
+    expect(st.get('p')).toMatchObject({ out: true });
+  });
+});
