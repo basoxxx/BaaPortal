@@ -388,8 +388,8 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
 
 ### Prestazioni e struttura
 
-- **Ricompilazione grossolana.** Qualsiasi modifica a variabili, costanti, UDT o interfacce ricompila tutti i blocchi, anche in modalità _solo modifiche_.
-- **Impronte senza cache.** Le impronte delle dipendenze si ricalcolano a ogni compilazione; su progetti molto grandi il costo cresce.
+- **Ricompilazione per dipendenze, prudente.** In modalità _solo modifiche_ una modifica a variabili, costanti, UDT o interfacce ricompila solo i blocchi che le nominano, anche a catena (un UDT dentro un UDT, l'FB di un DB di istanza, una multi-istanza). Il riconoscimento è per parola, sul testo di tutto il blocco: un nome che compare anche in un commento o un `FC 1` dentro `FC 10` fanno ricompilare un blocco in più, mai uno in meno. Cambiare la CPU o i blocchi importati ricompila tutto. I blocchi importati (con i byte originali) dipendono ancora da tutto il contesto, come prima.
+- **Impronte di fedeltà senza cache.** Le chiavi di compilazione sono in cache per dispositivo e per oggetto; le impronte delle dipendenze dei blocchi importati (regola F) si ricalcolano ancora a ogni compilazione.
 - **Pacchetto `s7comm` intero nel renderer.** L'interfaccia include tutto il pacchetto solo per leggere lo zip del kit. Non è un percorso di scrittura; basterebbe un'esportazione separata per il kit.
 
 ### Altro

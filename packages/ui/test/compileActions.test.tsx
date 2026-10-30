@@ -346,10 +346,15 @@ describe('editor di un blocco importato non ricodificabile', () => {
 
 describe('Compila solo modifiche: dipendenze', () => {
   const MODE = 'Compila → Software (solo modifiche)';
-  const all = ['Main', 'FC1', 'FC2'];
 
+  /** Main chiama FC1; FC2 è indipendente. Tutto compilato una volta. */
   async function primed() {
     const app = await setup([fc(1, GOOD), fc(2, GOOD)]);
+    act(() => {
+      app.store.getState().edit('history.editCode', (p) => {
+        (findDevice(p, PLC)!.blocks[0] as CodeBlock).networks[0]!.source = 'CALL "FC1"';
+      });
+    });
     await menu(app, ids.plc(PLC), MODE);
     expect(rows()).toHaveLength(3);
     await menu(app, ids.plc(PLC), MODE);
@@ -359,12 +364,13 @@ describe('Compila solo modifiche: dipendenze', () => {
   const names = () => rows().map((r) => r.getAttribute('data-block'));
 
   it(
-    'cambiando l’indirizzo di una variabile si ricompilano i chiamanti',
+    'cambiando l’indirizzo di una variabile si ricompilano solo i blocchi che la usano',
     async () => {
       const app = await primed();
       act(() => {
         app.store.getState().edit('history.addTag', (p) => {
-          findDevice(p, PLC)!.tagTables[0]!.tags.push({
+          const d = findDevice(p, PLC)!;
+          d.tagTables[0]!.tags.push({
             id: 'tg1',
             name: 'Start',
             type: 'Bool',
@@ -372,10 +378,12 @@ describe('Compila solo modifiche: dipendenze', () => {
             hmi: true,
             comment: '',
           });
+          (d.blocks.find((b) => b.name === 'FC2') as CodeBlock).networks[0]!.source =
+            'A "Start"\n= %Q0.0';
         });
       });
       await menu(app, ids.plc(PLC), MODE);
-      expect(names()).toEqual(all);
+      expect(names()).toEqual(['FC2']);
       await menu(app, ids.plc(PLC), MODE);
       expect(rows()).toHaveLength(0);
       act(() => {
@@ -384,7 +392,7 @@ describe('Compila solo modifiche: dipendenze', () => {
         });
       });
       await menu(app, ids.plc(PLC), MODE);
-      expect(names()).toEqual(all);
+      expect(names()).toEqual(['FC2']);
     },
     T,
   );
@@ -401,24 +409,31 @@ describe('Compila solo modifiche: dipendenze', () => {
         });
       });
       await menu(app, ids.plc(PLC), MODE);
-      expect(names()).toEqual(all);
+      expect(names()).toEqual(['Main', 'FC1']);
     },
     T,
   );
 
   it(
-    'cambiando un membro di un UDT si ricompilano i chiamanti',
+    'cambiando un membro di un UDT si ricompilano i blocchi che lo usano',
     async () => {
       const app = await primed();
       act(() => {
         app.store.getState().edit('history.addUdt', (p) => {
+          const d = findDevice(p, PLC)!;
           const u = createUdt({ name: 'Asse', number: 1 });
           u.members.push({ id: 'u1', name: 'X', type: 'Int', comment: '' });
-          findDevice(p, PLC)!.udts.push(u);
+          d.udts.push(u);
+          (d.blocks.find((b) => b.name === 'FC2') as CodeBlock).interface.temp.push({
+            id: 't1',
+            name: 'a',
+            type: '"Asse"',
+            comment: '',
+          });
         });
       });
       await menu(app, ids.plc(PLC), MODE);
-      expect(names()).toEqual(all);
+      expect(names()).toEqual(['FC2']);
       await menu(app, ids.plc(PLC), MODE);
       act(() => {
         app.store.getState().edit('history.editCell', (p) => {
@@ -426,7 +441,7 @@ describe('Compila solo modifiche: dipendenze', () => {
         });
       });
       await menu(app, ids.plc(PLC), MODE);
-      expect(names()).toEqual(all);
+      expect(names()).toEqual(['FC2']);
     },
     T,
   );

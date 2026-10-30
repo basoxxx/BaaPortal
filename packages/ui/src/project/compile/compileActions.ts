@@ -3,13 +3,12 @@ import { findCpu } from '@baaportal/catalog';
 import {
   applyImport,
   blockToMc7File,
+  compileKeyOf,
+  compileKeysOf,
   findDevice,
-  interfaceHashOf,
   planImport,
-  sourceHashOf,
   type Block,
   type Mc7Diagnostic,
-  type Member,
   type PlcDevice,
 } from '@baaportal/project';
 import { readKitZip } from '@baaportal/s7comm';
@@ -33,51 +32,16 @@ const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const baseName = (path: string) =>
   path.slice(Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1);
 const tagOf = (b: Block) => `${b.kind === 'IDB' ? 'DB' : b.kind}${b.number}`;
-/** Hash di 53 bit (cyrb53) del testo. */
-function hashText(text: string): string {
-  let h1 = 0xdeadbeef;
-  let h2 = 0x41c6ce57;
-  for (let i = 0; i < text.length; i++) {
-    const c = text.charCodeAt(i);
-    h1 = Math.imul(h1 ^ c, 2654435761);
-    h2 = Math.imul(h2 ^ c, 1597334677);
-  }
-  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
-  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
-  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16);
-}
-
-const memberKey = (m: Member): unknown => [
-  m.name,
-  m.type,
-  m.initial ?? null,
-  m.overrides ?? null,
-  (m.members ?? []).map(memberKey),
-];
+/** Le chiavi delle dipendenze di compilazione di ogni blocco del PLC (in cache per dispositivo). */
+export type CompileContext = (b: Block) => string;
+export const contextHashOf = (dev: PlcDevice): CompileContext => compileKeysOf(dev);
 
 /**
- * Impronta di ciò da cui dipende la compilazione di ogni blocco oltre al suo contenuto: variabili
- * (nome, tipo, indirizzo), costanti, UDT, CPU e, di ogni blocco, nome, tipo, numero e interfaccia
- * (un chiamato che cambia cambia i chiamanti). Prudente: ogni cambiamento ricompila tutto.
+ * Chiave di compilazione: contenuto del blocco (reti, interfaccia, intestazione) e ciò che il
+ * blocco nomina (variabili, costanti, UDT, interfacce dei chiamati, a catena) e CPU: un cambiamento
+ * ricompila solo i blocchi che ne dipendono.
  */
-export function contextHashOf(dev: PlcDevice): string {
-  return hashText(
-    JSON.stringify([
-      dev.cpu.typeId,
-      dev.tagTables.map((tb) => [
-        tb.name,
-        tb.tags.map((x) => [x.name, x.type, x.address]),
-        tb.constants.map((c) => [c.name, c.type, c.value]),
-      ]),
-      dev.udts.map((u) => [u.name, u.number, u.members.map(memberKey)]),
-      dev.blocks.map((b) => [b.kind, b.number, b.name, interfaceHashOf(b)]),
-    ]),
-  );
-}
-
-/** Chiave di compilazione: contenuto del blocco (reti, interfaccia, intestazione) e contesto. */
-export const hashOf = (b: Block, context: string) =>
-  `${sourceHashOf(b)}:${interfaceHashOf(b)}:${context}`;
+export const hashOf = (b: Block, context: CompileContext) => compileKeyOf(b, context);
 
 function showCompileTab(store: StoreApi<AppState>): void {
   const s = store.getState();
