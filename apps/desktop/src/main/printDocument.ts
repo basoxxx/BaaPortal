@@ -64,7 +64,13 @@ export async function printDocument(raw: unknown, deps: PrintDeps): Promise<Prin
     if (!savePath) return { status: 'cancelled' };
   }
   const dir = await mkdtemp(join(tmpdir(), 'baa-print-'));
-  const win = deps.createWindow();
+  let win: PrintWindow;
+  try {
+    win = deps.createWindow();
+  } catch (e) {
+    await rm(dir, { recursive: true, force: true });
+    throw e;
+  }
   try {
     win.webContents.on('will-navigate', (e) => e.preventDefault());
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));

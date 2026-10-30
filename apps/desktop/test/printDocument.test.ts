@@ -91,6 +91,19 @@ describe('finestra di stampa', () => {
     expect(f.win.destroy).toHaveBeenCalled();
   });
 
+  it('se la finestra non si crea, la cartella temporanea si cancella', async () => {
+    const { readdirSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const before = readdirSync(tmpdir()).filter((n) => n.startsWith('baa-print-')).length;
+    const f = fakes({
+      createWindow: () => {
+        throw new Error('no window');
+      },
+    });
+    await expect(printDocument(REQ, f.deps)).rejects.toThrow('no window');
+    expect(readdirSync(tmpdir()).filter((n) => n.startsWith('baa-print-')).length).toBe(before);
+  });
+
   it('rifiuta richieste malformate', () => {
     expect(() => parsePrintRequest(null)).toThrow();
     expect(() => parsePrintRequest({ ...REQ, paper: 'A0' })).toThrow();

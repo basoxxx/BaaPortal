@@ -5,6 +5,7 @@
 // shortcut: KOP e FUP escono come AWL generato (i componenti dell'editor sono interattivi e
 // legati a i18n e contesto); un rendering SVG statico del grafico è il passo successivo.
 import { convertMnemonics } from '@baaportal/awl';
+import { sameName } from '@baaportal/s7-types';
 import {
   blockSources,
   crossReferences,
@@ -152,7 +153,7 @@ function blockHtml(b: Block, dev: PlcDevice, o: PrintOptions): string {
     if (o.includeInterface)
       out += `<h3>${esc(t('print.doc.members'))}</h3>${memberTable(b.members, t)}`;
   } else if (b.kind === 'IDB') {
-    const fb = dev.blocks.find((x) => x.id === b.instanceOf);
+    const fb = dev.blocks.find((x) => x.kind === 'FB' && sameName(x.name, b.instanceOf));
     out += `<p>${esc(t('print.doc.instanceOf'))}: ${esc(fb ? blockLabel(fb) : b.instanceOf)}</p>`;
     const ov = Object.entries(b.overrides);
     if (ov.length > 0)

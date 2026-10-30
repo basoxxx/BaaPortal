@@ -44,7 +44,7 @@ function setup() {
   const s = createCodeBlock({ kind: 'FC', number: 3, name: 'Testo', language: 'SCL' });
   s.networks[0]!.source = `x := 1; // ${XSS}`;
   const db = globalDb('Dati', [mem('Valore', 'Int', { initial: '7' })]);
-  const idb = instanceDb('Ist', f.id);
+  const idb = instanceDb('Ist', f.name);
   const u = udt('Tipo', [mem('A', 'Int')]);
   const tt = createTagTable(`Tab${XSS}`);
   tt.tags.push({ id: 't', name: 'Tag', type: 'Bool', address: '%I0.0', hmi: false, comment: XSS });
@@ -89,6 +89,13 @@ describe('buildPrintDocument', () => {
       expect(html).toContain(x);
     expect(html).toContain('<td>7</td>'); // valore iniziale del DB
     expect(html).toMatch(/<pre>[^<]*A\s+I\s+0\.0/); // AWL generato dal segmento KOP
+  });
+
+  it('un DB di istanza riporta l FB di cui è istanza (instanceOf è il nome)', () => {
+    const { project, d } = setup();
+    const html = buildPrintDocument(project, all(d), opts());
+    const f = d.blocks.find((b) => b.kind === 'FB')!;
+    expect(html).toContain(`print.doc.instanceOf: FB${f.number}`);
   });
 
   it('il testo del progetto esce con escape, senza <script>', () => {
