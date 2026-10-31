@@ -441,8 +441,8 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
 ## Stampa e PDF (piano 7D)
 
 - **KOP e FUP escono come AWL generato**, non come grafico: i componenti dell'editor sono interattivi e un rendering statico (SVG) non c'è ancora.
-- **Niente anteprima di stampa** nell'app: si vede il risultato salvando il PDF. La voce _Anteprima di stampa_ del menu è stata sostituita da _Esporta in PDF_.
-- **Un PLC per documento.** Una selezione che attraversa più PLC stampa il primo; i blocchi di sistema e le sorgenti AWL esterne non sono stampati (di un DB di istanza si riportano il FB e i valori cambiati).
+- **Anteprima nella finestra di stampa:** il pulsante _Anteprima_ mostra lo stesso HTML in un riquadro isolato (iframe senza permessi: niente script, origine opaca, con la stessa CSP del documento). È l'HTML, non l'impaginazione: interruzioni di pagina, margini e numeri di pagina si vedono solo nel PDF.
+- **Più PLC nel documento:** una selezione su più PLC li stampa tutti, con il nome del PLC davanti ai titoli; riferimenti incrociati per PLC. Le sorgenti AWL esterne selezionate si stampano come testo salvato (senza conversione della mnemonica). I blocchi di sistema non sono stampati (di un DB di istanza si riportano il FB e i valori cambiati).
 - **Blocchi know-how protetti:** si riporta solo l'interfaccia, il codice no.
 - **Numeri di pagina** dal piè di pagina di Chromium (solo nel PDF); nella stampa di sistema dipendono dal driver. Intestazione e piè di pagina non sono personalizzabili.
 - **Il documento è fatto di testo del progetto**: viene caricato in una finestra senza JavaScript, in sandbox e con CSP che vieta ogni risorsa esterna. Un progetto altrui non può eseguire codice né leggere file tramite la stampa.
