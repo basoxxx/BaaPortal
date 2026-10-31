@@ -465,7 +465,7 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
 - **Niente parametri dei moduli.** Campi di misura e tipi di misura degli ingressi analogici, diagnostica, allarmi, valori sostitutivi, filtri: non ci sono. Del modulo si salvano solo posto, nome, commento e indirizzi iniziali.
 - **Controlli semplificati.** Non si controllano: gli I/O integrati delle CPU compatte 31xC (che occupano indirizzi propri nel posto 2), il numero di rack che la CPU accetta (la CPU 312 ne ha uno solo), la corrente assorbita dal bus e quella dell'alimentatore, i posti vuoti in mezzo, la memoria immagine di processo.
 - **Niente GSD.** Nessuna importazione di file GSD/GSDML; la periferia decentrata ET 200 di base è nella vista di rete (piano 6B, sotto).
-- **Il simulatore** usa ancora le dimensioni di I e Q della CPU, non quelle della configurazione.
+- **Il simulatore** usa la configurazione per la periferia e le immagini di processo (2.1), tranne con le CPU compatte 31xC (vedi _Simulatore_).
 
 ## Vista di rete (piano 6B)
 
