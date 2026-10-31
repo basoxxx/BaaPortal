@@ -25,7 +25,7 @@ export function createInterruptAsk(
       defaultId: 0,
       cancelId: 0,
       title: tr('Caricamento in corso'),
-      message: INTERRUPT_MESSAGE,
+      message: tr(INTERRUPT_MESSAGE),
       noLink: true,
     };
     // Senza finestra a cui agganciarla, la domanda si mostra da sola: l'uscita non va persa.

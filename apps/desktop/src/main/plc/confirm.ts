@@ -40,7 +40,7 @@ export function createConfirm(
     };
     // La finestra è quella che ha chiesto la scrittura; senza, non si mostra nulla e non si scrive.
     const win = windowOf(owner);
-    if (!win || win.isDestroyed()) throw new Error('Finestra non disponibile per la conferma');
+    if (!win || win.isDestroyed()) throw new Error(tr('Finestra non disponibile per la conferma'));
     const r = await dialog.showMessageBox(win, opts);
     return r.response === 0;
   };

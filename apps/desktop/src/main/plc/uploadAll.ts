@@ -11,6 +11,7 @@ import type {
 import { toPlcIdentity } from './plcMap';
 import { connectOptions } from './access';
 import { connectMessage } from './plcService';
+import { tr } from './dialogText';
 
 /** Quanto serve di una finestra: abbastanza per i test senza Electron. */
 export interface UploadOwner {
@@ -112,9 +113,9 @@ export class UploadService {
     access: PlcAccess,
     opts: CollectOptions = {},
   ): Promise<CollectResult> {
-    if (this.closing) return { ok: false, error: 'Chiusura in corso' };
-    if (this.runs.has(owner)) return { ok: false, error: 'Un caricamento è già in corso' };
-    if (owner.isDestroyed()) return { ok: false, error: 'Finestra chiusa' };
+    if (this.closing) return { ok: false, error: tr('Chiusura in corso') };
+    if (this.runs.has(owner)) return { ok: false, error: tr('Un caricamento è già in corso') };
+    if (owner.isDestroyed()) return { ok: false, error: tr('Finestra chiusa') };
     const ctl = new AbortController();
     const onGone = (): void => ctl.abort();
     owner.once('destroyed', onGone);
@@ -193,7 +194,9 @@ export class UploadService {
         if (todo.length > this.maxBlocks) {
           return {
             ok: false,
-            error: `Troppi blocchi nella CPU (oltre ${this.maxBlocks}): caricamento non eseguito`,
+            error: tr('Troppi blocchi nella CPU (oltre {n}): caricamento non eseguito', {
+              n: this.maxBlocks,
+            }),
           };
         }
       }
@@ -226,7 +229,9 @@ export class UploadService {
         if (bytes > this.maxBytes) {
           return {
             ok: false,
-            error: `Troppi dati dalla CPU (oltre ${this.maxBytes / (1024 * 1024)} MB): caricamento non eseguito`,
+            error: tr('Troppi dati dalla CPU (oltre {n} MB): caricamento non eseguito', {
+              n: this.maxBytes / (1024 * 1024),
+            }),
           };
         }
         files.push({ type, number, bytes: data });

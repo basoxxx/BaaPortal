@@ -1,6 +1,7 @@
 import type { ReadItem, WriteItem } from '@baaportal/s7comm';
 import type { PlcReadWatchResult, PlcWatchTarget, PlcWatchValue } from '@baaportal/ui';
 import { MPI_PAUSED, type PlcOwner, type PlcService } from './plcService';
+import { tr } from './dialogText';
 
 /** Al più tanti operandi per giro (10 richieste read var da 20 item). */
 export const ONLINE_MAX_ITEMS = 200;
@@ -22,7 +23,7 @@ function isInt(v: unknown, min: number, max: number): v is number {
 
 /** Controlla un operando che arriva dal renderer; `areas` sono quelle ammesse per l'operazione. */
 export function parseWatchTarget(raw: unknown, areas: readonly string[]): PlcWatchTarget | string {
-  if (typeof raw !== 'object' || raw === null) return 'Operando non valido';
+  if (typeof raw !== 'object' || raw === null) return tr('Operando non valido');
   const r = raw as Record<string, unknown>;
   const area = r['area'];
   if (typeof area !== 'string' || !areas.includes(area)) {
@@ -165,7 +166,7 @@ export async function readWatch(
   const list = parseWatchList(rawItems);
   if (typeof list === 'string') return { ok: false, error: list };
   // Un operando non valido dà l'errore della sua sola riga e non entra nella richiesta.
-  const values: PlcWatchValue[] = list.map(() => ({ error: 'Operando non valido' }));
+  const values: PlcWatchValue[] = list.map(() => ({ error: tr('Operando non valido') }));
   const valid: { at: number; target: PlcWatchTarget }[] = [];
   list.forEach((raw, at) => {
     const t = parseWatchTarget(raw, READ_AREAS);
@@ -175,16 +176,18 @@ export async function readWatch(
   if (valid.length === 0) return { ok: true, values };
   const items = valid.map((v) => toReadItem(v.target));
   const r = await service.read(owner, (run) => run((c) => c.readItems(items)), deadlineMs);
-  if (!r.ok)
-    return { ok: false, error: r.error, ...(r.error === MPI_PAUSED ? { paused: true } : {}) };
+  if (!r.ok) {
+    const paused = r.error === MPI_PAUSED;
+    return { ok: false, error: paused ? tr(MPI_PAUSED) : r.error, ...(paused ? { paused } : {}) };
+  }
   if (r.value.length !== valid.length) {
-    return { ok: false, error: 'La CPU ha risposto con un numero di valori inatteso' };
+    return { ok: false, error: tr('La CPU ha risposto con un numero di valori inatteso') };
   }
   r.value.forEach((res, i) => {
     const { at, target } = valid[i]!;
     if (!res.ok) values[at] = { error: res.name };
     else if (res.data.length !== expectedBytes(target)) {
-      values[at] = { error: 'Valore di lunghezza inattesa' };
+      values[at] = { error: tr('Valore di lunghezza inattesa') };
     } else values[at] = { bytes: res.data };
   });
   return { ok: true, values };

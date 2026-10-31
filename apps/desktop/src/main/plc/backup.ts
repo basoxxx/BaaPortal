@@ -12,6 +12,7 @@ import { accessLabel } from './access';
 import { toPlcMode } from './plcMap';
 import type { PlcOwner, PlcService } from './plcService';
 import { BACKUP_TYPES, type UploadOwner, type UploadService } from './uploadAll';
+import { tr } from './dialogText';
 
 export type BackupOwner = UploadOwner & PlcOwner;
 
@@ -76,8 +77,8 @@ export class BackupService {
   }
 
   async backup(owner: BackupOwner): Promise<PlcBackupResult> {
-    if (this.closing) return { ok: false, error: 'Chiusura in corso' };
-    if (this.running.has(owner)) return { ok: false, error: 'Un backup è già in corso' };
+    if (this.closing) return { ok: false, error: tr('Chiusura in corso') };
+    if (this.running.has(owner)) return { ok: false, error: tr('Un backup è già in corso') };
     const state = { cancelled: false };
     this.running.set(owner, state);
     try {
@@ -89,7 +90,7 @@ export class BackupService {
 
   private async run(owner: BackupOwner, state: { cancelled: boolean }): Promise<PlcBackupResult> {
     const target = this.o.service.target(owner);
-    if (!target) return { ok: false, error: 'Nessun collegamento online' };
+    if (!target) return { ok: false, error: tr('Nessun collegamento online') };
     const at = (this.o.now ?? (() => new Date()))();
     const path = await this.o.pick(owner, suggestedBackupName(target.identity, at));
     if (path === null || state.cancelled || owner.isDestroyed())
@@ -97,7 +98,7 @@ export class BackupService {
     // Durante la finestra il collegamento può essere caduto o cambiato: si rilegge il bersaglio.
     const now = this.o.service.target(owner);
     if (!now || now.linkId !== target.linkId)
-      return { ok: false, error: 'Nessun collegamento online' };
+      return { ok: false, error: tr('Nessun collegamento online') };
     // Se il collegamento online finisce (offline, perso, altra CPU) il backup si ferma.
     let ended = false;
     const offLink = this.o.service.onLinkEnd(owner, () => {
@@ -107,7 +108,7 @@ export class BackupService {
     try {
       const r = await this.collect(owner, target, at, path, state);
       return ended && !r.ok
-        ? { ok: false, error: 'Collegamento online finito: backup interrotto' }
+        ? { ok: false, error: tr('Collegamento online finito: backup interrotto') }
         : r;
     } finally {
       offLink();
@@ -141,7 +142,9 @@ export class BackupService {
         .join('; ');
       return {
         ok: false,
-        error: `Nessun blocco copiato${first ? `: ${first}` : ': la CPU non ne ha elencati'}`,
+        error: first
+          ? tr('Nessun blocco copiato: {why}', { why: first })
+          : tr('Nessun blocco copiato: la CPU non ne ha elencati'),
       };
     }
 
@@ -187,7 +190,9 @@ export class BackupService {
     } catch (e) {
       return {
         ok: false,
-        error: `Scrittura del file non riuscita: ${e instanceof Error ? e.message : String(e)}`,
+        error: tr('Scrittura del file non riuscita: {why}', {
+          why: e instanceof Error ? e.message : String(e),
+        }),
       };
     }
     return { ok: true, path, count: entries.length, failed: r.failed };
