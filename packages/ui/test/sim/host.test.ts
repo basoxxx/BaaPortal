@@ -267,6 +267,30 @@ describe('SimHost', () => {
     await f.host.handle({ op: 'stop' });
   });
 
+  it('OB35 gira anche durante l attesa del ciclo minimo, senza allarmi persi', async () => {
+    const f = fake();
+    await f.host.handle({
+      op: 'start',
+      cpuTypeId: 'cpu-315-2-pn-dp',
+      props: { ...PROPS, minCycleMs: 50, cyclicInterruptMs: 10 },
+    });
+    await f.host.handle({
+      op: 'download',
+      files: [ob1(['\tNOP 0;']), ob1(['\tL MW 0;\n\tL 1;\n\t+I;\n\tT MW 0;'], 35)],
+    });
+    await f.host.handle({ op: 'mode', to: 'RUN' });
+    await f.advance(1000);
+    const [mw] = (await f.host.handle({
+      op: 'read',
+      items: [{ area: 'M', byte: 0, size: 'W' }],
+    })) as { bytes: Uint8Array }[];
+    const runs = (mw!.bytes[0]! << 8) | mw!.bytes[1]!;
+    expect(runs).toBeGreaterThanOrEqual(90);
+    const diag = f.of('status').at(-1)!.diagnostics;
+    expect(diag.filter((d) => d.code === 'ALLARME_PERSO')).toEqual([]);
+    await f.host.handle({ op: 'stop' });
+  });
+
   it("con l'orologio fermo una fetta è limitata e cede", async () => {
     const jobs: { fn: () => void; ms: number }[] = [];
     let tickJob: (() => void) | undefined;

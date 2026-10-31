@@ -265,7 +265,7 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§10–§13). Come per il 
 - **OB82/OB86 mancanti → OB85:** il manuale è ambiguo; se manca anche OB85 la CPU va in STOP (`OB_NON_CARICATO`).
 - **OB80 in coda dietro OB82/OB85/OB86 (2.1):** se il tempo di ciclo si supera dentro un OB della classe 26, OB80 parte dopo la sua fine (al tick o al ciclo seguente).
 - **OB35, latenza:** fino a 128 istruzioni (2.1), non a ogni istruzione come sulla CPU vera.
-- **OB35, griglia fissa:** le scadenze sono multipli dell'intervallo dall'ingresso in RUN; le scadenze perse danno una voce `ALLARME_PERSO` (⚠️ id 16#3503 dedotto, nessun OB80); nessun OB85 se OB35 non è caricato; nessuna voce `OB_RICHIAMATO` per OB35, OB1 e OB100.
+- **OB35, griglia fissa:** le scadenze sono multipli dell'intervallo dall'ingresso in RUN; le scadenze perse danno una voce `ALLARME_PERSO` (⚠️ id 16#3503 dedotto, nessun OB80); nessun OB85 se OB35 non è caricato; nessuna voce `OB_RICHIAMATO` per OB35, OB1 e OB100. Gli allarmi a tempo girano anche durante l'attesa del ciclo minimo (2.1).
 - **Superamento in STARTUP:** il superamento del tempo di ciclo (o del limite di istruzioni) in OB100 porta in STOP; OB80 non è richiamato.
 - **Dati di avvio degli OB** (STRT_INF 16#36 di OB35, IO_FLAG 16#54 e MDL_DEFECT di OB82, FLT_ID 16#C4 e RACKS_FLTD 0 di OB86, MEM_AREA/MEM_ADDR di OB122, ERR_EV di OB80): valori ricordati dai manuali, non confrontati con una CPU.
 - **`DB_NON_APERTO`** (accesso a DB/DI con registro a 0) è mappato su SW_FLT 16#22/16#23 (errore di area): la lista del manuale non ha un codice dedicato.

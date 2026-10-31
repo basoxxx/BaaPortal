@@ -247,7 +247,11 @@ export class SimHost {
     for (;;) {
       const t = this.env.now();
       if (t < this.nextCycleAt) {
-        this.cancelPump = this.env.schedule(() => this.pump(), this.nextCycleAt - t);
+        // Nell'attesa del ciclo minimo gli allarmi a tempo girano: ci si risveglia alla prima scadenza.
+        const due = cpu.idle();
+        if (cpu.mode !== 'RUN') return;
+        const wait = Math.min(this.nextCycleAt - this.env.now(), due ?? Infinity);
+        this.cancelPump = this.env.schedule(() => this.pump(), Math.max(0, wait));
         return;
       }
       cpu.cycle();

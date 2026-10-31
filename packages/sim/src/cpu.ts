@@ -594,6 +594,26 @@ export class SimCpu {
     return result;
   }
 
+  /**
+   * Attesa del ciclo minimo: gli allarmi dovuti (OB35, OB20, OB10, OB82/86) girano come durante OB1.
+   * Restituisce i ms alla prossima scadenza, o niente se non ce n'è.
+   */
+  idle(): number | undefined {
+    if (this._mode !== 'RUN') return undefined;
+    const t = this.now();
+    this.watchdog = t;
+    this.updateClock(t);
+    try {
+      this.serviceInterrupts(this.newContext(t), PRIORITY.OB1, t);
+    } catch (e) {
+      if (e instanceof StopRequest) this.stop(e.reason);
+      else this.fail(e);
+      return undefined;
+    }
+    const due = this.nextDeadline();
+    return due === undefined ? undefined : Math.max(0, due - this.now());
+  }
+
   /** STP dal programma: STOP con la voce `STOP_RICHIESTO`; il ciclo non è un errore. */
   private stopRequested(e: StopRequest, start: number): CycleResult {
     this.stop(e.reason);
