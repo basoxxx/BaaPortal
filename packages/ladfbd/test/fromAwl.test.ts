@@ -285,8 +285,11 @@ function randomNetwork(rand: () => number): LadNetwork {
       const r = rand();
       return depth > 0 && r < 0.3 ? parallel(depth - 1) : r < 0.4 ? flowElem() : contact();
     });
-  const parallel = (depth: number): LadElem =>
-    par(...Array.from({ length: 2 + Math.floor(rand() * 2) }, () => branch(depth)));
+  const parallel = (depth: number): LadElem => {
+    const p = par(...Array.from({ length: 2 + Math.floor(rand() * 2) }, () => branch(depth)));
+    const contacts = p.k === 'parallel' && p.branches.flat().every((e) => e.k === 'contact');
+    return contacts && rand() < 0.5 ? { ...p, plain: true } : p;
+  };
   const elem = (): LadElem => {
     const r = rand();
     if (r < 0.45) return contact();
@@ -344,17 +347,55 @@ describe('awlToLad: reti casuali valide', () => {
   });
 });
 
-describe('awlToLad: resta AWL', () => {
-  it('O dopo A senza parentesi: forma che la traduzione non genera', () => {
-    const r = convert('A I 0.0\nO I 0.1\n= Q 4.0');
-    expect(r).toEqual({ ok: false, reason: { code: 'SHAPE', line: expect.any(Number) } });
+describe('awlToLad: forme di STEP 7', () => {
+  /** La rete trovata rigenera la sorgente (senza BLD), e il risultato rigenerato non cambia più. */
+  const same = (src: string, expected = src) => {
+    const r = convert(src);
+    if (!r.ok) throw new Error(`non convertita (${JSON.stringify(r.reason)}):\n${src}`);
+    expect(networkToAwl(r.network, OPTS).source).toBe(formatNetwork(expected, 'international'));
+    return r.network;
+  };
+
+  it('OR di serie senza parentesi: A x; O y e A a; A b; O; A c; ON d', () => {
+    const n = same('A I 0.0\nO I 0.1\n= Q 4.0');
+    expect(n.root.series).toMatchObject([{ k: 'parallel', plain: true, branches: [[{}], [{}]] }]);
+    same('A I 0.0\nA I 0.1\nO\nA I 0.2\nAN I 0.3\nON I 0.4\n= Q 4.0');
+    // con logica dopo e davanti: dentro A( … )
+    same('A I 1.0\nA(\nA I 0.0\nO I 0.1\n)\nA I 1.1\n= Q 4.0');
   });
 
-  it('BLD, L e T sciolti, salti verso etichette interne', () => {
+  it('i BLD si ignorano: la rete rigenera lo stesso AWL senza di loro', () => {
+    same('BLD 1\nA I 0.0\n= Q 4.0', 'A I 0.0\n= Q 4.0');
+    same(
+      'A I 0.0\nBLD 102\n= L 20.0\nA L 20.0\n= Q 4.0\nA L 20.0\nA I 0.1\n= Q 4.1',
+      'A I 0.0\n= L 20.0\nA L 20.0\n= Q 4.0\nA L 20.0\nA I 0.1\n= Q 4.1',
+    );
+  });
+
+  it('etichette fra segmenti: salto in avanti verso l’etichetta del segmento dopo', () => {
+    const segs = ['A I 0.0\nJC M1', 'A I 0.1\n= Q 4.0', 'M1: A I 0.2\n= Q 4.1'];
+    const r = blockAwlToLad(segs, { tempEnd: 20, newId: nid });
+    expect(r.map((x) => x.ok)).toEqual([true, true, true]);
+    if (r[2]!.ok) expect(r[2]!.network.label).toBe('M1');
+    // un salto seguito da altra logica nello stesso segmento resta AWL (due reti in una)
+    expect(
+      blockAwlToLad(['A I 0.0\nJC M1\nA I 0.1\n= Q 4.0', segs[2]!], { tempEnd: 20, newId: nid })[0]!
+        .ok,
+    ).toBe(false);
+  });
+});
+
+describe('awlToLad: resta AWL', () => {
+  it('X e XN: nessun elemento KOP le rappresenta', () => {
+    expect(convert('A I 0.0\nX I 0.1\n= Q 4.0').ok).toBe(false);
+    expect(convert('X I 0.0\nXN I 0.1\n= Q 4.0').ok).toBe(false);
+  });
+
+  it('L e T sciolti, salti verso etichette interne, BLD con etichetta', () => {
     for (const src of [
-      'BLD 1\nA I 0.0\n= Q 4.0',
       'L MW 10\nT MW 12',
       'A I 0.0\nJC M1\n= Q 4.0\nM1: NOP 0',
+      'M1: BLD 1\nA I 0.0\n= Q 4.0',
     ])
       expect(convert(src).ok).toBe(false);
   });

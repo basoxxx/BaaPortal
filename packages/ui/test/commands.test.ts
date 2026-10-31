@@ -331,7 +331,7 @@ describe('block.convertToGraphic', () => {
   }
   const cmd = commands['block.convertToGraphic'];
   const AND = 'A I 0.0\nA I 0.1\n= Q 4.0';
-  const OR_AFTER_AND = 'A I 0.0\nO I 0.1\n= Q 4.0';
+  const XOR_AFTER_AND = 'A I 0.0\nX I 0.1\n= Q 4.0';
 
   it('blocco AWL: diventa KOP in un solo passo annullabile', () => {
     const { store, ctx, cur } = setup('AWL', [AND, AND]);
@@ -346,7 +346,7 @@ describe('block.convertToGraphic', () => {
   });
 
   it('blocco AWL con un segmento senza forma KOP: non cambia, messaggio col segmento', () => {
-    const { store, ctx, cur } = setup('AWL', [AND, OR_AFTER_AND]);
+    const { store, ctx, cur } = setup('AWL', [AND, XOR_AFTER_AND]);
     const rev = store.getState().doc!.revision;
     void cmd.run(ctx);
     expect(cur().language).toBe('AWL');
@@ -359,7 +359,7 @@ describe('block.convertToGraphic', () => {
   });
 
   it('blocco KOP: converte i segmenti AWL che si possono, gli altri restano', () => {
-    const { ctx, cur } = setup('KOP', [AND, OR_AFTER_AND]);
+    const { ctx, cur } = setup('KOP', [AND, XOR_AFTER_AND]);
     void cmd.run(ctx);
     expect(cur().language).toBe('KOP');
     expect(cur().networks.map((n) => n.lad !== undefined)).toEqual([true, false]);

@@ -112,7 +112,11 @@ export type LadElem =
   | { id: string; k: 'edge'; dir: 'P' | 'N'; mem: string } // (P) / (N) in linea
   | { id: string; k: 'posneg'; dir: 'P' | 'N'; bit: string; mem: string } // box POS / NEG
   | { id: string; k: 'midline'; op: string } // (#)
-  | { id: string; k: 'parallel'; branches: LadElem[][] } // almeno 2 rami
+  /**
+   * Almeno 2 rami. `plain`: rami di soli contatti scritti senza parentesi, `A…`, poi `O x` per un
+   * ramo di un contatto o `O` e `A…` (forma di un AWL convertito, `A a; A b; O c`).
+   */
+  | { id: string; k: 'parallel'; branches: LadElem[][]; plain?: true }
   | LadBox;
 
 export type LadOut =

@@ -366,7 +366,14 @@ class Emitter {
     if (p.branches.length === 1) return this.series(p.branches[0]!, true);
     const single = (b: LadElem[]) => b.length === 1 && isContact(b[0]!);
     const simple = (b: LadElem[]) => b.every(isContact);
-    if (p.branches.every(single)) {
+    if (p.plain && p.branches.every(simple)) {
+      // OR di serie senza parentesi (AWL convertito): A…, poi O x o O / A… per ogni ramo
+      p.branches.forEach((b, i) => {
+        if (i > 0 && single(b)) return this.push(b[0]!.id, contactText(b[0] as Contact, true));
+        if (i > 0) this.push(p.id, 'O');
+        for (const e of b as Contact[]) this.push(e.id, contactText(e, false));
+      });
+    } else if (p.branches.every(single)) {
       // regola 1: O x per ramo
       for (const b of p.branches) this.push(b[0]!.id, contactText(b[0] as Contact, true));
     } else if (p.branches.every(simple)) {
