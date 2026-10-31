@@ -211,6 +211,10 @@ describe('allarme dall’orologio (SFC 28–31, OB10)', () => {
     // Mensile dal 31: salta i mesi senza 31 (⚠️).
     const jan31 = new Date(2026, 0, 31, 8, 0).getTime();
     expect(new Date(nextTod(jan31, 0x1401, jan31)!).getMonth()).toBe(2);
+    // Annuale dal 29 febbraio: solo negli anni bisestili, come il mensile (⚠️).
+    const feb29 = new Date(2024, 1, 29, 8, 0).getTime();
+    const y = new Date(nextTod(feb29, 0x1801, feb29)!);
+    expect([y.getFullYear(), y.getMonth(), y.getDate()]).toEqual([2028, 1, 29]);
   });
 
   it('SET_TINT + ACT_TINT: OB10 alle 10:01 (secondi ignorati) e poi ogni minuto', () => {

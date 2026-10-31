@@ -321,10 +321,11 @@ export function nextTod(start: number, period: number, t: number): number | unde
     const d = new Date(s);
     if (period === 0x1001) d.setDate(s.getDate() + k);
     else if (period === 0x1201) d.setDate(s.getDate() + 7 * k);
-    else if (period === 0x1801) d.setFullYear(s.getFullYear() + k);
     else if (period === 0x2001) d.setMonth(s.getMonth() + k + 1, 0);
     else {
-      d.setMonth(s.getMonth() + k);
+      // Mensile e annuale: i mesi (o gli anni) senza quel giorno si saltano.
+      if (period === 0x1801) d.setFullYear(s.getFullYear() + k);
+      else d.setMonth(s.getMonth() + k);
       if (d.getDate() !== s.getDate()) continue;
     }
     if (d.getTime() > t) return d.getTime();
