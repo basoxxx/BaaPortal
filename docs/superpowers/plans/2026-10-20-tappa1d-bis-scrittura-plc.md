@@ -2,9 +2,10 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (consigliato) oppure superpowers:executing-plans per realizzare questo piano un task alla volta. I passi usano caselle (`- [ ]`) per il tracciamento.
 
-**Obiettivo:** BaaPortal passa da *guardare* la CPU S7-300 a *programmarla e comandarla*: scrittura di variabili, carica nel dispositivo (con attivazione del blocco) e STOP/RUN, su ISO-on-TCP, chiudendo il giro con il compilatore del 1E. Tutto si sviluppa e si prova contro il **finto PLC** e contro i byte di catture pubbliche di CPU S7-300 reali, quindi funziona senza alcuna CPU a disposizione. Ogni funzione che cambia lo stato della CPU passa da una conferma esplicita.
+**Obiettivo:** BaaPortal passa da _guardare_ la CPU S7-300 a _programmarla e comandarla_: scrittura di variabili, carica nel dispositivo (con attivazione del blocco) e STOP/RUN, su ISO-on-TCP, chiudendo il giro con il compilatore del 1E. Tutto si sviluppa e si prova contro il **finto PLC** e contro i byte di catture pubbliche di CPU S7-300 reali, quindi funziona senza alcuna CPU a disposizione. Ogni funzione che cambia lo stato della CPU passa da una conferma esplicita.
 
 **Architettura:**
+
 - `@baaportal/s7comm` guadagna i **codici di scrittura, download e controllo** (write var `0x05`; download `0x1A`/`0x1B`/`0x1C`; PLC control `0x28` e stop `0x29`), un **filtro consapevole del modo** (sola lettura ↔ online-scrittura) sullo stesso choke point del 1D, e un **client di scrittura separato** (`S7WriteClient`). Il client di lettura `S7Client` e il kit restano in sola lettura (proto §15.4).
 - `@baaportal/s7-server`: il finto S7-300 impara ad **accettare** scrittura, download e stop/avvio, cambiando il suo stato interno (memoria, blocchi, modo) **solo** per le funzioni dell'allowlist di scrittura. È così che si prova il client da capo a fondo senza CPU.
 - `apps/s7bench`: nuovi comandi `scrivi`, `carica-nel-dispositivo`, `stop`, `avvia`, ciascuno con **conferma esplicita** che mostra IP, ordine CPU e modo, più un riconoscimento "non in produzione".
@@ -41,37 +42,72 @@
 ### Task 1: `@baaportal/s7comm`: codec Write var (`0x05`)
 
 **Files:**
+
 - Create: `packages/s7comm/src/s7/writeVar.ts`
 - Modify: `packages/s7comm/src/index.ts` (riesporta `writeVar`)
 - Test: `packages/s7comm/test/writeVar.test.ts`
 
 **Interfaces:**
+
 - Consumes: `Area`, `TransportSize`, `ItemResult`, le mappe `AREA_CODE`/`SIZE_CODE` e `itemByteLength` di `s7/readVar.ts`; `planReads`/`splitArea` di `s7/plan.ts` come modello.
 - Produces:
   ```ts
-  export interface WriteItem { area: Area; db: number; start: number; bit?: number; size: TransportSize; count: number; data: Uint8Array }
-  export function encodeWriteRequest(items: WriteItem[]): { param: Uint8Array; data: Uint8Array };   // function 0x05
-  export function decodeWriteRequest(param: Uint8Array, data: Uint8Array): WriteItem[];                // per il finto PLC
-  export function encodeWriteResponse(returnCodes: number[]): { param: Uint8Array; data: Uint8Array }; // per il finto PLC
-  export function decodeWriteResponse(param: Uint8Array, data: Uint8Array): { returnCode: number; name: string }[];
-  export function planWrites(items: WriteItem[], pduLength: number): WriteItem[][];                    // proto §5.11
-  export function splitWrite(area: Area, db: number, start: number, data: Uint8Array, pduLength: number): WriteItem[];
+  export interface WriteItem {
+    area: Area;
+    db: number;
+    start: number;
+    bit?: number;
+    size: TransportSize;
+    count: number;
+    data: Uint8Array;
+  }
+  export function encodeWriteRequest(items: WriteItem[]): { param: Uint8Array; data: Uint8Array }; // function 0x05
+  export function decodeWriteRequest(param: Uint8Array, data: Uint8Array): WriteItem[]; // per il finto PLC
+  export function encodeWriteResponse(returnCodes: number[]): {
+    param: Uint8Array;
+    data: Uint8Array;
+  }; // per il finto PLC
+  export function decodeWriteResponse(
+    param: Uint8Array,
+    data: Uint8Array,
+  ): { returnCode: number; name: string }[];
+  export function planWrites(items: WriteItem[], pduLength: number): WriteItem[][]; // proto §5.11
+  export function splitWrite(
+    area: Area,
+    db: number,
+    start: number,
+    data: Uint8Array,
+    pduLength: number,
+  ): WriteItem[];
   ```
 
 Regole:
+
 - Parte parametri identica alla read (spec item: area, size, count, db, start/bit); la **parte dati** porta per ogni item un header (return code `0x00` reserved, transport size, lunghezza in bit o byte) seguito dai byte, con padding tra item tranne l'ultimo (proto §5.5). La risposta write è `0xFF` per item ok (proto §5.9).
-- `planWrites`: al massimo 20 item per richiesta; ogni richiesta deve stare nella PDU come richiesta *e* come risposta (proto §5.11). `splitWrite` divide un item più grande della PDU in fette ordinate che coprono tutti i byte senza buchi.
+- `planWrites`: al massimo 20 item per richiesta; ogni richiesta deve stare nella PDU come richiesta _e_ come risposta (proto §5.11). `splitWrite` divide un item più grande della PDU in fette ordinate che coprono tutti i byte senza buchi.
 - Riuso: nessuna copia della logica di `readVar.ts`; i codici area/size e `itemByteLength` si importano.
 
 - [x] **Step 1: Scrivi i test che falliscono** (`packages/s7comm/test/writeVar.test.ts`)
 
   ```ts
-  it('write var di M reale di cisa/snap7.pcap: param e data coincidono byte per byte', () => { /* estrae la write var dalla cattura in repo */ });
-  it('encodeWriteRequest → decodeWriteRequest è identità su un item BYTE, un BIT e un DB WORD', () => { /* … */ });
-  it('padding: un item da 3 byte seguito da un altro ha 1 byte di riempimento; l\'ultimo no', () => { /* … */ });
-  it('write response multi-item con un 0x0A in mezzo → gli altri 0xFF restano ok', () => { /* … */ });
-  it('planWrites: 25 item piccoli → 2 richieste, ciascuna ≤ PDU in richiesta e risposta', () => { /* … */ });
-  it('splitWrite(DB,1,0, 1000 byte, 240) → fette ≤ 222 byte che coprono 0..999 senza buchi', () => { /* … */ });
+  it('write var di M reale di cisa/snap7.pcap: param e data coincidono byte per byte', () => {
+    /* estrae la write var dalla cattura in repo */
+  });
+  it('encodeWriteRequest → decodeWriteRequest è identità su un item BYTE, un BIT e un DB WORD', () => {
+    /* … */
+  });
+  it("padding: un item da 3 byte seguito da un altro ha 1 byte di riempimento; l'ultimo no", () => {
+    /* … */
+  });
+  it('write response multi-item con un 0x0A in mezzo → gli altri 0xFF restano ok', () => {
+    /* … */
+  });
+  it('planWrites: 25 item piccoli → 2 richieste, ciascuna ≤ PDU in richiesta e risposta', () => {
+    /* … */
+  });
+  it('splitWrite(DB,1,0, 1000 byte, 240) → fette ≤ 222 byte che coprono 0..999 senza buchi', () => {
+    /* … */
+  });
   ```
 
 - [x] **Step 2: Esegui e verifica che falliscano** — `npx vitest run --project s7comm`, atteso FAIL.
@@ -84,26 +120,40 @@ Regole:
 ### Task 2: `@baaportal/s7comm`: codec PLC control (`0x28`) e stop (`0x29`)
 
 **Files:**
+
 - Create: `packages/s7comm/src/s7/control.ts`
 - Modify: `packages/s7comm/src/index.ts`
 - Test: `packages/s7comm/test/control.test.ts`
 
 **Interfaces:**
+
 - Consumes: `blockTypeAscii`/`blockTypeCode` di `s7/blocks.ts`.
 - Produces:
   ```ts
-  export type PiService = 'P_PROGRAM' | '_INSE';          // allowlist di questo piano; altri servizi NON implementati qui
-  export function encodePlcStop(): Uint8Array;            // param 0x29 + "P_PROGRAM" (proto §11.1)
-  export function encodeWarmRestart(): Uint8Array;        // param 0x28 P_PROGRAM, nessun argomento (proto §11.2)
-  export function encodeInsertBlock(type: BlockType, number: number, fs: BlockFilesystem): Uint8Array;  // 0x28 _INSE (proto §10.4)
-  export interface ControlResult { code: number; name: string }   // 0x00 ok, 0x07 già STOP, 0x03 già RUN, 0x02 non eseguibile (proto §11.4)
+  export type PiService = 'P_PROGRAM' | '_INSE'; // allowlist di questo piano; altri servizi NON implementati qui
+  export function encodePlcStop(): Uint8Array; // param 0x29 + "P_PROGRAM" (proto §11.1)
+  export function encodeWarmRestart(): Uint8Array; // param 0x28 P_PROGRAM, nessun argomento (proto §11.2)
+  export function encodeInsertBlock(
+    type: BlockType,
+    number: number,
+    fs: BlockFilesystem,
+  ): Uint8Array; // 0x28 _INSE (proto §10.4)
+  export interface ControlResult {
+    code: number;
+    name: string;
+  } // 0x00 ok, 0x07 già STOP, 0x03 già RUN, 0x02 non eseguibile (proto §11.4)
   export function decodeControlResponse(param: Uint8Array): ControlResult;
   // lato finto PLC
-  export function decodePlcControlRequest(param: Uint8Array): { function: 0x28 | 0x29; service?: PiService; block?: { type: BlockType; number: number } };
+  export function decodePlcControlRequest(param: Uint8Array): {
+    function: 0x28 | 0x29;
+    service?: PiService;
+    block?: { type: BlockType; number: number };
+  };
   export function encodeControlResponse(fn: 0x28 | 0x29, code: number): Uint8Array;
   ```
 
 Regole:
+
 - Layout esatto da proto §10.4 (_INSE), §11.1 (stop), §11.2 (warm restart), §11.4 (codici di risposta). Le stringhe di servizio sono ASCII con il byte di lunghezza; `encodeInsertBlock` costruisce il nome `'0'+type+number(5 ASCII)` come in proto §10.4.
 - `decodePlcControlRequest` riconosce **solo** i servizi dell'allowlist (R3): un `_DELE`/`_GARB`/`_MODU`/cold-restart si decodifica come servizio non ammesso e il chiamante (finto PLC, Task 5) risponde con errore, senza implementarlo.
 - Nessuna password (proto §14): se arriva `0xD241`, è l'header error, gestito dal client (Task 7), non qui.
@@ -111,11 +161,21 @@ Regole:
 - [x] **Step 1: Scrivi i test che falliscono** (`control.test.ts`)
 
   ```ts
-  it('PLC stop di proto §17.10 (snap7_s300_stop): param 0x29 + "P_PROGRAM"', () => { /* … */ });
-  it('warm restart P_PROGRAM: param 0x28 senza argomenti, roundtrip', () => { /* … */ });
-  it('_INSE per DB1 di proto §10.4 / §17.9: byte identici alla cattura', () => { /* … */ });
-  it('decodeControlResponse: para 0x00→ok, 0x07→già STOP, 0x03→già RUN, 0x02→non eseguibile', () => { /* … */ });
-  it('decodePlcControlRequest rifiuta _MODU/_GARB/cold come "non ammesso"', () => { /* … */ });
+  it('PLC stop di proto §17.10 (snap7_s300_stop): param 0x29 + "P_PROGRAM"', () => {
+    /* … */
+  });
+  it('warm restart P_PROGRAM: param 0x28 senza argomenti, roundtrip', () => {
+    /* … */
+  });
+  it('_INSE per DB1 di proto §10.4 / §17.9: byte identici alla cattura', () => {
+    /* … */
+  });
+  it('decodeControlResponse: para 0x00→ok, 0x07→già STOP, 0x03→già RUN, 0x02→non eseguibile', () => {
+    /* … */
+  });
+  it('decodePlcControlRequest rifiuta _MODU/_GARB/cold come "non ammesso"', () => {
+    /* … */
+  });
   ```
 
 - [x] **Step 2: Esegui e verifica che falliscano**
@@ -128,25 +188,58 @@ Regole:
 ### Task 3: `@baaportal/s7comm`: codec Download (`0x1A`/`0x1B`/`0x1C`)
 
 **Files:**
+
 - Create: `packages/s7comm/src/s7/download.ts`
 - Modify: `packages/s7comm/src/index.ts`
 - Test: `packages/s7comm/test/download.test.ts`
 
 **Interfaces:**
+
 - Consumes: `blockFileName`/`parseBlockFileName` di `s7/upload.ts`; `BlockHeader`/`parseBlockFile` di `s7/blockFile.ts` (per leggere `type`, `number`, `loadLength`, `mc7Length` dal file del blocco).
 - Produces:
   ```ts
-  export function encodeRequestDownload(type: BlockType, number: number, fs: BlockFilesystem, loadLength: number, mc7Length: number): Uint8Array;  // 0x1A (proto §10.1)
-  export function decodeRequestDownload(param: Uint8Array): { type: BlockType; number: number; fs: BlockFilesystem; loadLength: number; mc7Length: number };  // finto PLC
-  export function decodeDownloadBlockJob(param: Uint8Array): { type: BlockType; number: number; fs: BlockFilesystem };   // job 0x1B dalla CPU
-  export function encodeDownloadBlockJob(type: BlockType, number: number, fs: BlockFilesystem): Uint8Array;              // finto PLC: la CPU chiede la fetta
-  export function encodeDownloadBlockAck(eos: boolean, chunk: Uint8Array): { param: Uint8Array; data: Uint8Array };      // ack-data del PG (ROSCTR 3), EoS 0x01=seguono / 0x00=ultimo
-  export function decodeDownloadBlockAck(param: Uint8Array, data: Uint8Array): { eos: boolean; chunk: Uint8Array };      // finto PLC
-  export function encodeDownloadEnded(type: BlockType, number: number, fs: BlockFilesystem): Uint8Array;                 // job 0x1C
-  export function sliceBlockForDownload(file: Uint8Array, pduLength: number): Uint8Array[];   // fette per le ack-data 0x1B, ultima con EoS 0
+  export function encodeRequestDownload(
+    type: BlockType,
+    number: number,
+    fs: BlockFilesystem,
+    loadLength: number,
+    mc7Length: number,
+  ): Uint8Array; // 0x1A (proto §10.1)
+  export function decodeRequestDownload(param: Uint8Array): {
+    type: BlockType;
+    number: number;
+    fs: BlockFilesystem;
+    loadLength: number;
+    mc7Length: number;
+  }; // finto PLC
+  export function decodeDownloadBlockJob(param: Uint8Array): {
+    type: BlockType;
+    number: number;
+    fs: BlockFilesystem;
+  }; // job 0x1B dalla CPU
+  export function encodeDownloadBlockJob(
+    type: BlockType,
+    number: number,
+    fs: BlockFilesystem,
+  ): Uint8Array; // finto PLC: la CPU chiede la fetta
+  export function encodeDownloadBlockAck(
+    eos: boolean,
+    chunk: Uint8Array,
+  ): { param: Uint8Array; data: Uint8Array }; // ack-data del PG (ROSCTR 3), EoS 0x01=seguono / 0x00=ultimo
+  export function decodeDownloadBlockAck(
+    param: Uint8Array,
+    data: Uint8Array,
+  ): { eos: boolean; chunk: Uint8Array }; // finto PLC
+  export function encodeDownloadEnded(
+    type: BlockType,
+    number: number,
+    fs: BlockFilesystem,
+  ): Uint8Array; // job 0x1C
+  export function sliceBlockForDownload(file: Uint8Array, pduLength: number): Uint8Array[]; // fette per le ack-data 0x1B, ultima con EoS 0
   ```
 
 Regole:
+
 - Sequenza e layout da proto §10.1–§10.3 e vettore reale §17.9. Il **download block `0x1B` è server-initiated**: la CPU (finto PLC) manda job `0x1B` (ROSCTR 1) e il PG risponde ack-data (ROSCTR 3). Questi codec non orchestrano la connessione (lo fa Task 4); costruiscono e leggono solo i frame.
 - `sliceBlockForDownload`: fette che stanno nella PDU, l'ultima con EoS `0x00`.
 - Un filename di download usa il filesystem `'P'` (passivo) come in proto §10.1.
@@ -154,11 +247,21 @@ Regole:
 - [x] **Step 1: Scrivi i test che falliscono** (`download.test.ts`)
 
   ```ts
-  it('request download DB1 di proto §17.9: byte identici (load mem 100086, MC7 2)', () => { /* … */ });
-  it('encode/decodeRequestDownload roundtrip su OB1 e FB1', () => { /* … */ });
-  it('la sequenza 0x1B di §17.9 (3 cicli, ultimo EoS 0) si decodifica e si ricodifica identica', () => { /* … */ });
-  it('sliceBlockForDownload di un blocco da 500 byte con PDU 240 → fette che ricompongono l\'originale, ultima EoS 0', () => { /* … */ });
-  it('download ended 0x1C roundtrip', () => { /* … */ });
+  it('request download DB1 di proto §17.9: byte identici (load mem 100086, MC7 2)', () => {
+    /* … */
+  });
+  it('encode/decodeRequestDownload roundtrip su OB1 e FB1', () => {
+    /* … */
+  });
+  it('la sequenza 0x1B di §17.9 (3 cicli, ultimo EoS 0) si decodifica e si ricodifica identica', () => {
+    /* … */
+  });
+  it("sliceBlockForDownload di un blocco da 500 byte con PDU 240 → fette che ricompongono l'originale, ultima EoS 0", () => {
+    /* … */
+  });
+  it('download ended 0x1C roundtrip', () => {
+    /* … */
+  });
   ```
 
 - [x] **Step 2: Esegui e verifica che falliscano**
@@ -171,10 +274,12 @@ Regole:
 ### Task 4: Filtro consapevole del modo e transazione di download in `S7Connection`
 
 **Files:**
+
 - Modify: `packages/s7comm/src/readOnlyGuard.ts`, `packages/s7comm/src/connection.ts`
 - Test: `packages/s7comm/test/writeGuard.test.ts`, aggiunte a `packages/s7comm/test/readOnlyGuard.test.ts`
 
 **Interfaces:**
+
 - Consumes: codec dei Task 1–3.
 - Produces / modifica:
   ```ts
@@ -189,6 +294,7 @@ Regole:
   ```
 
 Regole:
+
 - `assertReadOnly` resta invariata. `assertOnlineWrite` ammette l'allowlist di lettura **più** `0x05`, `0x1A`, `0x1C`, `0x28` (solo warm restart e `_INSE`, verificati decodificando il servizio), `0x29`, e le ack-data `0x1B` (ROSCTR 3). Mantiene il controllo di **codifica canonica** del 1D (ogni PDU deve combaciare con la ri-codifica del suo significato).
 - Il choke point `guardedSender` passa il `mode` ad `assertOutgoingFrame`. In `read-only` niente cambia rispetto al 1D. Il modo si fissa all'apertura e **non** si può cambiare su una connessione viva.
 - **Inversione dei ruoli (proto §10.2):** fuori da `runDownload`, un job (ROSCTR 1) in arrivo dalla CPU chiude ancora la connessione con `PROTOCOL` (comportamento del 1D, invariato). Dentro `runDownload`:
@@ -201,12 +307,24 @@ Regole:
 - [x] **Step 1: Scrivi i test che falliscono** (`writeGuard.test.ts`)
 
   ```ts
-  it('assertOnlineWrite: 0x05, 0x1A, 0x1C, 0x29, warm restart e _INSE passano; _DELE/_MODU/cold/MRES/force → FORBIDDEN', () => { /* … */ });
-  it('su una connessione read-only una write var non arriva mai al trasporto (spia su send)', () => { /* … */ });
-  it('assertOutgoingFrame(mode="online-write") accetta un DT con write var; mode default la rifiuta', () => { /* … */ });
-  it('runDownload su memoryTransportPair con un server di prova: 0x1A, tre ack-data 0x1B, 0x1C', async () => { /* … */ });
-  it('runDownload: job non-0x1B a metà → PROTOCOL e nessuna promessa appesa', async () => { /* … */ });
-  it('fuori da runDownload un job ROSCTR 1 chiude ancora la connessione con PROTOCOL', async () => { /* comportamento 1D invariato */ });
+  it('assertOnlineWrite: 0x05, 0x1A, 0x1C, 0x29, warm restart e _INSE passano; _DELE/_MODU/cold/MRES/force → FORBIDDEN', () => {
+    /* … */
+  });
+  it('su una connessione read-only una write var non arriva mai al trasporto (spia su send)', () => {
+    /* … */
+  });
+  it('assertOutgoingFrame(mode="online-write") accetta un DT con write var; mode default la rifiuta', () => {
+    /* … */
+  });
+  it('runDownload su memoryTransportPair con un server di prova: 0x1A, tre ack-data 0x1B, 0x1C', async () => {
+    /* … */
+  });
+  it('runDownload: job non-0x1B a metà → PROTOCOL e nessuna promessa appesa', async () => {
+    /* … */
+  });
+  it('fuori da runDownload un job ROSCTR 1 chiude ancora la connessione con PROTOCOL', async () => {
+    /* comportamento 1D invariato */
+  });
   ```
 
 - [x] **Step 2: Esegui e verifica che falliscano**
@@ -219,10 +337,12 @@ Regole:
 ### Task 5: Finto PLC accetta write var e stop/avvio
 
 **Files:**
+
 - Modify: `packages/s7-server/src/session.ts` (casi `0x05`, `0x28`, `0x29` del `job()`), `packages/s7-server/src/fakeCpu.ts` (mutazioni raggiungibili da rete, dietro l'allowlist)
 - Test: aggiunte a `packages/s7-server/test/session.test.ts`
 
 **Interfaces:**
+
 - Consumes: `decodeWriteRequest`/`encodeWriteResponse` (Task 1); `decodePlcControlRequest`/`encodeControlResponse` (Task 2).
 - Produces (interno a `FakeCpu`):
   ```ts
@@ -233,6 +353,7 @@ Regole:
   ```
 
 Regole:
+
 - Nel `job()` di `session.ts` i casi `0x05`/`0x28`/`0x29` **non** rispondono più `ERR.PROTECTED`: decodificano, chiamano il metodo `FakeCpu` corrispondente e rispondono. Un `0x28` con servizio fuori allowlist (cold/_MODU/_GARB) resta `ERR.PROTECTED`.
 - **Protezione:** se `protectionLevel >= 2`, write/download/control rispondono `0xD241` come proto §14 (lettura e SZL restano libere). Il livello è opzione del finto PLC già esistente.
 - Lo stato del finto PLC cambia **solo** attraverso questi metodi e **solo** per le funzioni dell'allowlist; ogni altra funzione da rete resta un errore (R5 del 1D, ristretta). La nota di `fakeCpu.ts` ("Lo stato cambia solo con i metodi di questa classe, mai per un comando di rete") va aggiornata: ora cambia anche per le funzioni di scrittura ammesse, ma mai per le altre.
@@ -241,12 +362,24 @@ Regole:
 - [x] **Step 1: Scrivi i test che falliscano** (`session.test.ts`)
 
   ```ts
-  it('write var su MW10 poi read var rilegge il valore scritto', () => { /* via rig memory */ });
-  it('write var su DB inesistente → 0x0A; oltre la dimensione di M → 0x05; stato invariato per quegli item', () => { /* … */ });
-  it('PLC stop porta mode a STOP; secondo stop → para 0x07; SZL 0x0424 ora dice STOP', () => { /* … */ });
-  it('warm restart porta mode a RUN; secondo → para 0x03', () => { /* … */ });
-  it('con protezione 2 la write var risponde 0xD241 e non cambia la memoria', () => { /* … */ });
-  it('0x28 con servizio _MODU resta ERR.PROTECTED (fuori allowlist)', () => { /* … */ });
+  it('write var su MW10 poi read var rilegge il valore scritto', () => {
+    /* via rig memory */
+  });
+  it('write var su DB inesistente → 0x0A; oltre la dimensione di M → 0x05; stato invariato per quegli item', () => {
+    /* … */
+  });
+  it('PLC stop porta mode a STOP; secondo stop → para 0x07; SZL 0x0424 ora dice STOP', () => {
+    /* … */
+  });
+  it('warm restart porta mode a RUN; secondo → para 0x03', () => {
+    /* … */
+  });
+  it('con protezione 2 la write var risponde 0xD241 e non cambia la memoria', () => {
+    /* … */
+  });
+  it('0x28 con servizio _MODU resta ERR.PROTECTED (fuori allowlist)', () => {
+    /* … */
+  });
   ```
 
 - [x] **Step 2: Esegui e verifica che falliscano** — `npx vitest run --project s7-server`
@@ -259,10 +392,12 @@ Regole:
 ### Task 6: Finto PLC accetta il download (job `0x1B` server-initiated)
 
 **Files:**
+
 - Modify: `packages/s7-server/src/session.ts` (caso `0x1A` + `0x1C` + `_INSE`; invio di job verso il client), `packages/s7-server/src/fakeCpu.ts` (inserimento del blocco da rete)
 - Test: aggiunte a `packages/s7-server/test/session.test.ts`
 
 **Interfaces:**
+
 - Consumes: `decodeRequestDownload`, `encodeDownloadBlockJob`, `decodeDownloadBlockAck`, `encodeDownloadEnded` (Task 3); `decodePlcControlRequest` per `_INSE` (Task 2); `parseBlockFile`/`buildBlockFile` (già in s7comm, usati da `addBlock`).
 - Produces (interno a `FakeCpu`):
   ```ts
@@ -270,6 +405,7 @@ Regole:
   ```
 
 Regole:
+
 - La `Session` deve poter **iniziare** job `0x1B`/`0x1C` verso il client (inversione dei ruoli, proto §10.2), raccogliere le ack-data, ricomporre i byte del blocco e, **solo all'arrivo dell'`_INSE`**, inserire il blocco con `applyDownloadedBlock`. Un download interrotto prima dell'`_INSE` **non** lascia alcun blocco (Review Focus 3).
 - Sequenza: `0x1A` (ack) → la Session manda `0x1B` finché ci sono fette, leggendo le ack-data del client → manda `0x1C` → attende l'`_INSE` del client → inserisce. La lunghezza dichiarata nel `0x1A` deve combaciare con i byte ricomposti, altrimenti errore.
 - Un secondo download in parallelo sulla stessa sessione dà l'errore "nessun download possibile" (riuso del meccanismo dell'upload, proto §3.3).
@@ -278,10 +414,18 @@ Regole:
 - [x] **Step 1: Scrivi i test che falliscano** (`session.test.ts`)
 
   ```ts
-  it('download di un blocco costruito con buildBlockFile: dopo _INSE compare in list-blocks e si rilegge in upload identico', async () => { /* client runDownload ↔ server */ });
-  it('download senza _INSE finale → il blocco NON compare (stato invariato)', async () => { /* … */ });
-  it('lunghezza dichiarata ≠ byte ricomposti → errore, blocco non inserito', async () => { /* … */ });
-  it('secondo download in parallelo → errore "nessun download possibile"', async () => { /* … */ });
+  it('download di un blocco costruito con buildBlockFile: dopo _INSE compare in list-blocks e si rilegge in upload identico', async () => {
+    /* client runDownload ↔ server */
+  });
+  it('download senza _INSE finale → il blocco NON compare (stato invariato)', async () => {
+    /* … */
+  });
+  it('lunghezza dichiarata ≠ byte ricomposti → errore, blocco non inserito', async () => {
+    /* … */
+  });
+  it('secondo download in parallelo → errore "nessun download possibile"', async () => {
+    /* … */
+  });
   ```
 
 - [x] **Step 2: Esegui e verifica che falliscano**
@@ -294,34 +438,42 @@ Regole:
 ### Task 7: `S7WriteClient` — client di scrittura
 
 **Files:**
+
 - Create: `packages/s7comm/src/writeClient.ts`, `packages/s7comm/src/node/connectWrite.ts`
 - Modify: `packages/s7comm/src/index.ts`, `packages/s7comm/src/node/index.ts` (riesporta `connectWriteTcp`)
 - Test: `packages/s7comm/test/writeClient.test.ts`
 
 **Interfaces:**
+
 - Consumes: `S7Connection` in modo `online-write` (Task 4); codec dei Task 1–3; `parseBlockFile` di `s7/blockFile.ts`.
 - Produces:
   ```ts
   export class S7WriteClient {
-    static connect(o: ConnectOptions): Promise<S7WriteClient>;   // forza mode:'online-write'
-    readonly pduLength: number; readonly closed: boolean;
+    static connect(o: ConnectOptions): Promise<S7WriteClient>; // forza mode:'online-write'
+    readonly pduLength: number;
+    readonly closed: boolean;
     // lettura (riuso della logica del client di lettura dove serve)
     readItems(items: ReadItem[]): Promise<ItemResult[]>;
     readArea(area: Area, db: number, start: number, length: number): Promise<Uint8Array>;
-    mode(): Promise<CpuMode>; identity(): Promise<CpuIdentity>; blockInfo(type: BlockType, number: number): Promise<BlockInfo>;
+    mode(): Promise<CpuMode>;
+    identity(): Promise<CpuIdentity>;
+    blockInfo(type: BlockType, number: number): Promise<BlockInfo>;
     upload(type: BlockType, number: number): Promise<Uint8Array>;
     // scrittura
-    writeItems(items: WriteItem[]): Promise<{ returnCode: number; name: string }[]>;   // usa planWrites
-    writeArea(area: Area, db: number, start: number, data: Uint8Array): Promise<void>;  // usa splitWrite; errore item → S7Error CPU_ERROR
-    downloadBlock(file: Uint8Array): Promise<void>;   // legge header per type/number/lunghezze, runDownload, poi _INSE
+    writeItems(items: WriteItem[]): Promise<{ returnCode: number; name: string }[]>; // usa planWrites
+    writeArea(area: Area, db: number, start: number, data: Uint8Array): Promise<void>; // usa splitWrite; errore item → S7Error CPU_ERROR
+    downloadBlock(file: Uint8Array): Promise<void>; // legge header per type/number/lunghezze, runDownload, poi _INSE
     stop(): Promise<ControlResult>;
-    start(): Promise<ControlResult>;                  // warm restart
+    start(): Promise<ControlResult>; // warm restart
     close(): Promise<void>;
   }
-  export const connectWriteTcp: (o: Omit<ConnectOptions,'transport'|'mode'>) => Promise<S7WriteClient>;   // in ./node
+  export const connectWriteTcp: (
+    o: Omit<ConnectOptions, 'transport' | 'mode'>,
+  ) => Promise<S7WriteClient>; // in ./node
   ```
 
 Regole:
+
 - `S7WriteClient` apre la connessione **sempre** in `mode:'online-write'`. Il `S7Client` di lettura e il kit **restano invariati** e senza metodi di scrittura (Review Focus 1).
 - `downloadBlock`: ricava type/number/`loadLength`/`mc7Length` da `parseBlockFile(file)`, costruisce il request download, chiama `runDownload` fornendo le fette con `sliceBlockForDownload`, poi invia `_INSE`. Se la connessione cade a metà, rilancia `S7Error` e non ritenta da solo.
 - `stop`/`start` ritornano il `ControlResult` (anche "già STOP"/"già RUN" sono risultati, non eccezioni); un `0xD241` è invece `S7Error('CPU_ERROR')` riportato così com'è.
@@ -330,11 +482,21 @@ Regole:
 - [x] **Step 1: Scrivi i test che falliscano** (`writeClient.test.ts`, contro `FakeCpu`)
 
   ```ts
-  it('writeArea di 1000 byte su un DB poi readArea rilegge identico', async () => { /* split su più PDU */ });
-  it('downloadBlock di un blocco → upload dello stesso blocco identico byte per byte', async () => { /* … */ });
-  it('stop() → ControlResult ok e mode()==="STOP"; stop() di nuovo → "già STOP"', async () => { /* … */ });
-  it('start() → RUN; su CPU protetta 2 la writeArea dà S7Error CPU_ERROR 0xD241', async () => { /* … */ });
-  it('S7Client (lettura) non ha metodi di scrittura (chiavi del prototipo)', () => { /* invariato dal 1D */ });
+  it('writeArea di 1000 byte su un DB poi readArea rilegge identico', async () => {
+    /* split su più PDU */
+  });
+  it('downloadBlock di un blocco → upload dello stesso blocco identico byte per byte', async () => {
+    /* … */
+  });
+  it('stop() → ControlResult ok e mode()==="STOP"; stop() di nuovo → "già STOP"', async () => {
+    /* … */
+  });
+  it('start() → RUN; su CPU protetta 2 la writeArea dà S7Error CPU_ERROR 0xD241', async () => {
+    /* … */
+  });
+  it('S7Client (lettura) non ha metodi di scrittura (chiavi del prototipo)', () => {
+    /* invariato dal 1D */
+  });
   ```
 
 - [x] **Step 2: Esegui e verifica che falliscano**
@@ -347,31 +509,43 @@ Regole:
 ### Task 8: `s7bench`: comandi di scrittura con conferma e sicura anti-produzione
 
 **Files:**
+
 - Modify: `apps/s7bench/src/commands.ts` (nuovi comandi + il banner non è più "sola lettura"), `apps/s7bench/src/main.ts` (lettura conferma), `apps/s7bench/src/format.ts`
 - Test: aggiunte a `apps/s7bench/test/cli.test.ts`
 
 **Interfaces / comandi** (uscita in italiano; opzioni comuni del 1D più `--conferma` e `--non-in-produzione`):
 
-| Comando | Cosa fa |
-|---|---|
-| `scrivi <area> <db> <inizio> <esadecimale>` | write var dei byte indicati |
-| `carica-nel-dispositivo <file.blk>` | download del blocco nel file (formato `@baaportal/mc7`) e `_INSE` |
-| `stop` | PLC stop |
-| `avvia` | warm restart (RUN) |
+| Comando                                     | Cosa fa                                                           |
+| ------------------------------------------- | ----------------------------------------------------------------- |
+| `scrivi <area> <db> <inizio> <esadecimale>` | write var dei byte indicati                                       |
+| `carica-nel-dispositivo <file.blk>`         | download del blocco nel file (formato `@baaportal/mc7`) e `_INSE` |
+| `stop`                                      | PLC stop                                                          |
+| `avvia`                                     | warm restart (RUN)                                                |
 
 Regole:
-- **Conferma obbligatoria** (spec §4): ogni comando di scrittura, prima di agire, apre una connessione **di lettura**, legge identità (ordine) e modo, poi stampa un riepilogo — *cosa* fa, su *quale IP e ordine CPU*, in *quale modo* (RUN/STOP) — e procede **solo** se sono presenti sia `--conferma` sia `--non-in-produzione`. Senza, esce con codice 2 e il riepilogo di cosa avrebbe fatto.
+
+- **Conferma obbligatoria** (spec §4): ogni comando di scrittura, prima di agire, apre una connessione **di lettura**, legge identità (ordine) e modo, poi stampa un riepilogo — _cosa_ fa, su _quale IP e ordine CPU_, in _quale modo_ (RUN/STOP) — e procede **solo** se sono presenti sia `--conferma` sia `--non-in-produzione`. Senza, esce con codice 2 e il riepilogo di cosa avrebbe fatto.
 - Il comando `finto` ora avvia un finto PLC che **accetta** scrittura/download/stop-avvio (Task 5–6), così i comandi si provano da capo a fondo in locale.
 - Codici di uscita: 0 ok, 1 errore di comunicazione, 2 argomenti/conferma mancante, 3 come nel 1D. Gli errori su stderr con codice e messaggio di `S7Error`. Il banner di aiuto non dice più "sola lettura": elenca i comandi di lettura e, a parte, quelli di scrittura con l'avviso sulla conferma.
 
 - [x] **Step 1: Scrivi i test che falliscano** (`cli.test.ts`, avviando `finto` su porta libera)
 
   ```ts
-  it('scrivi senza --conferma → codice 2 e stampa il riepilogo (IP, ordine, modo), nessuna scrittura', async () => { /* … */ });
-  it('scrivi con --conferma --non-in-produzione cambia MW10; una successiva leggi lo conferma', async () => { /* … */ });
-  it('stop con conferma porta il finto PLC in STOP (info lo mostra)', async () => { /* … */ });
-  it('carica-nel-dispositivo di un .blk compilato → il blocco compare in blocchi', async () => { /* … */ });
-  it('host irraggiungibile → codice 1 CONNECT_REFUSED', async () => { /* … */ });
+  it('scrivi senza --conferma → codice 2 e stampa il riepilogo (IP, ordine, modo), nessuna scrittura', async () => {
+    /* … */
+  });
+  it('scrivi con --conferma --non-in-produzione cambia MW10; una successiva leggi lo conferma', async () => {
+    /* … */
+  });
+  it('stop con conferma porta il finto PLC in STOP (info lo mostra)', async () => {
+    /* … */
+  });
+  it('carica-nel-dispositivo di un .blk compilato → il blocco compare in blocchi', async () => {
+    /* … */
+  });
+  it('host irraggiungibile → codice 1 CONNECT_REFUSED', async () => {
+    /* … */
+  });
   ```
 
 - [x] **Step 2: Esegui e verifica che falliscano**
@@ -384,16 +558,18 @@ Regole:
 ### Task 9: Conformità, robustezza e confronto con le CPU vere (via scrittura/download)
 
 **Files:**
+
 - Create: `packages/s7-server/test/writeConformance.test.ts`, `packages/s7-server/test/downloadRoundtrip.test.ts`
 - Modify: `packages/s7comm/test/realCaptures.test.ts` (aggiunge write/stop/cold-start/download), `packages/s7comm/test/captures/public.json` (aggiunge, se mancano, la cattura del download e la write di libnodave con SHA-256)
 - Test: i file sopra
 
 Regole:
+
 - **Confronto con le CPU vere** (letto come documentazione, mai ridistribuito):
   - su `cisa/snap7.pcap` (in repo): per ogni write var, PLC stop e cold restart, `encodeS7(decodeS7(x))` è identico, e i codec di Task 1–2 ricostruiscono gli stessi byte;
   - sulla cattura del download (scaricata al momento, best-effort in CI): la sequenza `0x1A`/`0x1B`/`0x1C`/`_INSE` si decodifica e si ricodifica identica; `compareShape` confronta le PDU vere con quelle del finto PLC (struttura, non valori);
   - le catture assenti risultano saltate, col nome del file.
-- **Giro completo compilatore → PLC → ritorno** (è lo scopo del 1D-bis): si compila un blocco con `@baaportal/mc7` (`blockToMc7File`/`compileBlock`), lo si carica sul finto PLC con `S7WriteClient.downloadBlock`, lo si rilegge con `upload` e dev'essere **identico byte per byte**. Questo prova il giro senza CPU; la verifica *indipendente* su CPU reale resta in sospeso (vedi Task 10 e R6).
+- **Giro completo compilatore → PLC → ritorno** (è lo scopo del 1D-bis): si compila un blocco con `@baaportal/mc7` (`blockToMc7File`/`compileBlock`), lo si carica sul finto PLC con `S7WriteClient.downloadBlock`, lo si rilegge con `upload` e dev'essere **identico byte per byte**. Questo prova il giro senza CPU; la verifica _indipendente_ su CPU reale resta in sospeso (vedi Task 10 e R6).
 - **Robustezza:** download interrotto a metà → `CLOSED`, nessuna promessa appesa, blocco non inserito; write var oltre la PDU divisa correttamente; fuzz di 2000 PDU di scrittura/controllo verso il finto PLC senza crash e con sole `S7Error` lato client.
 
 - [x] **Step 1: Scrivi i test che falliscano**
@@ -407,9 +583,11 @@ Regole:
 ### Task 10: Limiti noti, piano generale, provenienza, versione e collaudo
 
 **Files:**
+
 - Modify: `docs/limiti-noti.md`, `docs/superpowers/plans/2026-10-18-baaportal-roadmap.md`, `apps/desktop/package.json` (versione), questo piano (caselle)
 
 Regole:
+
 - **`docs/limiti-noti.md`:**
   - togliere "1D-bis" dalle **mancanze aperte**: scrittura, download e stop/avvio esistono, verificati contro il finto PLC e contro i byte di `cisa/snap7.pcap` (write/stop/cold) e della cattura del download;
   - aggiornare la voce **"Prove di conformità su una CPU reale"**: ora c'è il mezzo per farle (download + esecuzione), ma **restano in sospeso** perché non c'è una CPU; le farà l'amico **a prodotto finito**. Il **punto di decisione** della spec §11 resta aperto;
@@ -427,10 +605,10 @@ Regole:
 
 ## Decisioni prese in questo piano (Rulings)
 
-- **R1. 1D-bis = nucleo + s7bench, senza interfaccia online nell'app.** La spec §6 mette l'interfaccia online alla tappa 3; il nucleo di `s7comm` (lettura/scrittura, carica nel/dal dispositivo, RUN/STOP) si costruisce in tappa 1 come strumento interno di test. Tabelle di controllo in scrittura, finestra di confronto e conferma, pulsanti RUN/STOP e modalità online dell'app sono tappa 3 (§8.4, roadmap 3B). *Se fosse sbagliato:* si porta avanti una parte della tappa 3; le decisioni restano valide. **→ Questa è la domanda principale da confermare alla revisione del piano.**
-- **R2. Client di scrittura separato; filtro sulla PDU per modo.** Il client di lettura e il kit restano in sola lettura e senza metodi di scrittura (proto §15.4). Il choke point del 1D resta l'unica uscita e diventa consapevole del modo; una connessione `read-only` non può emettere una scrittura nemmeno per un bug. *Se fosse sbagliato:* un controllo in più per frame, costo trascurabile.
-- **R3. Allowlist di scrittura ristretta.** Anche in `online-write` passano solo write var, download `0x1A`/`0x1B`/`0x1C`, `0x28` warm restart + `_INSE`, `0x29`. `_DELE`/`_GARB`/`_MODU`/MRES/force/set clock/cold-hot restart restano vietati. *Se fosse sbagliato:* la tappa 3 allarga l'allowlist.
-- **R4. Inversione dei ruoli confinata in `runDownload`.** Fuori dalla transazione di download, un job dalla CPU chiude ancora la connessione (comportamento 1D). Dentro, si risponde solo a `0x1B`/`0x1C`. *Se fosse sbagliato:* si sposta la logica, senza cambiare il contratto.
-- **R5. Conferma e sicura anti-produzione in s7bench.** La conferma mostra IP, ordine CPU e modo (spec §4) e richiede il riconoscimento "non in produzione" (spec §5). *Se fosse sbagliato:* in tappa 3 la stessa conferma diventa una finestra.
-- **R6. Conformità su CPU reale ancora in sospeso.** Niente CPU: tutto è verificato contro il finto PLC e i byte delle catture pubbliche. L'anello finale (la CPU accetta ed esegue un blocco compilato da BaaPortal, spec §10) lo farà l'amico a prodotto finito; il punto di decisione (spec §11) resta aperto. *Se fosse sbagliato:* niente, è un limite dichiarato.
-- **R7. Il finto PLC cambia stato da rete solo per l'allowlist di scrittura.** Write→memoria, download→blocco (solo dopo `_INSE`), stop/avvio→modo. Ogni altra funzione resta un errore. *Se fosse sbagliato:* si aggiunge il gestore mancante.
+- **R1. 1D-bis = nucleo + s7bench, senza interfaccia online nell'app.** La spec §6 mette l'interfaccia online alla tappa 3; il nucleo di `s7comm` (lettura/scrittura, carica nel/dal dispositivo, RUN/STOP) si costruisce in tappa 1 come strumento interno di test. Tabelle di controllo in scrittura, finestra di confronto e conferma, pulsanti RUN/STOP e modalità online dell'app sono tappa 3 (§8.4, roadmap 3B). _Se fosse sbagliato:_ si porta avanti una parte della tappa 3; le decisioni restano valide. **→ Questa è la domanda principale da confermare alla revisione del piano.**
+- **R2. Client di scrittura separato; filtro sulla PDU per modo.** Il client di lettura e il kit restano in sola lettura e senza metodi di scrittura (proto §15.4). Il choke point del 1D resta l'unica uscita e diventa consapevole del modo; una connessione `read-only` non può emettere una scrittura nemmeno per un bug. _Se fosse sbagliato:_ un controllo in più per frame, costo trascurabile.
+- **R3. Allowlist di scrittura ristretta.** Anche in `online-write` passano solo write var, download `0x1A`/`0x1B`/`0x1C`, `0x28` warm restart + `_INSE`, `0x29`. `_DELE`/`_GARB`/`_MODU`/MRES/force/set clock/cold-hot restart restano vietati. _Se fosse sbagliato:_ la tappa 3 allarga l'allowlist.
+- **R4. Inversione dei ruoli confinata in `runDownload`.** Fuori dalla transazione di download, un job dalla CPU chiude ancora la connessione (comportamento 1D). Dentro, si risponde solo a `0x1B`/`0x1C`. _Se fosse sbagliato:_ si sposta la logica, senza cambiare il contratto.
+- **R5. Conferma e sicura anti-produzione in s7bench.** La conferma mostra IP, ordine CPU e modo (spec §4) e richiede il riconoscimento "non in produzione" (spec §5). _Se fosse sbagliato:_ in tappa 3 la stessa conferma diventa una finestra.
+- **R6. Conformità su CPU reale ancora in sospeso.** Niente CPU: tutto è verificato contro il finto PLC e i byte delle catture pubbliche. L'anello finale (la CPU accetta ed esegue un blocco compilato da BaaPortal, spec §10) lo farà l'amico a prodotto finito; il punto di decisione (spec §11) resta aperto. _Se fosse sbagliato:_ niente, è un limite dichiarato.
+- **R7. Il finto PLC cambia stato da rete solo per l'allowlist di scrittura.** Write→memoria, download→blocco (solo dopo `_INSE`), stop/avvio→modo. Ogni altra funzione resta un errore. _Se fosse sbagliato:_ si aggiunge il gestore mancante.

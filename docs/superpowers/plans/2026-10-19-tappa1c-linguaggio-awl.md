@@ -5,6 +5,7 @@
 **Goal:** Nei segmenti dei blocchi OB/FB/FC si scrive codice AWL con evidenziazione, completamento e errori precisi. Tutte le istruzioni AWL dell'S7-300 sono riconosciute e controllate, insieme ai simboli, alle variabili locali, ai richiami di FB/FC/SFC/SFB e ai salti. Le sorgenti esterne AWL si importano, si generano dai blocchi e si riesportano identiche.
 
 **Architecture:**
+
 - Nuovo pacchetto `@baaportal/awl`, TypeScript puro: tabella delle istruzioni, lexer, parser, formattatore, conversione dei mnemonici, controllo semantico e completamento. Lavora su un contesto neutro, `AwlContext`, così non dipende dal modello di progetto.
 - `@baaportal/project` costruisce quel contesto dal modello, aggiorna i riferimenti nel codice quando si rinomina qualcosa e passa al formato `.baap` 3 con le sorgenti esterne.
 - Nuovo pacchetto `@baaportal/importers` (modulo della spec §7): sorgente AWL ↔ oggetti del modello.
@@ -14,6 +15,7 @@
 **Tech Stack:** quello dei piani 1A–1B, più CodeMirror 6 (`@codemirror/state`, `@codemirror/view`, `@codemirror/commands`, `@codemirror/autocomplete`, `@codemirror/lint`, `@codemirror/language`) in `@baaportal/ui`.
 
 **Spec:** `docs/superpowers/specs/2026-10-18-baaportal-design.md`:
+
 - §6 (compatibilità con gli strumenti Siemens);
 - §7 (moduli `awl`, `importers`);
 - §8.2 (Sorgenti esterne, Blocchi di sistema);
@@ -34,7 +36,7 @@ Piano generale: `docs/superpowers/plans/2026-10-18-baaportal-roadmap.md`, riga 1
   - valori sbagliati salvati e segnalati (R4 del piano 1B).
 - Istruzioni, operandi e sintassi delle sorgenti sono fatti tecnici e si prendono dai manuali pubblici Siemens: "Lista istruzioni (AWL) per S7-300 e S7-400", "Programmare con STEP 7", "Software di sistema per S7-300/400, funzioni standard e di sistema". I testi dei manuali non si copiano. I messaggi d'errore sono scritti da noi.
 - **Mnemonici:** si supportano sia l'internazionale (`A`, `JU`, `SD`, `I`, `Q`, `C`) sia il tedesco (`U`, `SPA`, `SE`, `E`, `A`, `Z`). Nel modello il codice è **sempre internazionale**. Il default dell'interfaccia è internazionale, coerente con gli indirizzi `%I`/`%Q` del piano 1B.
-- **Codice nei segmenti:** in 1C si controlla e basta, non si compila. "Compila", MC7 e *Informazioni → Compila* arrivano con il piano 1E.
+- **Codice nei segmenti:** in 1C si controlla e basta, non si compila. "Compila", MC7 e _Informazioni → Compila_ arrivano con il piano 1E.
 - **Sorgenti esterne:** sono nel formato di testo delle sorgenti AWL di STEP 7/TIA Portal. Le esportiamo in UTF-8 con BOM e righe CRLF. In importazione accettiamo:
   - con o senza BOM;
   - UTF-8 o Windows-1252;
@@ -48,6 +50,7 @@ Piano generale: `docs/superpowers/plans/2026-10-18-baaportal-roadmap.md`, riga 1
    - Rinominare un tag, un blocco, un UDT, un membro o una variabile locale aggiorna il codice di tutti i segmenti in un solo passo di annulla, senza toccare commenti, stringhe e nomi che solo si somigliano.
 
    Test: Task 2, Task 3, Task 5.
+
 2. **Sorgenti venute da strumenti veri**:
    - BOM, CRLF, accenti in Windows-1252;
    - mnemonici tedeschi;
@@ -58,17 +61,20 @@ Piano generale: `docs/superpowers/plans/2026-10-18-baaportal-roadmap.md`, riga 1
    Ci si aspetta un'importazione senza crash, errori con riga e colonna, e niente importato a metà: o tutto in un passo di annulla, o niente.
 
    Test: Task 6 e Task 9.
+
 3. **Blocchi grandi**: un segmento di 2000 righe e un blocco di 100 segmenti.
    - Scrivere resta fluido: il controllo è rimandato di 250 ms e richiede meno di 100 ms per 2000 righe.
    - L'evidenziazione non blocca.
 
    Test: Task 3 e Task 8.
+
 4. **Cambio di mnemonico**:
    - passando da internazionale a tedesco e ritorno, il codice salvato non cambia di un carattere;
    - i token sconosciuti, i commenti e i simboli restano intatti;
    - un errore di battitura non viene "convertito" in un'altra istruzione.
 
    Test: Task 2 e Task 8.
+
 5. **Salti, parentesi e richiami**:
    - etichette usate in un altro segmento dello stesso blocco: valide;
    - etichette doppie o mancanti: errore preciso;
@@ -121,76 +127,108 @@ apps/desktop/e2e/awl.spec.ts          NUOVO
 ### Task 1: `@baaportal/awl`: tabella delle istruzioni S7-300
 
 **Files:**
+
 - Create: `packages/awl/{package.json,tsconfig.json,vitest.config.ts}`, `packages/awl/src/{index,instructions}.ts`
 - Test: `packages/awl/test/instructions.test.ts`
 
 **Interfaces:**
+
 - Consumes: niente (dipendenza `@baaportal/s7-types` per i tipi usati nei task seguenti).
 - Produces:
   ```ts
   export type Mnemonic = 'international' | 'german';
-  export type InstructionCategory = 'bitLogic'|'comparison'|'conversion'|'counter'|'db'|'jump'|'integer'|'float'|'loadTransfer'|'control'|'shift'|'timer'|'wordLogic'|'accumulator';
+  export type InstructionCategory =
+    | 'bitLogic'
+    | 'comparison'
+    | 'conversion'
+    | 'counter'
+    | 'db'
+    | 'jump'
+    | 'integer'
+    | 'float'
+    | 'loadTransfer'
+    | 'control'
+    | 'shift'
+    | 'timer'
+    | 'wordLogic'
+    | 'accumulator';
   export type OperandClass =
-    | 'none' | 'bit' | 'status' | 'loadSource' | 'transferTarget' | 'timer' | 'counter'
-    | 'label' | 'callTarget' | 'ucTarget' | 'dbOpen' | 'intConstant' | 'shiftCount' | 'byteConstant'
-    | 'wordConstant' | 'dwordConstant' | 'pointerOrDword' | 'dwordLocation' | 'nopValue';
+    | 'none'
+    | 'bit'
+    | 'status'
+    | 'loadSource'
+    | 'transferTarget'
+    | 'timer'
+    | 'counter'
+    | 'label'
+    | 'callTarget'
+    | 'ucTarget'
+    | 'dbOpen'
+    | 'intConstant'
+    | 'shiftCount'
+    | 'byteConstant'
+    | 'wordConstant'
+    | 'dwordConstant'
+    | 'pointerOrDword'
+    | 'dwordLocation'
+    | 'nopValue';
   export interface InstructionDef {
-    id: string;                 // = mnemonico internazionale, es. 'A', 'A(', 'JU', 'SD', '==I', 'L', 'LAR1'
-    german: string;             // es. 'U', 'U(', 'SPA', 'SE', '==I'
+    id: string; // = mnemonico internazionale, es. 'A', 'A(', 'JU', 'SD', '==I', 'L', 'LAR1'
+    german: string; // es. 'U', 'U(', 'SPA', 'SE', '==I'
     category: InstructionCategory;
-    operands: OperandClass[];   // alternative ammesse; 'none' = senza operando
-    opensBracket?: boolean;     // A( AN( O( ON( X( XN(
-    closesBracket?: boolean;    // )
-    endsBlock?: 'always' | 'conditional';  // BE BEU / BEB
+    operands: OperandClass[]; // alternative ammesse; 'none' = senza operando
+    opensBracket?: boolean; // A( AN( O( ON( X( XN(
+    closesBracket?: boolean; // )
+    endsBlock?: 'always' | 'conditional'; // BE BEU / BEB
   }
   export const INSTRUCTIONS: readonly InstructionDef[];
   export function findInstruction(text: string, mnemonic: Mnemonic): InstructionDef | undefined; // senza distinzione di maiuscole
   export const AREA_MNEMONICS: ReadonlyMap<string, { international: string; german: string }>; // I/E Q/A PI/PE PQ/PA C/Z, con dimensioni (IB/EB, QW/AW, …)
-  export const STATUS_CONDITIONS: readonly { international: string; german: string }[];          // ==0 <>0 >0 <0 >=0 <=0 OV OS UO BR/BIE
+  export const STATUS_CONDITIONS: readonly { international: string; german: string }[]; // ==0 <>0 >0 <0 >=0 <=0 OV OS UO BR/BIE
   ```
 
 Contenuto: tutte le istruzioni dell'S7-300, per categoria (internazionale/tedesco). Va verificato sul manuale pubblico "Lista istruzioni (AWL)", che le elenca nei due mnemonici.
 
-| Categoria | Istruzioni |
-|---|---|
-| Logica a bit | `A/U` `AN/UN` `O` `ON` `X` `XN` `O` (solo) `A(/U(` `AN(/UN(` `O(` `ON(` `X(` `XN(` `)` `=` `R` `S` `NOT` `SET` `CLR` `SAVE` `FN` `FP` |
-| Confronto | `==I` `<>I` `>I` `<I` `>=I` `<=I`, e le stesse con `D` e `R` |
-| Conversione | `BTI` `ITB` `BTD` `ITD` `DTB` `DTR` `INVI` `INVD` `NEGI` `NEGD` `NEGR` `CAW/TAW` `CAD/TAD` `RND` `TRUNC` `RND+` `RND-` |
-| Contatori | `CU/ZV` `CD/ZR`, più `S` `R` `FR` `L` `LC` con operando contatore |
-| DB | `OPN/AUF` `CDB/TDB`, `L DBLG` `L DBNO` `L DILG` `L DINO` |
-| Salti | `JU/SPA` `JL/SPL` `JC/SPB` `JCN/SPBN` `JCB/SPBB` `JNB/SPBNB` `JBI/SPBI` `JNBI/SPBIN` `JO/SPO` `JOS/SPS` `JZ/SPZ` `JN/SPN` `JP/SPP` `JM/SPM` `JPZ/SPPZ` `JMZ/SPMZ` `JUO/SPU` `LOOP` |
-| Interi | `+I` `-I` `*I` `/I` `+` (costante) `+D` `-D` `*D` `/D` `MOD` |
-| Virgola mobile | `+R` `-R` `*R` `/R` `ABS` `SQR` `SQRT` `EXP` `LN` `SIN` `COS` `TAN` `ASIN` `ACOS` `ATAN` |
-| Caricamento e trasferimento | `L` `T` `L STW` `T STW` `LAR1` `LAR2` `TAR1` `TAR2` `CAR/TAR` `+AR1` `+AR2` |
-| Controllo del programma | `BE` `BEB` `BEU/BEA` `CALL` `CC` `UC` `MCR(` `)MCR` `MCRA` `MCRD` |
-| Scorrimento e rotazione | `SSI` `SSD` `SLW` `SRW` `SLD` `SRD` `RLD` `RRD` `RLDA` `RRDA` |
-| Temporizzatori | `SP/SI` `SE/SV` `SD/SE` `SS` `SF/SA`, più `R` `FR` `L` `LC` con operando temporizzatore. **Attenzione: `SE` vuol dire cose diverse nei due mnemonici.** |
-| Logica a parola | `AW/UW` `OW` `XOW` `AD/UD` `OD` `XOD` |
-| Accumulatori | `TAK` `PUSH` `POP` `ENT` `LEAVE` `INC` `DEC` `BLD` `NOP 0` `NOP 1` |
+| Categoria                   | Istruzioni                                                                                                                                                                         |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Logica a bit                | `A/U` `AN/UN` `O` `ON` `X` `XN` `O` (solo) `A(/U(` `AN(/UN(` `O(` `ON(` `X(` `XN(` `)` `=` `R` `S` `NOT` `SET` `CLR` `SAVE` `FN` `FP`                                              |
+| Confronto                   | `==I` `<>I` `>I` `<I` `>=I` `<=I`, e le stesse con `D` e `R`                                                                                                                       |
+| Conversione                 | `BTI` `ITB` `BTD` `ITD` `DTB` `DTR` `INVI` `INVD` `NEGI` `NEGD` `NEGR` `CAW/TAW` `CAD/TAD` `RND` `TRUNC` `RND+` `RND-`                                                             |
+| Contatori                   | `CU/ZV` `CD/ZR`, più `S` `R` `FR` `L` `LC` con operando contatore                                                                                                                  |
+| DB                          | `OPN/AUF` `CDB/TDB`, `L DBLG` `L DBNO` `L DILG` `L DINO`                                                                                                                           |
+| Salti                       | `JU/SPA` `JL/SPL` `JC/SPB` `JCN/SPBN` `JCB/SPBB` `JNB/SPBNB` `JBI/SPBI` `JNBI/SPBIN` `JO/SPO` `JOS/SPS` `JZ/SPZ` `JN/SPN` `JP/SPP` `JM/SPM` `JPZ/SPPZ` `JMZ/SPMZ` `JUO/SPU` `LOOP` |
+| Interi                      | `+I` `-I` `*I` `/I` `+` (costante) `+D` `-D` `*D` `/D` `MOD`                                                                                                                       |
+| Virgola mobile              | `+R` `-R` `*R` `/R` `ABS` `SQR` `SQRT` `EXP` `LN` `SIN` `COS` `TAN` `ASIN` `ACOS` `ATAN`                                                                                           |
+| Caricamento e trasferimento | `L` `T` `L STW` `T STW` `LAR1` `LAR2` `TAR1` `TAR2` `CAR/TAR` `+AR1` `+AR2`                                                                                                        |
+| Controllo del programma     | `BE` `BEB` `BEU/BEA` `CALL` `CC` `UC` `MCR(` `)MCR` `MCRA` `MCRD`                                                                                                                  |
+| Scorrimento e rotazione     | `SSI` `SSD` `SLW` `SRW` `SLD` `SRD` `RLD` `RRD` `RLDA` `RRDA`                                                                                                                      |
+| Temporizzatori              | `SP/SI` `SE/SV` `SD/SE` `SS` `SF/SA`, più `R` `FR` `L` `LC` con operando temporizzatore. **Attenzione: `SE` vuol dire cose diverse nei due mnemonici.**                            |
+| Logica a parola             | `AW/UW` `OW` `XOW` `AD/UD` `OD` `XOD`                                                                                                                                              |
+| Accumulatori                | `TAK` `PUSH` `POP` `ENT` `LEAVE` `INC` `DEC` `BLD` `NOP 0` `NOP 1`                                                                                                                 |
 
 Classi di operando, regole minime da codificare:
 
-| Classe | Istruzioni |
-|---|---|
-| `bit` e `status` | `A AN O ON X XN` |
-| `bit`, con `timer` e `counter` | `S R` (quando l'operando è T/C diventano le istruzioni dei temporizzatori/contatori) |
-| `bit` | `= FP FN` |
-| `loadSource` | `L` |
-| `transferTarget` | `T` |
-| `timer` | `SP SE SD SS SF FR LC` |
-| `counter` | `CU CD FR LC` |
-| `label` | tutti i salti e `LOOP` |
-| `callTarget` | `CALL` |
-| `ucTarget` | `UC CC` |
-| `dbOpen` | `OPN` |
-| `intConstant` | `+` |
-| `shiftCount` facoltativo | `SSI…RRD` (0–15 per parola, 0–32 per doppia parola) |
-| `byteConstant` | `INC DEC BLD` |
-| `wordConstant`/`dwordConstant` facoltative | logica a parola |
-| `pointerOrDword` facoltativo | `LAR1 LAR2 +AR1 +AR2` |
-| `dwordLocation` facoltativo | `TAR1 TAR2` |
-| `nopValue` (0/1) | `NOP` |
-| `none` | tutte le altre |
+| Classe                                     | Istruzioni                                                                           |
+| ------------------------------------------ | ------------------------------------------------------------------------------------ |
+| `bit` e `status`                           | `A AN O ON X XN`                                                                     |
+| `bit`, con `timer` e `counter`             | `S R` (quando l'operando è T/C diventano le istruzioni dei temporizzatori/contatori) |
+| `bit`                                      | `= FP FN`                                                                            |
+| `loadSource`                               | `L`                                                                                  |
+| `transferTarget`                           | `T`                                                                                  |
+| `timer`                                    | `SP SE SD SS SF FR LC`                                                               |
+| `counter`                                  | `CU CD FR LC`                                                                        |
+| `label`                                    | tutti i salti e `LOOP`                                                               |
+| `callTarget`                               | `CALL`                                                                               |
+| `ucTarget`                                 | `UC CC`                                                                              |
+| `dbOpen`                                   | `OPN`                                                                                |
+| `intConstant`                              | `+`                                                                                  |
+| `shiftCount` facoltativo                   | `SSI…RRD` (0–15 per parola, 0–32 per doppia parola)                                  |
+| `byteConstant`                             | `INC DEC BLD`                                                                        |
+| `wordConstant`/`dwordConstant` facoltative | logica a parola                                                                      |
+| `pointerOrDword` facoltativo               | `LAR1 LAR2 +AR1 +AR2`                                                                |
+| `dwordLocation` facoltativo                | `TAR1 TAR2`                                                                          |
+| `nopValue` (0/1)                           | `NOP`                                                                                |
+| `none`                                     | tutte le altre                                                                       |
 
 - [ ] **Step 1: Crea il pacchetto**
 
@@ -201,12 +239,56 @@ Classi di operando, regole minime da codificare:
   ```ts
   it('ogni istruzione ha id unico, mnemonico tedesco e almeno una classe di operando', () => {
     expect(new Set(INSTRUCTIONS.map((i) => i.id)).size).toBe(INSTRUCTIONS.length);
-    for (const i of INSTRUCTIONS) { expect(i.german).not.toBe(''); expect(i.operands.length).toBeGreaterThan(0); }
+    for (const i of INSTRUCTIONS) {
+      expect(i.german).not.toBe('');
+      expect(i.operands.length).toBeGreaterThan(0);
+    }
   });
   it('coppie note internazionale/tedesco', () => {
     const g = (id: string) => INSTRUCTIONS.find((i) => i.id === id)!.german;
-    expect(['A','AN','A(','JU','JC','JCN','SP','SE','SD','SF','CU','CD','OPN','CDB','BEU','CAW','CAR','AW','AD'].map(g))
-      .toEqual(['U','UN','U(','SPA','SPB','SPBN','SI','SV','SE','SA','ZV','ZR','AUF','TDB','BEA','TAW','TAR','UW','UD']);
+    expect(
+      [
+        'A',
+        'AN',
+        'A(',
+        'JU',
+        'JC',
+        'JCN',
+        'SP',
+        'SE',
+        'SD',
+        'SF',
+        'CU',
+        'CD',
+        'OPN',
+        'CDB',
+        'BEU',
+        'CAW',
+        'CAR',
+        'AW',
+        'AD',
+      ].map(g),
+    ).toEqual([
+      'U',
+      'UN',
+      'U(',
+      'SPA',
+      'SPB',
+      'SPBN',
+      'SI',
+      'SV',
+      'SE',
+      'SA',
+      'ZV',
+      'ZR',
+      'AUF',
+      'TDB',
+      'BEA',
+      'TAW',
+      'TAR',
+      'UW',
+      'UD',
+    ]);
   });
   it('findInstruction non distingue maiuscole e rispetta il mnemonico', () => {
     expect(findInstruction('a', 'international')?.id).toBe('A');
@@ -215,7 +297,9 @@ Classi di operando, regole minime da codificare:
     expect(findInstruction('SE', 'international')?.id).toBe('SE');
     expect(findInstruction('SE', 'german')?.id).toBe('SD');
   });
-  it('copre tutte le categorie della tabella del piano con almeno 160 voci', () => { /* conta per categoria; nessuna categoria vuota */ });
+  it('copre tutte le categorie della tabella del piano con almeno 160 voci', () => {
+    /* conta per categoria; nessuna categoria vuota */
+  });
   ```
 
 - [ ] **Step 3: Esegui e verifica che falliscano**
@@ -244,48 +328,111 @@ Classi di operando, regole minime da codificare:
 ### Task 2: `@baaportal/awl`: lexer, parser, forma canonica, conversione dei mnemonici
 
 **Files:**
+
 - Create: `packages/awl/src/{lexer,parser,format,mnemonics}.ts`
 - Test: `packages/awl/test/{lexer,parser,format,mnemonics}.test.ts`
 
 **Interfaces:**
+
 - Consumes: `INSTRUCTIONS`, `findInstruction`, `AREA_MNEMONICS`, `STATUS_CONDITIONS` (Task 1); `parseLiteral`, `parseType` (s7-types).
 - Produces:
   ```ts
-  export interface Pos { line: number; col: number; offset: number }    // line e col da 0
-  export interface Range { from: Pos; to: Pos }
-  export type TokenKind = 'word'|'number'|'literal'|'symbol'|'local'|'string'|'comment'|'punct'|'label'|'newline'|'unknown';
-  export interface Token { kind: TokenKind; text: string; range: Range }
+  export interface Pos {
+    line: number;
+    col: number;
+    offset: number;
+  } // line e col da 0
+  export interface Range {
+    from: Pos;
+    to: Pos;
+  }
+  export type TokenKind =
+    | 'word'
+    | 'number'
+    | 'literal'
+    | 'symbol'
+    | 'local'
+    | 'string'
+    | 'comment'
+    | 'punct'
+    | 'label'
+    | 'newline'
+    | 'unknown';
+  export interface Token {
+    kind: TokenKind;
+    text: string;
+    range: Range;
+  }
   export function lex(source: string): Token[];
-  export type AreaId = 'I'|'Q'|'M'|'PI'|'PQ'|'L'|'DB'|'DI'|'T'|'C';
+  export type AreaId = 'I' | 'Q' | 'M' | 'PI' | 'PQ' | 'L' | 'DB' | 'DI' | 'T' | 'C';
   export type Operand =
-    | { kind: 'address'; area: AreaId; size: 'X'|'B'|'W'|'D'|null; byte: number; bit?: number; db?: number; range: Range } // DB10.DBX 2.0 → area 'DB', db 10
-    | { kind: 'timerCounter'; area: 'T'|'C'; number: number; range: Range }
-    | { kind: 'symbol'; path: PathSegment[]; range: Range }      // "Tag", "DB".a.b[1]
-    | { kind: 'local'; path: PathSegment[]; range: Range }       // #a.b, #"nome con spazi"
-    | { kind: 'constant'; text: string; range: Range }           // 5, L#5, W#16#FF, S5T#1S, 'AB', P#M 0.0, B#(1,2), C#123, 1.5e+002
-    | { kind: 'indirect'; area: AreaId; size: 'X'|'B'|'W'|'D'|null; via: { kind: 'memory'; location: Operand } | { kind: 'register'; ar: 1|2; offset: string }; range: Range }
-    | { kind: 'block'; blockKind: 'FB'|'FC'|'SFB'|'SFC'|'DB'|'DI'; number: number; range: Range }
+    | {
+        kind: 'address';
+        area: AreaId;
+        size: 'X' | 'B' | 'W' | 'D' | null;
+        byte: number;
+        bit?: number;
+        db?: number;
+        range: Range;
+      } // DB10.DBX 2.0 → area 'DB', db 10
+    | { kind: 'timerCounter'; area: 'T' | 'C'; number: number; range: Range }
+    | { kind: 'symbol'; path: PathSegment[]; range: Range } // "Tag", "DB".a.b[1]
+    | { kind: 'local'; path: PathSegment[]; range: Range } // #a.b, #"nome con spazi"
+    | { kind: 'constant'; text: string; range: Range } // 5, L#5, W#16#FF, S5T#1S, 'AB', P#M 0.0, B#(1,2), C#123, 1.5e+002
+    | {
+        kind: 'indirect';
+        area: AreaId;
+        size: 'X' | 'B' | 'W' | 'D' | null;
+        via:
+          { kind: 'memory'; location: Operand } | { kind: 'register'; ar: 1 | 2; offset: string };
+        range: Range;
+      }
+    | {
+        kind: 'block';
+        blockKind: 'FB' | 'FC' | 'SFB' | 'SFC' | 'DB' | 'DI';
+        number: number;
+        range: Range;
+      }
     | { kind: 'labelRef'; name: string; range: Range }
-    | { kind: 'status'; condition: string; range: Range }        // ==0, OV, BR…
-    | { kind: 'special'; name: 'STW'|'DBLG'|'DBNO'|'DILG'|'DINO'; range: Range };
-  export interface PathSegment { name: string; quoted: boolean; index?: number[]; range: Range }
-  export interface CallParam { name: string; nameRange: Range; arrow: ':=' | '=>'; value: Operand | null; range: Range }
+    | { kind: 'status'; condition: string; range: Range } // ==0, OV, BR…
+    | { kind: 'special'; name: 'STW' | 'DBLG' | 'DBNO' | 'DILG' | 'DINO'; range: Range };
+  export interface PathSegment {
+    name: string;
+    quoted: boolean;
+    index?: number[];
+    range: Range;
+  }
+  export interface CallParam {
+    name: string;
+    nameRange: Range;
+    arrow: ':=' | '=>';
+    value: Operand | null;
+    range: Range;
+  }
   export interface Statement {
     label?: { name: string; range: Range };
     instruction: { text: string; def: InstructionDef | null; range: Range };
-    operand?: Operand;                    // per CALL: blocco e, dopo ',', il DB di istanza in instanceDb
+    operand?: Operand; // per CALL: blocco e, dopo ',', il DB di istanza in instanceDb
     instanceDb?: Operand;
     params?: CallParam[];
     comment?: string;
     range: Range;
   }
-  export interface ParseError { code: 'SYNTAX'|'UNKNOWN_INSTRUCTION'|'BAD_OPERAND'|'UNCLOSED_STRING'|'UNCLOSED_PARAMS'; range: Range; params?: Record<string, string> }
-  export function parseNetwork(source: string, mnemonic: Mnemonic): { statements: Statement[]; errors: ParseError[] };
-  export function formatNetwork(source: string, mnemonic: Mnemonic): string;  // forma canonica; testo non analizzabile lasciato com'è riga per riga
+  export interface ParseError {
+    code: 'SYNTAX' | 'UNKNOWN_INSTRUCTION' | 'BAD_OPERAND' | 'UNCLOSED_STRING' | 'UNCLOSED_PARAMS';
+    range: Range;
+    params?: Record<string, string>;
+  }
+  export function parseNetwork(
+    source: string,
+    mnemonic: Mnemonic,
+  ): { statements: Statement[]; errors: ParseError[] };
+  export function formatNetwork(source: string, mnemonic: Mnemonic): string; // forma canonica; testo non analizzabile lasciato com'è riga per riga
   export function convertMnemonics(source: string, from: Mnemonic, to: Mnemonic): string;
   ```
 
 Grammatica (manuale pubblico "Lista istruzioni (AWL)", sorgenti STEP 7 e AWL di TIA):
+
 - Una istruzione per riga. Il `;` finale è facoltativo, il `:` di etichetta è obbligatorio. Le etichette hanno al massimo 4 caratteri alfanumerici e iniziano con una lettera (`M001:`). Commenti: da `//` a fine riga. Righe vuote ammesse.
 - **Operandi assoluti:**
   - spazio facoltativo tra area e numero, `%` facoltativo (`A %I0.0`, `A I 0.0`);
@@ -315,7 +462,7 @@ Grammatica (manuale pubblico "Lista istruzioni (AWL)", sorgenti STEP 7 e AWL di 
   - indirizzi senza spazi interni, nel formato TIA `%I0.0` e `%DB10.DBX2.0`;
   - simboli come scritti;
   - `;` finale;
-  - commento separato da ` // `;
+  - commento separato da `//`;
   - parametri di CALL uno per riga, con 3 spazi di rientro e `:=`/`=>` allineati al nome più lungo.
 - **`convertMnemonics`:** cambia solo i token riconosciuti come istruzione, area o condizione di stato nel mnemonico di partenza. Commenti, stringhe, simboli, locali e token sconosciuti non si toccano. `convertMnemonics(convertMnemonics(s, a, b), b, a) === s` per ogni testo senza token ambigui, con test su tutte le fixture.
 
@@ -323,22 +470,53 @@ Grammatica (manuale pubblico "Lista istruzioni (AWL)", sorgenti STEP 7 e AWL di 
 
   ```ts
   it('analizza istruzioni, etichette, commenti e operandi', () => {
-    const { statements, errors } = parseNetwork('M001: A %I0.0 // avvio\n      AN "Stop"\n      = #Uscita.bit;\n      JC M001', 'international');
+    const { statements, errors } = parseNetwork(
+      'M001: A %I0.0 // avvio\n      AN "Stop"\n      = #Uscita.bit;\n      JC M001',
+      'international',
+    );
     expect(errors).toEqual([]);
-    expect(statements.map((s) => [s.label?.name ?? '', s.instruction.def?.id, s.operand?.kind])).toEqual([['M001','A','address'], ['','AN','symbol'], ['','=','local'], ['','JC','labelRef']]);
+    expect(
+      statements.map((s) => [s.label?.name ?? '', s.instruction.def?.id, s.operand?.kind]),
+    ).toEqual([
+      ['M001', 'A', 'address'],
+      ['', 'AN', 'symbol'],
+      ['', '=', 'local'],
+      ['', 'JC', 'labelRef'],
+    ]);
   });
-  it('indirizzi indiretti e qualificati', () => { /* 'L DB10.DBW 4', 'A I [MD 2]', 'T W [AR1, P#2.0]', 'OPN DB [MW 2]' → kind e campi attesi */ });
+  it('indirizzi indiretti e qualificati', () => {
+    /* 'L DB10.DBW 4', 'A I [MD 2]', 'T W [AR1, P#2.0]', 'OPN DB [MW 2]' → kind e campi attesi */
+  });
   it('CALL con istanza e parametri su più righe, := e =>', () => {
-    const { statements } = parseNetwork('CALL "Nastro", "Nastro_DB"\n(  Avvio := %I0.0,\n   Errore => %M10.0\n);', 'international');
-    expect(statements[0]!.params!.map((p) => [p.name, p.arrow])).toEqual([['Avvio', ':='], ['Errore', '=>']]);
+    const { statements } = parseNetwork(
+      'CALL "Nastro", "Nastro_DB"\n(  Avvio := %I0.0,\n   Errore => %M10.0\n);',
+      'international',
+    );
+    expect(statements[0]!.params!.map((p) => [p.name, p.arrow])).toEqual([
+      ['Avvio', ':='],
+      ['Errore', '=>'],
+    ]);
   });
-  it('mnemonico tedesco', () => { /* 'U E 0.0\nSPB M1\nSE T 1' con 'german' → A, JC, SD */ });
+  it('mnemonico tedesco', () => {
+    /* 'U E 0.0\nSPB M1\nSE T 1' con 'german' → A, JC, SD */
+  });
   it('istruzione sconosciuta: errore con posizione esatta', () => {
-    expect(parseNetwork('A I0.0\nXYZ M0.0', 'international').errors).toEqual([expect.objectContaining({ code: 'UNKNOWN_INSTRUCTION', range: expect.objectContaining({ from: expect.objectContaining({ line: 1, col: 0 }) }) })]);
+    expect(parseNetwork('A I0.0\nXYZ M0.0', 'international').errors).toEqual([
+      expect.objectContaining({
+        code: 'UNKNOWN_INSTRUCTION',
+        range: expect.objectContaining({ from: expect.objectContaining({ line: 1, col: 0 }) }),
+      }),
+    ]);
   });
-  it('formatNetwork produce la forma canonica e si rilegge identica', () => { /* fixture → format(format(x)) === format(x) */ });
-  it('convertMnemonics andata e ritorno su tutte le fixture; commenti e simboli intatti', () => { /* … '"U" // U' resta */ });
-  it('2000 righe si analizzano in meno di 100 ms', () => { /* soglia di prova 1000 ms per la CI */ });
+  it('formatNetwork produce la forma canonica e si rilegge identica', () => {
+    /* fixture → format(format(x)) === format(x) */
+  });
+  it('convertMnemonics andata e ritorno su tutte le fixture; commenti e simboli intatti', () => {
+    /* … '"U" // U' resta */
+  });
+  it('2000 righe si analizzano in meno di 100 ms', () => {
+    /* soglia di prova 1000 ms per la CI */
+  });
   ```
 
 - [ ] **Step 2: Esegui e verifica che falliscano**
@@ -367,40 +545,119 @@ Grammatica (manuale pubblico "Lista istruzioni (AWL)", sorgenti STEP 7 e AWL di 
 ### Task 3: `@baaportal/awl`: contesto, controllo semantico, completamento, rinomina nel testo
 
 **Files:**
+
 - Create: `packages/awl/src/{context,check,complete,rename}.ts`
 - Test: `packages/awl/test/{check,complete,rename}.test.ts`
 
 **Interfaces:**
+
 - Consumes: Task 1–2; `DataType`, `TypedMember`, `TypeResolver`, `parseType`, `parseLiteral`, `sameName`, `addressFitsType` (s7-types).
 - Produces:
   ```ts
-  export interface AwlInterface { input: TypedMember[]; output: TypedMember[]; inOut: TypedMember[]; static: TypedMember[]; temp: TypedMember[]; returnType: DataType | null }
-  export interface AwlBlockInfo { name: string; kind: 'OB'|'FB'|'FC'|'DB'|'IDB'|'SFC'|'SFB'; number: number; iface?: AwlInterface; dbMembers?: TypedMember[]; instanceOf?: string }
-  export interface AwlContext {
-    owner: { kind: 'OB'|'FB'|'FC'; iface: AwlInterface };
-    symbol(name: string): { kind: 'tag' | 'constant'; type: DataType | null } | undefined;   // sameName
-    block(ref: { name: string } | { kind: AwlBlockInfo['kind']; number: number }): AwlBlockInfo | undefined;
-    resolve: TypeResolver;
-    limits?: { timers: number; counters: number; mBytes: number; inputBytes: number; outputBytes: number };
+  export interface AwlInterface {
+    input: TypedMember[];
+    output: TypedMember[];
+    inOut: TypedMember[];
+    static: TypedMember[];
+    temp: TypedMember[];
+    returnType: DataType | null;
   }
-  export type AwlCode = 'SYNTAX'|'UNKNOWN_INSTRUCTION'|'BAD_OPERAND'|'OPERAND_MISSING'|'OPERAND_NOT_ALLOWED'|'TYPE_MISMATCH'
-    | 'UNKNOWN_SYMBOL'|'UNKNOWN_LOCAL'|'UNKNOWN_MEMBER'|'UNKNOWN_BLOCK'|'UNKNOWN_LABEL'|'DUPLICATE_LABEL'|'LABEL_TOO_LONG'
-    | 'BRACKET_UNCLOSED'|'BRACKET_UNEXPECTED'|'BRACKET_DEPTH'|'MCR_DEPTH'|'ADDRESS_OUT_OF_RANGE'
-    | 'CALL_PARAM_MISSING'|'CALL_PARAM_UNKNOWN'|'CALL_PARAM_TYPE'|'CALL_PARAM_DIRECTION'|'CALL_INSTANCE_MISSING'|'CALL_INSTANCE_WRONG'
-    | 'LOCAL_NOT_ACCESSIBLE'|'CONSTANT_OUT_OF_RANGE';
-  export interface AwlDiagnostic { severity: 'error'|'warning'; code: AwlCode; network: number; range: Range; params?: Record<string, string> }
-  export function checkBlockCode(networks: string[], ctx: AwlContext, mnemonic: Mnemonic): AwlDiagnostic[];
-  export interface Completion { label: string; kind: 'instruction'|'tag'|'constant'|'local'|'member'|'block'|'label'|'param'; detail?: string; apply: string }
-  export function completeAt(networks: string[], network: number, offset: number, ctx: AwlContext, mnemonic: Mnemonic): { from: number; options: Completion[] };
+  export interface AwlBlockInfo {
+    name: string;
+    kind: 'OB' | 'FB' | 'FC' | 'DB' | 'IDB' | 'SFC' | 'SFB';
+    number: number;
+    iface?: AwlInterface;
+    dbMembers?: TypedMember[];
+    instanceOf?: string;
+  }
+  export interface AwlContext {
+    owner: { kind: 'OB' | 'FB' | 'FC'; iface: AwlInterface };
+    symbol(name: string): { kind: 'tag' | 'constant'; type: DataType | null } | undefined; // sameName
+    block(
+      ref: { name: string } | { kind: AwlBlockInfo['kind']; number: number },
+    ): AwlBlockInfo | undefined;
+    resolve: TypeResolver;
+    limits?: {
+      timers: number;
+      counters: number;
+      mBytes: number;
+      inputBytes: number;
+      outputBytes: number;
+    };
+  }
+  export type AwlCode =
+    | 'SYNTAX'
+    | 'UNKNOWN_INSTRUCTION'
+    | 'BAD_OPERAND'
+    | 'OPERAND_MISSING'
+    | 'OPERAND_NOT_ALLOWED'
+    | 'TYPE_MISMATCH'
+    | 'UNKNOWN_SYMBOL'
+    | 'UNKNOWN_LOCAL'
+    | 'UNKNOWN_MEMBER'
+    | 'UNKNOWN_BLOCK'
+    | 'UNKNOWN_LABEL'
+    | 'DUPLICATE_LABEL'
+    | 'LABEL_TOO_LONG'
+    | 'BRACKET_UNCLOSED'
+    | 'BRACKET_UNEXPECTED'
+    | 'BRACKET_DEPTH'
+    | 'MCR_DEPTH'
+    | 'ADDRESS_OUT_OF_RANGE'
+    | 'CALL_PARAM_MISSING'
+    | 'CALL_PARAM_UNKNOWN'
+    | 'CALL_PARAM_TYPE'
+    | 'CALL_PARAM_DIRECTION'
+    | 'CALL_INSTANCE_MISSING'
+    | 'CALL_INSTANCE_WRONG'
+    | 'LOCAL_NOT_ACCESSIBLE'
+    | 'CONSTANT_OUT_OF_RANGE';
+  export interface AwlDiagnostic {
+    severity: 'error' | 'warning';
+    code: AwlCode;
+    network: number;
+    range: Range;
+    params?: Record<string, string>;
+  }
+  export function checkBlockCode(
+    networks: string[],
+    ctx: AwlContext,
+    mnemonic: Mnemonic,
+  ): AwlDiagnostic[];
+  export interface Completion {
+    label: string;
+    kind: 'instruction' | 'tag' | 'constant' | 'local' | 'member' | 'block' | 'label' | 'param';
+    detail?: string;
+    apply: string;
+  }
+  export function completeAt(
+    networks: string[],
+    network: number,
+    offset: number,
+    ctx: AwlContext,
+    mnemonic: Mnemonic,
+  ): { from: number; options: Completion[] };
   export type RenameTarget =
-    | { kind: 'symbol'; oldName: string }                  // tag, costante, blocco, DB, UDT? (gli UDT non compaiono nel codice)
-    | { kind: 'member'; root: 'symbol' | 'local'; rootName: string | null; path: string[]; oldName: string } // "DB".a.old / #a.old; rootName null = qualsiasi
+    | { kind: 'symbol'; oldName: string } // tag, costante, blocco, DB, UDT? (gli UDT non compaiono nel codice)
+    | {
+        kind: 'member';
+        root: 'symbol' | 'local';
+        rootName: string | null;
+        path: string[];
+        oldName: string;
+      } // "DB".a.old / #a.old; rootName null = qualsiasi
     | { kind: 'local'; oldName: string }
     | { kind: 'callParam'; block: string; oldName: string }; // nomi dei parametri nei CALL di quel blocco
-  export function renameInSource(source: string, target: RenameTarget, newName: string, mnemonic: Mnemonic): string; // invariato se non c'è nulla
+  export function renameInSource(
+    source: string,
+    target: RenameTarget,
+    newName: string,
+    mnemonic: Mnemonic,
+  ): string; // invariato se non c'è nulla
   ```
 
 Regole del controllo (`checkBlockCode`):
+
 - **Etichette:** valide in tutto il blocco, anche tra segmenti. Errori: doppie (`DUPLICATE_LABEL` su ogni copia), usate e non definite (`UNKNOWN_LABEL`), oltre 4 caratteri (`LABEL_TOO_LONG`).
 - **Parentesi:** `A( … )` al massimo 7 livelli per segmento (`BRACKET_DEPTH`); una `)` senza apertura dà `BRACKET_UNEXPECTED`, un'apertura mai chiusa a fine segmento dà `BRACKET_UNCLOSED`. `MCR(` `)MCR` al massimo 8 livelli (`MCR_DEPTH`).
 - **Classe dell'operando**, dopo la risoluzione del suo tipo:
@@ -409,6 +666,7 @@ Regole del controllo (`checkBlockCode`):
   - `transferTarget` = come `loadSource` ma senza costanti e puntatori.
 
   Un tipo complesso (Struct, Array, UDT, String, Date_And_Time) usato come `L`/`T` dà `TYPE_MISMATCH`. Un operando in una classe non ammessa dà `OPERAND_NOT_ALLOWED`; operando assente dove serve, `OPERAND_MISSING`.
+
 - **Simboli:**
   - `"X"` cerca tag o costante, oppure un blocco o DB per nome; non trovato → `UNKNOWN_SYMBOL`;
   - `"DB".a.b` risolve i membri del DB globale o dell'interfaccia dell'FB del DB di istanza; membro sbagliato → `UNKNOWN_MEMBER` sul segmento;
@@ -426,6 +684,7 @@ Regole del controllo (`checkBlockCode`):
 - **Gli errori del parser** diventano diagnostica con lo stesso codice.
 
 Completamento (`completeAt`):
+
 - inizio riga o dopo un'etichetta: istruzioni nel mnemonico scelto;
 - dopo `"` o in posizione di operando: tag, costanti, blocchi, DB;
 - dopo `#`: locali;
@@ -436,6 +695,7 @@ Completamento (`completeAt`):
 Ordine dei candidati: per tipo, poi per nome. `apply` mette le virgolette dove servono.
 
 Rinomina (`renameInSource`): lavora sui token e sostituisce solo:
+
 - i simboli il cui nome è uguale (`sameName`);
 - il segmento di percorso giusto;
 - i locali e i nomi dei parametri dei CALL a quel blocco.
@@ -448,23 +708,52 @@ Il nuovo nome si scrive tra virgolette se contiene caratteri non identificatori 
 
   ```ts
   it('salti tra segmenti, etichette doppie e mancanti', () => {
-    expect(codes(checkBlockCode(['JU M1', 'M1: NOP 0', 'JC M2\nM1: NOP 0'], ctx, 'international'))).toEqual(['UNKNOWN_LABEL', 'DUPLICATE_LABEL', 'DUPLICATE_LABEL']);
+    expect(
+      codes(checkBlockCode(['JU M1', 'M1: NOP 0', 'JC M2\nM1: NOP 0'], ctx, 'international')),
+    ).toEqual(['UNKNOWN_LABEL', 'DUPLICATE_LABEL', 'DUPLICATE_LABEL']);
   });
-  it('parentesi: non chiusa, inattesa, oltre 7 livelli', () => { /* … */ });
-  it('classi di operando: L di un Bool, T di una costante, A di una parola', () => { /* TYPE_MISMATCH, OPERAND_NOT_ALLOWED, OPERAND_NOT_ALLOWED */ });
+  it('parentesi: non chiusa, inattesa, oltre 7 livelli', () => {
+    /* … */
+  });
+  it('classi di operando: L di un Bool, T di una costante, A di una parola', () => {
+    /* TYPE_MISMATCH, OPERAND_NOT_ALLOWED, OPERAND_NOT_ALLOWED */
+  });
   it('simboli con spazi e accenti, maiuscole diverse, membri di DB', () => {
     // L di un Int e T su un Real sono ammessi (AWL non controlla la larghezza tra L e T): resta solo il membro sbagliato
-    expect(checkBlockCode(['L "VELOCITÀ NASTRO"\nT "Dati".Asse.Pos\nL "Dati".Asse.Manca'], ctx, 'international').map((d) => d.code)).toEqual(['UNKNOWN_MEMBER']);
+    expect(
+      checkBlockCode(
+        ['L "VELOCITÀ NASTRO"\nT "Dati".Asse.Pos\nL "Dati".Asse.Manca'],
+        ctx,
+        'international',
+      ).map((d) => d.code),
+    ).toEqual(['UNKNOWN_MEMBER']);
   });
-  it('CALL: FC con parametro mancante, tipo sbagliato, direzione sbagliata; FB senza istanza', () => { /* … */ });
-  it('SFC dal contesto: CALL "READ_CLK" valido con tutti i parametri', () => { /* … */ });
-  it('completamento dopo #, dopo "Dati".Asse., dopo JU, dentro CALL', () => { /* … */ });
+  it('CALL: FC con parametro mancante, tipo sbagliato, direzione sbagliata; FB senza istanza', () => {
+    /* … */
+  });
+  it('SFC dal contesto: CALL "READ_CLK" valido con tutti i parametri', () => {
+    /* … */
+  });
+  it('completamento dopo #, dopo "Dati".Asse., dopo JU, dentro CALL', () => {
+    /* … */
+  });
   it('renameInSource tocca solo i riferimenti giusti', () => {
     const src = 'A "Avvio" // "Avvio" nel commento\nA "Avvio1"\nL "Dati".Asse.Pos';
-    expect(renameInSource(src, { kind: 'symbol', oldName: 'avvio' }, 'Start', 'international')).toBe('A "Start" // "Avvio" nel commento\nA "Avvio1"\nL "Dati".Asse.Pos');
-    expect(renameInSource(src, { kind: 'member', root: 'symbol', rootName: 'Dati', path: ['Asse'], oldName: 'Pos' }, 'Posizione', 'international')).toContain('"Dati".Asse.Posizione');
+    expect(
+      renameInSource(src, { kind: 'symbol', oldName: 'avvio' }, 'Start', 'international'),
+    ).toBe('A "Start" // "Avvio" nel commento\nA "Avvio1"\nL "Dati".Asse.Pos');
+    expect(
+      renameInSource(
+        src,
+        { kind: 'member', root: 'symbol', rootName: 'Dati', path: ['Asse'], oldName: 'Pos' },
+        'Posizione',
+        'international',
+      ),
+    ).toContain('"Dati".Asse.Posizione');
   });
-  it('controllo di un blocco di 100 segmenti × 20 righe in meno di 100 ms', () => { /* soglia di prova 2000 ms per la CI */ });
+  it('controllo di un blocco di 100 segmenti × 20 righe in meno di 100 ms', () => {
+    /* soglia di prova 2000 ms per la CI */
+  });
   ```
 
 - [ ] **Step 2: Esegui e verifica che falliscano**
@@ -491,20 +780,35 @@ Il nuovo nome si scrive tra virgolette se contiene caratteri non identificatori 
 ### Task 4: Catalogo SFC/SFB e SFB come tipo d'istanza
 
 **Files:**
+
 - Create: `packages/catalog/src/systemBlocks.ts`
 - Modify: `packages/catalog/src/index.ts`, `packages/project/src/{members,checks}.ts`
 - Test: `packages/catalog/test/systemBlocks.test.ts`, `packages/project/test/checks.test.ts`
 
 **Interfaces:**
+
 - Consumes: `TypedMember`, `parseType` (s7-types); `typeResolver`, `checkDevice` (piano 1B).
 - Produces:
   ```ts
-  export interface SystemBlock { kind: 'SFC' | 'SFB'; number: number; name: string; input: TypedMember[]; output: TypedMember[]; inOut: TypedMember[]; static?: TypedMember[]; returnType?: string; source: string }
+  export interface SystemBlock {
+    kind: 'SFC' | 'SFB';
+    number: number;
+    name: string;
+    input: TypedMember[];
+    output: TypedMember[];
+    inOut: TypedMember[];
+    static?: TypedMember[];
+    returnType?: string;
+    source: string;
+  }
   export const SYSTEM_BLOCKS: readonly SystemBlock[];
-  export function findSystemBlock(ref: { name: string } | { kind: 'SFC' | 'SFB'; number: number }): SystemBlock | undefined;
+  export function findSystemBlock(
+    ref: { name: string } | { kind: 'SFC' | 'SFB'; number: number },
+  ): SystemBlock | undefined;
   ```
 
 Regole:
+
 - Tutte le SFC/SFB dell'S7-300 del manuale pubblico "Software di sistema per S7-300/400, funzioni standard e di sistema", con numero, nome, parametri (nome, sezione, tipo) e tipo di `RET_VAL`. Esempi: SFC 0 `SET_CLK`, SFC 1 `READ_CLK`, SFC 20 `BLKMOV`, SFC 21 `FILL`; SFB 0–5 `CTU`/`CTD`/`CTUD`/`TP`/`TON`/`TOF`.
 - Una per voce, con `source`.
 - Niente commenti copiati.
@@ -518,11 +822,18 @@ Regole:
   ```ts
   it('SFB 4 TON e SFC 1 READ_CLK con le interfacce attese', () => {
     expect(findSystemBlock({ kind: 'SFB', number: 4 })!.name).toBe('TON');
-    expect(sig(findSystemBlock({ name: 'TON' })!)).toEqual({ input: ['IN:Bool', 'PT:Time'], output: ['Q:Bool', 'ET:Time'] });
+    expect(sig(findSystemBlock({ name: 'TON' })!)).toEqual({
+      input: ['IN:Bool', 'PT:Time'],
+      output: ['Q:Bool', 'ET:Time'],
+    });
     expect(findSystemBlock({ name: 'READ_CLK' })!.returnType).toBe('Int');
   });
-  it('numeri e nomi unici per tipo, tipi validi, fonte presente', () => { /* … */ });
-  it('DB di istanza di SFB e multi-istanza "TON" senza errori', () => { /* checkDevice */ });
+  it('numeri e nomi unici per tipo, tipi validi, fonte presente', () => {
+    /* … */
+  });
+  it('DB di istanza di SFB e multi-istanza "TON" senza errori', () => {
+    /* checkDevice */
+  });
   ```
 
 - [ ] **Step 2: Esegui e verifica che falliscano**
@@ -551,22 +862,33 @@ Regole:
 ### Task 5: `@baaportal/project`: contesto AWL, rinomina nel codice, formato 3 con sorgenti esterne
 
 **Files:**
+
 - Create: `packages/project/src/awlContext.ts`
 - Modify: `packages/project/src/{model,baapFile,plc,memberRename,index}.ts`, `packages/project/package.json` (dipendenza `@baaportal/awl`)
 - Test: `packages/project/test/{awlContext,codeRename,baapFileV3}.test.ts`
 
 **Interfaces:**
+
 - Consumes: Task 3 (`AwlContext`, `renameInSource`), Task 4 (`findSystemBlock`, `SYSTEM_BLOCKS`).
 - Produces:
   ```ts
   export const FORMAT_VERSION = 3;
-  export interface ExternalSource { id: string; name: string; text: string }   // name: nome di file, es. 'Motori.awl'
+  export interface ExternalSource {
+    id: string;
+    name: string;
+    text: string;
+  } // name: nome di file, es. 'Motori.awl'
   // PlcDevice: + sources: ExternalSource[];  ObjectRef: + { kind: 'source'; deviceId: string; id: string }
-  export function createAwlContext(device: PlcDevice, blockId: string, cpu: CpuType | undefined): AwlContext;
+  export function createAwlContext(
+    device: PlcDevice,
+    blockId: string,
+    cpu: CpuType | undefined,
+  ): AwlContext;
   export function createSource(name: string, text: string, newId?: NewId): ExternalSource;
   ```
 
 Regole:
+
 - **Formato 3:**
   - `device.json` aggiunge `sources: [{ id, name }]` in ordine;
   - il testo sta in `plc/<dev>/sources/<id>.awl`, in UTF-8 senza BOM, come scritto;
@@ -592,11 +914,21 @@ Regole:
 - [ ] **Step 1: Scrivi i test che falliscono**
 
   ```ts
-  it('formato 2 si apre con sources [], formato 3 andata e ritorno con il testo identico', () => { /* testo con accenti e CRLF */ });
-  it('rinominare un tag aggiorna il codice di tutti i segmenti in un passo', () => { /* device con 2 FB che usano "Avvio" */ });
-  it('rinominare un parametro di FB aggiorna i CALL dei chiamanti e #param dentro l\'FB', () => { /* … */ });
-  it('rinominare un membro di UDT tocca solo i percorsi di quel tipo', () => { /* "Dati".Asse.Pos (Asse: "Asse") sì, "Altro".Pos no */ });
-  it('createAwlContext: simboli, blocchi, SFC/SFB, locali dell\'OB1', () => { /* … */ });
+  it('formato 2 si apre con sources [], formato 3 andata e ritorno con il testo identico', () => {
+    /* testo con accenti e CRLF */
+  });
+  it('rinominare un tag aggiorna il codice di tutti i segmenti in un passo', () => {
+    /* device con 2 FB che usano "Avvio" */
+  });
+  it("rinominare un parametro di FB aggiorna i CALL dei chiamanti e #param dentro l'FB", () => {
+    /* … */
+  });
+  it('rinominare un membro di UDT tocca solo i percorsi di quel tipo', () => {
+    /* "Dati".Asse.Pos (Asse: "Asse") sì, "Altro".Pos no */
+  });
+  it("createAwlContext: simboli, blocchi, SFC/SFB, locali dell'OB1", () => {
+    /* … */
+  });
   ```
 
 - [ ] **Step 2: Esegui e verifica che falliscano**
@@ -623,28 +955,73 @@ Regole:
 ### Task 6: `@baaportal/importers`: sorgenti esterne AWL ↔ oggetti del modello
 
 **Files:**
+
 - Create: `packages/importers/{package.json,tsconfig.json,vitest.config.ts}`, `packages/importers/src/{index.ts,awlSource/decode.ts,awlSource/parse.ts,awlSource/generate.ts}`
 - Test: `packages/importers/test/{decode,awlSourceParse,awlSourceGenerate,roundTrip}.test.ts`, `packages/importers/test/fixtures/*.awl`
 
 **Interfaces:**
+
 - Consumes: `@baaportal/awl` (lexer, `parseNetwork`, `formatNetwork`, `convertMnemonics`, `Mnemonic`); modello e creatori del piano 1B (`createCodeBlock`, `createGlobalDb`, `createInstanceDb`, `createUdt`, `Member`, `nextFreeNumber`).
 - Produces:
   ```ts
-  export function decodeSourceBytes(bytes: Uint8Array): { text: string; encoding: 'utf-8' | 'utf-8-bom' | 'windows-1252' };
-  export function encodeSourceText(text: string): Uint8Array;            // UTF-8 con BOM, CRLF
-  export interface SourceError { line: number; col: number; code: string; params?: Record<string, string> } // line/col da 1, per i messaggi
-  export interface ParsedSource { mnemonic: Mnemonic; units: SourceUnit[] }
+  export function decodeSourceBytes(bytes: Uint8Array): {
+    text: string;
+    encoding: 'utf-8' | 'utf-8-bom' | 'windows-1252';
+  };
+  export function encodeSourceText(text: string): Uint8Array; // UTF-8 con BOM, CRLF
+  export interface SourceError {
+    line: number;
+    col: number;
+    code: string;
+    params?: Record<string, string>;
+  } // line/col da 1, per i messaggi
+  export interface ParsedSource {
+    mnemonic: Mnemonic;
+    units: SourceUnit[];
+  }
   export type SourceUnit =
-    | { kind: 'UDT'; name: string; number?: number; udt: Omit<Udt, 'id' | 'number' | 'group'> & { number?: number } }
-    | { kind: 'OB'|'FB'|'FC'; name: string; number?: number; block: Omit<CodeBlock, 'id' | 'group' | 'number'> & { number?: number } }
-    | { kind: 'DB'; name: string; number?: number; db: Omit<GlobalDb, 'id' | 'group' | 'number'> & { number?: number } }
-    | { kind: 'IDB'; name: string; number?: number; instanceOf: string; overrides: Record<string, string> };
-  export function parseAwlSource(text: string): { ok: true; source: ParsedSource } | { ok: false; errors: SourceError[] };
-  export function applySource(device: PlcDevice, parsed: ParsedSource, newId: NewId): { created: ObjectRef[]; replaced: ObjectRef[] }; // modifica sul posto (ricetta immer)
-  export function generateAwlSource(device: PlcDevice, refs: ObjectRef[], mnemonic: Mnemonic): string;  // in ordine di dipendenza: UDT, FB/FC richiamati, poi chiamanti, DB
+    | {
+        kind: 'UDT';
+        name: string;
+        number?: number;
+        udt: Omit<Udt, 'id' | 'number' | 'group'> & { number?: number };
+      }
+    | {
+        kind: 'OB' | 'FB' | 'FC';
+        name: string;
+        number?: number;
+        block: Omit<CodeBlock, 'id' | 'group' | 'number'> & { number?: number };
+      }
+    | {
+        kind: 'DB';
+        name: string;
+        number?: number;
+        db: Omit<GlobalDb, 'id' | 'group' | 'number'> & { number?: number };
+      }
+    | {
+        kind: 'IDB';
+        name: string;
+        number?: number;
+        instanceOf: string;
+        overrides: Record<string, string>;
+      };
+  export function parseAwlSource(
+    text: string,
+  ): { ok: true; source: ParsedSource } | { ok: false; errors: SourceError[] };
+  export function applySource(
+    device: PlcDevice,
+    parsed: ParsedSource,
+    newId: NewId,
+  ): { created: ObjectRef[]; replaced: ObjectRef[] }; // modifica sul posto (ricetta immer)
+  export function generateAwlSource(
+    device: PlcDevice,
+    refs: ObjectRef[],
+    mnemonic: Mnemonic,
+  ): string; // in ordine di dipendenza: UDT, FB/FC richiamati, poi chiamanti, DB
   ```
 
 Formato della sorgente: manuale pubblico "Programmare con STEP 7", capitolo sulle sorgenti AWL, ed esportazioni AWL di TIA Portal.
+
 - **Unità:**
   - `TYPE "Nome"` … `STRUCT` … `END_STRUCT;` … `END_TYPE`;
   - `ORGANIZATION_BLOCK "Main"` / `OB 1`;
@@ -670,17 +1047,29 @@ Formato della sorgente: manuale pubblico "Programmare con STEP 7", capitolo sull
 - [ ] **Step 1: Scrivi i test che falliscono**
 
   ```ts
-  it('decodifica: BOM, UTF-8, Windows-1252 con accenti, CRLF', () => { /* 'Velocit\xe0' in 1252 → 'Velocità' */ });
-  it('sorgente con UDT, FB, FC, OB1, DB globale e DB di istanza si importa', () => { /* fixture tutto.awl → units in ordine con i tipi giusti */ });
-  it('mnemonico tedesco rilevato e convertito in internazionale', () => { /* fixture tedesco.awl */ });
-  it('righe { S7_Optimized_Access := \'FALSE\' } ignorate; FB 1 assoluto tiene il numero', () => { /* … */ });
+  it('decodifica: BOM, UTF-8, Windows-1252 con accenti, CRLF', () => {
+    /* 'Velocit\xe0' in 1252 → 'Velocità' */
+  });
+  it('sorgente con UDT, FB, FC, OB1, DB globale e DB di istanza si importa', () => {
+    /* fixture tutto.awl → units in ordine con i tipi giusti */
+  });
+  it('mnemonico tedesco rilevato e convertito in internazionale', () => {
+    /* fixture tedesco.awl */
+  });
+  it("righe { S7_Optimized_Access := 'FALSE' } ignorate; FB 1 assoluto tiene il numero", () => {
+    /* … */
+  });
   it('errore a metà file: elenco con riga e colonna, niente applicato', () => {
     const r = parseAwlSource(fixture('errore_riga_12.awl'));
     expect(r.ok).toBe(false);
     expect(!r.ok && r.errors[0]).toMatchObject({ line: 12, col: 5 });
   });
-  it('andata e ritorno identica su tutte le fixture canoniche', () => { /* … */ });
-  it('generate mette gli UDT e gli FB richiamati prima dei chiamanti', () => { /* … */ });
+  it('andata e ritorno identica su tutte le fixture canoniche', () => {
+    /* … */
+  });
+  it('generate mette gli UDT e gli FB richiamati prima dei chiamanti', () => {
+    /* … */
+  });
   ```
 
 - [ ] **Step 2: Esegui e verifica che falliscano**
@@ -709,10 +1098,12 @@ Formato della sorgente: manuale pubblico "Programmare con STEP 7", capitolo sull
 ### Task 7: Bridge: dialoghi di file generici
 
 **Files:**
+
 - Modify: `packages/ui/src/bridge.ts`, `packages/ui/test/fakeBridge.ts`, `apps/desktop/src/{main/ipc.ts,preload/index.ts,shared/rawBridge.ts}`
 - Test: `apps/desktop/e2e/bridge.spec.ts` (esteso)
 
 **Interfaces:**
+
 - Produces:
   ```ts
   export interface FileFilter { name: string; extensions: string[] }  // name già tradotto dal chiamante
@@ -721,6 +1112,7 @@ Formato della sorgente: manuale pubblico "Programmare con STEP 7", capitolo sull
   ```
 
 Regole:
+
 - Canali `dialog:open-file` e `dialog:save-file`, controllati sul frame mittente, aperti sulla finestra principale.
 - I file si leggono e si scrivono con `readFile` e `writeFileAtomic`, che esistono già.
 - `FakeBridge`: `openFileResults: string[][]` e `saveFileResults: (string | null)[]`.
@@ -748,21 +1140,31 @@ Regole:
 ### Task 8: Editor AWL nei segmenti
 
 **Files:**
+
 - Create: `packages/ui/src/editors/awl/{AwlEditor.tsx,awlExtensions.ts,mnemonicPreference.ts,awl.css}`
 - Modify: `packages/ui/src/editors/block/NetworksView.tsx`, `packages/ui/src/commands/useShortcuts.ts`, `packages/ui/src/i18n/{it,en}.json`, `packages/ui/package.json` (CodeMirror)
 - Test: `packages/ui/test/{awlExtensions.test.ts,awlEditor.test.tsx,networksView.test.tsx}`
 
 **Interfaces:**
+
 - Consumes: Task 2–3 (`lex`, `checkBlockCode`, `completeAt`, `convertMnemonics`), Task 5 (`createAwlContext`), `edit` e `flushPendingEdits` (piano 1B).
 - Produces:
   ```ts
-  export function useMnemonic(): [Mnemonic, (m: Mnemonic) => void];  // localStorage 'baa.mnemonic', predefinito 'international'
-  export function AwlEditor(p: { value: string; mnemonic: Mnemonic; diagnostics: AwlDiagnostic[]; complete: (offset: number) => { from: number; options: Completion[] };
-    onCommit(text: string): void; onChange?(text: string): void; 'aria-label': string }): JSX.Element;
-  export function awlHighlight(): Extension;   // decorazioni dai token di lex: istruzione, indirizzo, simbolo, locale, costante, etichetta, commento
+  export function useMnemonic(): [Mnemonic, (m: Mnemonic) => void]; // localStorage 'baa.mnemonic', predefinito 'international'
+  export function AwlEditor(p: {
+    value: string;
+    mnemonic: Mnemonic;
+    diagnostics: AwlDiagnostic[];
+    complete: (offset: number) => { from: number; options: Completion[] };
+    onCommit(text: string): void;
+    onChange?(text: string): void;
+    'aria-label': string;
+  }): JSX.Element;
+  export function awlHighlight(): Extension; // decorazioni dai token di lex: istruzione, indirizzo, simbolo, locale, costante, etichetta, commento
   ```
 
 Regole:
+
 - **Un editor CodeMirror per segmento** al posto dell'area di testo del piano 1B.
   - Mostra `convertMnemonics(source, 'international', mnemonic)`.
   - Alla conferma salva `convertMnemonics(testo, mnemonic, 'international')`.
@@ -777,21 +1179,35 @@ Regole:
   - Sotto i segmenti c'è un elenco "Problemi": segmento, riga e messaggio. Un clic mette il focus sull'editor nel punto giusto.
 - **Completamento:** `@codemirror/autocomplete` con `completeAt`; si apre con Ctrl+Spazio e da solo dopo `"`, `#` e `.`.
 - **Evidenziazione:** decorazioni dal lexer, con classi `baa-awl-<kind>` e colori dal tema.
-- **Mnemonico:** un `<select>` "Mnemonica: Internazionale / Tedesco" nell'intestazione dell'editor di blocco. Si sposterà in *Opzioni → Impostazioni* con il piano 1F (Ruling R2 di questo piano).
+- **Mnemonico:** un `<select>` "Mnemonica: Internazionale / Tedesco" nell'intestazione dell'editor di blocco. Si sposterà in _Opzioni → Impostazioni_ con il piano 1F (Ruling R2 di questo piano).
 - **Finestra separata:** CodeMirror riceve come radice il documento del suo contenitore (`root: element.ownerDocument`), così funziona anche nella finestra separata del piano 1B.
 
 - [ ] **Step 1: Scrivi i test che falliscono**
 
   ```ts
   // awlExtensions.test.ts (puro)
-  it('decorazioni per tipo di token', () => { /* 'A "Avvio" // x' → classi istruzione, simbolo, commento */ });
+  it('decorazioni per tipo di token', () => {
+    /* 'A "Avvio" // x' → classi istruzione, simbolo, commento */
+  });
   // awlEditor.test.tsx / networksView.test.tsx (jsdom, view.dispatch)
-  it('conferma all\'uscita dal focus: un solo passo di annulla, testo salvato in internazionale', async () => { /* mnemonico tedesco: 'U E 0.0' → salvato 'A I 0.0' (forma come scritta, solo mnemonici convertiti) */ });
-  it('Mod+S dentro l\'editor salva il testo appena scritto', async () => { /* … */ });
-  it('Mod+Z dentro l\'editor non annulla il progetto', async () => { /* history.past invariata */ });
-  it('errori sottolineati ed elenco Problemi con clic che porta al punto', async () => { /* … */ });
-  it('cambio di mnemonico: il codice salvato non cambia', async () => { /* … */ });
-  it('completamento dopo #', async () => { /* … */ });
+  it("conferma all'uscita dal focus: un solo passo di annulla, testo salvato in internazionale", async () => {
+    /* mnemonico tedesco: 'U E 0.0' → salvato 'A I 0.0' (forma come scritta, solo mnemonici convertiti) */
+  });
+  it("Mod+S dentro l'editor salva il testo appena scritto", async () => {
+    /* … */
+  });
+  it("Mod+Z dentro l'editor non annulla il progetto", async () => {
+    /* history.past invariata */
+  });
+  it('errori sottolineati ed elenco Problemi con clic che porta al punto', async () => {
+    /* … */
+  });
+  it('cambio di mnemonico: il codice salvato non cambia', async () => {
+    /* … */
+  });
+  it('completamento dopo #', async () => {
+    /* … */
+  });
   ```
 
 - [ ] **Step 2: Esegui e verifica che falliscano**
@@ -818,15 +1234,18 @@ Regole:
 ### Task 9: Sorgenti esterne e blocchi di sistema nell'interfaccia
 
 **Files:**
+
 - Create: `packages/ui/src/editors/source/SourceEditor.tsx`, `packages/ui/src/project/navigation/sourceActions.ts`
 - Modify: `packages/ui/src/project/navigation/{treeModel,treeIds,objectCommands,ProjectTree,DetailsView}.tsx|ts`, `packages/ui/src/editors/registry.tsx`, `packages/ui/src/state/workArea.ts` (EditorKind `source`), `packages/ui/src/i18n/{it,en}.json`
 - Test: `packages/ui/test/{sourceActions.test.ts,sources.test.tsx}`
 
 **Interfaces:**
+
 - Consumes: Task 5 (`ExternalSource`, `createSource`, ObjectRef `source`), Task 6 (`decodeSourceBytes`, `encodeSourceText`, `parseAwlSource`, `applySource`, `generateAwlSource`), Task 7 (dialoghi).
 - Produces: azioni senza nuove interfacce pubbliche oltre a quelle elencate nei file.
 
 Regole:
+
 - **Albero, "Sorgenti esterne"** (ora attivo):
   - "Aggiungi nuovo file esterno": `showOpenFileDialog` con filtro "Sorgente AWL (*.awl)", più file insieme. Ogni file diventa una sorgente: nome = nome del file (unico con `uniqueName`), testo = `decodeSourceBytes`. Un solo `edit`;
   - i nodi delle sorgenti si rinominano ed eliminano con le operazioni del piano 1B;
@@ -834,7 +1253,7 @@ Regole:
 - **Doppio clic su una sorgente** apre `SourceEditor`: CodeMirror con evidenziazione delle parole chiave della sorgente e del codice AWL, conferma all'uscita dal focus, un `edit`.
 - **Menu contestuale della sorgente:**
   - "Genera blocchi dalla sorgente": `parseAwlSource`.
-    - Con errori: niente cambia, gli errori vanno in *Informazioni → Generale*, uno per riga, come "Sorgente <nome>, riga R, colonna C: <messaggio>". Un clic apre la sorgente nel punto.
+    - Con errori: niente cambia, gli errori vanno in _Informazioni → Generale_, uno per riga, come "Sorgente <nome>, riga R, colonna C: <messaggio>". Un clic apre la sorgente nel punto.
     - Se ci sono oggetti da sostituire: `askQuestion` con il loro elenco. Poi `applySource` in un solo `edit` e un messaggio di riepilogo.
   - "Esporta…": `showSaveFileDialog`, poi `writeFileAtomic(encodeSourceText(text))`.
 - **Menu contestuale di blocchi, UDT, cartella "Blocchi di programma" e "Tipi di dati PLC":** "Genera sorgente dai blocchi" (gli oggetti selezionati, o tutti quelli della cartella). Crea una sorgente nuova `<primo nome>.awl` (unica) con `generateAwlSource` nel mnemonico scelto, la seleziona e la apre. Un `edit`.
@@ -843,11 +1262,21 @@ Regole:
 - [ ] **Step 1: Scrivi i test che falliscono**
 
   ```ts
-  it('Aggiungi nuovo file esterno: due file, Windows-1252 decodificato, un passo di annulla', async () => { /* … */ });
-  it('Genera blocchi dalla sorgente: crea FB/DB/UDT, sostituisce con conferma, un passo', async () => { /* … */ });
-  it('sorgente con errore: niente cambia, errori in Informazioni con riga e colonna', async () => { /* … */ });
-  it('Genera sorgente dai blocchi ed Esporta: file con BOM e CRLF', async () => { /* bridge.files */ });
-  it('Blocchi di sistema elenca TON e READ_CLK richiamati', async () => { /* … */ });
+  it('Aggiungi nuovo file esterno: due file, Windows-1252 decodificato, un passo di annulla', async () => {
+    /* … */
+  });
+  it('Genera blocchi dalla sorgente: crea FB/DB/UDT, sostituisce con conferma, un passo', async () => {
+    /* … */
+  });
+  it('sorgente con errore: niente cambia, errori in Informazioni con riga e colonna', async () => {
+    /* … */
+  });
+  it('Genera sorgente dai blocchi ed Esporta: file con BOM e CRLF', async () => {
+    /* bridge.files */
+  });
+  it('Blocchi di sistema elenca TON e READ_CLK richiamati', async () => {
+    /* … */
+  });
   ```
 
 - [ ] **Step 2: Esegui e verifica che falliscano**
@@ -874,10 +1303,12 @@ Regole:
 ### Task 10: Prove end-to-end del piano 1C e lista di controllo
 
 **Files:**
+
 - Create: `apps/desktop/e2e/awl.spec.ts`
 - Modify: `apps/desktop/e2e/helpers.ts` (se servono aiuti)
 
 Prove ("Fatto quando" del piano 1C):
+
 1. **Sorgente di prova** (`packages/importers/test/fixtures/collaudo.awl`, con UDT, FB con multi-istanza `"TON"`, FC, OB1, DB, DB di istanza):
    1. si aggiunge da file (stub del dialogo);
    2. si generano i blocchi;
@@ -922,9 +1353,9 @@ Prove ("Fatto quando" del piano 1C):
 ## Decisioni prese in questo piano (Rulings)
 
 - **R1. Codice salvato sempre con i mnemonici internazionali.** Il tedesco è solo visualizzazione e scrittura. Il file resta unico e confrontabile, e cambiare preferenza non tocca il progetto. Se fosse sbagliato: servirebbe un campo "mnemonico" per blocco.
-- **R2. La preferenza del mnemonico sta nell'intestazione dell'editor di blocco** finché non arriva *Opzioni → Impostazioni* (piano 1F). Se fosse sbagliato: si sposta.
-- **R3. In 1C si controlla, non si compila.** "Compila" e *Informazioni → Compila* arrivano con il piano 1E.
+- **R2. La preferenza del mnemonico sta nell'intestazione dell'editor di blocco** finché non arriva _Opzioni → Impostazioni_ (piano 1F). Se fosse sbagliato: si sposta.
+- **R3. In 1C si controlla, non si compila.** "Compila" e _Informazioni → Compila_ arrivano con il piano 1E.
 - **R4. Le sorgenti esterne stanno nel progetto**, come in TIA. Si importano da file e si esportano su file a richiesta.
 - **R5. La rinomina nel codice cambia solo quello che si risolve con certezza.** Un percorso che non si sa risolvere resta com'è, e la diagnostica lo segnala.
 - **R6. Copia e incolla delle sorgenti non c'è in 1C.** Si possono duplicare esportando e reimportando.
-- **R7. Il controllo AWL non entra in `checkDevice`.** Per ora vive nell'editor; la compilazione del piano 1E lo riunirà in *Informazioni → Compila* e nello stato dei nodi dell'albero.
+- **R7. Il controllo AWL non entra in `checkDevice`.** Per ora vive nell'editor; la compilazione del piano 1E lo riunirà in _Informazioni → Compila_ e nello stato dei nodi dell'albero.

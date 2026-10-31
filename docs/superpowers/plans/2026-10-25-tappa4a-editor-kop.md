@@ -71,31 +71,51 @@ Fuori da questo piano: FUP (4B), conversione AWL → KOP, cambio linguaggio, oss
 **Interfaces — Produces** (`src/model.ts`, esportati da `index.ts`):
 
 ```ts
-export type CmpFn = '==I'|'<>I'|'>I'|'<I'|'>=I'|'<=I'|'==D'|'<>D'|'>D'|'<D'|'>=D'|'<=D'|'==R'|'<>R'|'>R'|'<R'|'>=R'|'<=R';
+export type CmpFn =
+  | '==I'
+  | '<>I'
+  | '>I'
+  | '<I'
+  | '>=I'
+  | '<=I'
+  | '==D'
+  | '<>D'
+  | '>D'
+  | '<D'
+  | '>=D'
+  | '<=D'
+  | '==R'
+  | '<>R'
+  | '>R'
+  | '<R'
+  | '>=R'
+  | '<=R';
 export type LadElem =
-  | { id: string; k: 'contact'; neg: boolean; op: string }          // NA / NC
+  | { id: string; k: 'contact'; neg: boolean; op: string } // NA / NC
   | { id: string; k: 'not' }
   | { id: string; k: 'cmp'; fn: CmpFn; in1: string; in2: string }
-  | { id: string; k: 'edge'; dir: 'P' | 'N'; mem: string }           // (P) / (N) in linea
+  | { id: string; k: 'edge'; dir: 'P' | 'N'; mem: string } // (P) / (N) in linea
   | { id: string; k: 'posneg'; dir: 'P' | 'N'; bit: string; mem: string } // box POS / NEG
-  | { id: string; k: 'midline'; op: string }                         // (#)
-  | { id: string; k: 'parallel'; branches: LadElem[][] }             // ≥ 2 rami
+  | { id: string; k: 'midline'; op: string } // (#)
+  | { id: string; k: 'parallel'; branches: LadElem[][] } // ≥ 2 rami
   | LadBox;
 export type LadBox = {
-  id: string; k: 'box'; box: BoxKind;
-  instance: string;                 // T 1, C 10, M 0.0 (SR/RS), FC 1, FB 1 / DB 1 → "FB 1, DB 1", '' se non serve
-  pins: Record<string, string>;     // pin di dati: nome → operando ('' = non collegato)
+  id: string;
+  k: 'box';
+  box: BoxKind;
+  instance: string; // T 1, C 10, M 0.0 (SR/RS), FC 1, FB 1 / DB 1 → "FB 1, DB 1", '' se non serve
+  pins: Record<string, string>; // pin di dati: nome → operando ('' = non collegato)
   boolPins: Record<string, LadElem[]>; // pin BOOL d'ingresso con logica propria, esclusi EN e il primo pin
-  enoUsed?: boolean;                // calcolato dalla traduzione, non salvato: vedi Task 4
+  enoUsed?: boolean; // calcolato dalla traduzione, non salvato: vedi Task 4
 };
 export type LadOut =
   | { id: string; k: 'coil' | 'set' | 'reset'; op: string }
-  | { id: string; k: 'tcoil'; fn: 'SP'|'SE'|'SD'|'SS'|'SF'; timer: string; value: string }
-  | { id: string; k: 'ccoil'; fn: 'SC'|'CU'|'CD'; counter: string; value: string } // value solo per SC
+  | { id: string; k: 'tcoil'; fn: 'SP' | 'SE' | 'SD' | 'SS' | 'SF'; timer: string; value: string }
+  | { id: string; k: 'ccoil'; fn: 'SC' | 'CU' | 'CD'; counter: string; value: string } // value solo per SC
   | { id: string; k: 'jmp' | 'jmpn'; label: string }
   | { id: string; k: 'ret' | 'save' | 'mcrOpen' | 'mcrClose' | 'mcra' | 'mcrd' }
-  | { id: string; k: 'callCoil'; block: string }                     // "FC 11" / "SFC 46"
-  | { id: string; k: 'opn'; db: string };                            // "DB 10" / "DI 5"
+  | { id: string; k: 'callCoil'; block: string } // "FC 11" / "SFC 46"
+  | { id: string; k: 'opn'; db: string }; // "DB 10" / "DI 5"
 export type LadNode = { id: string; series: LadElem[]; outs: (LadOut | LadNode)[] };
 export type LadNetwork = { label?: string; root: LadNode };
 ```
@@ -130,11 +150,28 @@ Operazioni pure in `src/edit.ts` (tutte ritornano una nuova `LadNetwork`; `newId
 
 ```ts
 export type LadDiag = { elemId: string; code: LadDiagCode; params?: Record<string, string> };
-export type LadDiagCode = 'NO_OUTPUT' | 'EMPTY_OPERAND' | 'EMPTY_BRANCH' | 'MIDLINE_ON_RAIL'
-  | 'RET_ON_RAIL' | 'EDGE_ON_RAIL' | 'BOX_IN_PARALLEL' | 'BOX_IN_TBRANCH' | 'BAD_LABEL' | 'BAD_INSTANCE';
-export type LineOwner = { line: number; elemId: string };   // riga 0-based della sorgente generata
-export type NetworkAwl = { source: string; lines: LineOwner[]; diagnostics: LadDiag[]; nextLabel: number };
-export function networkToAwl(net: LadNetwork, opts: { tempEnd: number; firstLabel: number }): NetworkAwl;
+export type LadDiagCode =
+  | 'NO_OUTPUT'
+  | 'EMPTY_OPERAND'
+  | 'EMPTY_BRANCH'
+  | 'MIDLINE_ON_RAIL'
+  | 'RET_ON_RAIL'
+  | 'EDGE_ON_RAIL'
+  | 'BOX_IN_PARALLEL'
+  | 'BOX_IN_TBRANCH'
+  | 'BAD_LABEL'
+  | 'BAD_INSTANCE';
+export type LineOwner = { line: number; elemId: string }; // riga 0-based della sorgente generata
+export type NetworkAwl = {
+  source: string;
+  lines: LineOwner[];
+  diagnostics: LadDiag[];
+  nextLabel: number;
+};
+export function networkToAwl(
+  net: LadNetwork,
+  opts: { tempEnd: number; firstLabel: number },
+): NetworkAwl;
 export function validateNetwork(net: LadNetwork): LadDiag[];
 ```
 
@@ -163,7 +200,10 @@ Forme (ogni test cita il paragrafo di `kop-awl.md`):
 **Interfaces — Produces:**
 
 ```ts
-export function blockToAwl(nets: (LadNetwork | null)[], tempEnd: number): { networks: NetworkAwl[] };
+export function blockToAwl(
+  nets: (LadNetwork | null)[],
+  tempEnd: number,
+): { networks: NetworkAwl[] };
 ```
 
 `null` = segmento senza KOP (resta la sua sorgente, Task 5). Le etichette `_001`… crescono nel blocco nell'ordine dei segmenti; il formato è `_` + 3 cifre (`_001`…`_999`; oltre, diagnostica `TOO_MANY_LABELS` sul box).
@@ -194,9 +234,9 @@ Forme:
 ```ts
 // packages/project/src/kopSources.ts
 export type KopNetworkResult = { source: string; lines: LineOwner[]; diagnostics: LadDiag[] };
-export function kopSources(block: CodeBlock, dev: Device): KopNetworkResult[];   // uno per segmento
-export function blockSources(block: CodeBlock, dev: Device): string[];          // AWL di ogni segmento, qualsiasi lingua
-export function tempEnd(block: CodeBlock): number;                              // primo byte L dopo i TEMP dichiarati
+export function kopSources(block: CodeBlock, dev: Device): KopNetworkResult[]; // uno per segmento
+export function blockSources(block: CodeBlock, dev: Device): string[]; // AWL di ogni segmento, qualsiasi lingua
+export function tempEnd(block: CodeBlock): number; // primo byte L dopo i TEMP dichiarati
 ```
 
 `tempEnd` usa lo stesso calcolo del layout dei TEMP che usa `compileBlock` (cercare in `packages/mc7/src/layout.ts`/`compile.ts` come si ottiene `base`; esportarlo se serve, senza duplicarlo). Un segmento KOP senza `lad` usa la sua `source`. `blockSources` sostituisce ogni lettura di `networks.map(n => n.source)` per il codice da compilare, controllare, confrontare nell'hash ed esportare. Il pin list di un box CALL viene dall'interfaccia del blocco chiamato nel dispositivo (o da `findSystemBlock` per SFC/SFB): `kopSources` riempie l'ordine dei parametri prima di tradurre.
@@ -219,10 +259,23 @@ Le diagnostiche KOP diventano diagnostiche di compilazione con il codice `KOP_<C
 **Interfaces — Produces:**
 
 ```ts
-export type LadCell = { elemId: string; kind: 'contact'|'not'|'cmp'|'edge'|'posneg'|'midline'|'box'|'out'|'empty'; col: number; row: number; w: number; h: number };
+export type LadCell = {
+  elemId: string;
+  kind: 'contact' | 'not' | 'cmp' | 'edge' | 'posneg' | 'midline' | 'box' | 'out' | 'empty';
+  col: number;
+  row: number;
+  w: number;
+  h: number;
+};
 export type LadWire = { from: [col: number, row: number]; to: [col: number, row: number] }; // orizzontali e verticali, in coordinate di griglia
 export type LadInsertSlot = { at: InsertPoint; col: number; row: number }; // dove si può inserire (per clic e trascinamento)
-export type LadLayout = { cells: LadCell[]; wires: LadWire[]; slots: LadInsertSlot[]; cols: number; rows: number };
+export type LadLayout = {
+  cells: LadCell[];
+  wires: LadWire[];
+  slots: LadInsertSlot[];
+  cols: number;
+  rows: number;
+};
 export function layoutNetwork(net: LadNetwork): LadLayout;
 ```
 

@@ -74,12 +74,12 @@ Piano generale: riga 3D. Protocollo: `docs/protocollo/s7comm.md` §7.5.4, §7.5.
    - `online-test`: block status v2 con trigger `0x0600`, maschere ⊆ `0x0F`, p4 uguale alla dimensione calcolata; enable e delete solo per `0x13`; lista dei job; stack;
    - `online-restore`: in più gli SDB negli intervalli documentati, con `'P'` nel download e in `_INSE` e `'A'` in `_DELE`, più la lista dei job;
    - nessun altro modo ammette gruppo 1 o SDB.
-   → test in Task 1 e Task 6.
+     → test in Task 1 e Task 6.
 3. **Risposte inattese:**
    - block status con righe mancanti, troncato, con offset diversi o byte in più;
    - stack più corti, più lunghi o con la lunghezza sbagliata dell'IM151-8;
    - indication fuori tempo o di un altro job.
-   Ogni caso dà righe grigie, «risposta non riconosciuta» con esadecimale, oppure lo scarto, mai un crash. → test in Task 1, Task 3 e Task 5.
+     Ogni caso dà righe grigie, «risposta non riconosciuta» con esadecimale, oppure lo scarto, mai un crash. → test in Task 1, Task 3 e Task 5.
 4. **Ripristino interrotto o rifiutato:**
    - `0xD2A9` per più di 10 volte;
    - collegamento perso durante un SDB;
@@ -87,12 +87,12 @@ Piano generale: riga 3D. Protocollo: `docs/protocollo/s7comm.md` §7.5.4, §7.5.
    - lista dei job non vuota;
    - FRCE acceso;
    - CPU diversa.
-   La tabella dell'esito dice il vero per ogni blocco («Esito sconosciuto» per quello in corso) e dice se la CPU è rimasta in STOP. → test in Task 6 e Task 7.
+     La tabella dell'esito dice il vero per ogni blocco («Esito sconosciuto» per quello in corso) e dice se la CPU è rimasta in STOP. → test in Task 6 e Task 7.
 5. **Blocco online diverso da quello offline e finestra entro la PDU:**
    - compilato non aggiornato, testo modificato, checksum diverso, `0xD0C8`;
    - più righe visibili del limite;
    - PDU 240 e 480, con le maschere `0x03` e `0x0F`.
-   → test in Task 1, Task 3 e Task 4.
+     → test in Task 1, Task 3 e Task 4.
 
 ---
 
@@ -337,7 +337,7 @@ Regole:
   - `before-quit`;
   - finestra distrutta;
   - nessuna `read` né `window` per `idleMs`.
-  Il delete ha un limite di 1 s; se fallisce, il job resta nel registro per la pulizia successiva.
+    Il delete ha un limite di 1 s; se fallisce, il job resta nel registro per la pulizia successiva.
 - **Cambio di finestra:** `window` cancella il job e ne crea uno nuovo con le nuove righe. Più cambi entro 250 ms si riducono all'ultimo.
 - **Orfani:** all'avvio dell'osservazione e a ogni `onConnect` di una CPU con voci nel registro:
   - lista dei job; per ogni voce `0x13` presente **e** registrata si fa delete;
@@ -748,7 +748,7 @@ Regole della e2e, sull'app costruita, con il PLC di prova avviato nel processo d
   - un job per CPU; finestra = righe visibili entro una PDU; un enable ogni 250 ms al massimo;
   - delete garantito; pulizia dei soli job nostri;
   - in STOP stato senza valori.
-  _Se fosse sbagliato:_ una cattura su CPU vera corregge SAZ e righe non eseguite nel solo `decodeBlockStatusResult`.
+    _Se fosse sbagliato:_ una cattura su CPU vera corregge SAZ e righe non eseguite nel solo `decodeBlockStatusResult`.
 - **R2. Stack di chiamata: sperimentali, solo in STOP/HOLD,** dietro «Funzioni sperimentali (non provate su una CPU reale)», spenta per default, nella pagina «Stack di chiamata» di «Online e diagnostica». Decodifica tollerante con l'esadecimale. USTACK è lo stack delle interruzioni, cioè ISTACK `0x03` del documento.
 - **R3. Forzamento non implementato.** Si legge FRCE (`0x0174`/`0x0006`) e si mostra «Forzamento attivo sulla CPU» nella diagnostica e nella barra di stato. Niente colonna «Forza» né tabelle di forzamento. I limiti noti spiegano il perché e rimandano a TIA/STEP 7.
 - **R4. Ripristino sperimentale,** dietro la stessa impostazione, con la ricetta di §19.5:
@@ -758,7 +758,7 @@ Regole della e2e, sull'app costruita, con il PLC di prova avviato nel processo d
   - SDB con `'P'` e `_INSE`, SDB 0 per ultimo, ritentativo su `0xD2A9` (10 × 200 ms);
   - poi DB, FC/FB, OB;
   - riavvio solo se scelto (predefinito no).
-  Esito per blocco con le parole del 3B. In più si corregge la lettura del `.baapbak`, che si fidava di `originalSize`.
+    Esito per blocco con le parole del 3B. In più si corregge la lettura del `.baapbak`, che si fidava di `originalSize`.
 - **R5. Tutto il 3D è «mai provato su una CPU reale»** (spec §5), nei limiti noti e nelle note di rilascio.
 - **R6. Versione 0.13.0.** Documenti: `docs/uso/online.md`, la sezione dei limiti noti, la riga 3D del piano generale.
 - **R7. Il PLC di prova risponde a tutto ciò che è nuovo:** block status, job, stack, FRCE, SDB. La e2e copre l'osservazione on/off e il ripristino con l'impostazione attiva.
@@ -770,19 +770,19 @@ Decisioni prese da me durante la stesura (modificabili):
   - `online-test` per la «zona grigia» di §15.1bis: block status, enable e delete di `0x13`, lista dei job e stack, senza conferma;
   - `online-restore` per il ripristino: `online-write` più SDB e lista dei job.
   - `read-only` e `online-write` non cambiano: un caricamento normale non può mai scrivere un SDB, e la sorveglianza non può mai creare un job.
-  _Se fosse sbagliato:_ i modi si fondono senza toccare i codificatori.
+    _Se fosse sbagliato:_ i modi si fondono senza toccare i codificatori.
 - **R10. L'osservazione usa un collegamento suo,** non quello della sorveglianza:
   - i job sono legati al collegamento (`0xD0AE`);
   - chiuderlo è l'ultima difesa se il delete non arriva;
   - la sorveglianza resta `read-only`.
-  Costa un collegamento PG in più, come le scritture del 3B.
+    Costa un collegamento PG in più, come le scritture del 3B.
 - **R11. Il renderer chiede ogni risultato** (un enable per `plc:statusRead`), come R10 del 3C. Il main ha un solo temporizzatore nuovo: il controllo che cancella il job dopo 5 s di silenzio del renderer. È una sicurezza, non un'interrogazione.
 - **R12. Una maschera di registri uguale su tutte le righe:** STW + ACCU1 (`0x03`) per default; ACCU2 e AR1 si aggiungono dalle caselle e riducono la finestra. Non si chiedono AR2, DB1 e DB2. La maschera uniforme permette di risincronizzare un risultato con righe mancanti.
 - **R13. Come si riconosce una riga non elaborata (ipotesi):**
   - riga assente dal risultato → grigia;
   - nessun risultato in 2 s → tutta la finestra grigia con un messaggio, senza cancellare il job (un FC non chiamato è un caso normale);
   - il server di prova toglie le righe non eseguite, per provare questa strada.
-  _Se fosse sbagliato:_ cambia solo il decodificatore.
+    _Se fosse sbagliato:_ cambia solo il decodificatore.
 - **R14. «Solo i nostri job» = quelli registrati** in `userData/tis-jobs.json` (CPU, funzione, numero). La CPU stessa protegge i job degli altri collegamenti con `0xD0AE`. `read job` (`0x11`) non si usa perché è da una sola fonte.
 - **R15. In STOP non si crea il job:** la risposta della CPU è sconosciuta (§18.4.1). Il job si ricrea al ritorno in RUN.
 - **R16. Stack solo a richiesta,** con un collegamento `online-test` breve e il modo riletto subito prima. In RUN non parte nessuna richiesta di stack.
@@ -792,7 +792,7 @@ Decisioni prese da me durante la stesura (modificabili):
   - sovrascrittura, con le righe del main;
   - STOP;
   - avvio, se scelto.
-  I blocchi utente presenti solo nella CPU restano (`_DELE` dei blocchi utente è un'ipotesi, §10.5). Un SDB del backup fuori dagli intervalli fa rifiutare tutto, per non lasciare una configurazione a metà. Intervalli: 0, 1, 3–7, 1000–2999. SDB 2 non si tocca mai.
+    I blocchi utente presenti solo nella CPU restano (`_DELE` dei blocchi utente è un'ipotesi, §10.5). Un SDB del backup fuori dagli intervalli fa rifiutare tutto, per non lasciare una configurazione a metà. Intervalli: 0, 1, 3–7, 1000–2999. SDB 2 non si tocca mai.
 - **R19. L'impostazione sperimentale vive nel renderer,** con le altre impostazioni. Il main non la ricontrolla: per il ripristino la difesa sono le conferme native, che dicono «sperimentale»; gli stack sono in sola lettura.
 - **R20. I backup non si elencano nell'albero:** si aprono con la finestra dei file. Tenerne l'elenco vorrebbe dire salvare percorsi nel progetto.
 - **R21. Il `.baapbak` si legge a flusso,** con tetti sui byte veri (64 KB per il manifest, la lunghezza dichiarata per ogni blocco, 256 MB in tutto). `originalSize` non conta più.

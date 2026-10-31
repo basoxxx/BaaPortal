@@ -3,6 +3,7 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (consigliato) oppure superpowers:executing-plans per realizzare questo piano un task alla volta. I passi usano caselle (`- [ ]`) per il tracciamento.
 
 **Obiettivo:** un nuovo pacchetto `@baaportal/sim` con una CPU S7-300 simulata che esegue lo **stesso MC7** che si carica nel PLC (spec §6). Comprende:
+
 - la parola di stato, gli accumulatori, AR1/AR2, i registri DB/DI, lo stack L e lo stack di annidamento;
 - le istruzioni AWL tranne temporizzatori, contatori e SFC/SFB, che arrivano con il piano 2B;
 - il richiamo di FC e FB con i parametri;
@@ -12,6 +13,7 @@
 La CPU simulata si carica con lo stesso percorso del PLC vero: `S7WriteClient.downloadBlock` verso il server S7 in memoria.
 
 **Architettura:**
+
 - **Pacchetto puro:** `packages/sim` è TypeScript puro, senza `node:`, senza React e senza DOM, così gira in un Worker, nel renderer o in node. Il piano 2C lo ospiterà in un Worker con l'interfaccia.
 - **Esecuzione dei byte:** l'esecutore legge i byte MC7 con `decodeInstruction(code, at)` di `@baaportal/mc7`, che dà `DecodedStatement` con `id`, l'operando come AST di `@baaportal/awl` e `jumpTo` in byte. Le istruzioni decodificate si tengono in una cache per blocco e per offset. Non si riparsa il testo AWL: si esegue esattamente ciò che è stato caricato.
 - **Server S7:** `@baaportal/s7-server` riceve un'interfaccia `CpuBackend` estratta da `FakeCpu`. `FakeCpu` resta com'è (stessi test); `SimCpu` la implementa a sua volta. Il download in memoria (`memoryTransportPair`) è già provato dai test di 1D-bis.
@@ -19,6 +21,7 @@ La CPU simulata si carica con lo stesso percorso del PLC vero: `S7WriteClient.do
 **Tecnologie:** TypeScript, Vitest (ambiente node).
 
 **Spec:** `docs/superpowers/specs/2026-10-18-baaportal-design.md`:
+
 - §9 Tappa 2 e il suo "Fatto quando";
 - §6 «il simulatore esegue lo stesso MC7»;
 - §7 il modulo `sim`;
@@ -66,10 +69,12 @@ Piano generale: `docs/superpowers/plans/2026-10-18-baaportal-roadmap.md`, riga 2
 ### Task 1: Pacchetto `@baaportal/sim`: memoria, registri, operandi
 
 **Files:**
+
 - Create: `packages/sim/package.json`, `tsconfig.json`, `vitest.config.ts`, `src/index.ts`, `src/memory.ts`, `src/registers.ts`, `src/operands.ts`, `src/errors.ts`
 - Test: `packages/sim/test/memory.test.ts`, `packages/sim/test/operands.test.ts`
 
 **Interfaces:**
+
 - Consumes: `Operand`, `AreaId` di `@baaportal/awl` (`src/ast.ts`); `findCpu` e `CpuType.limits` di `@baaportal/catalog`; `parsePointer` e i codici d'area di `@baaportal/mc7` (`operands.ts`).
 - Produces:
   ```ts
@@ -96,6 +101,7 @@ Piano generale: `docs/superpowers/plans/2026-10-18-baaportal-roadmap.md`, riga 2
   ```
 
 Regole:
+
 - **Dimensioni** da `memorySizesFor`: le danno `inputBytes`, `outputBytes`, `mBytes` e `localDataBytesPerClass` della CPU nel catalogo. Una CPU sconosciuta usa i valori di una 315-2 PN/DP.
 - **Puntatori:** si usa il formato a 32 bit del manuale (area nei bit 24–26, byte·8+bit nei bit 3–18 e 0–2), lo stesso di `docs/protocollo/mc7.md` §2.2.4. L'indiretto in memoria a 16 bit vale per T, C e i numeri di blocco; quello a 32 bit vale per i bit e i byte.
 - **Area DB/DI:** usa il registro DB o DI aperto. Con il registro a 0 l'errore è `DB_NON_APERTO`.
@@ -123,24 +129,56 @@ Regole:
 ### Task 2: Esecutore e logica combinatoria a bit
 
 **Files:**
+
 - Create: `packages/sim/src/executor.ts`, `src/program.ts`, `src/ops/bitLogic.ts`, `src/ops/index.ts`
 - Test: `packages/sim/test/bitLogic.test.ts`, `packages/sim/test/helpers.ts`
 
 **Interfaces:**
+
 - Consumes: Task 1; `decodeInstruction` e `readBlockFile` di `@baaportal/mc7`; `encodeCode` e `compileBlock` di `@baaportal/mc7` (solo nei test, per passare da testo AWL a MC7).
 - Produces:
   ```ts
-  export interface LoadedBlock { kind: 'OB'|'FB'|'FC'|'DB'; number: number; code: Uint8Array; localBytes: number; networkStarts: number[] }  // da readBlockFile + parseAdd
-  export class Program { load(file: Uint8Array): LoadedBlock; get(kind, number): LoadedBlock | undefined; delete(kind, number): void; list(): LoadedBlock[] }
-  export interface ExecContext { mem: SimMemory; regs: Registers; program: Program; now(): number; maxCycleMs: number; cycleStart: number; trace?: (t: TraceStep) => void }
-  export interface TraceStep { block: { kind: string; number: number }; offset: number; id: string; stw: number; accu1: number; accu2: number }
-  export function runBlock(ctx: ExecContext, kind: 'OB'|'FB'|'FC', number: number): void;   // lancia SimError
-  export type OpHandler = (st: ExecState, stmt: DecodedStatement) => void | { jump: number } | 'return';
-  export const OPS: Record<string, OpHandler>;   // chiave = id internazionale di INSTRUCTIONS
+  export interface LoadedBlock {
+    kind: 'OB' | 'FB' | 'FC' | 'DB';
+    number: number;
+    code: Uint8Array;
+    localBytes: number;
+    networkStarts: number[];
+  } // da readBlockFile + parseAdd
+  export class Program {
+    load(file: Uint8Array): LoadedBlock;
+    get(kind, number): LoadedBlock | undefined;
+    delete(kind, number): void;
+    list(): LoadedBlock[];
+  }
+  export interface ExecContext {
+    mem: SimMemory;
+    regs: Registers;
+    program: Program;
+    now(): number;
+    maxCycleMs: number;
+    cycleStart: number;
+    trace?: (t: TraceStep) => void;
+  }
+  export interface TraceStep {
+    block: { kind: string; number: number };
+    offset: number;
+    id: string;
+    stw: number;
+    accu1: number;
+    accu2: number;
+  }
+  export function runBlock(ctx: ExecContext, kind: 'OB' | 'FB' | 'FC', number: number): void; // lancia SimError
+  export type OpHandler = (
+    st: ExecState,
+    stmt: DecodedStatement,
+  ) => void | { jump: number } | 'return';
+  export const OPS: Record<string, OpHandler>; // chiave = id internazionale di INSTRUCTIONS
   // helpers.ts (test): runAwl(networks: string[], init?: Partial<…>): { regs, mem, trace }
   ```
 
 Regole (manuale AWL, «Operazioni di combinazione logica a bit» e «Parola di stato»):
+
 - **Inizio di una catena:** con /FC = 0, la prima interrogazione `A`, `AN`, `O`, `ON`, `X` o `XN` carica il risultato in RLO e mette /FC = 1. STA vale sempre il bit interrogato.
 - **Fine di una catena:** `=`, `S` e `R` mettono /FC = 0 e lasciano invariato RLO. `S` e `R` agiscono solo con RLO = 1.
 - **Parentesi:** `A(` … `)` salva in uno stack di annidamento di 7 livelli BR, RLO, OR e la funzione, poi riapre la catena con /FC = 0. Un ottavo livello dà `STACK_ANNIDAMENTO_PIENO`. Anche `O` senza operando (AND prima di OR) segue le tabelle del manuale.
@@ -170,14 +208,17 @@ Regole (manuale AWL, «Operazioni di combinazione logica a bit» e «Parola di s
 ### Task 3: Caricamento, trasferimento, accumulatori, logica a parola, scorrimento, registri
 
 **Files:**
+
 - Create: `packages/sim/src/ops/loadTransfer.ts`, `ops/accumulator.ts`, `ops/wordLogic.ts`, `ops/shift.ts`, `ops/db.ts`
 - Test: `packages/sim/test/loadTransfer.test.ts`, `test/wordShift.test.ts`
 
 **Interfaces:**
+
 - Consumes: Task 2 (`OPS`, `runAwl`).
 - Produces: le voci di `OPS` per gli id `L`, `T`, `LAR1`, `LAR2`, `TAR1`, `TAR2`, `CAR`, `TAK`, `PUSH`, `POP`, `ENT`, `LEAVE`, `INC`, `DEC`, `+AR1`, `+AR2`, `AW`, `OW`, `XOW`, `AD`, `OD`, `XOD`, `SSI`, `SSD`, `SLW`, `SRW`, `SLD`, `SRD`, `RLD`, `RRD`, `RLDA`, `RRDA`, `OPN`, `CDB`. `L` e `T` per T e C restano a `NON_SIMULATA_2B`.
 
 Regole:
+
 - **`L` e `T`:**
   - `L` sposta ACCU1 in ACCU2 e carica, estendendo con zeri byte e parola;
   - `T` scrive la parte meno significativa;
@@ -224,14 +265,17 @@ Regole:
 ### Task 4: Aritmetica intera e reale, confronti, conversioni
 
 **Files:**
+
 - Create: `packages/sim/src/ops/integer.ts`, `ops/float.ts`, `ops/comparison.ts`, `ops/conversion.ts`
 - Test: `packages/sim/test/arith.test.ts`, `test/compareConvert.test.ts`
 
 **Interfaces:**
+
 - Consumes: Task 2 e Task 3.
 - Produces: le voci di `OPS` per tutti gli id delle categorie `integer`, `float`, `comparison` e `conversion` di `INSTRUCTIONS`: `+I -I *I /I +D -D *D /D MOD +` (`+` con costante), `+R -R *R /R ABS SQR SQRT EXP LN SIN COS TAN ASIN ACOS ATAN`, tutti i `==I…<=R`, `BTI ITB BTD ITD DTB DTR INVI INVD NEGI NEGD NEGR CAW CAD RND TRUNC RND+ RND-`.
 
 Regole (manuale AWL: «Operazioni con numeri interi», «… in virgola mobile», «… di confronto», «… di conversione»):
+
 - **Confronti:** il risultato va in RLO, con CC0 e CC1 come da tabella (uguale 00, minore 01, maggiore 10, non confrontabile per REAL 11). OV e OS sono 0 tranne per un REAL non valido, che mette OV = OS = 1. Un confronto è una interrogazione: segue le regole di /FC del Task 2.
 - **Aritmetica intera:**
   - CC0 e CC1 dicono il segno del risultato, oppure il tipo di overflow;
@@ -273,10 +317,12 @@ Regole (manuale AWL: «Operazioni con numeri interi», «… in virgola mobile»
 ### Task 5: Salti, controllo del programma, richiami di FC e FB
 
 **Files:**
+
 - Create: `packages/sim/src/ops/jump.ts`, `ops/control.ts`, `src/calls.ts`
 - Test: `packages/sim/test/jumps.test.ts`, `test/calls.test.ts`
 
 **Interfaces:**
+
 - Consumes: Tasks 1–4; `docs/protocollo/mc7.md` §2.4 (salti, `JL`, `LOOP`) e §2.5 (UC/CC, lista dei puntatori dei parametri delle FC, `BLD`, area `V`); per i test, `compileBlock` di `@baaportal/mc7` con un `AwlContext` minimo, come in `packages/s7-server/test/downloadRoundtrip.test.ts`.
 - Produces: le voci di `OPS` per tutti gli id `jump` e `control` (`JU JL JC JCN JCB JNB JBI JNBI JO JOS JZ JN JP JM JPZ JMZ JUO LOOP BE BEU BEC UC CC`).
   ```ts
@@ -285,6 +331,7 @@ Regole (manuale AWL: «Operazioni con numeri interi», «… in virgola mobile»
   ```
 
 Regole:
+
 - **Salti:**
   - i salti condizionati seguono la tabella del manuale;
   - `JC` e `JCN` mettono /FC = 0, STA = 1 e RLO = 1;
@@ -335,32 +382,58 @@ Regole:
 ### Task 6: La CPU simulata: modi, avvio, ciclo, cancellazione totale, diagnostica
 
 **Files:**
+
 - Create: `packages/sim/src/cpu.ts`, `src/diagnostics.ts`, `src/obStartInfo.ts`
 - Test: `packages/sim/test/cpu.test.ts`
 
 **Interfaces:**
+
 - Consumes: Tasks 1–5; `OB_DEFINITIONS` e `findCpu` di `@baaportal/catalog`; `CpuProperties` di `@baaportal/project` come **tipo** strutturale (se serve, si copia la forma in `sim`, per non far dipendere `sim` da `project`).
 - Produces:
   ```ts
   export type SimMode = 'STOP' | 'STARTUP' | 'RUN';
-  export interface SimCpuOptions { cpuTypeId: string; props: { maxCycleMs: number; minCycleMs: number; clockMemory: { enabled: boolean; byte: number }; retentivity: { mBytes: number; timers: number; counters: number } }; now?: () => number }
-  export interface DiagEntry { time: number; code: SimErrorCode | 'STOP_RICHIESTO' | 'AVVIO' | 'CANCELLAZIONE_TOTALE'; block?: string; offset?: number; network?: number; detail?: string }
+  export interface SimCpuOptions {
+    cpuTypeId: string;
+    props: {
+      maxCycleMs: number;
+      minCycleMs: number;
+      clockMemory: { enabled: boolean; byte: number };
+      retentivity: { mBytes: number; timers: number; counters: number };
+    };
+    now?: () => number;
+  }
+  export interface DiagEntry {
+    time: number;
+    code: SimErrorCode | 'STOP_RICHIESTO' | 'AVVIO' | 'CANCELLAZIONE_TOTALE';
+    block?: string;
+    offset?: number;
+    network?: number;
+    detail?: string;
+  }
   export class SimCpu {
     constructor(o: SimCpuOptions);
-    readonly memory: SimMemory; readonly program: Program; get mode(): SimMode; get diagnostics(): readonly DiagEntry[];
-    loadBlock(file: Uint8Array): void;            // DB: dati attuali = dati del file; altri blocchi in Program
+    readonly memory: SimMemory;
+    readonly program: Program;
+    get mode(): SimMode;
+    get diagnostics(): readonly DiagEntry[];
+    loadBlock(file: Uint8Array): void; // DB: dati attuali = dati del file; altri blocchi in Program
     deleteBlock(kind: string, number: number): void;
-    run(): void;                                  // STOP → avvio a caldo (OB100 se c'è) → RUN
+    run(): void; // STOP → avvio a caldo (OB100 se c'è) → RUN
     stop(reason?: string): void;
-    memoryReset(): void;                          // cancellazione totale
-    cycle(): CycleResult;                         // un ciclo OB1 completo; in STOP non fa nulla
+    memoryReset(): void; // cancellazione totale
+    cycle(): CycleResult; // un ciclo OB1 completo; in STOP non fa nulla
     stats(): { last: number; min: number; max: number; cycles: number };
-    onEvent(cb: (e: SimEvent) => void): () => void;   // modo cambiato, voce diagnostica, ciclo finito
+    onEvent(cb: (e: SimEvent) => void): () => void; // modo cambiato, voce diagnostica, ciclo finito
   }
-  export interface CycleResult { ok: boolean; error?: DiagEntry; elapsedMs: number }
+  export interface CycleResult {
+    ok: boolean;
+    error?: DiagEntry;
+    elapsedMs: number;
+  }
   ```
 
 Regole (manuale CPU 31x: «Modi di funzionamento», «Avvio», «Cancellazione totale», «Ritenzione»):
+
 - **Ciclo:** si copia `physIn` in I, si esegue OB1 con i dati di avvio a 20 byte negli L 0..19 (struttura di `OB_DEFINITIONS[1].startInfo`: tempi del ciclo precedente, minimo e massimo in ms, data e ora in BCD), poi si copia Q in `physOut`.
 - **Tempo minimo di ciclo:** `cycle()` restituisce il tempo trascorso. L'attesa del tempo minimo spetta a chi lo ospita, nel piano 2C.
 - **Merker di clock:** se è attivo, il byte indicato riflette `now()` con le frequenze del manuale (bit 0 10 Hz, 1 5 Hz, 2 2.5 Hz, 3 2 Hz, 4 1.25 Hz, 5 1 Hz, 6 0.625 Hz, 7 0.5 Hz). Si aggiorna a ogni ciclo e a ogni lettura di quel byte.
@@ -399,22 +472,27 @@ Regole (manuale CPU 31x: «Modi di funzionamento», «Avvio», «Cancellazione t
 ### Task 7: Carica nella CPU simulata attraverso il server S7
 
 **Files:**
+
 - Create: `packages/s7-server/src/backend.ts`, `packages/sim/src/backend.ts`
 - Modify: `packages/s7-server/src/session.ts` (`serve(cpu: CpuBackend, …)`), `packages/s7-server/src/fakeCpu.ts` (`implements CpuBackend`), `packages/s7-server/src/index.ts`
 - Test: `packages/sim/test/download.test.ts`
 
 **Interfaces:**
+
 - Consumes: Task 6; `serve` di `@baaportal/s7-server`; `S7WriteClient` e `memoryTransportPair` di `@baaportal/s7comm`.
 - Produces:
   ```ts
   // @baaportal/s7-server
-  export interface CpuBackend { /* esattamente i metodi che session.ts usa oggi su FakeCpu, con la stessa firma: readItem, applyWrite, applyStop, applyWarmRestart, applyDownloadedBlock, block, blockList, blockCounts, blockInfo, mode, now, attach, detach, diagnostiche/SZL usate */ }
+  export interface CpuBackend {
+    /* esattamente i metodi che session.ts usa oggi su FakeCpu, con la stessa firma: readItem, applyWrite, applyStop, applyWarmRestart, applyDownloadedBlock, block, blockList, blockCounts, blockInfo, mode, now, attach, detach, diagnostiche/SZL usate */
+  }
   // @baaportal/sim
   export function simBackend(cpu: SimCpu, o?: { orderNumber?: string }): CpuBackend;
-  export function connectToSim(cpu: SimCpu): Promise<S7WriteClient>;   // memoryTransportPair + serve(simBackend(cpu))
+  export function connectToSim(cpu: SimCpu): Promise<S7WriteClient>; // memoryTransportPair + serve(simBackend(cpu))
   ```
 
 Regole:
+
 - **Estrazione dell'interfaccia:** `CpuBackend` si estrae da ciò che `session.ts` chiama oggi, senza cambiare il comportamento di `FakeCpu`. Tutti i test esistenti di `s7-server` e `s7comm` devono restare verdi senza modifiche.
 - **`simBackend`:**
   - `applyDownloadedBlock` → `cpu.loadBlock`;
@@ -442,14 +520,17 @@ Regole:
 ### Task 8: Batteria "Fatto quando" del piano 2A e copertura delle istruzioni
 
 **Files:**
+
 - Create: `packages/sim/test/battery/*.awl` (programmi di prova), `packages/sim/test/battery.test.ts`, `packages/sim/test/coverage.test.ts`
 - Test: gli stessi
 
 **Interfaces:**
+
 - Consumes: Tasks 1–7.
 - Produces: nessuna API nuova.
 
 Regole:
+
 - **Programmi di prova** (`.awl`), scritti da noi a partire dagli esempi dei manuali pubblici, almeno uno per categoria: bit, parentesi e MCR; caricamento e trasferimento; parola e scorrimenti; interi; reali; confronti; conversioni; salti, `JL` e `LOOP`; FC con parametri; FB con multi-istanza.
 - **Valori attesi in un commento** in testa a ogni file, nella forma `// atteso: MW10=…, MD20=…, STW=…, ACCU1=…`, riga per riga dove serve.
 - **`battery.test.ts`:** legge ogni file, compila con `compileBlock`, carica in `SimCpu` con `connectToSim` e `downloadBlock`, esegue un ciclo e confronta i valori attesi.
@@ -466,10 +547,12 @@ Regole:
 ### Task 9: Documentazione, limiti noti, piano generale, versione e collaudo
 
 **Files:**
+
 - Create: `docs/protocollo/sim.md`
 - Modify: `docs/limiti-noti.md`, `docs/superpowers/plans/2026-10-18-baaportal-roadmap.md`, `apps/desktop/package.json` (+ la riga di `package-lock.json`), questo piano (caselle)
 
 Regole:
+
 - **`docs/protocollo/sim.md`:**
   - descrive modello di memoria, registri, parola di stato e regole di /FC, ciclo, avvio, cancellazione totale e codici d'errore;
   - per ogni gruppo di istruzioni indica il capitolo del manuale pubblico da cui viene la semantica;
@@ -480,9 +563,11 @@ Regole:
 - **Piano generale:** riga 2A → "fatto".
 - **Versione:** `apps/desktop` 0.6.0.
 - **Collaudo** con `S7_CAPTURES_DIR` sulla cache delle catture:
+
   ```
   npm test && npm run e2e && npm run typecheck && npm run lint && npm run format:check
   ```
+
   Deve essere verde. Gli e2e si eseguono una volta: il piano non tocca l'interfaccia.
 
 - [x] **Step 1: Aggiorna documenti, versione e caselle**
@@ -493,11 +578,11 @@ Regole:
 
 ## Decisioni prese in questo piano (Rulings)
 
-- **R1. Si eseguono i byte MC7, non il testo AWL.** `decodeInstruction` passo per passo, con la cache. Così si prova esattamente ciò che si carica (spec §6), compresi i blocchi caricati dalle macchine e le chiamate espanse (`BLD`, `UC` con la lista dei puntatori). *Se fosse sbagliato:* le prestazioni si recuperano con una cache che pre-compila le istruzioni in chiusure, senza cambiare l'interfaccia.
-- **R2. Pacchetto puro, nessun Worker in questo piano.** Il Worker e l'interfaccia arrivano nel piano 2C, che ospita `SimCpu` e chiama `cycle()` a tempo. *Se fosse sbagliato:* niente da rifare; il pacchetto gira anche nel renderer.
-- **R3. Il server S7 riceve un'interfaccia `CpuBackend`.** È estratta da `FakeCpu` senza cambiarne il comportamento, così "carica nel simulatore" usa lo stesso client e lo stesso protocollo del PLC vero. *Se fosse sbagliato:* `SimCpu` potrebbe ereditare da `FakeCpu`, ma i campi privati lo rendono fragile.
-- **R4. Gli errori di programmazione portano in STOP nel piano 2A.** Nel piano 2B, se OB121/OB122/OB80/OB85 sono caricati, si richiamano. È il comportamento della CPU vera quando l'OB d'errore manca. *Se fosse sbagliato:* si cambia un punto solo, in `cpu.ts`.
-- **R5. Cancellazione totale = la memoria di lavoro torna allo stato del file caricato, i blocchi restano.** Le CPU S7-300 con MMC ricaricano il programma dalla scheda dopo una cancellazione totale. *Se fosse sbagliato:* si aggiunge "cancella anche i blocchi" come opzione nel pannello del piano 2C.
-- **R6. La profondità dello stack dei blocchi è fissa a 16**, con lo stack L condiviso secondo `localDataBytesPerClass`. Il manuale delle CPU 31x indica valori che cambiano con la CPU; la costante unica è marcata ⚠️ in `sim.md`. *Se fosse sbagliato:* si legge dal catalogo, aggiungendo il campo.
-- **R7. Il tempo è iniettato e il controllo del ciclo avviene ogni 1024 istruzioni.** Un tempo deterministico nei test, e un ciclo infinito che non blocca mai il simulatore. *Se fosse sbagliato:* si cambia la costante.
-- **R8. Temporizzatori, contatori e SFC/SFB danno un errore chiaro (`NON_SIMULATA_2B`) invece di essere ignorati.** È la regola della spec «avviso chiaro "non simulata"» applicata già adesso. *Se fosse sbagliato:* niente, il piano 2B li implementa.
+- **R1. Si eseguono i byte MC7, non il testo AWL.** `decodeInstruction` passo per passo, con la cache. Così si prova esattamente ciò che si carica (spec §6), compresi i blocchi caricati dalle macchine e le chiamate espanse (`BLD`, `UC` con la lista dei puntatori). _Se fosse sbagliato:_ le prestazioni si recuperano con una cache che pre-compila le istruzioni in chiusure, senza cambiare l'interfaccia.
+- **R2. Pacchetto puro, nessun Worker in questo piano.** Il Worker e l'interfaccia arrivano nel piano 2C, che ospita `SimCpu` e chiama `cycle()` a tempo. _Se fosse sbagliato:_ niente da rifare; il pacchetto gira anche nel renderer.
+- **R3. Il server S7 riceve un'interfaccia `CpuBackend`.** È estratta da `FakeCpu` senza cambiarne il comportamento, così "carica nel simulatore" usa lo stesso client e lo stesso protocollo del PLC vero. _Se fosse sbagliato:_ `SimCpu` potrebbe ereditare da `FakeCpu`, ma i campi privati lo rendono fragile.
+- **R4. Gli errori di programmazione portano in STOP nel piano 2A.** Nel piano 2B, se OB121/OB122/OB80/OB85 sono caricati, si richiamano. È il comportamento della CPU vera quando l'OB d'errore manca. _Se fosse sbagliato:_ si cambia un punto solo, in `cpu.ts`.
+- **R5. Cancellazione totale = la memoria di lavoro torna allo stato del file caricato, i blocchi restano.** Le CPU S7-300 con MMC ricaricano il programma dalla scheda dopo una cancellazione totale. _Se fosse sbagliato:_ si aggiunge "cancella anche i blocchi" come opzione nel pannello del piano 2C.
+- **R6. La profondità dello stack dei blocchi è fissa a 16**, con lo stack L condiviso secondo `localDataBytesPerClass`. Il manuale delle CPU 31x indica valori che cambiano con la CPU; la costante unica è marcata ⚠️ in `sim.md`. _Se fosse sbagliato:_ si legge dal catalogo, aggiungendo il campo.
+- **R7. Il tempo è iniettato e il controllo del ciclo avviene ogni 1024 istruzioni.** Un tempo deterministico nei test, e un ciclo infinito che non blocca mai il simulatore. _Se fosse sbagliato:_ si cambia la costante.
+- **R8. Temporizzatori, contatori e SFC/SFB danno un errore chiaro (`NON_SIMULATA_2B`) invece di essere ignorati.** È la regola della spec «avviso chiaro "non simulata"» applicata già adesso. _Se fosse sbagliato:_ niente, il piano 2B li implementa.
