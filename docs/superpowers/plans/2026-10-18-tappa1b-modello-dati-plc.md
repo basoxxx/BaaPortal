@@ -5,6 +5,7 @@
 **Goal:** In BaaPortal si aggiunge una CPU S7-300 dal catalogo e si creano, modificano e salvano tabelle delle variabili (con costanti), tipi di dati PLC (UDT) e blocchi OB/FB/FC/DB/DB di istanza con la loro interfaccia, con annulla/ripeti, taglia/copia/incolla, trascinamento, recupero automatico ed editor nell'area di lavoro (barra degli editor, divisione, finestra separata).
 
 **Architecture:** Due pacchetti nuovi, TypeScript puro e senza interfaccia:
+
 - `@baaportal/s7-types`: tipi di dati S7, valori, indirizzi assoluti, disposizione in memoria;
 - `@baaportal/catalog`: CPU S7-300 e OB, con dati tecnici presi da documentazione pubblica.
 
@@ -47,6 +48,7 @@ In `@baaportal/ui` ogni modifica al progetto passa da `store.edit(...)`, che tie
    - una modifica fatta durante il salvataggio non va persa.
 
    Test: Task 6 e Task 10.
+
 2. **Nomi con accenti, spazi, virgolette e maiuscole diverse**:
    - "Velocità nastro" è valido;
    - `a"b` viene rifiutato con un messaggio chiaro;
@@ -54,6 +56,7 @@ In `@baaportal/ui` ogni modifica al progetto passa da `store.edit(...)`, che tie
    - rinominare un UDT usato in tre posti aggiorna tutti i riferimenti in un solo passo di annulla.
 
    Test: Task 1, Task 4, Task 5, Task 9.
+
 3. **Incolla da Excel** (righe separate da `\r\n`, riga vuota finale, colonne mancanti, tipi o indirizzi sbagliati, 1000 righe):
    - le righe si creano tutte, quelle sbagliate segnate in rosso;
    - nessun crash;
@@ -61,6 +64,7 @@ In `@baaportal/ui` ogni modifica al progetto passa da `store.edit(...)`, che tie
    - i nomi già usati diventano `_1`, `_2`.
 
    Test: Task 11 e Task 12.
+
 4. **File `.baap` vecchi, nuovi o incoerenti**:
    - un progetto del piano 1A (formato 1) si apre e si salva in formato 2;
    - un file formato 2 con chiavi sconosciute le conserva;
@@ -68,6 +72,7 @@ In `@baaportal/ui` ogni modifica al progetto passa da `store.edit(...)`, che tie
    - id doppi o file mancanti danno `INVALID_SCHEMA`.
 
    Test: Task 4 e Task 5.
+
 5. **Editor in finestra separata**:
    - chiudere la finestra separata riporta l'editor nell'area di lavoro;
    - chiudere la finestra principale (dopo la conferma) chiude anche quelle separate;
@@ -131,41 +136,76 @@ apps/desktop/src/
 ### Task 1: `@baaportal/s7-types`: tipi, espressioni di tipo, nomi, valori
 
 **Files:**
+
 - Create: `packages/s7-types/{package.json,tsconfig.json,vitest.config.ts}`, `packages/s7-types/src/{index,types,typeExpr,names,literals}.ts`
 - Test: `packages/s7-types/test/{typeExpr,names,literals}.test.ts`
 
 **Interfaces:**
+
 - Consumes: niente.
 - Produces:
   ```ts
-  export type ElementaryTypeName = 'Bool'|'Byte'|'Word'|'DWord'|'Int'|'DInt'|'Real'|'S5Time'|'Time'|'Date'|'Time_Of_Day'|'Char';
-  export type ParameterTypeName = 'Timer'|'Counter'|'Block_FB'|'Block_FC'|'Block_DB'|'Block_SDB'|'Pointer'|'Any';
-  export const ELEMENTARY_TYPES: readonly ElementaryTypeName[];   // nell'ordine sopra
+  export type ElementaryTypeName =
+    | 'Bool'
+    | 'Byte'
+    | 'Word'
+    | 'DWord'
+    | 'Int'
+    | 'DInt'
+    | 'Real'
+    | 'S5Time'
+    | 'Time'
+    | 'Date'
+    | 'Time_Of_Day'
+    | 'Char';
+  export type ParameterTypeName =
+    'Timer' | 'Counter' | 'Block_FB' | 'Block_FC' | 'Block_DB' | 'Block_SDB' | 'Pointer' | 'Any';
+  export const ELEMENTARY_TYPES: readonly ElementaryTypeName[]; // nell'ordine sopra
   export const PARAMETER_TYPES: readonly ParameterTypeName[];
-  export interface TypedMember { name: string; type: DataType }
-  export interface ArrayDim { lo: number; hi: number }
+  export interface TypedMember {
+    name: string;
+    type: DataType;
+  }
+  export interface ArrayDim {
+    lo: number;
+    hi: number;
+  }
   export type DataType =
     | { kind: 'elementary'; name: ElementaryTypeName }
-    | { kind: 'string'; length: number }          // 1..254
+    | { kind: 'string'; length: number } // 1..254
     | { kind: 'dateAndTime' }
     | { kind: 'parameter'; name: ParameterTypeName }
-    | { kind: 'array'; dims: ArrayDim[]; element: DataType }   // 1..6 dimensioni
+    | { kind: 'array'; dims: ArrayDim[]; element: DataType } // 1..6 dimensioni
     | { kind: 'struct'; members: TypedMember[] }
-    | { kind: 'named'; name: string }            // UDT o FB (multi-istanza), senza virgolette
+    | { kind: 'named'; name: string } // UDT o FB (multi-istanza), senza virgolette
     | { kind: 'void' };
-  export type TypeError = 'SYNTAX'|'STRING_LENGTH'|'ARRAY_BOUNDS'|'ARRAY_DIMENSIONS'|'NESTED_ARRAY'|'ARRAY_OF_PARAMETER';
-  export function parseType(text: string): { ok: true; type: DataType } | { ok: false; error: TypeError };
+  export type TypeError =
+    | 'SYNTAX'
+    | 'STRING_LENGTH'
+    | 'ARRAY_BOUNDS'
+    | 'ARRAY_DIMENSIONS'
+    | 'NESTED_ARRAY'
+    | 'ARRAY_OF_PARAMETER';
+  export function parseType(
+    text: string,
+  ): { ok: true; type: DataType } | { ok: false; error: TypeError };
   export function formatType(type: DataType): string;
-  export type NameCheck = { ok: true } | { ok: false; reason: 'EMPTY'|'TOO_LONG'|'INVALID_CHARS'|'LEADING_TRAILING_SPACE' };
+  export type NameCheck =
+    | { ok: true }
+    | { ok: false; reason: 'EMPTY' | 'TOO_LONG' | 'INVALID_CHARS' | 'LEADING_TRAILING_SPACE' };
   export function validateS7Name(name: string): NameCheck;
   export function sameName(a: string, b: string): boolean;
   export function incrementName(name: string): string;
-  export type LiteralError = 'SYNTAX'|'OUT_OF_RANGE'|'TOO_LONG'|'NO_VALUE';
-  export function parseLiteral(type: DataType, text: string): { ok: true; canonical: string } | { ok: false; error: LiteralError };
+  export type LiteralError = 'SYNTAX' | 'OUT_OF_RANGE' | 'TOO_LONG' | 'NO_VALUE';
+  export function parseLiteral(
+    type: DataType,
+    text: string,
+  ): { ok: true; canonical: string } | { ok: false; error: LiteralError };
   export function defaultLiteral(type: DataType): string | null;
   ```
 
 Regole:
+
 - `parseType`:
   - non distingue maiuscole e minuscole e ignora gli spazi;
   - alias: `TOD` → `Time_Of_Day`, `DT` → `Date_And_Time`, `S5TIME` → `S5Time`;
@@ -218,32 +258,64 @@ Regole:
   ```ts
   // typeExpr.test.ts
   it.each([
-    ['Bool', 'Bool'], ['INT', 'Int'], ['dword', 'DWord'], ['TOD', 'Time_Of_Day'], ['DT', 'Date_And_Time'],
-    ['S5TIME', 'S5Time'], ['String', 'String[254]'], ['STRING[20]', 'String[20]'], ['string [ 8 ]', 'String[8]'],
-    ['ARRAY[1..10] OF INT', 'Array[1..10] of Int'], ['Array [0..3, -2..2] of Bool', 'Array[0..3, -2..2] of Bool'],
-    ['"Motore"', '"Motore"'], ['Array[1..2] of "Asse"', 'Array[1..2] of "Asse"'], ['Struct', 'Struct'],
-    ['Array[1..4] of Struct', 'Array[1..4] of Struct'], ['Timer', 'Timer'], ['block_fb', 'Block_FB'], ['ANY', 'Any'], ['Void', 'Void'],
+    ['Bool', 'Bool'],
+    ['INT', 'Int'],
+    ['dword', 'DWord'],
+    ['TOD', 'Time_Of_Day'],
+    ['DT', 'Date_And_Time'],
+    ['S5TIME', 'S5Time'],
+    ['String', 'String[254]'],
+    ['STRING[20]', 'String[20]'],
+    ['string [ 8 ]', 'String[8]'],
+    ['ARRAY[1..10] OF INT', 'Array[1..10] of Int'],
+    ['Array [0..3, -2..2] of Bool', 'Array[0..3, -2..2] of Bool'],
+    ['"Motore"', '"Motore"'],
+    ['Array[1..2] of "Asse"', 'Array[1..2] of "Asse"'],
+    ['Struct', 'Struct'],
+    ['Array[1..4] of Struct', 'Array[1..4] of Struct'],
+    ['Timer', 'Timer'],
+    ['block_fb', 'Block_FB'],
+    ['ANY', 'Any'],
+    ['Void', 'Void'],
   ])('parseType(%s) → %s', (input, out) => {
     const r = parseType(input);
     expect(r.ok && formatType(r.type)).toBe(out);
   });
   it.each([
-    ['Bol', 'SYNTAX'], ['String[0]', 'STRING_LENGTH'], ['String[255]', 'STRING_LENGTH'], ['Array[5..1] of Int', 'ARRAY_BOUNDS'],
-    ['Array[1..40000] of Int', 'ARRAY_BOUNDS'], ['Array[1..2,1..2,1..2,1..2,1..2,1..2,1..2] of Int', 'ARRAY_DIMENSIONS'],
-    ['Array[1..2] of Array[1..2] of Int', 'NESTED_ARRAY'], ['Array[1..2] of Timer', 'ARRAY_OF_PARAMETER'], ['"senza fine', 'SYNTAX'],
+    ['Bol', 'SYNTAX'],
+    ['String[0]', 'STRING_LENGTH'],
+    ['String[255]', 'STRING_LENGTH'],
+    ['Array[5..1] of Int', 'ARRAY_BOUNDS'],
+    ['Array[1..40000] of Int', 'ARRAY_BOUNDS'],
+    ['Array[1..2,1..2,1..2,1..2,1..2,1..2,1..2] of Int', 'ARRAY_DIMENSIONS'],
+    ['Array[1..2] of Array[1..2] of Int', 'NESTED_ARRAY'],
+    ['Array[1..2] of Timer', 'ARRAY_OF_PARAMETER'],
+    ['"senza fine', 'SYNTAX'],
   ])('parseType(%s) rifiuta con %s', (input, error) => {
     expect(parseType(input)).toEqual({ ok: false, error });
   });
 
   // names.test.ts
-  it.each([['', 'EMPTY'], [' a', 'LEADING_TRAILING_SPACE'], ['a ', 'LEADING_TRAILING_SPACE'], ['a"b', 'INVALID_CHARS'],
-    ['a\tb', 'INVALID_CHARS'], ['x'.repeat(129), 'TOO_LONG']])('validateS7Name(%j) → %s', (n, reason) => {
+  it.each([
+    ['', 'EMPTY'],
+    [' a', 'LEADING_TRAILING_SPACE'],
+    ['a ', 'LEADING_TRAILING_SPACE'],
+    ['a"b', 'INVALID_CHARS'],
+    ['a\tb', 'INVALID_CHARS'],
+    ['x'.repeat(129), 'TOO_LONG'],
+  ])('validateS7Name(%j) → %s', (n, reason) => {
     expect(validateS7Name(n)).toEqual({ ok: false, reason });
   });
   it('accetta spazi interni, accenti e simboli', () => {
-    for (const n of ['Motore 1', 'Velocità nastro', 'Nastro#2', 'Valvola-A', 'x'.repeat(128)]) expect(validateS7Name(n)).toEqual({ ok: true });
+    for (const n of ['Motore 1', 'Velocità nastro', 'Nastro#2', 'Valvola-A', 'x'.repeat(128)])
+      expect(validateS7Name(n)).toEqual({ ok: true });
   });
-  it.each([['Motore', 'Motore_1'], ['Motore_1', 'Motore_2'], ['Tag_9', 'Tag_10'], ['A_01', 'A_02']])('incrementName(%s) → %s', (a, b) => {
+  it.each([
+    ['Motore', 'Motore_1'],
+    ['Motore_1', 'Motore_2'],
+    ['Tag_9', 'Tag_10'],
+    ['A_01', 'A_02'],
+  ])('incrementName(%s) → %s', (a, b) => {
     expect(incrementName(a)).toBe(b);
   });
   it('sameName non distingue maiuscole, anche accentate', () => {
@@ -254,28 +326,82 @@ Regole:
 
   // literals.test.ts: t(text) = parseType(text).type
   it.each([
-    ['Bool', 'TRUE', 'true'], ['Bool', '0', 'false'], ['Byte', '255', '16#FF'], ['Byte', 'B#16#0a', '16#A'], ['Byte', '2#1010', '16#A'],
-    ['Word', 'W#16#1', '16#1'], ['Word', 'B#(1,2)', '16#102'], ['DWord', 'DW#16#FFFFFFFF', '16#FFFFFFFF'],
-    ['Int', '-32768', '-32768'], ['DInt', 'L#5', '5'], ['Real', '1', '1.0'], ['Real', '-1.5e3', '-1500.0'],
-    ['S5Time', 's5time#100ms', 'S5T#100MS'], ['S5Time', 'S5T#2H46M30S', 'S5T#2H46M30S'], ['Time', 'T#1d_2h_3m_4s_5ms', 'T#1D2H3M4S5MS'],
-    ['Time', 'TIME#-1s', 'T#-1S'], ['Date', 'DATE#2026-10-18', 'D#2026-10-18'], ['Time_Of_Day', 'TIME_OF_DAY#1:2:3.4', 'TOD#01:02:03.400'],
-    ['Date_And_Time', 'DT#2026-10-18-12:30:00', 'DT#2026-10-18-12:30:00.000'], ['Char', "'$''", "'$''"], ['String[5]', "'a$Lb'", "'a$Lb'"],
+    ['Bool', 'TRUE', 'true'],
+    ['Bool', '0', 'false'],
+    ['Byte', '255', '16#FF'],
+    ['Byte', 'B#16#0a', '16#A'],
+    ['Byte', '2#1010', '16#A'],
+    ['Word', 'W#16#1', '16#1'],
+    ['Word', 'B#(1,2)', '16#102'],
+    ['DWord', 'DW#16#FFFFFFFF', '16#FFFFFFFF'],
+    ['Int', '-32768', '-32768'],
+    ['DInt', 'L#5', '5'],
+    ['Real', '1', '1.0'],
+    ['Real', '-1.5e3', '-1500.0'],
+    ['S5Time', 's5time#100ms', 'S5T#100MS'],
+    ['S5Time', 'S5T#2H46M30S', 'S5T#2H46M30S'],
+    ['Time', 'T#1d_2h_3m_4s_5ms', 'T#1D2H3M4S5MS'],
+    ['Time', 'TIME#-1s', 'T#-1S'],
+    ['Date', 'DATE#2026-10-18', 'D#2026-10-18'],
+    ['Time_Of_Day', 'TIME_OF_DAY#1:2:3.4', 'TOD#01:02:03.400'],
+    ['Date_And_Time', 'DT#2026-10-18-12:30:00', 'DT#2026-10-18-12:30:00.000'],
+    ['Char', "'$''", "'$''"],
+    ['String[5]', "'a$Lb'", "'a$Lb'"],
   ])('parseLiteral(%s, %s) → %s', (type, text, canonical) => {
     expect(parseLiteral(t(type), text)).toEqual({ ok: true, canonical });
   });
   it.each([
-    ['Byte', '256', 'OUT_OF_RANGE'], ['Int', '32768', 'OUT_OF_RANGE'], ['Real', '3.5E+38', 'OUT_OF_RANGE'], ['Real', '1,5', 'SYNTAX'],
-    ['S5Time', 'S5T#2H46M31S', 'OUT_OF_RANGE'], ['S5Time', 'S5T#5MS', 'OUT_OF_RANGE'], ['Time', 'T#25D', 'OUT_OF_RANGE'],
-    ['Date', 'D#1989-12-31', 'OUT_OF_RANGE'], ['Date', 'D#2026-02-30', 'OUT_OF_RANGE'], ['Time_Of_Day', 'TOD#24:00:00', 'OUT_OF_RANGE'],
-    ['Char', "'AB'", 'TOO_LONG'], ['String[5]', "'abcdef'", 'TOO_LONG'], ['String[5]', "'$Q'", 'SYNTAX'], ['Timer', '1', 'NO_VALUE'],
+    ['Byte', '256', 'OUT_OF_RANGE'],
+    ['Int', '32768', 'OUT_OF_RANGE'],
+    ['Real', '3.5E+38', 'OUT_OF_RANGE'],
+    ['Real', '1,5', 'SYNTAX'],
+    ['S5Time', 'S5T#2H46M31S', 'OUT_OF_RANGE'],
+    ['S5Time', 'S5T#5MS', 'OUT_OF_RANGE'],
+    ['Time', 'T#25D', 'OUT_OF_RANGE'],
+    ['Date', 'D#1989-12-31', 'OUT_OF_RANGE'],
+    ['Date', 'D#2026-02-30', 'OUT_OF_RANGE'],
+    ['Time_Of_Day', 'TOD#24:00:00', 'OUT_OF_RANGE'],
+    ['Char', "'AB'", 'TOO_LONG'],
+    ['String[5]', "'abcdef'", 'TOO_LONG'],
+    ['String[5]', "'$Q'", 'SYNTAX'],
+    ['Timer', '1', 'NO_VALUE'],
   ])('parseLiteral(%s, %s) rifiuta con %s', (type, text, error) => {
     expect(parseLiteral(t(type), text)).toEqual({ ok: false, error });
   });
   it('defaultLiteral', () => {
-    expect(['Bool', 'Byte', 'Int', 'Real', 'S5Time', 'Time', 'Date', 'Time_Of_Day', 'Date_And_Time', 'Char', 'String[4]', 'Timer'].map((x) => defaultLiteral(t(x))))
-      .toEqual(['false', '16#0', '0', '0.0', 'S5T#0MS', 'T#0MS', 'D#1990-01-01', 'TOD#00:00:00.000', 'DT#1990-01-01-00:00:00.000', "' '", "''", null]);
+    expect(
+      [
+        'Bool',
+        'Byte',
+        'Int',
+        'Real',
+        'S5Time',
+        'Time',
+        'Date',
+        'Time_Of_Day',
+        'Date_And_Time',
+        'Char',
+        'String[4]',
+        'Timer',
+      ].map((x) => defaultLiteral(t(x))),
+    ).toEqual([
+      'false',
+      '16#0',
+      '0',
+      '0.0',
+      'S5T#0MS',
+      'T#0MS',
+      'D#1990-01-01',
+      'TOD#00:00:00.000',
+      'DT#1990-01-01-00:00:00.000',
+      "' '",
+      "''",
+      null,
+    ]);
   });
-  it('ogni valore canonico si rilegge identico', () => { /* per ogni caso valido sopra: parseLiteral(type, canonical).canonical === canonical */ });
+  it('ogni valore canonico si rilegge identico', () => {
+    /* per ogni caso valido sopra: parseLiteral(type, canonical).canonical === canonical */
+  });
   ```
 
 - [ ] **Step 3: Esegui e verifica che falliscano**
@@ -305,36 +431,60 @@ Regole:
 ### Task 2: `@baaportal/s7-types`: indirizzi assoluti e disposizione in memoria
 
 **Files:**
+
 - Create: `packages/s7-types/src/{address,layout}.ts`
 - Modify: `packages/s7-types/src/index.ts`
 - Test: `packages/s7-types/test/{address,layout}.test.ts`
 
 **Interfaces:**
+
 - Consumes: `DataType`, `TypedMember`, `parseType` (Task 1).
 - Produces:
   ```ts
-  export type IoArea = 'I'|'Q'|'M'|'PI'|'PQ';
+  export type IoArea = 'I' | 'Q' | 'M' | 'PI' | 'PQ';
   export type AbsoluteAddress =
     | { area: IoArea; size: 'X'; byte: number; bit: number }
-    | { area: IoArea; size: 'B'|'W'|'D'; byte: number }
-    | { area: 'T'|'C'; number: number };
-  export type AddressError = 'SYNTAX'|'BIT_RANGE'|'NUMBER_RANGE';
-  export function parseAddress(text: string): { ok: true; address: AbsoluteAddress } | { ok: false; error: AddressError };
-  export function formatAddress(a: AbsoluteAddress): string;                 // '%MW10'
+    | { area: IoArea; size: 'B' | 'W' | 'D'; byte: number }
+    | { area: 'T' | 'C'; number: number };
+  export type AddressError = 'SYNTAX' | 'BIT_RANGE' | 'NUMBER_RANGE';
+  export function parseAddress(
+    text: string,
+  ): { ok: true; address: AbsoluteAddress } | { ok: false; error: AddressError };
+  export function formatAddress(a: AbsoluteAddress): string; // '%MW10'
   export function addressFitsType(a: AbsoluteAddress, type: DataType): boolean;
-  export function addressBitRange(a: AbsoluteAddress): { area: IoArea | 'T' | 'C'; from: number; to: number }; // bit inclusi; T/C: numero
+  export function addressBitRange(a: AbsoluteAddress): {
+    area: IoArea | 'T' | 'C';
+    from: number;
+    to: number;
+  }; // bit inclusi; T/C: numero
   export function rangesOverlap(a: AbsoluteAddress, b: AbsoluteAddress): boolean;
-  export function incrementAddress(a: AbsoluteAddress): AbsoluteAddress;   // passo = dimensione dell'accesso
-  export interface FbSections { input: TypedMember[]; output: TypedMember[]; inOut: TypedMember[]; static: TypedMember[] }
-  export type TypeResolver = (name: string) => { kind: 'udt'; members: TypedMember[] } | { kind: 'fb'; sections: FbSections } | null;
-  export interface LayoutEntry { path: string; byte: number; bit: number; sizeBits: number; strideBits?: number } // strideBits solo per gli Array
-  export type LayoutResult = { ok: true; sizeBytes: number; entries: LayoutEntry[] } | { ok: false; error: 'UNKNOWN_TYPE'|'CYCLE'|'NOT_LAYOUTABLE'; name: string };
+  export function incrementAddress(a: AbsoluteAddress): AbsoluteAddress; // passo = dimensione dell'accesso
+  export interface FbSections {
+    input: TypedMember[];
+    output: TypedMember[];
+    inOut: TypedMember[];
+    static: TypedMember[];
+  }
+  export type TypeResolver = (
+    name: string,
+  ) => { kind: 'udt'; members: TypedMember[] } | { kind: 'fb'; sections: FbSections } | null;
+  export interface LayoutEntry {
+    path: string;
+    byte: number;
+    bit: number;
+    sizeBits: number;
+    strideBits?: number;
+  } // strideBits solo per gli Array
+  export type LayoutResult =
+    | { ok: true; sizeBytes: number; entries: LayoutEntry[] }
+    | { ok: false; error: 'UNKNOWN_TYPE' | 'CYCLE' | 'NOT_LAYOUTABLE'; name: string };
   export function layoutStruct(members: TypedMember[], resolve: TypeResolver): LayoutResult; // DB, UDT, Temp
-  export function layoutInstance(sections: FbSections, resolve: TypeResolver): LayoutResult;  // dati di istanza di un FB
-  export function formatOffset(e: { byte: number; bit: number }): string;    // '2.0'
+  export function layoutInstance(sections: FbSections, resolve: TypeResolver): LayoutResult; // dati di istanza di un FB
+  export function formatOffset(e: { byte: number; bit: number }): string; // '2.0'
   ```
 
 Regole:
+
 - `parseAddress`:
   - aree I, Q, M (bit `X`, `B`, `W`, `D`), periferia `PI`/`PQ` (solo `B`, `W`, `D`, nessun bit), `T` e `C`;
   - mnemonici tedeschi: `E` = I, `A` = Q, `PE` = PI, `PA` = PQ, `Z` = C;
@@ -367,49 +517,149 @@ Regole:
   ```ts
   // address.test.ts
   it.each([
-    ['M0.0', '%M0.0'], ['%mw10', '%MW10'], ['E 1.7', '%I1.7'], ['A4.0', '%Q4.0'], ['EB0', '%IB0'], ['AW2', '%QW2'], ['MD4', '%MD4'],
-    ['PEW256', '%PIW256'], ['PIW256', '%PIW256'], ['PAW256', '%PQW256'], ['T5', '%T5'], ['Z3', '%C3'], ['c3', '%C3'],
-  ])('parseAddress(%s) → %s', (a, b) => { const r = parseAddress(a); expect(r.ok && formatAddress(r.address)).toBe(b); });
-  it.each([['M0.8', 'BIT_RANGE'], ['MW', 'SYNTAX'], ['PI0.0', 'SYNTAX'], ['M70000.0', 'NUMBER_RANGE'], ['DB1.DBX0.0', 'SYNTAX'], ['T70000', 'NUMBER_RANGE']])(
-    'parseAddress(%s) rifiuta con %s', (a, error) => expect(parseAddress(a)).toEqual({ ok: false, error }));
+    ['M0.0', '%M0.0'],
+    ['%mw10', '%MW10'],
+    ['E 1.7', '%I1.7'],
+    ['A4.0', '%Q4.0'],
+    ['EB0', '%IB0'],
+    ['AW2', '%QW2'],
+    ['MD4', '%MD4'],
+    ['PEW256', '%PIW256'],
+    ['PIW256', '%PIW256'],
+    ['PAW256', '%PQW256'],
+    ['T5', '%T5'],
+    ['Z3', '%C3'],
+    ['c3', '%C3'],
+  ])('parseAddress(%s) → %s', (a, b) => {
+    const r = parseAddress(a);
+    expect(r.ok && formatAddress(r.address)).toBe(b);
+  });
+  it.each([
+    ['M0.8', 'BIT_RANGE'],
+    ['MW', 'SYNTAX'],
+    ['PI0.0', 'SYNTAX'],
+    ['M70000.0', 'NUMBER_RANGE'],
+    ['DB1.DBX0.0', 'SYNTAX'],
+    ['T70000', 'NUMBER_RANGE'],
+  ])('parseAddress(%s) rifiuta con %s', (a, error) =>
+    expect(parseAddress(a)).toEqual({ ok: false, error }),
+  );
   it('compatibilità indirizzo/tipo', () => {
     const fits = (a: string, ty: string) => addressFitsType(addr(a), type(ty));
-    expect([fits('M0.0','Bool'), fits('MW0','Int'), fits('MW0','Bool'), fits('MD0','Real'), fits('T1','Timer'), fits('T1','Int'), fits('MB0','Char'), fits('PIW256','Word'), fits('MW0','String[2]')])
-      .toEqual([true, true, false, true, true, false, true, true, false]);
+    expect([
+      fits('M0.0', 'Bool'),
+      fits('MW0', 'Int'),
+      fits('MW0', 'Bool'),
+      fits('MD0', 'Real'),
+      fits('T1', 'Timer'),
+      fits('T1', 'Int'),
+      fits('MB0', 'Char'),
+      fits('PIW256', 'Word'),
+      fits('MW0', 'String[2]'),
+    ]).toEqual([true, true, false, true, true, false, true, true, false]);
   });
   it('sovrapposizioni', () => {
     const ov = (a: string, b: string) => rangesOverlap(addr(a), addr(b));
-    expect([ov('MW0','M1.3'), ov('MW0','MW2'), ov('MD0','MW2'), ov('IW0','PIW0'), ov('T1','T1'), ov('C1','T1')]).toEqual([true, false, true, false, true, false]);
+    expect([
+      ov('MW0', 'M1.3'),
+      ov('MW0', 'MW2'),
+      ov('MD0', 'MW2'),
+      ov('IW0', 'PIW0'),
+      ov('T1', 'T1'),
+      ov('C1', 'T1'),
+    ]).toEqual([true, false, true, false, true, false]);
   });
-  it.each([['M0.7','%M1.0'], ['MW10','%MW12'], ['MD4','%MD8'], ['IB3','%IB4'], ['T9','%T10']])('incrementAddress(%s) → %s', (a, b) =>
-    expect(formatAddress(incrementAddress(addr(a)))).toBe(b));
+  it.each([
+    ['M0.7', '%M1.0'],
+    ['MW10', '%MW12'],
+    ['MD4', '%MD8'],
+    ['IB3', '%IB4'],
+    ['T9', '%T10'],
+  ])('incrementAddress(%s) → %s', (a, b) =>
+    expect(formatAddress(incrementAddress(addr(a)))).toBe(b),
+  );
 
   // layout.test.ts: m(name, typeText); offsets(r) = Object.fromEntries(r.entries.map(e => [e.path, formatOffset(e)]))
   it('Bool nello stesso byte, Byte al byte, Int e Real al byte pari', () => {
-    const r = layoutStruct([m('a','Bool'), m('b','Bool'), m('c','Byte'), m('d','Int'), m('e','Bool'), m('f','Real')], none);
+    const r = layoutStruct(
+      [
+        m('a', 'Bool'),
+        m('b', 'Bool'),
+        m('c', 'Byte'),
+        m('d', 'Int'),
+        m('e', 'Bool'),
+        m('f', 'Real'),
+      ],
+      none,
+    );
     expect(offsets(r)).toEqual({ a: '0.0', b: '0.1', c: '1.0', d: '2.0', e: '4.0', f: '6.0' });
     expect(r.ok && r.sizeBytes).toBe(10);
   });
   it('Struct e Array a byte pari con lunghezza pari', () => {
-    const s = { name: 's', type: { kind: 'struct', members: [m('p','Bool'), m('q','Byte')] } } as const;
-    const r = layoutStruct([m('x','Bool'), s, m('y','Byte'), m('arr','Array[1..3] of Bool'), m('z','Byte')], none);
-    expect(offsets(r)).toEqual({ x: '0.0', s: '2.0', 's.p': '2.0', 's.q': '3.0', y: '4.0', arr: '6.0', z: '8.0' });
+    const s = {
+      name: 's',
+      type: { kind: 'struct', members: [m('p', 'Bool'), m('q', 'Byte')] },
+    } as const;
+    const r = layoutStruct(
+      [m('x', 'Bool'), s, m('y', 'Byte'), m('arr', 'Array[1..3] of Bool'), m('z', 'Byte')],
+      none,
+    );
+    expect(offsets(r)).toEqual({
+      x: '0.0',
+      s: '2.0',
+      's.p': '2.0',
+      's.q': '3.0',
+      y: '4.0',
+      arr: '6.0',
+      z: '8.0',
+    });
     expect(r.ok && r.sizeBytes).toBe(10);
     expect(r.ok && r.entries.find((e) => e.path === 'arr')!.strideBits).toBe(1);
   });
   it('String[n] occupa n+2 byte da un byte pari', () => {
-    expect(offsets(layoutStruct([m('c','Char'), m('s','String[3]'), m('b','Byte')], none))).toEqual({ c: '0.0', s: '2.0', b: '7.0' });
+    expect(
+      offsets(layoutStruct([m('c', 'Char'), m('s', 'String[3]'), m('b', 'Byte')], none)),
+    ).toEqual({ c: '0.0', s: '2.0', b: '7.0' });
   });
   it('dati di istanza: sezioni a byte pari, InOut complesso come puntatore, multi-istanza', () => {
-    const resolve: TypeResolver = (n) => n === 'Sub' ? { kind: 'fb', sections: { input: [m('x','Int')], output: [], inOut: [], static: [] } } : null;
-    const r = layoutInstance({ input: [m('a','Bool'), m('t','Timer')], output: [m('b','Bool')], inOut: [m('c','Int'), m('d','Array[1..10] of Byte')], static: [m('e','Bool'), m('inst','"Sub"')] }, resolve);
-    expect(offsets(r)).toEqual({ a: '0.0', t: '2.0', b: '4.0', c: '6.0', d: '8.0', e: '14.0', inst: '16.0', 'inst.x': '16.0' });
+    const resolve: TypeResolver = (n) =>
+      n === 'Sub'
+        ? { kind: 'fb', sections: { input: [m('x', 'Int')], output: [], inOut: [], static: [] } }
+        : null;
+    const r = layoutInstance(
+      {
+        input: [m('a', 'Bool'), m('t', 'Timer')],
+        output: [m('b', 'Bool')],
+        inOut: [m('c', 'Int'), m('d', 'Array[1..10] of Byte')],
+        static: [m('e', 'Bool'), m('inst', '"Sub"')],
+      },
+      resolve,
+    );
+    expect(offsets(r)).toEqual({
+      a: '0.0',
+      t: '2.0',
+      b: '4.0',
+      c: '6.0',
+      d: '8.0',
+      e: '14.0',
+      inst: '16.0',
+      'inst.x': '16.0',
+    });
     expect(r.ok && r.sizeBytes).toBe(18);
   });
   it('UDT sconosciuto e UDT ricorsivo', () => {
-    expect(layoutStruct([m('u','"Manca"')], none)).toEqual({ ok: false, error: 'UNKNOWN_TYPE', name: 'Manca' });
-    const loop: TypeResolver = (n) => n === 'A' ? { kind: 'udt', members: [m('b','"B"')] } : n === 'B' ? { kind: 'udt', members: [m('a','"A"')] } : null;
-    expect(layoutStruct([m('x','"A"')], loop)).toMatchObject({ ok: false, error: 'CYCLE' });
+    expect(layoutStruct([m('u', '"Manca"')], none)).toEqual({
+      ok: false,
+      error: 'UNKNOWN_TYPE',
+      name: 'Manca',
+    });
+    const loop: TypeResolver = (n) =>
+      n === 'A'
+        ? { kind: 'udt', members: [m('b', '"B"')] }
+        : n === 'B'
+          ? { kind: 'udt', members: [m('a', '"A"')] }
+          : null;
+    expect(layoutStruct([m('x', '"A"')], loop)).toMatchObject({ ok: false, error: 'CYCLE' });
   });
   ```
 
@@ -439,36 +689,58 @@ Regole:
 ### Task 3: `@baaportal/catalog`: CPU S7-300 e OB
 
 **Files:**
+
 - Create: `packages/catalog/{package.json,tsconfig.json,vitest.config.ts}`, `packages/catalog/src/{index,types,cpus,obs}.ts`
 - Test: `packages/catalog/test/catalog.test.ts`
 
 **Interfaces:**
+
 - Consumes: `TypedMember`, `parseType`, `layoutStruct` (Task 1–2).
 - Produces:
   ```ts
-  export interface CpuVersion { orderNumber: string; firmware: string[] }   // firmware dal più recente, es. ['V3.2', 'V3.1']
+  export interface CpuVersion {
+    orderNumber: string;
+    firmware: string[];
+  } // firmware dal più recente, es. ['V3.2', 'V3.1']
   export interface CpuType {
-    id: string;                                     // 'cpu-315-2-pn-dp'
-    name: string;                                   // 'CPU 315-2 PN/DP'
+    id: string; // 'cpu-315-2-pn-dp'
+    name: string; // 'CPU 315-2 PN/DP'
     group: 'standard' | 'compact' | 'failsafe';
-    versions: CpuVersion[];                         // dalla più recente
+    versions: CpuVersion[]; // dalla più recente
     interfaces: { mpi: boolean; dp: boolean; pn: boolean };
     workMemoryKB: number;
-    limits: { mBytes: number; timers: number; counters: number; inputBytes: number; outputBytes: number;
-              maxFb: number; maxFc: number; maxDb: number; localDataBytesPerClass: number };
+    limits: {
+      mBytes: number;
+      timers: number;
+      counters: number;
+      inputBytes: number;
+      outputBytes: number;
+      maxFb: number;
+      maxFc: number;
+      maxDb: number;
+      localDataBytesPerClass: number;
+    };
     retentiveMax: { mBytes: number; timers: number; counters: number };
-    obs: number[];                                  // OB ammessi dalla CPU
-    source: string;                                 // titolo ed eventuale URL del documento pubblico usato
+    obs: number[]; // OB ammessi dalla CPU
+    source: string; // titolo ed eventuale URL del documento pubblico usato
   }
-  export interface ObDefinition { number: number; eventKey: string; defaultName: string; startInfo: TypedMember[] }
+  export interface ObDefinition {
+    number: number;
+    eventKey: string;
+    defaultName: string;
+    startInfo: TypedMember[];
+  }
   export const CPU_CATALOG: readonly CpuType[];
   export const OB_DEFINITIONS: readonly ObDefinition[];
   export function findCpu(id: string): CpuType | undefined;
-  export function findCpuByOrderNumber(orderNumber: string): { cpu: CpuType; version: CpuVersion } | undefined;
+  export function findCpuByOrderNumber(
+    orderNumber: string,
+  ): { cpu: CpuType; version: CpuVersion } | undefined;
   export function findOb(number: number): ObDefinition | undefined;
   ```
 
 Contenuto:
+
 - **CPU** (spec §6: "tutte le CPU S7-300 31x presenti nei manuali pubblici"):
   - standard: 312, 314, 315-2 DP, 315-2 PN/DP, 317-2 DP, 317-2 PN/DP, 319-3 PN/DP, più 316-2 DP e 318-2 DP se le loro schede tecniche pubbliche si trovano;
   - compatte: 312C, 313C, 313C-2 PtP, 313C-2 DP, 314C-2 PtP, 314C-2 DP, 314C-2 PN/DP;
@@ -488,12 +760,15 @@ Contenuto:
 - [ ] **Step 1: Scrivi i test che falliscono**
 
   ```ts
-  it('ogni CPU: id unico, nome CPU 31x, numeri d\'articolo validi, OB1, fonte', () => {
+  it("ogni CPU: id unico, nome CPU 31x, numeri d'articolo validi, OB1, fonte", () => {
     expect(new Set(CPU_CATALOG.map((c) => c.id)).size).toBe(CPU_CATALOG.length);
     for (const c of CPU_CATALOG) {
       expect(c.name).toMatch(/^CPU 31\d/);
       expect(c.versions.length).toBeGreaterThan(0);
-      for (const v of c.versions) { expect(v.orderNumber).toMatch(/^6ES7 31\d-[0-9A-Z]{5}-0AB0$/); expect(v.firmware.length).toBeGreaterThan(0); }
+      for (const v of c.versions) {
+        expect(v.orderNumber).toMatch(/^6ES7 31\d-[0-9A-Z]{5}-0AB0$/);
+        expect(v.firmware.length).toBeGreaterThan(0);
+      }
       expect(c.obs).toContain(1);
       for (const ob of c.obs) expect(findOb(ob)).toBeDefined();
       expect(c.source.trim()).not.toBe('');
@@ -502,16 +777,32 @@ Contenuto:
   });
   it('CPU 315-2 PN/DP', () => {
     const { cpu } = findCpuByOrderNumber('6ES7 315-2EH14-0AB0')!;
-    expect(cpu).toMatchObject({ name: 'CPU 315-2 PN/DP', group: 'standard', interfaces: { mpi: true, dp: true, pn: true } });
+    expect(cpu).toMatchObject({
+      name: 'CPU 315-2 PN/DP',
+      group: 'standard',
+      interfaces: { mpi: true, dp: true, pn: true },
+    });
     expect(cpu.limits).toMatchObject({ mBytes: 2048, timers: 256, counters: 256 });
   });
   it('le informazioni di avvio di ogni OB occupano 20 byte', () => {
-    for (const ob of OB_DEFINITIONS) { const r = layoutStruct(ob.startInfo, () => null); expect(r.ok && r.sizeBytes).toBe(20); }
+    for (const ob of OB_DEFINITIONS) {
+      const r = layoutStruct(ob.startInfo, () => null);
+      expect(r.ok && r.sizeBytes).toBe(20);
+    }
   });
   it('OB1: nomi e tipi delle informazioni di avvio', () => {
     expect(findOb(1)!.startInfo.map((m) => `${m.name}:${formatType(m.type)}`)).toEqual([
-      'OB1_EV_CLASS:Byte','OB1_SCAN_1:Byte','OB1_PRIORITY:Byte','OB1_OB_NUMBR:Byte','OB1_RESERVED_1:Byte','OB1_RESERVED_2:Byte',
-      'OB1_PREV_CYCLE:Int','OB1_MIN_CYCLE:Int','OB1_MAX_CYCLE:Int','OB1_DATE_TIME:Date_And_Time']);
+      'OB1_EV_CLASS:Byte',
+      'OB1_SCAN_1:Byte',
+      'OB1_PRIORITY:Byte',
+      'OB1_OB_NUMBR:Byte',
+      'OB1_RESERVED_1:Byte',
+      'OB1_RESERVED_2:Byte',
+      'OB1_PREV_CYCLE:Int',
+      'OB1_MIN_CYCLE:Int',
+      'OB1_MAX_CYCLE:Int',
+      'OB1_DATE_TIME:Date_And_Time',
+    ]);
     expect(findOb(1)!.defaultName).toBe('Main');
   });
   ```
@@ -544,76 +835,195 @@ Contenuto:
 ### Task 4: `@baaportal/project`: modello formato 2, file `.baap`, creazione e rinomina
 
 **Files:**
+
 - Modify: `packages/project/src/{model,baapFile,index}.ts`, `packages/project/package.json` (dipendenze `@baaportal/s7-types`, `@baaportal/catalog`)
 - Create: `packages/project/src/{plc,members}.ts`
 - Test: `packages/project/test/{model,baapFile,plc}.test.ts` (aggiorna quelli del piano 1A)
 
 **Interfaces:**
+
 - Consumes: `@baaportal/s7-types` (Task 1–2), `CpuType`, `findOb` (Task 3).
 - Produces:
   ```ts
   export const FORMAT_VERSION = 2;
-  export type Language = 'AWL'|'KOP'|'FUP'|'SCL';
-  export interface Project { formatVersion: 2; meta: ProjectMeta; devices: PlcDevice[] }
+  export type Language = 'AWL' | 'KOP' | 'FUP' | 'SCL';
+  export interface Project {
+    formatVersion: 2;
+    meta: ProjectMeta;
+    devices: PlcDevice[];
+  }
   export interface PlcDevice {
-    id: string; name: string;
+    id: string;
+    name: string;
     cpu: { typeId: string; orderNumber: string; firmware: string };
     properties: CpuProperties;
-    tagTables: TagTable[]; udts: Udt[]; blocks: Block[];
-    groups: { blocks: string[]; tags: string[]; types: string[] };  // percorsi 'A' e 'A/B'
+    tagTables: TagTable[];
+    udts: Udt[];
+    blocks: Block[];
+    groups: { blocks: string[]; tags: string[]; types: string[] }; // percorsi 'A' e 'A/B'
   }
   export interface CpuProperties {
     comment: string;
     pn?: { ipAddress: string; subnetMask: string; useRouter: boolean; routerAddress: string };
-    mpiAddress: number; dpAddress?: number;
+    mpiAddress: number;
+    dpAddress?: number;
     cycle: { maxCycleMs: number; minCycleMs: number; commLoadPercent: number };
     clockMemory: { enabled: boolean; byte: number };
     retentivity: { mBytes: number; timers: number; counters: number };
     cyclicInterrupts: { ob35Ms: number };
   }
-  export interface TagTable { id: string; name: string; group: string; tags: Tag[]; constants: UserConstant[] }
-  export interface Tag { id: string; name: string; type: string; address: string; hmi: boolean; comment: string }
-  export interface UserConstant { id: string; name: string; type: string; value: string; comment: string }
-  export interface Member { id: string; name: string; type: string; initial?: string; comment: string;
-    members?: Member[]; overrides?: Record<string, string>; readOnly?: boolean }
-  export interface Udt { id: string; name: string; number: number; group: string; comment: string; author: string; family: string; version: string; members: Member[] }
-  export interface BlockHeader { title: string; comment: string; author: string; family: string; headerName: string; version: string }
-  export interface Network { id: string; title: string; comment: string; source: string }
-  export interface BlockInterface { input: Member[]; output: Member[]; inOut: Member[]; static: Member[]; temp: Member[]; returnType: string }
-  export interface DbAttributes { unlinked: boolean; readOnly: boolean; nonRetain: boolean }
-  interface BlockBase { id: string; number: number; name: string; group: string; header: BlockHeader; knowHowProtected: boolean }
-  export interface CodeBlock extends BlockBase { kind: 'OB'|'FB'|'FC'; language: Language; interface: BlockInterface; networks: Network[] }
-  export interface GlobalDb extends BlockBase { kind: 'DB'; members: Member[]; attributes: DbAttributes }
-  export interface InstanceDb extends BlockBase { kind: 'IDB'; instanceOf: string; overrides: Record<string, string>; attributes: DbAttributes }
+  export interface TagTable {
+    id: string;
+    name: string;
+    group: string;
+    tags: Tag[];
+    constants: UserConstant[];
+  }
+  export interface Tag {
+    id: string;
+    name: string;
+    type: string;
+    address: string;
+    hmi: boolean;
+    comment: string;
+  }
+  export interface UserConstant {
+    id: string;
+    name: string;
+    type: string;
+    value: string;
+    comment: string;
+  }
+  export interface Member {
+    id: string;
+    name: string;
+    type: string;
+    initial?: string;
+    comment: string;
+    members?: Member[];
+    overrides?: Record<string, string>;
+    readOnly?: boolean;
+  }
+  export interface Udt {
+    id: string;
+    name: string;
+    number: number;
+    group: string;
+    comment: string;
+    author: string;
+    family: string;
+    version: string;
+    members: Member[];
+  }
+  export interface BlockHeader {
+    title: string;
+    comment: string;
+    author: string;
+    family: string;
+    headerName: string;
+    version: string;
+  }
+  export interface Network {
+    id: string;
+    title: string;
+    comment: string;
+    source: string;
+  }
+  export interface BlockInterface {
+    input: Member[];
+    output: Member[];
+    inOut: Member[];
+    static: Member[];
+    temp: Member[];
+    returnType: string;
+  }
+  export interface DbAttributes {
+    unlinked: boolean;
+    readOnly: boolean;
+    nonRetain: boolean;
+  }
+  interface BlockBase {
+    id: string;
+    number: number;
+    name: string;
+    group: string;
+    header: BlockHeader;
+    knowHowProtected: boolean;
+  }
+  export interface CodeBlock extends BlockBase {
+    kind: 'OB' | 'FB' | 'FC';
+    language: Language;
+    interface: BlockInterface;
+    networks: Network[];
+  }
+  export interface GlobalDb extends BlockBase {
+    kind: 'DB';
+    members: Member[];
+    attributes: DbAttributes;
+  }
+  export interface InstanceDb extends BlockBase {
+    kind: 'IDB';
+    instanceOf: string;
+    overrides: Record<string, string>;
+    attributes: DbAttributes;
+  }
   export type Block = CodeBlock | GlobalDb | InstanceDb;
   export type ObjectRef =
     | { kind: 'device'; deviceId: string }
     | { kind: 'block' | 'udt' | 'tagTable'; deviceId: string; id: string }
     | { kind: 'tag' | 'constant'; deviceId: string; tableId: string; id: string }
-    | { kind: 'member'; deviceId: string; ownerKind: 'block' | 'udt'; ownerId: string; memberId: string };
+    | {
+        kind: 'member';
+        deviceId: string;
+        ownerKind: 'block' | 'udt';
+        ownerId: string;
+        memberId: string;
+      };
 
   // plc.ts
-  export type NewId = () => string;   // predefinito: () => crypto.randomUUID()
-  export function createPlcDevice(a: { cpu: CpuType; orderNumber: string; firmware: string; name: string;
-    texts: { defaultTagTable: string }; newId?: NewId }): PlcDevice;
-  export function createCodeBlock(a: { kind: 'OB'|'FB'|'FC'; number: number; name: string; language: Language; newId?: NewId }): CodeBlock;
+  export type NewId = () => string; // predefinito: () => crypto.randomUUID()
+  export function createPlcDevice(a: {
+    cpu: CpuType;
+    orderNumber: string;
+    firmware: string;
+    name: string;
+    texts: { defaultTagTable: string };
+    newId?: NewId;
+  }): PlcDevice;
+  export function createCodeBlock(a: {
+    kind: 'OB' | 'FB' | 'FC';
+    number: number;
+    name: string;
+    language: Language;
+    newId?: NewId;
+  }): CodeBlock;
   export function createGlobalDb(a: { number: number; name: string; newId?: NewId }): GlobalDb;
-  export function createInstanceDb(a: { number: number; name: string; instanceOf: string; newId?: NewId }): InstanceDb;
+  export function createInstanceDb(a: {
+    number: number;
+    name: string;
+    instanceOf: string;
+    newId?: NewId;
+  }): InstanceDb;
   export function createTagTable(name: string, newId?: NewId): TagTable;
   export function createUdt(a: { name: string; number: number; newId?: NewId }): Udt;
-  export function symbolNames(device: PlcDevice): string[];          // tag, costanti, blocchi, UDT
+  export function symbolNames(device: PlcDevice): string[]; // tag, costanti, blocchi, UDT
   export function uniqueName(base: string, taken: Iterable<string>): string;
-  export function nextFreeNumber(device: PlcDevice, kind: 'OB'|'FB'|'FC'|'DB'|'UDT', max: number): number | null; // DB e IDB condividono i numeri
+  export function nextFreeNumber(
+    device: PlcDevice,
+    kind: 'OB' | 'FB' | 'FC' | 'DB' | 'UDT',
+    max: number,
+  ): number | null; // DB e IDB condividono i numeri
   export function findDevice(p: Project, id: string): PlcDevice | undefined;
-  export function findBlock(d: PlcDevice, id: string): Block | undefined;   // findUdt, findTagTable allo stesso modo
+  export function findBlock(d: PlcDevice, id: string): Block | undefined; // findUdt, findTagTable allo stesso modo
   export function renameWithReferences(device: PlcDevice, ref: ObjectRef, newName: string): void; // modifica sul posto (ricetta immer)
   // members.ts
-  export function toTypedMembers(members: Member[]): TypedMember[];  // salta i membri con tipo non valido
-  export function typeResolver(device: PlcDevice): TypeResolver;     // UDT per nome; FB per nome (sezioni Input/Output/InOut/Static)
+  export function toTypedMembers(members: Member[]): TypedMember[]; // salta i membri con tipo non valido
+  export function typeResolver(device: PlcDevice): TypeResolver; // UDT per nome; FB per nome (sezioni Input/Output/InOut/Static)
   export function memberPath(parent: string, child: string | number[]): string; // 'a' + 'b' → 'a.b'; 'a' + [1,2] → 'a[1,2]'
   ```
 
 Regole:
+
 - **File zip, formato 2**. Tutti i JSON hanno 2 spazi di indentazione e sono UTF-8, con i nomi dei file basati sull'id e non sul nome:
   - `baaportal.json` (manifesto, come nel piano 1A, con `formatVersion: 2`);
   - `project.json` = `{ formatVersion, meta, devices: [{ id, name }] }`;
@@ -647,32 +1057,83 @@ Regole:
 
   ```ts
   // baapFile.test.ts
-  it('un file del formato 1 si apre come formato 2 senza dispositivi', () => { /* zip formato 1 come nel piano 1A */ expect(readBaap(v1).devices).toEqual([]); });
-  it('andata e ritorno di un progetto completo', () => { /* device 315-2 PN/DP + tabella con 2 tag e 1 costante + UDT con Struct + FB con multi-istanza + DB + IDB */
-    expect(readBaap(writeBaap(p, { appVersion: '0.2.0' }))).toEqual(p); });
-  it('un JSON per oggetto con percorsi basati sugli id', () => {
-    expect(Object.keys(unzipSync(writeBaap(p, { appVersion: 'x' }))).sort()).toEqual([
-      'baaportal.json', `plc/${dev.id}/blocks/${ob1.id}.json`, /* … */ `plc/${dev.id}/device.json`, `plc/${dev.id}/tags/${table.id}.json`, `plc/${dev.id}/types/${udt.id}.json`, 'project.json'].sort());
+  it('un file del formato 1 si apre come formato 2 senza dispositivi', () => {
+    /* zip formato 1 come nel piano 1A */ expect(readBaap(v1).devices).toEqual([]);
   });
-  it('le chiavi sconosciute si conservano', () => { /* aggiunge meta.extra e tags[0].extra nel JSON → read → write → read: ancora presenti */ });
-  it('id doppi, file mancante, kind sconosciuto → INVALID_SCHEMA; formato 3 → NEWER_FORMAT', () => { /* … */ });
+  it('andata e ritorno di un progetto completo', () => {
+    /* device 315-2 PN/DP + tabella con 2 tag e 1 costante + UDT con Struct + FB con multi-istanza + DB + IDB */
+    expect(readBaap(writeBaap(p, { appVersion: '0.2.0' }))).toEqual(p);
+  });
+  it('un JSON per oggetto con percorsi basati sugli id', () => {
+    expect(Object.keys(unzipSync(writeBaap(p, { appVersion: 'x' }))).sort()).toEqual(
+      [
+        'baaportal.json',
+        `plc/${dev.id}/blocks/${ob1.id}.json`,
+        /* … */ `plc/${dev.id}/device.json`,
+        `plc/${dev.id}/tags/${table.id}.json`,
+        `plc/${dev.id}/types/${udt.id}.json`,
+        'project.json',
+      ].sort(),
+    );
+  });
+  it('le chiavi sconosciute si conservano', () => {
+    /* aggiunge meta.extra e tags[0].extra nel JSON → read → write → read: ancora presenti */
+  });
+  it('id doppi, file mancante, kind sconosciuto → INVALID_SCHEMA; formato 3 → NEWER_FORMAT', () => {
+    /* … */
+  });
   // plc.test.ts
   it('createPlcDevice con i valori predefiniti', () => {
-    const d = createPlcDevice({ cpu: cpu315pn, orderNumber: '6ES7 315-2EH14-0AB0', firmware: 'V3.2', name: 'PLC_1', texts: { defaultTagTable: 'Tabella delle variabili standard' }, newId: seq() });
-    expect(d.properties).toEqual({ comment: '', pn: { ipAddress: '192.168.0.1', subnetMask: '255.255.255.0', useRouter: false, routerAddress: '' }, mpiAddress: 2, dpAddress: 2,
-      cycle: { maxCycleMs: 150, minCycleMs: 0, commLoadPercent: 20 }, clockMemory: { enabled: false, byte: 0 }, retentivity: { mBytes: 16, timers: 0, counters: 8 }, cyclicInterrupts: { ob35Ms: 100 } });
+    const d = createPlcDevice({
+      cpu: cpu315pn,
+      orderNumber: '6ES7 315-2EH14-0AB0',
+      firmware: 'V3.2',
+      name: 'PLC_1',
+      texts: { defaultTagTable: 'Tabella delle variabili standard' },
+      newId: seq(),
+    });
+    expect(d.properties).toEqual({
+      comment: '',
+      pn: {
+        ipAddress: '192.168.0.1',
+        subnetMask: '255.255.255.0',
+        useRouter: false,
+        routerAddress: '',
+      },
+      mpiAddress: 2,
+      dpAddress: 2,
+      cycle: { maxCycleMs: 150, minCycleMs: 0, commLoadPercent: 20 },
+      clockMemory: { enabled: false, byte: 0 },
+      retentivity: { mBytes: 16, timers: 0, counters: 8 },
+      cyclicInterrupts: { ob35Ms: 100 },
+    });
     expect(d.tagTables.map((t) => t.name)).toEqual(['Tabella delle variabili standard']);
     const ob1 = d.blocks[0] as CodeBlock;
-    expect([ob1.kind, ob1.number, ob1.name, ob1.language, ob1.interface.temp.length, ob1.interface.temp.every((m) => m.readOnly), ob1.networks.length]).toEqual(['OB', 1, 'Main', 'AWL', 10, true, 1]);
+    expect([
+      ob1.kind,
+      ob1.number,
+      ob1.name,
+      ob1.language,
+      ob1.interface.temp.length,
+      ob1.interface.temp.every((m) => m.readOnly),
+      ob1.networks.length,
+    ]).toEqual(['OB', 1, 'Main', 'AWL', 10, true, 1]);
   });
-  it('nextFreeNumber: buchi, DB e IDB condivisi, pieno → null', () => { /* FB1,FB2,FB4 → 3; DB1 + IDB2 → DB 3; max 2 con FB1,FB2 → null */ });
-  it('uniqueName', () => { expect(uniqueName('Motore', ['motore', 'Motore_1'])).toBe('Motore_2'); expect(uniqueName('Nastro', ['Motore'])).toBe('Nastro'); });
+  it('nextFreeNumber: buchi, DB e IDB condivisi, pieno → null', () => {
+    /* FB1,FB2,FB4 → 3; DB1 + IDB2 → DB 3; max 2 con FB1,FB2 → null */
+  });
+  it('uniqueName', () => {
+    expect(uniqueName('Motore', ['motore', 'Motore_1'])).toBe('Motore_2');
+    expect(uniqueName('Nastro', ['Motore'])).toBe('Nastro');
+  });
   it('rinomina di un UDT aggiorna tutti i riferimenti', () => {
     /* "Asse" usato in FB.static (tipo "Asse"), in un altro UDT (Array[1..2] of "Asse"), in un DB globale */
     renameWithReferences(d, { kind: 'udt', deviceId: d.id, id: asse.id }, 'Asse2');
     expect(types(d)).toEqual(['"Asse2"', 'Array[1..2] of "Asse2"', '"Asse2"']);
   });
-  it('rinomina di un FB aggiorna DB di istanza e multi-istanze', () => { /* … instanceOf === 'Nastro2', membro static tipo '"Nastro2"' */ });
+  it('rinomina di un FB aggiorna DB di istanza e multi-istanze', () => {
+    /* … instanceOf === 'Nastro2', membro static tipo '"Nastro2"' */
+  });
   ```
 
 - [ ] **Step 2: Esegui e verifica che falliscano**
@@ -701,41 +1162,70 @@ Regole:
 ### Task 5: `@baaportal/project`: controlli e diagnostica
 
 **Files:**
+
 - Create: `packages/project/src/checks.ts`
 - Modify: `packages/project/src/index.ts`
 - Test: `packages/project/test/checks.test.ts`
 
 **Interfaces:**
+
 - Consumes: modello e `members.ts` (Task 4), `@baaportal/s7-types`, `CpuType` (Task 3).
 - Produces:
   ```ts
   export type DiagnosticCode =
-    | 'NAME_INVALID' | 'NAME_DUPLICATE' | 'TYPE_INVALID' | 'TYPE_NOT_ALLOWED' | 'TYPE_UNKNOWN' | 'TYPE_CYCLE'
-    | 'ADDRESS_INVALID' | 'ADDRESS_TYPE_MISMATCH' | 'ADDRESS_OUT_OF_RANGE' | 'ADDRESS_OVERLAP'
-    | 'VALUE_INVALID' | 'NUMBER_DUPLICATE' | 'NUMBER_OUT_OF_RANGE' | 'OB_NOT_SUPPORTED'
-    | 'INSTANCE_FB_MISSING' | 'HEADER_INVALID' | 'PROPERTY_INVALID' | 'CPU_UNKNOWN';
-  export interface Diagnostic { severity: 'error' | 'warning'; code: DiagnosticCode; ref: ObjectRef;
-    field?: 'name' | 'type' | 'address' | 'value' | 'number' | 'header' | 'property'; property?: string; params?: Record<string, string> }
+    | 'NAME_INVALID'
+    | 'NAME_DUPLICATE'
+    | 'TYPE_INVALID'
+    | 'TYPE_NOT_ALLOWED'
+    | 'TYPE_UNKNOWN'
+    | 'TYPE_CYCLE'
+    | 'ADDRESS_INVALID'
+    | 'ADDRESS_TYPE_MISMATCH'
+    | 'ADDRESS_OUT_OF_RANGE'
+    | 'ADDRESS_OVERLAP'
+    | 'VALUE_INVALID'
+    | 'NUMBER_DUPLICATE'
+    | 'NUMBER_OUT_OF_RANGE'
+    | 'OB_NOT_SUPPORTED'
+    | 'INSTANCE_FB_MISSING'
+    | 'HEADER_INVALID'
+    | 'PROPERTY_INVALID'
+    | 'CPU_UNKNOWN';
+  export interface Diagnostic {
+    severity: 'error' | 'warning';
+    code: DiagnosticCode;
+    ref: ObjectRef;
+    field?: 'name' | 'type' | 'address' | 'value' | 'number' | 'header' | 'property';
+    property?: string;
+    params?: Record<string, string>;
+  }
   export function checkDevice(device: PlcDevice, cpu: CpuType | undefined): Diagnostic[];
-  export function memberAllowed(owner: 'FB'|'FC'|'OB'|'DB'|'UDT', section: 'input'|'output'|'inOut'|'static'|'temp'|'return'|'members', type: DataType, isFb: (name: string) => boolean): boolean;
+  export function memberAllowed(
+    owner: 'FB' | 'FC' | 'OB' | 'DB' | 'UDT',
+    section: 'input' | 'output' | 'inOut' | 'static' | 'temp' | 'return' | 'members',
+    type: DataType,
+    isFb: (name: string) => boolean,
+  ): boolean;
   ```
 
 Regole:
+
 - **Spazio dei simboli** della CPU: tag, costanti, blocchi (anche DB di istanza) e UDT hanno nomi unici fra tutti, senza distinguere maiuscole (`sameName`). Ogni copia di un nome doppio dà `NAME_DUPLICATE` (`error`, campo `name`).
 - **Nomi locali**: unici nell'intera interfaccia di un blocco, in tutte le sezioni, e dentro ogni struct. Per le tabelle delle variabili: unici fra le tabelle. Gruppi: unici fra gruppi fratelli.
 - **Tipi ammessi per sezione** (`TYPE_NOT_ALLOWED`):
 
-  | Proprietario / sezione | Ammessi |
-  |---|---|
-  | FB/FC Input | elementari, `String`, `Date_And_Time`, `Array`, `Struct`, UDT, `Timer`, `Counter`, `Block_*`; FC anche `Pointer`, `Any` |
-  | FB/FC Output | elementari, complessi (come sopra), FC anche `Pointer`, `Any` |
-  | FB/FC InOut | elementari, complessi, `Pointer`, `Any` |
-  | FB Static | elementari, complessi, multi-istanza (`"FB"`) |
-  | Temp (OB/FB/FC) | elementari, complessi, `Any` |
-  | FC Return | `Void` o elementari |
-  | DB / UDT | elementari, complessi |
+  | Proprietario / sezione | Ammessi                                                                                                                 |
+  | ---------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+  | FB/FC Input            | elementari, `String`, `Date_And_Time`, `Array`, `Struct`, UDT, `Timer`, `Counter`, `Block_*`; FC anche `Pointer`, `Any` |
+  | FB/FC Output           | elementari, complessi (come sopra), FC anche `Pointer`, `Any`                                                           |
+  | FB/FC InOut            | elementari, complessi, `Pointer`, `Any`                                                                                 |
+  | FB Static              | elementari, complessi, multi-istanza (`"FB"`)                                                                           |
+  | Temp (OB/FB/FC)        | elementari, complessi, `Any`                                                                                            |
+  | FC Return              | `Void` o elementari                                                                                                     |
+  | DB / UDT               | elementari, complessi                                                                                                   |
 
   Il tag della tabella può avere solo un tipo elementare, `Timer` o `Counter`. La costante utente ha un tipo elementare.
+
 - **Indirizzi dei tag**:
   - sintassi errata → `ADDRESS_INVALID`;
   - tipo incompatibile → `ADDRESS_TYPE_MISMATCH`;
@@ -770,13 +1260,22 @@ Regole:
   ```ts
   it('nomi doppi fra tag, costante, blocco e UDT senza distinguere maiuscole', () => {
     /* tag 'Motore', costante 'MOTORE', FB 'motore' */
-    expect(codes(checkDevice(d, cpu))).toEqual(['NAME_DUPLICATE', 'NAME_DUPLICATE', 'NAME_DUPLICATE']);
+    expect(codes(checkDevice(d, cpu))).toEqual([
+      'NAME_DUPLICATE',
+      'NAME_DUPLICATE',
+      'NAME_DUPLICATE',
+    ]);
   });
-  it('sovrapposizione: avviso su entrambi con il nome dell\'altro', () => {
+  it("sovrapposizione: avviso su entrambi con il nome dell'altro", () => {
     /* A %MW0 Int, B %M1.3 Bool */
-    expect(checkDevice(d, cpu).map((x) => [x.code, x.severity, x.params?.other])).toEqual([['ADDRESS_OVERLAP', 'warning', 'B'], ['ADDRESS_OVERLAP', 'warning', 'A']]);
+    expect(checkDevice(d, cpu).map((x) => [x.code, x.severity, x.params?.other])).toEqual([
+      ['ADDRESS_OVERLAP', 'warning', 'B'],
+      ['ADDRESS_OVERLAP', 'warning', 'A'],
+    ]);
   });
-  it('limiti della CPU: %M2048.0 fuori dalla 315-2 PN/DP', () => { /* ADDRESS_OUT_OF_RANGE */ });
+  it('limiti della CPU: %M2048.0 fuori dalla 315-2 PN/DP', () => {
+    /* ADDRESS_OUT_OF_RANGE */
+  });
   it('tipi per sezione', () => {
     expect(memberAllowed('FB', 'input', type('Pointer'), no)).toBe(false);
     expect(memberAllowed('FC', 'input', type('Pointer'), no)).toBe(true);
@@ -787,10 +1286,15 @@ Regole:
   });
   it('file con riferimenti rotti: diagnostica, nessuna eccezione', () => {
     /* IDB con instanceOf 'Manca', membro di tipo '"NonCè"', UDT A↔B ricorsivi */
-    expect(codes(checkDevice(d, cpu))).toEqual(expect.arrayContaining(['INSTANCE_FB_MISSING', 'TYPE_UNKNOWN', 'TYPE_CYCLE']));
+    expect(codes(checkDevice(d, cpu))).toEqual(
+      expect.arrayContaining(['INSTANCE_FB_MISSING', 'TYPE_UNKNOWN', 'TYPE_CYCLE']),
+    );
   });
-  it('proprietà CPU non valide', () => { /* ip '192.168.0.0' maschera '255.0.255.0' clock byte 2048 → tre PROPERTY_INVALID con property 'pn.ipAddress','pn.subnetMask','clockMemory.byte' */ });
-  it('un dispositivo nuovo è senza errori', () => expect(checkDevice(createPlcDevice(/* 315 PN */), cpu)).toEqual([]));
+  it('proprietà CPU non valide', () => {
+    /* ip '192.168.0.0' maschera '255.0.255.0' clock byte 2048 → tre PROPERTY_INVALID con property 'pn.ipAddress','pn.subnetMask','clockMemory.byte' */
+  });
+  it('un dispositivo nuovo è senza errori', () =>
+    expect(checkDevice(createPlcDevice(/* 315 PN */), cpu)).toEqual([]));
   ```
 
 - [ ] **Step 2: Esegui e verifica che falliscano**
@@ -819,11 +1323,13 @@ Regole:
 ### Task 6: Annulla/ripeti, revisioni del documento, campi a conferma
 
 **Files:**
+
 - Create: `packages/ui/src/state/history.ts`, `packages/ui/src/components/CommitField.tsx`
 - Modify: `packages/ui/src/state/store.ts`, `packages/ui/src/services/projectService.ts`, `packages/ui/src/commands/{commands,useShortcuts}.ts`, `packages/ui/src/project/inspector/ProjectProperties.tsx`, `packages/ui/src/project/Toolbar.tsx`, `packages/ui/package.json` (aggiungi `immer`)
 - Test: `packages/ui/test/{history,store,projectService,commands}.test.ts`, `packages/ui/test/commitField.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `Project` (Task 4).
 - Produces:
   ```ts
@@ -845,6 +1351,7 @@ Regole:
   ```
 
 Regole:
+
 - **Revisioni**:
   - ogni `edit` riuscito prende un nuovo numero da un contatore che cresce sempre, e lo assegna a `revision`;
   - `undo` riporta `revision` a `entry.before`, `redo` a `entry.after`;
@@ -875,18 +1382,38 @@ Regole:
   ```ts
   it('edit, undo, redo e dirty seguono la revisione salvata', () => {
     s.setDoc({ project, filePath: '/p.baap', dirty: false, revision: 0, savedRevision: 0 });
-    s.edit('history.author', (p) => { p.meta.author = 'A'; });
+    s.edit('history.author', (p) => {
+      p.meta.author = 'A';
+    });
     expect(get().doc!.dirty).toBe(true);
-    s.undo(); expect(get().doc!.dirty).toBe(false); expect(get().doc!.project.meta.author).toBe(project.meta.author);
-    s.redo(); expect(get().doc!.project.meta.author).toBe('A');
+    s.undo();
+    expect(get().doc!.dirty).toBe(false);
+    expect(get().doc!.project.meta.author).toBe(project.meta.author);
+    s.redo();
+    expect(get().doc!.project.meta.author).toBe('A');
   });
-  it('salvare e poi annullare rimette "modificato"', () => { /* edit → markSaved(revision) → dirty false → undo → dirty true */ });
-  it('una ricetta che non cambia nulla non crea voci', () => { expect(s.edit('x', () => {})).toBe(false); expect(get().history.past).toHaveLength(0); });
-  it('nuovo edit svuota future; limite di 100 voci', () => { /* 101 edit → past.length 100 */ });
-  it('modifica durante il salvataggio: resta modificata e non va persa', async () => { /* scrittura differita nel FakeBridge, edit durante l'attesa → dirty true e valore presente */ });
-  it('Mod+Z e Mod+Y, Mod+Shift+Z su macOS', async () => { /* renderApp con progetto, edit, tasti → valori */ });
-  it('dentro un campo Mod+Z non annulla il progetto', async () => { /* focus su input → Mod+Z → history.past invariata */ });
-  it('CommitInput conferma su blur e Invio, Esc annulla, validate blocca', async () => { /* … onCommit chiamato 2 volte con i valori giusti */ });
+  it('salvare e poi annullare rimette "modificato"', () => {
+    /* edit → markSaved(revision) → dirty false → undo → dirty true */
+  });
+  it('una ricetta che non cambia nulla non crea voci', () => {
+    expect(s.edit('x', () => {})).toBe(false);
+    expect(get().history.past).toHaveLength(0);
+  });
+  it('nuovo edit svuota future; limite di 100 voci', () => {
+    /* 101 edit → past.length 100 */
+  });
+  it('modifica durante il salvataggio: resta modificata e non va persa', async () => {
+    /* scrittura differita nel FakeBridge, edit durante l'attesa → dirty true e valore presente */
+  });
+  it('Mod+Z e Mod+Y, Mod+Shift+Z su macOS', async () => {
+    /* renderApp con progetto, edit, tasti → valori */
+  });
+  it('dentro un campo Mod+Z non annulla il progetto', async () => {
+    /* focus su input → Mod+Z → history.past invariata */
+  });
+  it('CommitInput conferma su blur e Invio, Esc annulla, validate blocca', async () => {
+    /* … onCommit chiamato 2 volte con i valori giusti */
+  });
   ```
 
 - [ ] **Step 2: Esegui e verifica che falliscano**
@@ -915,11 +1442,13 @@ Regole:
 ### Task 7: Bridge: appunti, domanda sì/no, file di recupero, finestre degli editor
 
 **Files:**
+
 - Create: `apps/desktop/src/main/recoveryStore.ts`
 - Modify: `packages/ui/src/bridge.ts`, `packages/ui/test/fakeBridge.ts`, `apps/desktop/src/{main/ipc.ts,main/index.ts,preload/index.ts,shared/rawBridge.ts,renderer/createBridge.ts}`
 - Test: `apps/desktop/test/recoveryStore.test.ts`, `apps/desktop/e2e/bridge.spec.ts` (esteso), `apps/desktop/e2e/window-guards.spec.ts` (esteso), `apps/desktop/e2e/helpers.ts` (`launchApp({ env })` per variabili d'ambiente in più; `userData` riutilizzabile con `launchApp({ userData })` per il Task 16)
 
 **Interfaces:**
+
 - Consumes: bridge e IPC del piano 1A (`registerIpc`, `toIpcResult`, `writeFileAtomic`, `isTrustedFrame`).
 - Produces (aggiunte a `BaaBridge`):
   ```ts
@@ -943,6 +1472,7 @@ Regole:
   ```
 
 Regole:
+
 - **Canali IPC**, tutti sotto il controllo del frame mittente:
   - `clipboard:write-text` (send);
   - `clipboard:read-text`;
@@ -967,12 +1497,24 @@ Regole:
 
   ```ts
   // recoveryStore.test.ts (cartella temporanea)
-  it('scrive, elenca, legge ed elimina', async () => { /* write k1 → list = [{ key:'k1', info }] → read = data → delete → list [] */ });
-  it('chiave non valida rifiutata', async () => { await expect(writeRecovery(dir, '../x', d, info)).rejects.toMatchObject({ code: 'INVALID_KEY' }); });
-  it('un .json rotto o senza .baap non compare', async () => { /* … */ });
+  it('scrive, elenca, legge ed elimina', async () => {
+    /* write k1 → list = [{ key:'k1', info }] → read = data → delete → list [] */
+  });
+  it('chiave non valida rifiutata', async () => {
+    await expect(writeRecovery(dir, '../x', d, info)).rejects.toMatchObject({
+      code: 'INVALID_KEY',
+    });
+  });
+  it('un .json rotto o senza .baap non compare', async () => {
+    /* … */
+  });
   // e2e bridge.spec.ts
-  test('appunti e recupero attraverso il bridge', async () => { /* clipboardWriteText('a\tb') → clipboardReadText() === 'a\tb'; recoveryWrite/list/read/delete */ });
-  test('testOverrides restituisce l\'intervallo di BAA_RECOVERY_MS', async () => { /* launchApp con env BAA_RECOVERY_MS=500 → { recoveryIntervalMs: 500 }; senza → {} */ });
+  test('appunti e recupero attraverso il bridge', async () => {
+    /* clipboardWriteText('a\tb') → clipboardReadText() === 'a\tb'; recoveryWrite/list/read/delete */
+  });
+  test("testOverrides restituisce l'intervallo di BAA_RECOVERY_MS", async () => {
+    /* launchApp con env BAA_RECOVERY_MS=500 → { recoveryIntervalMs: 500 }; senza → {} */
+  });
   // e2e window-guards.spec.ts
   test('window.open about:blank baa-editor-* apre una finestra; altri URL o nomi negati', async () => {
     /* page.evaluate(() => { (window as any).__w = window.open('', 'baa-editor-x'); }) → 2 finestre;
@@ -1005,36 +1547,70 @@ Regole:
 ### Task 8: Albero del PLC, vista dettagli, dialoghi "Aggiungi"
 
 **Files:**
+
 - Create: `packages/ui/src/project/navigation/treeIds.ts`, `packages/ui/src/project/dialogs/{AddDeviceDialog,AddBlockDialog}.tsx`, `packages/ui/src/components/Dialog.tsx`, `packages/ui/src/icons/objects.tsx`
 - Modify: `packages/ui/src/project/navigation/{treeModel.ts,ProjectTree.tsx,DetailsView.tsx}`, `packages/ui/src/state/store.ts` (`selection: string | null`), `packages/ui/src/commands/commands.ts` (`insert.device`, `insert.block`), `packages/ui/src/i18n/{it,en}.json`, `packages/ui/src/portal/PortalView.tsx` (le operazioni "Aggiungi nuovo dispositivo" e "Aggiungi nuovo blocco" ora sono attive con un progetto aperto), `packages/ui/package.json` (aggiungi `@baaportal/s7-types` e `@baaportal/catalog`)
 - Test: `packages/ui/test/{treeModel.test.tsx,projectTree.test.tsx,detailsView.test.tsx,addDevice.test.tsx,addBlock.test.tsx}`
 
 **Interfaces:**
+
 - Consumes: store con `edit` (Task 6); `createPlcDevice`, `createCodeBlock`, `createGlobalDb`, `createInstanceDb`, `createTagTable`, `createUdt`, `nextFreeNumber`, `uniqueName`, `symbolNames` (Task 4); `CPU_CATALOG`, `OB_DEFINITIONS` (Task 3).
 - Produces:
   ```ts
   // treeIds.ts: costruttori e lettura degli id dei nodi
   export const ids: {
-    plc(dev: string): string;                     // 'plc:<dev>'
-    folder(dev: string, f: PlcFolder): string;     // 'plc:<dev>:<f>'
-    group(dev: string, area: 'blocks'|'tags'|'types', path: string): string;  // 'plc:<dev>:<area>:group:<path>'
-    block(dev: string, id: string): string;        // 'plc:<dev>:block:<id>'
-    tagTable(dev: string, id: string): string; udt(dev: string, id: string): string;
+    plc(dev: string): string; // 'plc:<dev>'
+    folder(dev: string, f: PlcFolder): string; // 'plc:<dev>:<f>'
+    group(dev: string, area: 'blocks' | 'tags' | 'types', path: string): string; // 'plc:<dev>:<area>:group:<path>'
+    block(dev: string, id: string): string; // 'plc:<dev>:block:<id>'
+    tagTable(dev: string, id: string): string;
+    udt(dev: string, id: string): string;
   };
-  export type PlcFolder = 'device-config'|'online-diag'|'blocks'|'blocks-add'|'system-blocks'|'sources'|'tags'|'tags-all'|'tags-add'|'types'|'types-add'|'watch'|'backup'|'prog-info';
-  export type ParsedNodeId = { kind: 'static'; id: string } | { kind: 'plc'; dev: string } | { kind: 'folder'; dev: string; folder: PlcFolder }
-    | { kind: 'group'; dev: string; area: 'blocks'|'tags'|'types'; path: string } | { kind: 'block'|'tagTable'|'udt'; dev: string; id: string };
+  export type PlcFolder =
+    | 'device-config'
+    | 'online-diag'
+    | 'blocks'
+    | 'blocks-add'
+    | 'system-blocks'
+    | 'sources'
+    | 'tags'
+    | 'tags-all'
+    | 'tags-add'
+    | 'types'
+    | 'types-add'
+    | 'watch'
+    | 'backup'
+    | 'prog-info';
+  export type ParsedNodeId =
+    | { kind: 'static'; id: string }
+    | { kind: 'plc'; dev: string }
+    | { kind: 'folder'; dev: string; folder: PlcFolder }
+    | { kind: 'group'; dev: string; area: 'blocks' | 'tags' | 'types'; path: string }
+    | { kind: 'block' | 'tagTable' | 'udt'; dev: string; id: string };
   export function parseNodeId(id: string): ParsedNodeId;
   export function nodeIdForRef(ref: ObjectRef): string | null;
   // treeModel.ts
-  export interface TreeNode { id: string; labelKey: string; label?: string; icon: IconName; enabled: boolean; children: TreeNode[]; ref?: ObjectRef; dropArea?: 'blocks'|'tags'|'types' }
-  export function buildTree(doc: OpenDoc | null): { project: TreeNode | null; onlineAccess: TreeNode };
+  export interface TreeNode {
+    id: string;
+    labelKey: string;
+    label?: string;
+    icon: IconName;
+    enabled: boolean;
+    children: TreeNode[];
+    ref?: ObjectRef;
+    dropArea?: 'blocks' | 'tags' | 'types';
+  }
+  export function buildTree(doc: OpenDoc | null): {
+    project: TreeNode | null;
+    onlineAccess: TreeNode;
+  };
   // dialoghi
   export function AddDeviceDialog(p: { onClose(): void }): JSX.Element;
   export function AddBlockDialog(p: { deviceId: string; onClose(): void }): JSX.Element;
   ```
 
 Regole:
+
 - **Albero** (spec §8.2): sotto ogni dispositivo, in quest'ordine:
   - Configurazione dispositivi (disattivato);
   - Online e diagnostica (disattivato);
@@ -1068,6 +1644,7 @@ Regole:
   - blocco: apre `AddBlockDialog`.
 
   Ogni aggiunta è un solo `edit` e seleziona il nodo nuovo. L'apertura dell'editor la aggiunge il Task 10.
+
 - **AddDeviceDialog**:
   - a sinistra un albero del catalogo: Controllori > SIMATIC S7-300 > CPU > {CPU standard | CPU compatte | CPU F} > CPU > numero di articolo;
   - a destra la descrizione (memoria di lavoro, interfacce), la scelta della versione firmware e il nome, predefinito `uniqueName('PLC_1', nomi dei dispositivi)`;
@@ -1096,18 +1673,54 @@ Regole:
   ```ts
   it('albero di un PLC nuovo', () => {
     /* doc con un 315-2 PN/DP creato da createPlcDevice */
-    expect(labels(buildTree(doc).project!)).toEqual(expect.arrayContaining(['PLC_1 [CPU 315-2 PN/DP]', 'Blocchi di programma', 'Aggiungi nuovo blocco', 'Main [OB1]', 'Blocchi di sistema',
-      'Variabili PLC', 'Mostra tutte le variabili', 'Aggiungi nuova tabella delle variabili', 'Tabella delle variabili standard [0]', 'Tipi di dati PLC', 'Aggiungi nuovo tipo di dati']));
-    expect(disabled(buildTree(doc).project!)).toEqual(['Configurazione dispositivi', 'Online e diagnostica', 'Sorgenti esterne', 'Tabelle di controllo e forzamento', 'Backup online', 'Informazioni sul programma']);
+    expect(labels(buildTree(doc).project!)).toEqual(
+      expect.arrayContaining([
+        'PLC_1 [CPU 315-2 PN/DP]',
+        'Blocchi di programma',
+        'Aggiungi nuovo blocco',
+        'Main [OB1]',
+        'Blocchi di sistema',
+        'Variabili PLC',
+        'Mostra tutte le variabili',
+        'Aggiungi nuova tabella delle variabili',
+        'Tabella delle variabili standard [0]',
+        'Tipi di dati PLC',
+        'Aggiungi nuovo tipo di dati',
+      ]),
+    );
+    expect(disabled(buildTree(doc).project!)).toEqual([
+      'Configurazione dispositivi',
+      'Online e diagnostica',
+      'Sorgenti esterne',
+      'Tabelle di controllo e forzamento',
+      'Backup online',
+      'Informazioni sul programma',
+    ]);
   });
-  it('parseNodeId(ids.block(d, b)) → { kind: "block", dev: d, id: b }; ids con ":" nei percorsi dei gruppi restano reversibili', () => { /* … */ });
-  it('Aggiungi nuovo dispositivo: scelta CPU, firmware e nome, un solo passo di annulla', async () => { /* … poi undo → devices [] */ });
-  it('Aggiungi nuovo blocco FB: numero automatico 1, nome Blocco_1; con FB1 esistente → FB2, Blocco_2', async () => { /* … */ });
-  it('OB: elenco senza OB1 già presente e solo OB della CPU', async () => { /* … */ });
-  it('numero manuale doppio: messaggio e OK disattivato', async () => { /* … */ });
-  it('DB di istanza: nome <FB>_DB e instanceOf', async () => { /* … */ });
-  it('Aggiungi nuova tabella delle variabili due volte → _1 e _2', async () => { /* … */ });
-  it('vista dettagli di una tabella mostra i tag', async () => { /* … */ });
+  it('parseNodeId(ids.block(d, b)) → { kind: "block", dev: d, id: b }; ids con ":" nei percorsi dei gruppi restano reversibili', () => {
+    /* … */
+  });
+  it('Aggiungi nuovo dispositivo: scelta CPU, firmware e nome, un solo passo di annulla', async () => {
+    /* … poi undo → devices [] */
+  });
+  it('Aggiungi nuovo blocco FB: numero automatico 1, nome Blocco_1; con FB1 esistente → FB2, Blocco_2', async () => {
+    /* … */
+  });
+  it('OB: elenco senza OB1 già presente e solo OB della CPU', async () => {
+    /* … */
+  });
+  it('numero manuale doppio: messaggio e OK disattivato', async () => {
+    /* … */
+  });
+  it('DB di istanza: nome <FB>_DB e instanceOf', async () => {
+    /* … */
+  });
+  it('Aggiungi nuova tabella delle variabili due volte → _1 e _2', async () => {
+    /* … */
+  });
+  it('vista dettagli di una tabella mostra i tag', async () => {
+    /* … */
+  });
   ```
 
 - [ ] **Step 2: Esegui e verifica che falliscano**
@@ -1136,11 +1749,13 @@ Regole:
 ### Task 9: Operazioni sugli oggetti: taglia, copia, incolla, elimina, rinomina, trascina
 
 **Files:**
+
 - Create: `packages/ui/src/project/objectActions.ts`, `packages/ui/src/services/clipboard.ts`, `packages/ui/src/components/ContextMenu.tsx`
 - Modify: `packages/ui/src/state/store.ts` (`editTarget`), `packages/ui/src/commands/commands.ts`, `packages/ui/src/project/navigation/{ProjectTree,DetailsView}.tsx`, `packages/ui/src/i18n/{it,en}.json`, `apps/desktop/src/renderer/main.tsx`
 - Test: `packages/ui/test/{objectActions.test.ts,treeEditing.test.tsx}`, `apps/desktop/e2e/window-guards.spec.ts`
 
 **Interfaces:**
+
 - Consumes: Task 4 (`renameWithReferences`, `uniqueName`, `nextFreeNumber`, `symbolNames`), Task 6 (`edit`), Task 7 (`clipboardWriteText`, `clipboardReadText`, `askQuestion`), Task 8 (id e albero).
 - Produces:
   ```ts
@@ -1163,6 +1778,7 @@ Regole:
   ```
 
 Regole:
+
 - **Comandi**:
   - `edit.cut` `Mod+X`, `edit.copy` `Mod+C`, `edit.paste` `Mod+V`, `edit.delete` `Delete`, `edit.rename` `F2`, `edit.selectAll` `Mod+A`;
   - sono attivi se `editTarget?.can[action]` e chiamano `editTarget.run(action)`;
@@ -1200,15 +1816,33 @@ Regole:
 - [ ] **Step 1: Scrivi i test che falliscono**
 
   ```ts
-  it('copia e incolla di un FB: nome _1, numero libero, id nuovi', () => { /* FB1 'Nastro' → incolla stesso PLC → 'Nastro_1' FB2, id ≠ */ });
-  it('incolla in un altro PLC conserva il numero se libero', () => { /* … */ });
-  it('elimina chiede conferma; la tabella standard resta', async () => { /* questionAnswers [true] → standard ancora presente, messaggio */ });
-  it('rinomina F2: nome doppio mostra l\'errore e non cambia; Esc annulla; nome valido aggiorna i riferimenti', async () => { /* … */ });
-  it('Mod+C / Mod+V nell\'albero passano dagli appunti del bridge', async () => { /* bridge.clipboard === 'Nastro' */ });
-  it('trascinare un blocco su un gruppo lo sposta (un passo di annulla)', async () => { /* fireEvent.dragStart/dragOver/drop con DataTransfer finto */ });
-  it('trascinare un tag dai dettagli su un\'altra tabella lo sposta', async () => { /* … */ });
-  it('menu contestuale da tastiera: Maiusc+F10, frecce, Invio', async () => { /* … */ });
-  it('Modifica > Taglia è disattivato senza destinazione', () => { /* editTarget null → isEnabled false */ });
+  it('copia e incolla di un FB: nome _1, numero libero, id nuovi', () => {
+    /* FB1 'Nastro' → incolla stesso PLC → 'Nastro_1' FB2, id ≠ */
+  });
+  it('incolla in un altro PLC conserva il numero se libero', () => {
+    /* … */
+  });
+  it('elimina chiede conferma; la tabella standard resta', async () => {
+    /* questionAnswers [true] → standard ancora presente, messaggio */
+  });
+  it("rinomina F2: nome doppio mostra l'errore e non cambia; Esc annulla; nome valido aggiorna i riferimenti", async () => {
+    /* … */
+  });
+  it("Mod+C / Mod+V nell'albero passano dagli appunti del bridge", async () => {
+    /* bridge.clipboard === 'Nastro' */
+  });
+  it('trascinare un blocco su un gruppo lo sposta (un passo di annulla)', async () => {
+    /* fireEvent.dragStart/dragOver/drop con DataTransfer finto */
+  });
+  it("trascinare un tag dai dettagli su un'altra tabella lo sposta", async () => {
+    /* … */
+  });
+  it('menu contestuale da tastiera: Maiusc+F10, frecce, Invio', async () => {
+    /* … */
+  });
+  it('Modifica > Taglia è disattivato senza destinazione', () => {
+    /* editTarget null → isEnabled false */
+  });
   ```
 
 - [ ] **Step 2: Esegui e verifica che falliscano**
@@ -1235,11 +1869,13 @@ Regole:
 ### Task 10: Area di lavoro: editor, barra degli editor, divisione, finestra separata
 
 **Files:**
+
 - Create: `packages/ui/src/project/workarea/{WorkArea,EditorFrame,DetachedWindow}.tsx`, `packages/ui/src/project/workarea/editorBarModel.ts`, `packages/ui/src/editors/registry.tsx`
 - Modify: `packages/ui/src/state/store.ts` (`workArea`), `packages/ui/src/project/{ProjectView,EditorBar}.tsx`, `packages/ui/src/commands/commands.ts` (`window.*`), `packages/ui/src/project/navigation/ProjectTree.tsx` (doppio clic e Invio aprono), `packages/ui/src/i18n/{it,en}.json`
 - Test: `packages/ui/test/{workArea.test.tsx,editorBarModel.test.ts}`
 
 **Interfaces:**
+
 - Consumes: store (Task 6), id dei nodi (Task 8), `handleShortcutKeydown` (Task 6), finestre `baa-editor-*` (Task 7).
 - Produces:
   ```ts
@@ -1263,6 +1899,7 @@ Regole:
   ```
 
 Regole:
+
 - **Apertura**:
   - doppio clic o Invio su un blocco, un UDT, una tabella o "Mostra tutte le variabili" apre l'editor;
   - "Aggiungi e apri" (Task 8) e "Aggiungi nuova tabella" o "Aggiungi nuovo tipo di dati" aprono l'oggetto creato;
@@ -1294,20 +1931,40 @@ Regole:
 - [ ] **Step 1: Scrivi i test che falliscono**
 
   ```ts
-  it('editorBarItems: nessun gruppo se c\'è spazio; poi raggruppa il tipo più numeroso', () => {
+  it("editorBarItems: nessun gruppo se c'è spazio; poi raggruppa il tipo più numeroso", () => {
     const e = [blk('a'), blk('b'), blk('c'), tbl('x'), udt('u')];
-    expect(editorBarItems(e, 10).map((i) => i.type)).toEqual(['single','single','single','single','single']);
-    expect(editorBarItems(e, 3)).toEqual([{ type: 'group', kind: 'block', keys: [k('a'), k('b'), k('c')] }, { type: 'single', key: k('x') }, { type: 'single', key: k('u') }]);
+    expect(editorBarItems(e, 10).map((i) => i.type)).toEqual([
+      'single',
+      'single',
+      'single',
+      'single',
+      'single',
+    ]);
+    expect(editorBarItems(e, 3)).toEqual([
+      { type: 'group', kind: 'block', keys: [k('a'), k('b'), k('c')] },
+      { type: 'single', key: k('x') },
+      { type: 'single', key: k('u') },
+    ]);
   });
-  it('doppio clic su Main [OB1] apre l\'editor e mostra il pulsante nella barra', async () => { /* … */ });
-  it('annullare la creazione di un blocco aperto chiude l\'editor', async () => { /* … */ });
-  it('divisione verticale: due riquadri, il secondo con l\'editor precedente', async () => { /* … */ });
-  it('finestra separata: portale nella figlia, chiusura della figlia → torna nell\'area di lavoro', async () => {
+  it("doppio clic su Main [OB1] apre l'editor e mostra il pulsante nella barra", async () => {
+    /* … */
+  });
+  it("annullare la creazione di un blocco aperto chiude l'editor", async () => {
+    /* … */
+  });
+  it("divisione verticale: due riquadri, il secondo con l'editor precedente", async () => {
+    /* … */
+  });
+  it("finestra separata: portale nella figlia, chiusura della figlia → torna nell'area di lavoro", async () => {
     /* vi.spyOn(window, 'open') restituisce un oggetto con document = document.implementation.createHTMLDocument(),
        addEventListener/focus/close finti; dispatch 'pagehide' → editor di nuovo in un riquadro */
   });
-  it('window.open null: l\'editor resta e compare un messaggio', async () => { /* … */ });
-  it('Mod+S nella finestra separata salva', async () => { /* keydown sul document della figlia → service.save chiamato */ });
+  it("window.open null: l'editor resta e compare un messaggio", async () => {
+    /* … */
+  });
+  it('Mod+S nella finestra separata salva', async () => {
+    /* keydown sul document della figlia → service.save chiamato */
+  });
   ```
 
 - [ ] **Step 2: Esegui e verifica che falliscano**
@@ -1336,27 +1993,44 @@ Regole:
 ### Task 11: Griglia `DataGrid`
 
 **Files:**
+
 - Create: `packages/ui/src/grid/{DataGrid.tsx,grid.css,tsv.ts}`
 - Test: `packages/ui/test/{dataGrid.test.tsx,tsv.test.ts}`
 
 **Interfaces:**
+
 - Consumes: `EditTarget` e `setEditTarget` (Task 9); `copyToClipboard`, `readClipboard` (Task 9).
 - Produces:
   ```ts
   export interface GridColumn<R> {
-    id: string; headerKey: string; width: number;
+    id: string;
+    headerKey: string;
+    width: number;
     editor: 'text' | 'checkbox' | 'type' | 'none';
     get(row: R): string | boolean;
     readOnly?(row: R): boolean;
-    suggestions?(row: R): string[];      // per 'type': elenco filtrato mentre si scrive
+    suggestions?(row: R): string[]; // per 'type': elenco filtrato mentre si scrive
   }
-  export interface GridDiagnostic { severity: 'error' | 'warning'; text: string }
+  export interface GridDiagnostic {
+    severity: 'error' | 'warning';
+    text: string;
+  }
   export interface DataGridProps<R> {
-    label: string; rows: R[]; rowKey(row: R): string; columns: GridColumn<R>[];
-    depth?(row: R): number; expandable?(row: R): boolean; expanded?: ReadonlySet<string>; onToggleExpand?(key: string): void;
-    rowSelectable?(row: R): boolean;                              // righe di sezione: no
+    label: string;
+    rows: R[];
+    rowKey(row: R): string;
+    columns: GridColumn<R>[];
+    depth?(row: R): number;
+    expandable?(row: R): boolean;
+    expanded?: ReadonlySet<string>;
+    onToggleExpand?(key: string): void;
+    rowSelectable?(row: R): boolean; // righe di sezione: no
     onCommit(rowKey: string, columnId: string, value: string | boolean): void;
-    addRow?: { afterKey: string | null; labelKey: string; onAdd(columnId: string, value: string): void }[]; // righe "<Aggiungi>"
+    addRow?: {
+      afterKey: string | null;
+      labelKey: string;
+      onAdd(columnId: string, value: string): void;
+    }[]; // righe "<Aggiungi>"
     onDeleteRows?(keys: string[]): void;
     copyRows?(keys: string[]): { text: string; payload: ClipboardPayload };
     onPaste?(text: string, payload: ClipboardPayload | null, atKey: string | null): void;
@@ -1366,11 +2040,12 @@ Regole:
     onDropOnRow?(e: DragEvent, rowKey: string | null): void;
   }
   export function DataGrid<R>(props: DataGridProps<R>): JSX.Element;
-  export function toTsv(rows: string[][]): string;      // \t e \r\n, campi con tab, a capo o " tra virgolette
-  export function parseTsv(text: string): string[][];   // accetta \n e \r\n, ignora l'ultima riga vuota, virgolette alla Excel
+  export function toTsv(rows: string[][]): string; // \t e \r\n, campi con tab, a capo o " tra virgolette
+  export function parseTsv(text: string): string[][]; // accetta \n e \r\n, ignora l'ultima riga vuota, virgolette alla Excel
   ```
 
 Regole:
+
 - **Struttura accessibile**:
   - `role="grid"` con `aria-label`, righe `role="row"`, celle `role="gridcell"`, intestazioni `role="columnheader"`;
   - una colonna iniziale stretta con il numero di riga, che serve per selezionare le righe;
@@ -1406,21 +2081,46 @@ Regole:
   ```ts
   // tsv.test.ts
   it('parseTsv: \\r\\n, riga vuota finale, virgolette e tab', () => {
-    expect(parseTsv('a\tb\r\n"c\td"\te\r\n')).toEqual([['a','b'], ['c\td','e']]);
+    expect(parseTsv('a\tb\r\n"c\td"\te\r\n')).toEqual([
+      ['a', 'b'],
+      ['c\td', 'e'],
+    ]);
     expect(parseTsv(toTsv([['x"y', 'z\nw']]))).toEqual([['x"y', 'z\nw']]);
   });
   // dataGrid.test.tsx (griglia di prova con colonne Nome/Tipo/Spunta)
-  it('frecce, F2, Invio conferma e scende, Esc annulla', async () => { /* onCommit chiamato una volta con ('r1','name','Nuovo') */ });
-  it('scrivere un carattere inizia la modifica sostituendo il testo', async () => { /* … */ });
-  it('Tab conferma e va a destra', async () => { /* … */ });
-  it('Spazio commuta la casella', async () => { /* onCommit('r1','flag',true) */ });
-  it('riga <Aggiungi>: scrivere un nome chiama onAdd', async () => { /* onAdd('name','Motore') */ });
-  it('selezione righe con Maiusc+clic, Canc elimina', async () => { /* onDeleteRows(['r1','r2','r3']) */ });
-  it('Mod+C copia le righe come TSV negli appunti del bridge; Mod+V chiama onPaste', async () => { /* … */ });
-  it('riempimento automatico su 3 righe chiama onFill(r1, 3)', async () => { /* pointer events */ });
-  it('la diagnostica è leggibile (title e aria-describedby)', () => { /* … */ });
-  it('suggerimenti di tipo filtrati mentre si scrive', async () => { /* 'Di' → DInt, DWord… */ });
-  it('2000 righe in meno di 1 s', () => { /* performance.now */ });
+  it('frecce, F2, Invio conferma e scende, Esc annulla', async () => {
+    /* onCommit chiamato una volta con ('r1','name','Nuovo') */
+  });
+  it('scrivere un carattere inizia la modifica sostituendo il testo', async () => {
+    /* … */
+  });
+  it('Tab conferma e va a destra', async () => {
+    /* … */
+  });
+  it('Spazio commuta la casella', async () => {
+    /* onCommit('r1','flag',true) */
+  });
+  it('riga <Aggiungi>: scrivere un nome chiama onAdd', async () => {
+    /* onAdd('name','Motore') */
+  });
+  it('selezione righe con Maiusc+clic, Canc elimina', async () => {
+    /* onDeleteRows(['r1','r2','r3']) */
+  });
+  it('Mod+C copia le righe come TSV negli appunti del bridge; Mod+V chiama onPaste', async () => {
+    /* … */
+  });
+  it('riempimento automatico su 3 righe chiama onFill(r1, 3)', async () => {
+    /* pointer events */
+  });
+  it('la diagnostica è leggibile (title e aria-describedby)', () => {
+    /* … */
+  });
+  it('suggerimenti di tipo filtrati mentre si scrive', async () => {
+    /* 'Di' → DInt, DWord… */
+  });
+  it('2000 righe in meno di 1 s', () => {
+    /* performance.now */
+  });
   ```
 
 - [ ] **Step 2: Esegui e verifica che falliscano**
@@ -1449,19 +2149,21 @@ Regole:
 ### Task 12: Editor delle tabelle delle variabili, costanti utente, "Mostra tutte le variabili"
 
 **Files:**
+
 - Create: `packages/ui/src/editors/tags/{TagTableEditor,AllTagsEditor}.tsx`, `packages/ui/src/editors/tags/tagRows.ts`, `packages/ui/src/state/diagnostics.ts`
 - Modify: `packages/ui/src/editors/registry.tsx`, `packages/ui/src/i18n/{it,en}.json`
 - Test: `packages/ui/test/{tagRows.test.ts,tagTableEditor.test.tsx}`
 
 **Interfaces:**
+
 - Consumes: `DataGrid`, `toTsv`, `parseTsv` (Task 11); `checkDevice` (Task 5); `edit` (Task 6); s7-types (Task 1–2); `findCpu` (Task 3).
 - Produces:
   ```ts
   // diagnostics.ts: diagnostica per dispositivo, ricalcolata solo quando il dispositivo cambia (memo per riferimento)
   export function useDeviceDiagnostics(deviceId: string): Diagnostic[];
-  export function diagnosticText(d: Diagnostic, t: TFunction): string;          // chiavi diag.<CODE>
+  export function diagnosticText(d: Diagnostic, t: TFunction): string; // chiavi diag.<CODE>
   // tagRows.ts (puro)
-  export function newTagAfter(prev: Tag | undefined, name: string, newId: NewId): Tag;   // tipo e indirizzo dal precedente
+  export function newTagAfter(prev: Tag | undefined, name: string, newId: NewId): Tag; // tipo e indirizzo dal precedente
   export function fillTags(source: Tag, count: number, taken: string[], newId: NewId): Tag[];
   export function tagsFromTsv(rows: string[][], taken: string[], newId: NewId): Tag[];
   export function tagsToTsv(tags: Tag[], retain: (t: Tag) => boolean): string;
@@ -1470,6 +2172,7 @@ Regole:
   ```
 
 Regole:
+
 - **Editor della tabella**: due schede, "Variabili" e "Costanti utente".
   - Colonne delle variabili: Nome, Tipo di dati, Indirizzo, Ritenzione, Accessibile da HMI, Commento.
   - Colonne delle costanti: Nome, Tipo di dati, Valore, Commento.
@@ -1505,23 +2208,63 @@ Regole:
   ```ts
   // tagRows.test.ts
   it('newTagAfter continua tipo e indirizzo', () => {
-    expect(pick(newTagAfter(tag('A', 'Bool', '%M0.7'), 'B', seq()))).toEqual({ name: 'B', type: 'Bool', address: '%M1.0', hmi: true });
-    expect(pick(newTagAfter(undefined, 'X', seq()))).toEqual({ name: 'X', type: 'Bool', address: '%M0.0', hmi: true });
+    expect(pick(newTagAfter(tag('A', 'Bool', '%M0.7'), 'B', seq()))).toEqual({
+      name: 'B',
+      type: 'Bool',
+      address: '%M1.0',
+      hmi: true,
+    });
+    expect(pick(newTagAfter(undefined, 'X', seq()))).toEqual({
+      name: 'X',
+      type: 'Bool',
+      address: '%M0.0',
+      hmi: true,
+    });
   });
   it('fillTags: nomi e indirizzi incrementati, nomi già presi saltati', () => {
-    expect(fillTags(tag('Motore_1', 'Int', '%MW10'), 3, ['Motore_3'], seq()).map((t) => [t.name, t.address])).toEqual([['Motore_2','%MW12'], ['Motore_4','%MW14'], ['Motore_5','%MW16']]);
+    expect(
+      fillTags(tag('Motore_1', 'Int', '%MW10'), 3, ['Motore_3'], seq()).map((t) => [
+        t.name,
+        t.address,
+      ]),
+    ).toEqual([
+      ['Motore_2', '%MW12'],
+      ['Motore_4', '%MW14'],
+      ['Motore_5', '%MW16'],
+    ]);
   });
   it('tagsFromTsv: \\r\\n, colonne mancanti, nomi doppi, righe sbagliate conservate', () => {
-    expect(tagsFromTsv(parseTsv('A\tInt\t%MW0\r\nA\r\nB\tBol\tXYZ\r\n'), ['a'], seq()).map((t) => [t.name, t.type, t.address]))
-      .toEqual([['A_1','Int','%MW0'], ['A_2','Bool','%M0.0'], ['B','Bol','XYZ']]);
+    expect(
+      tagsFromTsv(parseTsv('A\tInt\t%MW0\r\nA\r\nB\tBol\tXYZ\r\n'), ['a'], seq()).map((t) => [
+        t.name,
+        t.type,
+        t.address,
+      ]),
+    ).toEqual([
+      ['A_1', 'Int', '%MW0'],
+      ['A_2', 'Bool', '%M0.0'],
+      ['B', 'Bol', 'XYZ'],
+    ]);
   });
-  it('1000 righe incollate in un solo passo di annulla', async () => { /* … history.past.length aumenta di 1 */ });
-  it('isRetentive con ritenzione MB0..15, T0..-, C0..7', () => { /* %MW14 sì, %MW16 no, %C7 sì, %T0 no */ });
+  it('1000 righe incollate in un solo passo di annulla', async () => {
+    /* … history.past.length aumenta di 1 */
+  });
+  it('isRetentive con ritenzione MB0..15, T0..-, C0..7', () => {
+    /* %MW14 sì, %MW16 no, %C7 sì, %T0 no */
+  });
   // tagTableEditor.test.tsx
-  it('scrivere nella riga <Aggiungi> crea un tag con valori proposti', async () => { /* … */ });
-  it('nome doppio e indirizzo sovrapposto sono evidenziati con il testo giusto', async () => { /* … */ });
-  it('scheda Costanti utente: aggiunta e valore non valido segnato', async () => { /* … */ });
-  it('Mostra tutte le variabili: colonna tabella e modifica che arriva alla tabella giusta', async () => { /* … */ });
+  it('scrivere nella riga <Aggiungi> crea un tag con valori proposti', async () => {
+    /* … */
+  });
+  it('nome doppio e indirizzo sovrapposto sono evidenziati con il testo giusto', async () => {
+    /* … */
+  });
+  it('scheda Costanti utente: aggiunta e valore non valido segnato', async () => {
+    /* … */
+  });
+  it('Mostra tutte le variabili: colonna tabella e modifica che arriva alla tabella giusta', async () => {
+    /* … */
+  });
   ```
 
 - [ ] **Step 2: Esegui e verifica che falliscano**
@@ -1548,28 +2291,45 @@ Regole:
 ### Task 13: Editor di blocco (interfaccia e segmenti), DB e UDT
 
 **Files:**
+
 - Create: `packages/ui/src/editors/block/{BlockEditor,InterfaceTable,NetworksView}.tsx`, `packages/ui/src/editors/block/interfaceRows.ts`, `packages/ui/src/editors/db/DbEditor.tsx`, `packages/ui/src/editors/udt/UdtEditor.tsx`
 - Modify: `packages/ui/src/editors/registry.tsx`, `packages/ui/src/i18n/{it,en}.json`
 - Test: `packages/ui/test/{interfaceRows.test.ts,blockEditor.test.tsx,dbEditor.test.tsx,udtEditor.test.tsx}`
 
 **Interfaces:**
+
 - Consumes: `DataGrid` (Task 11); `memberAllowed`, `checkDevice` (Task 5); `layoutStruct`, `layoutInstance`, `formatOffset`, `parseType`, `defaultLiteral` (Task 1–2); `typeResolver`, `toTypedMembers`, `memberPath` (Task 4); `useDeviceDiagnostics` (Task 12).
 - Produces:
   ```ts
-  export type SectionId = 'input'|'output'|'inOut'|'static'|'temp'|'return'|'members';
+  export type SectionId = 'input' | 'output' | 'inOut' | 'static' | 'temp' | 'return' | 'members';
   export interface InterfaceRow {
-    key: string;                       // 'section:<id>' | id del membro | '<id membro>[i,j]' | '<id membro>/<percorso>'
-    kind: 'section' | 'member' | 'element' | 'derived';   // derived = membro di UDT o FB mostrato in sola lettura
-    section: SectionId; depth: number;
-    name: string; type: string; offset: string; initial: string; comment: string;
+    key: string; // 'section:<id>' | id del membro | '<id membro>[i,j]' | '<id membro>/<percorso>'
+    kind: 'section' | 'member' | 'element' | 'derived'; // derived = membro di UDT o FB mostrato in sola lettura
+    section: SectionId;
+    depth: number;
+    name: string;
+    type: string;
+    offset: string;
+    initial: string;
+    comment: string;
     editable: { name: boolean; type: boolean; initial: boolean; comment: boolean };
-    expandable: boolean; memberId?: string; overridePath?: string;   // dove si salva un valore iniziale sostituito
+    expandable: boolean;
+    memberId?: string;
+    overridePath?: string; // dove si salva un valore iniziale sostituito
   }
-  export function interfaceRows(owner: { kind: 'OB'|'FB'|'FC'; block: CodeBlock } | { kind: 'DB'; db: GlobalDb } | { kind: 'IDB'; db: InstanceDb } | { kind: 'UDT'; udt: Udt },
-    device: PlcDevice, expanded: ReadonlySet<string>): InterfaceRow[];
+  export function interfaceRows(
+    owner:
+      | { kind: 'OB' | 'FB' | 'FC'; block: CodeBlock }
+      | { kind: 'DB'; db: GlobalDb }
+      | { kind: 'IDB'; db: InstanceDb }
+      | { kind: 'UDT'; udt: Udt },
+    device: PlcDevice,
+    expanded: ReadonlySet<string>,
+  ): InterfaceRow[];
   ```
 
 Regole:
+
 - **Sezioni per tipo** di proprietario:
   - OB: Temp;
   - FB: Input, Output, InOut, Static, Temp;
@@ -1622,22 +2382,49 @@ Regole:
   // interfaceRows.test.ts
   it('FB: sezioni in ordine, offset di istanza e di Temp', () => {
     /* FB con Input a:Bool, Output b:Int, Static s:Struct{p:Bool}, Temp t:Int */
-    expect(rows.filter((r) => r.kind !== 'section').map((r) => [r.name, r.offset])).toEqual([['a','0.0'], ['b','2.0'], ['s','4.0'], ['t','0.0']]);
-    expect(rows.filter((r) => r.kind === 'section').map((r) => r.name)).toEqual(['Input','Output','InOut','Static','Temp']);
+    expect(rows.filter((r) => r.kind !== 'section').map((r) => [r.name, r.offset])).toEqual([
+      ['a', '0.0'],
+      ['b', '2.0'],
+      ['s', '4.0'],
+      ['t', '0.0'],
+    ]);
+    expect(rows.filter((r) => r.kind === 'section').map((r) => r.name)).toEqual([
+      'Input',
+      'Output',
+      'InOut',
+      'Static',
+      'Temp',
+    ]);
   });
-  it('FC: niente Static, Return con Ret_Val, offset solo in Temp', () => { /* … */ });
+  it('FC: niente Static, Return con Ret_Val, offset solo in Temp', () => {
+    /* … */
+  });
   it('array espanso: righe [i] con offset e valore iniziale sostituito', () => {
     /* DB con arr: Array[1..3] of Int, overrides { '[2]': '5' } → righe '[1]' 2.0? … initial '5' sulla seconda */
   });
-  it('UDT espanso in un DB: righe derived con override .membro', () => { /* … */ });
-  it('OB1: dieci righe di sola lettura', () => { /* editable tutti false */ });
+  it('UDT espanso in un DB: righe derived con override .membro', () => {
+    /* … */
+  });
+  it('OB1: dieci righe di sola lettura', () => {
+    /* editable tutti false */
+  });
   // blockEditor.test.tsx
-  it('scrivere Struct crea una struct espandibile con <Aggiungi> interno', async () => { /* … */ });
-  it('trascinare un FB dall\'albero in Static crea Nastro_Instance', async () => { /* … */ });
-  it('Pointer in Input di un FB è segnato come non ammesso', async () => { /* … */ });
-  it('segmenti: inserisci, titolo, elimina, ognuno un passo di annulla', async () => { /* … */ });
+  it('scrivere Struct crea una struct espandibile con <Aggiungi> interno', async () => {
+    /* … */
+  });
+  it("trascinare un FB dall'albero in Static crea Nastro_Instance", async () => {
+    /* … */
+  });
+  it('Pointer in Input di un FB è segnato come non ammesso', async () => {
+    /* … */
+  });
+  it('segmenti: inserisci, titolo, elimina, ognuno un passo di annulla', async () => {
+    /* … */
+  });
   // dbEditor.test.tsx
-  it('DB di istanza: valori iniziali modificabili, nomi in sola lettura; FB mancante → riquadro d\'errore', async () => { /* … */ });
+  it("DB di istanza: valori iniziali modificabili, nomi in sola lettura; FB mancante → riquadro d'errore", async () => {
+    /* … */
+  });
   ```
 
 - [ ] **Step 2: Esegui e verifica che falliscano**
@@ -1666,15 +2453,18 @@ Regole:
 ### Task 14: Finestra di ispezione: proprietà di CPU, blocchi, UDT e tabelle
 
 **Files:**
+
 - Create: `packages/ui/src/project/inspector/properties/{PlcProperties,BlockProperties,UdtProperties,TagTableProperties,PropertySection}.tsx`
 - Modify: `packages/ui/src/project/inspector/{Inspector,ProjectProperties}.tsx`, `packages/ui/src/i18n/{it,en}.json`
 - Test: `packages/ui/test/properties.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `CommitInput` (Task 6), `edit` (Task 6), `parseNodeId` (Task 8), `useDeviceDiagnostics` e `diagnosticText` (Task 12), `findCpu` e `findCpuByOrderNumber` (Task 3), `nextFreeNumber` (Task 4).
 - Produces: componenti senza nuove interfacce pubbliche. `Inspector` sceglie il pannello delle proprietà in base a `parseNodeId(selection)`.
 
 Regole:
+
 - **PLC**:
   - in testa, un riquadro informativo fisso: "Queste proprietà servono al simulatore e ai controlli offline. Fino alla tappa 6 non vengono caricate nel PLC.";
   - sezioni comprimibili:
@@ -1703,14 +2493,30 @@ Regole:
 - [ ] **Step 1: Scrivi i test che falliscono**
 
   ```ts
-  it('PLC: riquadro "non caricate nel PLC" e valori predefiniti', async () => { /* testi e valori 192.168.0.1, 255.255.255.0, 150, 20, 16, 0, 8, 100 */ });
-  it('IP non valido: errore sotto il campo, valore conservato', async () => { /* '192.168.0.0' */ });
-  it('Indirizzo router attivo solo con Utilizza router', async () => { /* … */ });
-  it('CPU senza PN: niente sezione PROFINET', async () => { /* 315-2 DP */ });
-  it('Numero di blocco doppio segnalato; Automatico assegna il primo libero', async () => { /* … */ });
-  it('Famiglia di 9 caratteri: HEADER_INVALID', async () => { /* … */ });
-  it('rinomina di un UDT dalle proprietà aggiorna i riferimenti, un passo di annulla', async () => { /* … */ });
-  it('tabella standard: nome non modificabile', async () => { /* … */ });
+  it('PLC: riquadro "non caricate nel PLC" e valori predefiniti', async () => {
+    /* testi e valori 192.168.0.1, 255.255.255.0, 150, 20, 16, 0, 8, 100 */
+  });
+  it('IP non valido: errore sotto il campo, valore conservato', async () => {
+    /* '192.168.0.0' */
+  });
+  it('Indirizzo router attivo solo con Utilizza router', async () => {
+    /* … */
+  });
+  it('CPU senza PN: niente sezione PROFINET', async () => {
+    /* 315-2 DP */
+  });
+  it('Numero di blocco doppio segnalato; Automatico assegna il primo libero', async () => {
+    /* … */
+  });
+  it('Famiglia di 9 caratteri: HEADER_INVALID', async () => {
+    /* … */
+  });
+  it('rinomina di un UDT dalle proprietà aggiorna i riferimenti, un passo di annulla', async () => {
+    /* … */
+  });
+  it('tabella standard: nome non modificabile', async () => {
+    /* … */
+  });
   ```
 
 - [ ] **Step 2: Esegui e verifica che falliscano**
@@ -1737,11 +2543,13 @@ Regole:
 ### Task 15: Recupero automatico
 
 **Files:**
+
 - Create: `packages/ui/src/services/recoveryService.ts`
 - Modify: `packages/ui/src/App.tsx` (avvio del servizio e domanda di recupero all'avvio), `packages/ui/src/services/projectService.ts` (`openRecovered`, `beforeWindowClose`), `packages/ui/src/i18n/{it,en}.json`
 - Test: `packages/ui/test/recoveryService.test.ts`
 
 **Interfaces:**
+
 - Consumes: `recoveryWrite/List/Read/Delete`, `askQuestion` e `testOverrides` (Task 7); `writeBaap` e `readBaap` (Task 4); store (Task 6).
 - Produces:
   ```ts
@@ -1757,6 +2565,7 @@ Regole:
   ```
 
 Regole:
+
 - **Scrittura periodica**: ogni `intervalMs`, se il documento è "modificato" e `revision` è cambiato dall'ultima copia, `recoveryWrite(recoveryKey(filePath), writeBaap(project), { originalPath, projectName, savedAt })`. Un errore va in Informazioni come avviso e non interrompe nulla.
 - **Intervallo**: `intervalMs` se passato, altrimenti `testOverrides().recoveryIntervalMs`, altrimenti `RECOVERY_INTERVAL_MS`.
 - **Pulizia** con `recoveryDelete` della chiave del documento:
@@ -1772,14 +2581,31 @@ Regole:
 - [ ] **Step 1: Scrivi i test che falliscono**
 
   ```ts
-  it('scrive una copia solo se modificato e cambiato', async () => { /* vi.advanceTimersByTime(60_000) ×2 senza edit → 1 sola scrittura */ });
-  it('salvataggio riuscito cancella la copia', async () => { /* … */ });
-  it('uscita con "Non salvare" cancella la copia prima di chiudere la finestra', async () => { /* confirmAnswers ['discard'] → recovery vuota, closeConfirmed */ });
-  it('Salva con nome cancella la copia del vecchio percorso', async () => { /* … */ });
-  it('all\'avvio: Recupera apre il documento modificato con il percorso originale e cancella la voce', async () => { /* … */ });
-  it('Elimina cancella la voce senza aprire', async () => { /* … */ });
-  it('recupero illeggibile: messaggio ed eliminazione', async () => { /* … */ });
-  it('recoveryKey stabile e senza caratteri vietati', () => { expect(recoveryKey('C:\\P\\A.baap')).toMatch(/^p-[0-9a-f]{8}$/); expect(recoveryKey('c:\\p\\a.baap')).toBe(recoveryKey('C:\\P\\A.baap')); });
+  it('scrive una copia solo se modificato e cambiato', async () => {
+    /* vi.advanceTimersByTime(60_000) ×2 senza edit → 1 sola scrittura */
+  });
+  it('salvataggio riuscito cancella la copia', async () => {
+    /* … */
+  });
+  it('uscita con "Non salvare" cancella la copia prima di chiudere la finestra', async () => {
+    /* confirmAnswers ['discard'] → recovery vuota, closeConfirmed */
+  });
+  it('Salva con nome cancella la copia del vecchio percorso', async () => {
+    /* … */
+  });
+  it("all'avvio: Recupera apre il documento modificato con il percorso originale e cancella la voce", async () => {
+    /* … */
+  });
+  it('Elimina cancella la voce senza aprire', async () => {
+    /* … */
+  });
+  it('recupero illeggibile: messaggio ed eliminazione', async () => {
+    /* … */
+  });
+  it('recoveryKey stabile e senza caratteri vietati', () => {
+    expect(recoveryKey('C:\\P\\A.baap')).toMatch(/^p-[0-9a-f]{8}$/);
+    expect(recoveryKey('c:\\p\\a.baap')).toBe(recoveryKey('C:\\P\\A.baap'));
+  });
   ```
 
 - [ ] **Step 2: Esegui e verifica che falliscano**
@@ -1806,14 +2632,17 @@ Regole:
 ### Task 16: Prove end-to-end del piano 1B e lista di controllo
 
 **Files:**
+
 - Create: `apps/desktop/e2e/{plc-model,detached-editor,recovery}.spec.ts`
 - Modify: `apps/desktop/e2e/helpers.ts` (aiuti per aggiungere CPU e blocchi), questo piano (lista di controllo manuale qui sotto)
 
 **Interfaces:**
+
 - Consumes: tutto quanto sopra, e `launchApp`, `stubMessageBox`, `shownDialogs`, `createProject` di `helpers.ts`.
 - Produces: niente di nuovo per altri task.
 
 Prove ("Fatto quando" del piano 1B):
+
 1. `plc-model.spec.ts`, in una cartella con spazi e accenti:
    1. crea il progetto e aggiungi la CPU 315-2 PN/DP;
    2. nella tabella standard aggiungi 3 tag scrivendo, poi riempi fino a 6;
@@ -1881,13 +2710,14 @@ Prove ("Fatto quando" del piano 1B):
 - **R5. Editor separato = portale React in una finestra `about:blank`.** Lo stato resta uno solo e non serve sincronizzare. Se Electron cambiasse il comportamento di `window.open`, si passa a una seconda finestra con sincronizzazione via IPC.
 - **R6. Nessuna libreria di griglia.** In jsdom una griglia esterna virtualizzata non disegna righe, e i test lo richiedono. Se fosse sbagliato, servirà la virtualizzazione oltre le 5000 righe.
 - **R7. Il codice dei segmenti è un'area di testo semplice in 1B.** Editor AWL, evidenziazione e controllo arrivano con il piano 1C. Se fosse sbagliato, nulla: il testo resta e il piano 1C lo prende così.
-- **R8. Recupero ogni 60 secondi, una copia per percorso.** L'intervallo diventerà un'opzione in *Opzioni → Impostazioni* (piano 1F).
+- **R8. Recupero ogni 60 secondi, una copia per percorso.** L'intervallo diventerà un'opzione in _Opzioni → Impostazioni_ (piano 1F).
 - **R9. Default dei nomi in italiano**, salvati come dati: Tabella delle variabili standard, Variabile_1, Blocco_1, Gruppo_1. Un progetto creato con l'interfaccia in inglese li ha in inglese.
 - **R10. Formato 2 senza file sconosciuti.** File in più nello zip si ignorano. La regola della versione rende inutile conservarli, perché un file più nuovo viene rifiutato.
 
 ## Residui del piano 1A che restano aperti
 
 Sono punti minori, ripresi quando si tocca il codice vicino:
+
 - l'intercettazione di `drop` sul documento impedisce di trascinare testo nei campi. Il Task 9 la limita ai file (`dataTransfer.types` contiene `Files`) e lo prova;
 - `isAbsolutePath` non distingue la piattaforma;
 - `addRecentBestEffort` non registra gli errori;

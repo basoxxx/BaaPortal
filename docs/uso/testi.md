@@ -26,6 +26,7 @@ Una riga per ogni testo non vuoto: oggetto, campo, testo nella lingua di modific
 
 ## Esportare e importare
 
+- **Da rivedere:** se il testo nella lingua di modifica cambia dopo che una riga è stata tradotta, la riga è evidenziata e accanto al testo compare «Da rivedere»; riscrivendo la traduzione, o premendo il pulsante, la riga torna a posto. La tabella scorre senza limite di righe e il campo di ricerca in alto filtra per oggetto, testo e traduzioni.
 - **Esporta xlsx / csv:** un file con le colonne `Key`, `Object`, `Field`, la lingua di modifica e le altre lingue, comprese le traduzioni già scritte. Si manda al traduttore.
 - **Importa…:** legge lo stesso formato (xlsx o csv). Vale la colonna `Key`, che non va modificata; le celle vuote non cambiano nulla; le righe con una chiave che non c'è più e le lingue non dichiarate si scartano e il messaggio dice quante. Un'importazione è un solo passo di annullamento.
 

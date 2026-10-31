@@ -5,7 +5,7 @@ import { Dialog } from '../components/Dialog';
 import { useMnemonic } from '../editors/awl/mnemonicPreference';
 import { useAppStore, useServices } from '../state/AppContext';
 import { buildPrintDocument } from './buildPrintDocument';
-import { selectionFromNodes } from './selection';
+import { selectionsFromNodes } from './selection';
 
 interface Props {
   nodeIds: string[];
@@ -28,15 +28,17 @@ export function PrintDialog({ nodeIds, mode, onClose }: Props) {
   const [landscape, setLandscape] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
 
   const project = doc?.project;
   // Una selezione senza oggetti stampabili (nodo statico, sorgenti) vale il primo PLC.
   const firstDev = project?.devices[0];
-  const sel =
-    project &&
-    (selectionFromNodes(project, nodeIds) ??
-      (firstDev ? selectionFromNodes(project, [`plc:${firstDev.id}`]) : null));
-  if (!project || !sel || !findDevice(project, sel.deviceId)) {
+  const picked = project ? selectionsFromNodes(project, nodeIds) : [];
+  const sels =
+    picked.length > 0 || !project || !firstDev
+      ? picked
+      : selectionsFromNodes(project, [`plc:${firstDev.id}`]);
+  if (!project || sels.length === 0 || sels.some((s) => !findDevice(project, s.deviceId))) {
     return (
       <Dialog title={t('print.title')} onClose={onClose} onOk={onClose}>
         <p>{t('print.nothing')}</p>
@@ -44,21 +46,34 @@ export function PrintDialog({ nodeIds, mode, onClose }: Props) {
     );
   }
 
+  const build = async () =>
+    buildPrintDocument(project, sels, {
+      t: (k, v) => t(k, v) as string,
+      lang: i18n.language,
+      appVersion: await bridge.appVersion(),
+      now: new Date(),
+      mnemonic,
+      includeComments: comments,
+      includeInterface: iface,
+      includeCode: code,
+      includeXref: xref,
+    });
+
+  /** Anteprima nella finestra: lo stesso HTML della stampa, in un iframe senza permessi. */
+  const showPreview = async () => {
+    setError(null);
+    try {
+      setPreview(await build());
+    } catch (e) {
+      setError(t('print.failed', { message: e instanceof Error ? e.message : String(e) }));
+    }
+  };
+
   const run = async () => {
     setBusy(true);
     setError(null);
     try {
-      const html = buildPrintDocument(project, sel, {
-        t: (k, v) => t(k, v) as string,
-        lang: i18n.language,
-        appVersion: await bridge.appVersion(),
-        now: new Date(),
-        mnemonic,
-        includeComments: comments,
-        includeInterface: iface,
-        includeCode: code,
-        includeXref: xref,
-      });
+      const html = await build();
       const r = await bridge.printDocument({
         html,
         mode,
@@ -99,6 +114,9 @@ export function PrintDialog({ nodeIds, mode, onClose }: Props) {
       testId="print-dialog"
       footer={
         <>
+          <button type="button" disabled={busy} onClick={() => void showPreview()}>
+            {t('print.preview')}
+          </button>
           <button type="button" disabled={busy} onClick={() => void run()}>
             {t(mode === 'pdf' ? 'print.okPdf' : 'print.ok')}
           </button>
@@ -145,6 +163,16 @@ export function PrintDialog({ nodeIds, mode, onClose }: Props) {
       </p>
       <p>{t('print.graphicNote')}</p>
       {error ? <p role="alert">{error}</p> : null}
+      {preview !== null ? (
+        // Senza `allow-*`: nessuno script, nessun modulo, origine opaca. Il documento ha anche la sua CSP.
+        <iframe
+          title={t('print.preview')}
+          data-testid="print-preview"
+          sandbox=""
+          srcDoc={preview}
+          style={{ width: '100%', height: '50vh', border: '1px solid #888', background: '#fff' }}
+        />
+      ) : null}
     </Dialog>
   );
 }

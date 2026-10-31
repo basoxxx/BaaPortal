@@ -409,6 +409,7 @@ function ClockPage({ d, t, readAt, ctrl }: PageProps & { readAt: number; ctrl: D
   const [time, setTime] = useState('');
   const [fieldError, setFieldError] = useState<{ field: string; text: string } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [utc, setUtc] = useState(false);
 
   const report = async (req: Parameters<DiagController['setClock']>[0]) => {
     setMessage(null);
@@ -448,11 +449,20 @@ function ClockPage({ d, t, readAt, ctrl }: PageProps & { readAt: number; ctrl: D
       <div className="baa-diag-set">
         <button
           type="button"
-          onClick={() => void report({ source: 'pc' })}
+          onClick={() => void report(utc ? { source: 'pc', utc: true } : { source: 'pc' })}
           data-testid="clock-set-pc"
         >
           {t('onlineDiag.setToPc')}
         </button>
+        <label>
+          <input
+            type="checkbox"
+            checked={utc}
+            onChange={(e) => setUtc(e.target.checked)}
+            data-testid="clock-utc"
+          />{' '}
+          {t('onlineDiag.utc')}
+        </label>
       </div>
       <div className="baa-diag-set">
         <label>

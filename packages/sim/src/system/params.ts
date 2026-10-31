@@ -5,6 +5,7 @@ import type { Location } from '../operands';
 import { readBits, writeBits } from '../operands';
 import { SimError } from '../errors';
 import type { SfbState } from './sfb';
+import type { SimIoModule } from '../cpu';
 
 export type Size = 'X' | 'B' | 'W' | 'D';
 
@@ -89,6 +90,66 @@ export interface SystemServices {
   delayInterrupts(delta: 1 | -1): number | undefined;
   /** Primi 12 byte dei dati di avvio dell'OB in corso e dell'ultimo OB di avvio (SFC 6). */
   startInfo(): { top: Uint8Array; startUp: Uint8Array };
+  /** Allarmi a tempo, contatore di ore e blocchi di DIS_IRT (SFC 2–4, 28–34, 39, 40). */
+  readonly state: SysState;
+  /** Maschere degli errori sincroni dell'OB in corso (SFC 36–38). */
+  faults(): FaultMasks;
+  /** Gestore degli errori sincroni (maschere, OB121/OB122): MSK_FLT lo installa nel contesto se manca. */
+  readonly onFault: (e: SimError, st: ExecState) => boolean;
+  /** Moduli di I/O presenti della configurazione hardware (SFC 5, 49, 58, 59). */
+  modules(): readonly SimIoModule[];
+  /** Voce utente nel buffer di diagnostica (SFC 52 WR_USMSG). */
+  userMessage(eventId: number, detail: string): void;
+}
+
+/** Maschere e registro degli errori sincroni (bit n = SW_FLT 16#20+n per la programmazione, 16#40+n per l'accesso). */
+export interface FaultMasks {
+  prg: number;
+  acc: number;
+  /** Errori mascherati avvenuti, finché READ_ERR non li cancella. */
+  prgErr: number;
+  accErr: number;
+}
+
+/** Allarme di ritardo avviato da SFC 32 (OB20). */
+export interface DelayInterrupt {
+  /** Istante di scadenza (orologio di sistema, ms). */
+  due: number;
+  sign: number;
+  dtimeMs: number;
+}
+
+/** Allarme dall'orologio impostato da SFC 28 (OB10). */
+export interface TodInterrupt {
+  /** Data e ora di partenza (orologio della CPU, ms), secondi e millisecondi azzerati. */
+  start: number;
+  /** PERIOD di SFC 28 (16#0000 una volta, 16#0201 ogni minuto, …). */
+  period: number;
+  active: boolean;
+  /** Prossima scadenza (orologio della CPU), con l'allarme attivo. */
+  next?: number;
+}
+
+/** Stato delle SFC che sopravvive alla chiamata; l'avvio a caldo lo riazzera (tranne il contatore di ore). */
+export class SysState {
+  /** Contatore di ore 0 (SFC 2–4): ms accumulati e inizio del conteggio in corso. */
+  rtm: { ms: number; since?: number } = { ms: 0 };
+  readonly delay = new Map<number, DelayInterrupt>();
+  readonly tod = new Map<number, TodInterrupt>();
+  /** OB bloccati da SFC 39 DIS_IRT: i loro eventi si scartano. */
+  readonly disabled = new Set<number>();
+
+  /** Avvio a caldo: gli allarmi a tempo e i blocchi si cancellano (⚠️), il contatore di ore si ferma. */
+  restart(now: number): void {
+    this.delay.clear();
+    this.tod.clear();
+    this.disabled.clear();
+    this.stopRtm(now);
+  }
+
+  stopRtm(now: number): void {
+    if (this.rtm.since !== undefined) this.rtm = { ms: this.rtm.ms + now - this.rtm.since };
+  }
 }
 
 /** Richiamo di una SFC o di un SFB, come lo vede il gestore. */

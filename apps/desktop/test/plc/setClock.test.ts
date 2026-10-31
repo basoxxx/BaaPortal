@@ -86,6 +86,14 @@ describe('setClock con collegamento finto', () => {
     expect(written).toEqual([want]);
   });
 
+  it('pc in UTC: si scrivono i campi UTC dello stesso istante; utc non booleano rifiutato', async () => {
+    nowMs = Date.UTC(2026, 9, 20, 8, 30, 0, 0);
+    const r = await writes.setClock(owner, { source: 'pc', utc: true });
+    const want = { year: 2026, month: 10, day: 20, hour: 8, minute: 30, second: 0, ms: 0 };
+    expect(r).toEqual({ ok: true, written: want });
+    expect(await writes.setClock(owner, { source: 'pc', utc: 'si' })).toMatchObject({ ok: false });
+  });
+
   it('pc alle 23:59:59.999 del 31/12 → data e ora dello stesso istante, un solo now dopo la conferma', async () => {
     const seq = [
       new Date(2026, 11, 31, 23, 59, 58, 0).getTime(), // anteprima per la conferma

@@ -70,8 +70,8 @@ export function WatchTableView({ editor }: { editor: EditorRef }) {
   const source: WatchSource | null = simOn ? 'sim' : plcOn ? 'plc' : null;
   const online = useMemo(() => watchHubFor(store, bridge).client(), [store, bridge]);
   const onlineState = useSyncExternalStore(online.subscribe, online.getState);
-  const simWatching = useAppStore(
-    (s) => s.sim.watch?.deviceId === deviceId && s.sim.watch.tableId === tableId,
+  const simWatching = useAppStore((s) =>
+    s.sim.watch.some((w) => w.deviceId === deviceId && w.tableId === tableId),
   );
   const watching = source === 'plc' ? onlineState.running : source === 'sim' && simWatching;
   const simValues = useAppStore((s) => (simWatching ? s.sim.watchValues : null));

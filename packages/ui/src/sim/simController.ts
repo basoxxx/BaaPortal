@@ -1,13 +1,14 @@
 import type { StoreApi } from 'zustand/vanilla';
-import { findCpu } from '@baaportal/catalog';
+import { findCpu, findIoModule } from '@baaportal/catalog';
 import {
   findDevice,
   findWatchTable,
   watchResolverFor,
+  type HwModule,
   type PlcDevice,
   type WatchTable,
 } from '@baaportal/project';
-import type { MonitorRequest, SimCpuProps } from '@baaportal/sim';
+import type { MonitorRequest, SimCpuProps, SimIoModule } from '@baaportal/sim';
 import type { BaaBridge } from '../bridge';
 import { t } from '../i18n';
 import { hashOf } from '../project/compile/compileActions';
@@ -23,7 +24,13 @@ import {
 import { SIM_OFF, type AppState } from '../state/store';
 import { downloadOrder } from './downloadOrder';
 import { activeCodeBlock, codeBlockOf, monitorReasonOf, monitorStillShown } from './monitorStatus';
-import type { WatchItem, WatchValue, WriteItemReq, WriteResult } from './protocol';
+import {
+  MAX_WATCH_ITEMS,
+  type WatchItem,
+  type WatchValue,
+  type WriteItemReq,
+  type WriteResult,
+} from './protocol';
 import { SimSession, type SimSessionOptions } from './session';
 import { watchStillShown } from './watchStatus';
 
@@ -49,6 +56,76 @@ export function simPropsOf(dev: PlcDevice): SimCpuProps {
     retentivity: { ...p.retentivity },
     cyclicInterruptMs: p.cyclicInterrupts.ob35Ms,
   };
+}
+
+/** Salva nel dispositivo le preferenze del pannello di test (una voce di cronologia se cambiano). */
+function saveSimPanel(
+  store: StoreApi<AppState>,
+  deviceId: string | null | undefined,
+  patch: NonNullable<PlcDevice['simPanel']>,
+): void {
+  const st = store.getState();
+  if (!deviceId || !st.doc || !findDevice(st.doc.project, deviceId)) return;
+  st.edit('history.simPanel', (p) => {
+    const d = findDevice(p, deviceId);
+    if (d) d.simPanel = { ...d.simPanel, ...patch };
+  });
+}
+
+/** Esadecimale/decimale dell'osservazione: subito nello stato e nel progetto del dispositivo. */
+export function setMonitorHex(
+  store: StoreApi<AppState>,
+  deviceId: string | null | undefined,
+  hex: boolean,
+): void {
+  store.getState().setSim({ monitorHex: hex });
+  saveSimPanel(store, deviceId, { hex });
+}
+
+/** Byte aggiunto a mano al pannello I/O («+ byte»), salvato anche nel progetto. */
+export function addIoByte(
+  store: StoreApi<AppState>,
+  dir: 'inputs' | 'outputs',
+  byte: number,
+): void {
+  const sim = store.getState().sim;
+  if (sim.ioExtra[dir].includes(byte)) return;
+  const ioExtra = { ...sim.ioExtra, [dir]: [...sim.ioExtra[dir], byte] };
+  store.getState().setSim({ ioExtra });
+  saveSimPanel(store, sim.deviceId, { [dir]: ioExtra[dir] });
+}
+
+/**
+ * Moduli di I/O della configurazione hardware (rack e stazioni ET 200) per il simulatore; vuoto se
+ * non ce n'è nessuno (progetti senza configurazione: tutto il campo della CPU).
+ */
+export function simIoOf(dev: PlcDevice): SimIoModule[] {
+  const out: SimIoModule[] = [];
+  // shortcut: le 31xC hanno I/O integrato (posto 2) senza indirizzi nel catalogo; limitare la periferia
+  // ai moduli lo escluderebbe, quindi tutto il campo della CPU (come la 2.0). Da togliere quando il catalogo li avrà.
+  if (findCpu(dev.cpu.typeId)?.group === 'compact') return out;
+  const add = (m: HwModule, station?: number) => {
+    const type = findIoModule(m.orderNumber);
+    if (!type) return;
+    const range = (start: number | undefined, bytes: number) =>
+      start !== undefined && bytes > 0 ? { start, bytes } : undefined;
+    const inputs = range(m.inputStart, type.inputBytes);
+    const outputs = range(m.outputStart, type.outputBytes);
+    if (!inputs && !outputs) return;
+    out.push({
+      id: m.id,
+      name: m.name,
+      rack: m.rack,
+      slot: m.slot,
+      ...(station !== undefined ? { station } : {}),
+      ...(inputs ? { inputs } : {}),
+      ...(outputs ? { outputs } : {}),
+    });
+  };
+  for (const m of dev.hardware?.modules ?? []) add(m);
+  for (const st of dev.hardware?.stations ?? [])
+    for (const m of st.modules) add(m, st.address ?? 0);
+  return out;
 }
 
 /**
@@ -77,9 +154,11 @@ export class SimController {
   private watchInFlight = 0;
   /** Le voci la cui ultima richiesta è stata rifiutata (segnalato una volta). */
   private failedWatch: string | undefined;
-  /** Piano già calcolato per un dato dispositivo e una data tabella (oggetti immutabili). */
-  private watchPlanFor:
-    { dev: PlcDevice; table: WatchTable; rowIds: string[]; items: WatchItem[] } | undefined;
+  /** Piani già calcolati per tabella (oggetti immutabili: una tabella cambiata è un oggetto nuovo). */
+  private watchPlanFor = new WeakMap<
+    WatchTable,
+    { dev: PlcDevice; rowIds: string[]; items: WatchItem[] }
+  >();
 
   constructor(
     private readonly store: StoreApi<AppState>,
@@ -94,6 +173,23 @@ export class SimController {
     store.subscribe(() => {
       this.syncMonitor();
       this.syncWatch();
+      this.syncProps();
+    });
+  }
+
+  /** Proprietà della CPU mandate al worker (oggetto immutabile del progetto). */
+  private sentProps: PlcDevice['properties'] | undefined;
+
+  /** Le proprietà della CPU simulata cambiate nel progetto valgono subito (tempo di ciclo, clock, OB35). */
+  private syncProps(): void {
+    const s = this.session;
+    const st = this.store.getState();
+    if (!s || st.sim.phase !== 'on' || !st.doc || !st.sim.deviceId) return;
+    const dev = findDevice(st.doc.project, st.sim.deviceId);
+    if (!dev || dev.properties === this.sentProps) return;
+    this.sentProps = dev.properties;
+    s.request({ op: 'props', props: simPropsOf(dev) }).catch((e: unknown) => {
+      if (this.session === s) this.push('error', 'simModeFailed', { message: errorText(e) });
     });
   }
 
@@ -127,12 +223,20 @@ export class SimController {
     const dev = doc && target ? findDevice(doc.project, target) : undefined;
     if (!dev) return;
     const gen = ++this.generation;
-    state.setSim({ ...SIM_OFF, phase: 'starting', deviceId: dev.id });
+    // Preferenze del pannello salvate nel progetto (assenti nei file precedenti).
+    state.setSim({
+      ...SIM_OFF,
+      phase: 'starting',
+      deviceId: dev.id,
+      monitorHex: dev.simPanel?.hex ?? true,
+      ioExtra: { inputs: dev.simPanel?.inputs ?? [], outputs: dev.simPanel?.outputs ?? [] },
+    });
     let session: SimSession;
     try {
       session = await (this.deps.start ?? SimSession.start)({
         cpuTypeId: dev.cpu.typeId,
         props: simPropsOf(dev),
+        io: simIoOf(dev),
       });
     } catch (e) {
       if (gen === this.generation) {
@@ -148,6 +252,7 @@ export class SimController {
     // L'API non permette di registrare gli ascoltatori prima di `start`: le notifiche del primo
     // istante (solo STOP) si perdono, la successiva arriva entro 200 ms.
     this.session = session;
+    this.sentProps = dev.properties;
     this.inputsInFlight = 0;
     this.sentMonitor = undefined;
     this.sentWatch = undefined;
@@ -183,6 +288,8 @@ export class SimController {
         warnings: n.warnings,
         ...(this.inputsInFlight > 0 ? {} : { inputs: n.inputs }),
         outputs: n.outputs,
+        forces: n.forces,
+        pulled: n.pulled,
       });
     });
     session.onFail((e) => {
@@ -203,7 +310,6 @@ export class SimController {
     this.session = undefined;
     this.sentMonitor = undefined;
     this.sentWatch = undefined;
-    this.watchPlanFor = undefined;
     s?.dispose();
     if (this.store.getState().sim.phase !== 'off') this.store.getState().setSim(SIM_OFF);
   }
@@ -239,6 +345,28 @@ export class SimController {
       if (this.session === s) this.push('error', 'simInputsFailed', { message: errorText(e) });
     } finally {
       if (this.session === s) this.inputsInFlight--;
+    }
+  }
+
+  /** Estrae o reinserisce un modulo della configurazione (OB82, OB86 per una stazione). */
+  async setModulePresent(id: string, present: boolean): Promise<void> {
+    const s = this.session;
+    if (!s) return;
+    try {
+      await s.request({ op: 'module', id, present });
+    } catch (e) {
+      if (this.session === s) this.push('error', 'simInterruptFailed', { message: errorText(e) });
+    }
+  }
+
+  /** Sostituisce la tabella di forzamento della CPU simulata (vuota = termina il forzamento). */
+  async setForce(items: WriteItemReq[]): Promise<void> {
+    const s = this.session;
+    if (!s) return;
+    try {
+      await s.request({ op: 'force', items });
+    } catch (e) {
+      if (this.session === s) this.push('error', 'simForceFailed', { message: errorText(e) });
     }
   }
 
@@ -353,21 +481,24 @@ export class SimController {
   toggleWatch(deviceId: string, tableId: string): void {
     const st = this.store.getState();
     if (st.sim.phase !== 'on' || st.sim.deviceId !== deviceId) return;
-    const w = st.sim.watch;
-    if (w && w.deviceId === deviceId && w.tableId === tableId) {
-      st.setSim({ watch: null, watchValues: null });
-    } else st.setSim({ watch: { deviceId, tableId }, watchValues: null });
+    const on = st.sim.watch.some((w) => w.deviceId === deviceId && w.tableId === tableId);
+    // Più tabelle osservano insieme (come online): «Osserva tutto» accende o spegne solo questa.
+    st.setSim({
+      watch: on
+        ? st.sim.watch.filter((w) => !(w.deviceId === deviceId && w.tableId === tableId))
+        : [...st.sim.watch, { deviceId, tableId }],
+    });
   }
 
   /** Piano di osservazione della tabella (righe con operando risolto e formato adatto). */
   private planOf(dev: PlcDevice, table: WatchTable) {
-    const cached = this.watchPlanFor;
-    if (cached && cached.dev === dev && cached.table === table) return cached;
+    const cached = this.watchPlanFor.get(table);
+    if (cached && cached.dev === dev) return cached;
     const resolve = watchResolverFor(dev, findCpu(dev.cpu.typeId));
     const infos = resolveRows(resolve, table.rows);
-    const plan = watchPlan(table.rows, (row) => infos.get(row.id)!);
-    this.watchPlanFor = { dev, table, ...plan };
-    return this.watchPlanFor;
+    const plan = { dev, ...watchPlan(table.rows, (row) => infos.get(row.id)!) };
+    this.watchPlanFor.set(table, plan);
+    return plan;
   }
 
   /**
@@ -376,14 +507,28 @@ export class SimController {
    */
   private syncWatch(): void {
     const st = this.store.getState();
-    const w = st.sim.watch;
-    const dev = w && st.doc ? findDevice(st.doc.project, w.deviceId) : undefined;
-    const table = w && dev ? findWatchTable(dev, w.tableId) : undefined;
-    if (w && !(dev && table && watchStillShown(st, w.deviceId, w.tableId))) {
-      st.setSim({ watch: null, watchValues: null });
+    const tables = st.sim.watch.map((w) => {
+      const dev = st.doc ? findDevice(st.doc.project, w.deviceId) : undefined;
+      const table = dev ? findWatchTable(dev, w.tableId) : undefined;
+      return dev && table && watchStillShown(st, w.deviceId, w.tableId)
+        ? { dev, table }
+        : undefined;
+    });
+    if (tables.some((x) => !x)) {
+      const watch = st.sim.watch.filter((_, i) => tables[i]);
+      st.setSim({ watch, ...(watch.length === 0 ? { watchValues: null } : {}) });
       return; // lo stato è cambiato: la sottoscrizione richiama questa funzione
     }
-    const plan = dev && table ? this.planOf(dev, table) : undefined;
+    // Le voci delle tabelle in fila, nell'ordine di accensione (gli id di riga sono unici).
+    const plans = tables.map((x) => this.planOf(x!.dev, x!.table));
+    const plan =
+      plans.length > 0
+        ? {
+            // shortcut: oltre MAX_WATCH_ITEMS in tutto le righe in più restano senza valore, senza errore di riga.
+            rowIds: plans.flatMap((p) => p.rowIds).slice(0, MAX_WATCH_ITEMS),
+            items: plans.flatMap((p) => p.items).slice(0, MAX_WATCH_ITEMS),
+          }
+        : undefined;
     const key = plan ? JSON.stringify(plan.items) : undefined;
     const s = this.session;
     if (!s) return;

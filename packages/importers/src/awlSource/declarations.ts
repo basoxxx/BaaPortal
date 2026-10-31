@@ -46,6 +46,12 @@ function splitNames(text: string): string[] | null {
 /** Indice di `:` che non fa parte di `:=`. */
 const colonAt = (text: string): number => indexOutside(text, ':', (t, i) => t[i + 1] === '=');
 
+/** Il codice della riga corrente del lettore. */
+const nextCode = (r: Reader): string => cleanLine(r.lines[r.i]!).code;
+
+/** Inizio di una dichiarazione: nomi e `:` (non `:=`). */
+const DECL_START = /^[\p{L}_"][^:;=]*:(?!=)/u;
+
 const assignAt = (text: string): number => {
   let q = '';
   for (let i = 0; i < text.length - 1; i++) {
@@ -64,17 +70,22 @@ const assignAt = (text: string): number => {
  */
 export function readMembers(r: Reader, stop: (code: string) => boolean): Member[] {
   const out: Member[] = [];
-  while (!r.done) {
-    const start = r.i;
-    const first = cleanLine(r.lines[start]!);
-    if (first.code === '') {
-      r.i++;
-      continue;
+  /** Il resto di una riga con più dichiarazioni (`a : INT; b : REAL;`), da leggere come una riga a sé. */
+  type Carry = { start: number; code: string; comment: string | undefined };
+  let carry: Carry | null = null as Carry | null;
+  while (carry || !r.done) {
+    const from: Carry | null = carry;
+    carry = null;
+    const start = from ? from.start : r.i;
+    const first = from ?? cleanLine(r.lines[start]!);
+    if (!from) r.i++;
+    if (first.code === '') continue;
+    if (!from && stop(first.code)) {
+      r.i--;
+      return out;
     }
-    if (stop(first.code)) return out;
     let text = first.code;
     let comment = first.comment;
-    r.i++;
     const open = (): boolean => {
       const c = colonAt(text);
       if (c < 0) return false;
@@ -82,8 +93,13 @@ export function readMembers(r: Reader, stop: (code: string) => boolean): Member[
       return a < 0 && STRUCT_OPEN.test(text.slice(c + 1).trim());
     };
     const structOpen = open();
-    // Un valore iniziale può continuare sulle righe seguenti fino al ';'.
-    while (!structOpen && !text.endsWith(';') && assignAt(text) >= 0 && !r.done) {
+    // Una dichiarazione (valore iniziale, tipo, elenco di nomi) può continuare sulle righe seguenti fino al ';'.
+    while (
+      !structOpen &&
+      !text.endsWith(';') &&
+      (assignAt(text) >= 0 || /[:,]$/.test(text) || !DECL_START.test(nextCode(r))) &&
+      !r.done
+    ) {
       const next = cleanLine(r.lines[r.i]!);
       if (next.code === '' || stop(next.code)) break;
       text = `${text} ${next.code}`;
@@ -91,6 +107,12 @@ export function readMembers(r: Reader, stop: (code: string) => boolean): Member[
       r.i++;
     }
     const col = r.indent(start);
+    const semi = structOpen || /\bSTRUCT\b/i.test(text) ? -1 : indexOutside(text, ';');
+    if (semi >= 0 && text.slice(semi + 1).trim() !== '') {
+      carry = { start, code: text.slice(semi + 1).trim(), comment };
+      text = text.slice(0, semi + 1);
+      comment = undefined;
+    }
     const c = colonAt(text);
     if (c < 0) {
       r.error(start, col, 'BAD_DECLARATION');

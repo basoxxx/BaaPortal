@@ -1114,6 +1114,7 @@ avere anche i byte MC7. Una rete per ipotesi; blocco FC con TEMP noti (es. 4 byt
 | H18 | pin BOOL di FC/FB con logica: bit L + `BLD 103`, ordine rispetto a EN                                                                             | FC con 2 ingressi BOOL cablati a contatti               |
 | H19 | `X`/`XN` non mostrati in KOP (solo FUP)                                                                                                           | rete AWL `X I0.0 / X I0.1 / = Q4.0` → vista KOP         |
 | H20 | lingua del blocco (byte `02` KOP dell'header) e reti non convertibili: STEP 7 apre il blocco in KOP e lascia in AWL solo le reti non riconosciute | FC con una rete KOP e una AWL libera                    |
+| H21 | NOT, `(#)` o fronte in un ramo di un parallelo con logica davanti: il flusso in un bit L (`= L`), ogni ramo in `O( A L` … `)`                     | `A a`, parallelo con `b NOT` e `NOT`, bobina            |
 
 Finché un'ipotesi è aperta, il generatore usa la forma indicata qui, e i test di BaaPortal la
 verificano **solo** sul comportamento (simulatore e CPU di prova), non sull'identità con STEP 7.

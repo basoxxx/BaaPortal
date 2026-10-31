@@ -111,16 +111,46 @@ export function listTextEntries(p: Pick<Project, 'devices'>): TextEntry[] {
 }
 
 /** Scrive (o toglie, se il testo è vuoto) la traduzione di una chiave. Modifica `p` sul posto. */
-export function setTranslation(p: Project, key: string, lang: string, text: string): boolean {
+export function setTranslation(
+  p: Project,
+  key: string,
+  lang: string,
+  text: string,
+  /** Il testo di modifica di adesso: si ricorda per segnare la traduzione «da rivedere» se poi cambia. */
+  source?: string,
+): boolean {
   if (text.length > MAX_TRANSLATION_LENGTH) return false;
+  if (text !== '' && source !== undefined) (p.textSources ??= {})[key] = source;
   const texts = (p.texts ??= {});
   const map = Object.hasOwn(texts, key) ? texts[key]! : (texts[key] = {});
   if (text === '') {
     delete map[lang];
-    if (Object.keys(map).length === 0) delete texts[key];
+    if (Object.keys(map).length === 0) {
+      delete texts[key];
+      if (p.textSources) delete p.textSources[key];
+    }
   } else map[lang] = text;
   if (Object.keys(texts).length === 0) delete p.texts;
+  if (p.textSources && Object.keys(p.textSources).length === 0) delete p.textSources;
   return true;
+}
+
+/** Le chiavi con una traduzione il cui testo di modifica è cambiato dopo l'ultima traduzione. */
+export function staleTranslations(
+  p: Pick<Project, 'devices' | 'texts' | 'textSources'>,
+): Set<string> {
+  const out = new Set<string>();
+  if (!p.textSources || !p.texts) return out;
+  for (const e of listTextEntries(p)) {
+    const was = p.textSources[e.key];
+    if (was !== undefined && was !== e.source && p.texts[e.key]) out.add(e.key);
+  }
+  return out;
+}
+
+/** Segna la traduzione della chiave come rivista rispetto al testo di modifica di adesso. */
+export function markReviewed(p: Project, key: string, source: string): void {
+  if (p.texts?.[key]) (p.textSources ??= {})[key] = source;
 }
 
 export interface TranslationInput {
@@ -137,13 +167,19 @@ export function applyTranslations(
   p: Project,
   inputs: readonly TranslationInput[],
 ): { applied: number; skipped: number } {
-  const keys = new Set(listTextEntries(p).map((e) => e.key));
+  const sources = new Map(listTextEntries(p).map((e) => [e.key, e.source]));
+  const keys = new Set(sources.keys());
   const langs = new Set(p.languages?.others ?? []);
   let applied = 0;
   let skipped = 0;
   for (const i of inputs) {
     if (i.text === '') continue;
-    if (keys.has(i.key) && langs.has(i.lang) && setTranslation(p, i.key, i.lang, i.text)) applied++;
+    if (
+      keys.has(i.key) &&
+      langs.has(i.lang) &&
+      setTranslation(p, i.key, i.lang, i.text, sources.get(i.key))
+    )
+      applied++;
     else skipped++;
   }
   return { applied, skipped };
@@ -181,5 +217,13 @@ export function liveTexts(p: Project): Project['texts'] {
   if (!p.texts) return undefined;
   const keys = new Set(listTextEntries(p).map((e) => e.key));
   const out = Object.fromEntries(Object.entries(p.texts).filter(([k]) => keys.has(k)));
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/** Come `liveTexts`, per i testi di modifica ricordati. */
+export function liveTextSources(p: Project): Project['textSources'] {
+  if (!p.textSources || !p.texts) return undefined;
+  const live = liveTexts(p);
+  const out = Object.fromEntries(Object.entries(p.textSources).filter(([k]) => live && k in live));
   return Object.keys(out).length > 0 ? out : undefined;
 }

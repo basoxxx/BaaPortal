@@ -1,11 +1,14 @@
 // Parser a discesa ricorsiva del sottoinsieme SCL in prova (istruzioni, senza intestazione del
 // blocco: l'interfaccia è quella del blocco). Precedenze dal manuale pubblico SCL, dalla più bassa:
-// OR, XOR, AND/&, confronti, + -, * / MOD, NOT e meno unario.
+// OR, XOR, AND/&, confronti, + -, * / MOD, NOT e meno unario, **.
 import { intLiteral, lex, SclError, type Tok } from './lexer.js';
 
 export type Pos = { line: number; col: number };
-/** Membro dopo `.` (nome come scritto, virgolette comprese) con i suoi indici costanti. */
-export type Seg = { name: string; index?: number[] };
+/**
+ * Membro dopo `.` (nome come scritto, virgolette comprese) con i suoi indici: costanti in `index`,
+ * con almeno un indice variabile in `vindex` (uno per dimensione).
+ */
+export type Seg = { name: string; index?: number[]; vindex?: Expr[] };
 export type Operand =
   | (Pos & {
       k: 'local' | 'id' | 'symbol' | 'addr';
@@ -14,7 +17,7 @@ export type Operand =
       index?: number[];
       /** Membri dopo il nome: `#s.x`, `"DB".m[2].n`. */
       path?: Seg[];
-      /** Indici variabili dell'ultimo ARRAY (`#a[#i]`, `#s.m[#i, 2]`), uno per dimensione. */
+      /** Indici variabili dopo il nome (`#a[#i]`, `#m[#i, 2].x`); quelli dei membri in `path`. */
       vindex?: Expr[];
     })
   /** Solo dalla traduzione: una TEMP di appoggio già calcolata, di tipo `ty`. */
@@ -82,7 +85,15 @@ class TooMany extends Error {}
  */
 export function parse(text: string): { stmts: Stmt[]; errors: SclError[] } {
   const errors: SclError[] = [];
-  const toks = lex(text, { errors });
+  // `AW1`, `EB2`: dopo `.`, come nome di parametro o di FC chiamata sono nomi, non indirizzi
+  const toks = lex(text, { errors }).map((t, i, all) =>
+    t.kind === 'addr' &&
+    (all[i - 1]?.text === '.' ||
+      all[i + 1]?.text === '(' ||
+      (['(', ','].includes(all[i - 1]?.text ?? '') && ARROWS.includes(all[i + 1]?.text ?? '')))
+      ? { ...t, kind: 'id' as const }
+      : t,
+  );
   // Su una riga con un errore del lexer, quelli del parser ne sono di solito la conseguenza.
   const lexLines = new Set(errors.map((e) => e.line));
   const record = (e: unknown) => {
@@ -330,37 +341,28 @@ export function parse(text: string): { stmts: Stmt[]; errors: SclError[] } {
       p++;
       const o: Operand = { k: t.kind, text: t.text, ...pos(t) };
       if (t.kind === 'addr') return o;
-      let vindex: Expr[] | undefined;
-      const onlyLast = (at: Tok) =>
-        fail(at, "Indice variabile solo nell'ultimo ARRAY dell'operando: #a[#i], non #a[#i].x");
-      /** Indici tutti costanti come numeri; con un indice variabile vanno in `vindex`. */
-      const take = (): number[] | undefined => {
+      /** Indici tutti costanti come numeri (`index`), altrimenti espressioni (`vindex`). */
+      const take = (): { index?: number[]; vindex?: Expr[] } => {
         const at = peek();
         const i = indices();
-        if (!i || i.every((e) => typeof e === 'number')) return i as number[] | undefined;
-        vindex = i.map((e) =>
-          typeof e === 'number' ? { k: 'int', text: String(e), ...pos(at) } : e,
-        );
-        return undefined;
+        if (!i) return {};
+        if (i.every((e) => typeof e === 'number')) return { index: i as number[] };
+        return {
+          vindex: i.map((e) =>
+            typeof e === 'number' ? { k: 'int', text: String(e), ...pos(at) } : e,
+          ),
+        };
       };
-      const index = take();
+      const root = take();
       const path: Seg[] = [];
       while (is('.')) {
         p++;
         const m = peek();
         if (m.kind !== 'id' && m.kind !== 'symbol') fail(m, 'Dopo «.» serve il nome di un membro');
-        if (vindex) onlyLast(m);
         p++;
-        const i = take();
-        path.push(i ? { name: m.text, index: i } : { name: m.text });
+        path.push({ name: m.text, ...take() });
       }
-      if (vindex && is('[')) onlyLast(peek());
-      return {
-        ...o,
-        ...(index ? { index } : {}),
-        ...(path.length ? { path } : {}),
-        ...(vindex ? { vindex } : {}),
-      };
+      return { ...o, ...root, ...(path.length ? { path } : {}) };
     }
     return fail(t, `Atteso un operando, trovato ${shown(t)}`);
   }
@@ -439,7 +441,6 @@ export function parse(text: string): { stmts: Stmt[]; errors: SclError[] } {
       const t = toks[p++]!;
       l = { k: 'bin', op: up(t), l, r: unary(), ...pos(t) };
     }
-    if (is('**')) fail(peek(), 'La potenza ** non è supportata in prova');
     return l;
   }
 
@@ -453,7 +454,7 @@ export function parse(text: string): { stmts: Stmt[]; errors: SclError[] } {
       p++;
       const n = peek();
       // -123 è un letterale (serve per -32768 e per il tipo del letterale)
-      if (n.kind === 'int' || n.kind === 'real') {
+      if ((n.kind === 'int' || n.kind === 'real') && toks[p + 1]?.text !== '**') {
         p++;
         return { k: n.kind, text: `-${n.text}`, ...pos(t) };
       }
@@ -463,7 +464,30 @@ export function parse(text: string): { stmts: Stmt[]; errors: SclError[] } {
       p++;
       return unary();
     }
-    return primary();
+    return power();
+  }
+
+  /**
+   * `a ** b`, sopra il meno unario (`-2 ** 2` è -4); l'esponente può avere il segno. Le potenze in
+   * catena vogliono le parentesi (l'associatività non è verificata con STEP 7).
+   */
+  function power(): Expr {
+    const l = primary();
+    if (!is('**')) return l;
+    const t = toks[p++]!;
+    let r: Expr;
+    if (is('-', '+')) {
+      const s = toks[p++]!;
+      const x = primary();
+      r =
+        s.text === '+'
+          ? x
+          : x.k === 'int' || x.k === 'real'
+            ? { ...x, text: `-${x.text}` }
+            : { k: 'neg', e: x, ...pos(s) };
+    } else r = primary();
+    if (is('**')) fail(peek(), 'Potenze in catena: servono le parentesi');
+    return { k: 'bin', op: '**', l, r, ...pos(t) };
   }
 
   function primary(): Expr {

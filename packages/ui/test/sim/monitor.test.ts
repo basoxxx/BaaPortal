@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { findCpu } from '@baaportal/catalog';
+import { networkStatus } from '@baaportal/ladfbd';
+import { SimCpu } from '@baaportal/sim';
 import {
+  blockToMc7File,
   createCodeBlock,
   createPlcDevice,
+  kopSources,
   createProject,
   findDevice,
   type CodeBlock,
@@ -15,7 +19,7 @@ import { createAppStore } from '../../src/state/store';
 import { monitorLinesByNetwork } from '../../src/editors/awl/monitorExtension';
 import { initI18n } from '../../src/i18n';
 import { FakeBridge } from '../fakeBridge';
-import { fakeWorker } from './simFixtures';
+import { PROPS, fakeWorker } from './simFixtures';
 
 const DEV = 'dev1';
 
@@ -303,5 +307,44 @@ describe('osservazione del programma', () => {
     st(s).setSim({ monitorSteps: null });
     late('FC', 5);
     expect(st(s).sim.monitorSteps).toBeNull();
+  });
+});
+
+describe('osservazione di un blocco KOP', () => {
+  it('compilato, eseguito da OB1 nel simulatore: gli elementi hanno lo stato del ciclo', () => {
+    const dev = findDevice(setup().store.getState().doc!.project, DEV)!;
+    const ob = dev.blocks.find((b) => b.kind === 'OB' && b.number === 1) as CodeBlock;
+    ob.networks[0]!.source = 'SET\n= I 0.0\n= I 0.1\nCALL FC 1';
+    const fc = createCodeBlock({ kind: 'FC', number: 1, name: 'Logica', language: 'KOP' });
+    const lad = {
+      root: {
+        id: 'n0',
+        series: [
+          { id: 'a', k: 'contact' as const, neg: false, op: 'I 0.0' },
+          { id: 'b', k: 'contact' as const, neg: false, op: 'I 0.1' },
+        ],
+        outs: [{ id: 'q', k: 'coil' as const, op: 'Q 4.0' }],
+      },
+    };
+    fc.networks[0]!.lad = lad;
+    dev.blocks = dev.blocks.filter((b) => b.kind !== 'FC');
+    dev.blocks.push(fc);
+    const cpuType = findCpu(dev.cpu.typeId)!;
+    const cpu = new SimCpu({ cpuTypeId: cpuType.id, props: PROPS });
+    let lines;
+    for (const b of dev.blocks) {
+      const r = blockToMc7File(b, dev, cpuType);
+      cpu.loadBlock(r.file!);
+      if (b === fc) lines = r.lines;
+    }
+    cpu.setMonitor({ kind: 'FC', number: 1 });
+    cpu.run();
+    cpu.cycle();
+    expect(cpu.memory.Q[4]).toBe(1);
+    const cells = monitorLinesByNetwork(lines!, cpu.monitorSnapshot()!, false).get(0)!.cells;
+    const status = networkStatus(lad, kopSources(fc, dev)[0]!.lines, cells);
+    expect(status.get('a')).toEqual({ in: true, sta: true, out: true });
+    expect(status.get('b')).toEqual({ in: true, sta: true, out: true });
+    expect(status.get('q')).toEqual({ in: true, out: true });
   });
 });

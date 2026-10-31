@@ -98,6 +98,7 @@ describe('sclToAwl: AWL generato', () => {
       line: out.source.split('\n').length - 1,
       sclLine: 3,
       value: 'INT',
+      name: 'a',
     });
   });
 

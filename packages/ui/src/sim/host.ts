@@ -1,5 +1,5 @@
 import { parseBlockFile, type S7WriteClient } from '@baaportal/s7comm';
-import { SimCpu, connectToSim, type MonitorRequest } from '@baaportal/sim';
+import { SimCpu, connectToSim, type ForceEntry, type MonitorRequest } from '@baaportal/sim';
 import {
   INTERRUPT_OBS,
   MAX_WATCH_ITEMS,
@@ -83,6 +83,10 @@ export class SimHost {
         if (req.to === 'RUN') await this.client.start();
         else await this.client.stop();
         return undefined;
+      case 'props':
+        this.minCycleMs = req.props.minCycleMs;
+        cpu.setProps(req.props);
+        return undefined;
       case 'mres':
         cpu.memoryReset();
         this.warnings = [];
@@ -131,6 +135,23 @@ export class SimHost {
           );
         checkSizes(req.items);
         return req.items.map((it) => this.writeOne(cpu, it));
+      case 'module':
+        if (typeof req.id !== 'string' || typeof req.present !== 'boolean')
+          throw new RangeError('richiesta di modulo non valida');
+        cpu.setModulePresent(req.id, req.present);
+        this.sendStatus();
+        return undefined;
+      case 'force':
+        if (req.items.length > MAX_WATCH_ITEMS)
+          throw new RangeError(`troppe voci da forzare: ${req.items.length}`);
+        checkSizes(req.items);
+        for (const it of req.items)
+          if (it.area !== 'I' && it.area !== 'Q' && it.area !== 'M')
+            throw new RangeError(`area non forzabile: ${String(it.area)}`);
+        // La CPU convalida indirizzi e lunghezze e rifiuta tutta la tabella se una voce è sbagliata.
+        cpu.setForce(req.items as ForceEntry[]);
+        this.sendStatus();
+        return undefined;
       case 'stop':
         await this.shutdown();
         return undefined;
@@ -140,7 +161,12 @@ export class SimHost {
   private async start(req: Extract<SimRequest, { op: 'start' }>): Promise<void> {
     if (this.cpu) throw new Error('simulazione già avviata');
     this.minCycleMs = req.props.minCycleMs;
-    const cpu = new SimCpu({ cpuTypeId: req.cpuTypeId, props: req.props, now: this.env.now });
+    const cpu = new SimCpu({
+      cpuTypeId: req.cpuTypeId,
+      props: req.props,
+      now: this.env.now,
+      ...(req.io ? { io: req.io } : {}),
+    });
     cpu.onEvent((e) => {
       if (e.type === 'mode') {
         this.sendStatus(); // subito a ogni cambio di modo
@@ -221,7 +247,11 @@ export class SimHost {
     for (;;) {
       const t = this.env.now();
       if (t < this.nextCycleAt) {
-        this.cancelPump = this.env.schedule(() => this.pump(), this.nextCycleAt - t);
+        // Nell'attesa del ciclo minimo gli allarmi a tempo girano: ci si risveglia alla prima scadenza.
+        const due = cpu.idle();
+        if (cpu.mode !== 'RUN') return;
+        const wait = Math.min(this.nextCycleAt - this.env.now(), due ?? Infinity);
+        this.cancelPump = this.env.schedule(() => this.pump(), Math.max(0, wait));
         return;
       }
       cpu.cycle();
@@ -285,6 +315,8 @@ export class SimHost {
       warnings: [...this.warnings],
       inputs: cpu.memory.physIn.slice(),
       outputs: cpu.memory.physOut.slice(),
+      forces: cpu.forceTable.map((f) => ({ ...f, data: f.data.slice() })),
+      pulled: cpu.io.filter((m) => !cpu.modulePresent(m.id)).map((m) => m.id),
     });
   }
 

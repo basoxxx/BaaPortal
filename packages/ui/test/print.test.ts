@@ -68,6 +68,28 @@ const all = (d: ReturnType<typeof setup>['d']) => ({
 });
 
 describe('buildPrintDocument', () => {
+  it('più PLC e sorgenti AWL esterne nello stesso documento', () => {
+    const { project, d } = setup();
+    d.sources.push({ id: 's1', name: 'Motori.awl', text: `A I 0.0 ${XSS}` });
+    const d2 = plc();
+    d2.id = 'altro';
+    d2.name = 'PLC2';
+    project.devices.push(d2);
+    const sel1 = { ...all(d), sources: ['s1'] };
+    const sel2 = {
+      deviceId: d2.id,
+      blocks: [],
+      udts: [],
+      tagTables: [d2.tagTables[0]!.id],
+      watchTables: [],
+    };
+    const html = buildPrintDocument(project, [sel1, sel2], opts());
+    expect(html).toContain('print.doc.source');
+    expect(html).toContain('A I 0.0 &lt;script&gt;');
+    expect(html).toContain('PLC2 › ');
+    expect(html).not.toContain(XSS);
+  });
+
   it('struttura: copertina, indice e una sezione per oggetto di ogni tipo', () => {
     const { project, d } = setup();
     const html = buildPrintDocument(project, all(d), opts());

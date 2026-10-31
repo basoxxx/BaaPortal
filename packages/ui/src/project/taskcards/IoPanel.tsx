@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { parseAddress } from '@baaportal/s7-types';
 import { findDevice, type PlcDevice } from '@baaportal/project';
 import { useAppStore, useServices } from '../../state/AppContext';
-import { simControllerFor } from '../../sim/simController';
+import { addIoByte, simControllerFor, simIoOf } from '../../sim/simController';
+import type { WriteItemReq } from '../../sim/protocol';
 
 type Dir = 'inputs' | 'outputs';
 
@@ -75,8 +76,7 @@ function ByteGroup({ dir }: { dir: Dir }) {
     }
     setBad(false);
     setText('');
-    if (!sim.ioExtra[dir].includes(n))
-      store.getState().setSim({ ioExtra: { ...sim.ioExtra, [dir]: [...sim.ioExtra[dir], n] } });
+    addIoByte(store, dir, n);
   };
 
   return (
@@ -259,6 +259,170 @@ function FaultSimulation() {
   );
 }
 
+const SIZE_LETTER = { X: '', B: 'B', W: 'W', D: 'D' } as const;
+
+/** Testo dell'operando forzato: `I 0.1`, `MW 10`. */
+export function forceLabel(f: WriteItemReq): string {
+  return f.size === 'X'
+    ? `${f.area} ${f.byte}.${f.bit ?? 0}`
+    : `${f.area}${SIZE_LETTER[f.size]} ${f.byte}`;
+}
+
+/** Voce di forzamento da operando (I, Q, M) e valore (0/1, TRUE/FALSE, intero o 16#…); errore come chiave. */
+export function parseForce(addr: string, value: string): WriteItemReq | string {
+  const p = parseAddress(addr);
+  if (!p.ok || !('size' in p.address) || !['I', 'Q', 'M'].includes(p.address.area))
+    return 'forceBadAddress';
+  const a = p.address;
+  const v = value.trim().toUpperCase();
+  const len = BYTES_OF[a.size];
+  let n: number | undefined;
+  if (a.size === 'X')
+    n = v === '1' || v === 'TRUE' ? 1 : v === '0' || v === 'FALSE' ? 0 : undefined;
+  else if (/^16#[0-9A-F]+$/.test(v)) n = parseInt(v.slice(3), 16);
+  else n = parseIntStrict(v);
+  const max = 2 ** (8 * len);
+  if (n === undefined || n >= max || n < -max / 2) return 'forceBadValue';
+  const u = n < 0 ? n + max : n;
+  const data = new Uint8Array(len);
+  for (let i = 0; i < len; i++) data[i] = Math.floor(u / 2 ** (8 * (len - 1 - i))) & 255;
+  return {
+    area: a.area as 'I' | 'Q' | 'M',
+    byte: a.byte,
+    ...(a.size === 'X' ? { bit: a.bit } : {}),
+    size: a.size,
+    data,
+  };
+}
+
+const forceValue = (f: WriteItemReq): string =>
+  f.size === 'X'
+    ? String(f.data[0] ? 1 : 0)
+    : `16#${[...f.data]
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('')
+        .toUpperCase()}`;
+
+/**
+ * Forzamento sul simulatore: la tabella vale finché non la si termina, anche in STOP. Gli ingressi
+ * e i merker forzati si scrivono all'inizio del ciclo, le uscite prima di passare ai moduli.
+ */
+function ForceTable() {
+  const { t } = useTranslation();
+  const { store } = useServices();
+  const forces = useAppStore((s) => s.sim.forces);
+  const [addr, setAddr] = useState('');
+  const [value, setValue] = useState('1');
+  const [error, setError] = useState<string | null>(null);
+  const ctrl = simControllerFor(store);
+
+  const add = () => {
+    const f = parseForce(addr, value);
+    if (typeof f === 'string') return setError(f);
+    setError(null);
+    const label = forceLabel(f);
+    void ctrl.setForce([...forces.filter((x) => forceLabel(x) !== label), f]);
+  };
+
+  return (
+    <div data-testid="io-force">
+      <h4>{t('ioPanel.force')}</h4>
+      <div className="baa-io-add">
+        <label>
+          {t('ioPanel.forceAddress')}{' '}
+          <input
+            type="text"
+            size={8}
+            value={addr}
+            data-testid="force-address"
+            onChange={(e) => setAddr(e.target.value)}
+          />
+        </label>
+        <label>
+          {t('ioPanel.forceValue')}{' '}
+          <input
+            type="text"
+            size={10}
+            value={value}
+            data-testid="force-value"
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && add()}
+          />
+        </label>
+        <button type="button" onClick={add} data-testid="force-add">
+          {t('ioPanel.forceAdd')}
+        </button>
+      </div>
+      {error ? <p role="alert">{t(`ioPanel.${error}`)}</p> : null}
+      {forces.length > 0 ? (
+        <>
+          <ul className="baa-io-forces">
+            {forces.map((f) => {
+              const label = forceLabel(f);
+              return (
+                <li key={label} data-testid={`force-row-${label}`}>
+                  {label} = {forceValue(f)}{' '}
+                  <button
+                    type="button"
+                    aria-label={t('ioPanel.forceRemove', { operand: label })}
+                    onClick={() =>
+                      void ctrl.setForce(forces.filter((x) => forceLabel(x) !== label))
+                    }
+                  >
+                    ×
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <button type="button" data-testid="force-clear" onClick={() => void ctrl.setForce([])}>
+            {t('ioPanel.forceClear')}
+          </button>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+/** Moduli della configurazione hardware: estrai e reinserisci (OB82, OB86 per le stazioni ET 200). */
+function Modules() {
+  const { t } = useTranslation();
+  const { store } = useServices();
+  const sim = useAppStore((s) => s.sim);
+  const project = useAppStore((s) => s.doc?.project ?? null);
+  const dev = project && sim.deviceId ? findDevice(project, sim.deviceId) : undefined;
+  const mods = dev ? simIoOf(dev) : [];
+  if (mods.length === 0) return null;
+  const ctrl = simControllerFor(store);
+  const range = (a: string, r?: { start: number; bytes: number }) =>
+    r ? `${a} ${r.start}..${r.start + r.bytes - 1}` : '';
+  return (
+    <div data-testid="io-modules">
+      <h4>{t('ioPanel.modules')}</h4>
+      <ul className="baa-io-forces">
+        {mods.map((m) => {
+          const out = sim.pulled.includes(m.id);
+          return (
+            <li key={m.id} data-testid={`module-${m.id}`} data-pulled={out}>
+              {m.station !== undefined
+                ? t('ioPanel.moduleStation', { station: m.station, slot: m.slot })
+                : t('ioPanel.moduleRack', { rack: m.rack, slot: m.slot })}{' '}
+              {m.name} {[range('I', m.inputs), range('Q', m.outputs)].filter(Boolean).join(', ')}{' '}
+              <button
+                type="button"
+                data-testid={`module-toggle-${m.id}`}
+                onClick={() => void ctrl.setModulePresent(m.id, out)}
+              >
+                {t(out ? 'ioPanel.modulePlug' : 'ioPanel.modulePull')}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 export function IoPanel() {
   const { t } = useTranslation();
   const phase = useAppStore((s) => s.sim.phase);
@@ -268,6 +432,8 @@ export function IoPanel() {
       <ByteGroup dir="inputs" />
       <AnalogInput />
       <ByteGroup dir="outputs" />
+      <ForceTable />
+      <Modules />
       <FaultSimulation />
     </div>
   );

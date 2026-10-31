@@ -3,6 +3,7 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (consigliato) oppure superpowers:executing-plans per realizzare questo piano un task alla volta. I passi usano caselle (`- [ ]`) per il tracciamento.
 
 **Obiettivo:** rendere usabile dall'app la CPU simulata dei piani 2A e 2B. L'utente:
+
 - avvia la simulazione e carica il programma nel simulatore con lo stesso percorso del PLC;
 - comanda la CPU dal pannello: RUN, STOP, cancellazione totale, diagnostica, stack di chiamata;
 - forza gli ingressi e vede le uscite dal pannello I/O;
@@ -10,6 +11,7 @@
 - crea tabelle di controllo con cui osservare e modificare gli operandi.
 
 **Architettura:**
+
 - **Worker:** la CPU simulata gira in un **Web Worker** del renderer (spec §7: «Worker separati per compilatore e simulatore»). Il worker ospita `SimCpu`, il suo server S7 in memoria e il client S7. Il ciclo gira a tempo, con un orologio reale e il tempo minimo di ciclo.
 - **Host puro:** la logica sta in una classe pura, `SimHost`, provata in node senza Worker. Il file del worker si limita a collegare `postMessage`.
 - **Client nel renderer:** `SimSession` parla con il worker attraverso un protocollo tipato, con richieste e risposte numerate più notifiche.
@@ -20,6 +22,7 @@
 **Tecnologie:** TypeScript, React 19, zustand, CodeMirror 6, Electron/electron-vite (Worker con `new URL(…, import.meta.url)`), Vitest, Playwright.
 
 **Spec:** `docs/superpowers/specs/2026-10-18-baaportal-design.md`:
+
 - §9 Tappa 2: pannello di comando CPU nella task card Test, pannello I/O del simulatore, osservazione AWL, tabelle di controllo sul simulatore, «Carica nel simulatore come se fosse un PLC»;
 - §7: Worker separati;
 - §8.2: tabelle di controllo e forzamento nell'albero;
@@ -53,24 +56,45 @@ Piano generale: riga 2C. Semantica del simulatore: `docs/protocollo/sim.md`.
 ### Task 1: Tabella delle righe dal compilatore e traccia del simulatore
 
 **Files:**
+
 - Modify: `packages/mc7/src/encode.ts` (`encodeCode` restituisce `lines`), `packages/mc7/src/compile.ts` (`CompileResult.lines`), `packages/project/src/mc7Bridge.ts` (`blockToMc7File` passa `lines`)
 - Modify: `packages/sim/src/executor.ts`, `src/cpu.ts` (`setMonitor`, stack dei blocchi nella voce di diagnostica)
 - Test: `packages/mc7/test/lineMap.test.ts`, `packages/sim/test/monitor.test.ts`
 
 **Interfaces:**
+
 - Produces:
   ```ts
   // @baaportal/mc7
-  export interface LineMapEntry { offset: number; length: number; network: number /* 0-based */; line: number /* 0-based, riga del testo della rete */ }
+  export interface LineMapEntry {
+    offset: number;
+    length: number;
+    network: number /* 0-based */;
+    line: number; /* 0-based, riga del testo della rete */
+  }
   // CompileResult: + lines?: LineMapEntry[]   (offset nel codice MC7, una voce per istruzione; tutte le istruzioni di una CALL espansa puntano alla riga della CALL)
   // @baaportal/sim
-  export interface MonitorStep { offset: number; rlo: boolean; sta: boolean; stw: number; accu1: number; accu2: number; ar1: number; db: number; di: number }
-  export interface MonitorRequest { kind: 'OB'|'FB'|'FC'; number: number }
+  export interface MonitorStep {
+    offset: number;
+    rlo: boolean;
+    sta: boolean;
+    stw: number;
+    accu1: number;
+    accu2: number;
+    ar1: number;
+    db: number;
+    di: number;
+  }
+  export interface MonitorRequest {
+    kind: 'OB' | 'FB' | 'FC';
+    number: number;
+  }
   // SimCpu: + setMonitor(req: MonitorRequest | undefined): void; + monitorSnapshot(): MonitorStep[] | undefined   // stato DOPO l'istruzione, prima esecuzione nel ciclo
   // DiagEntry: + stack?: { kind: string; number: number; offset: number }[]   (stack dei blocchi al momento dell'errore)
   ```
 
 Regole:
+
 - **Tabella delle righe:** la riga è l'indice nel testo della rete come la conserva il progetto. Le righe vuote e i commenti contano, così la riga corrisponde alla riga dell'editor.
 - **Istante del rilevamento:** è la **prima** esecuzione nel ciclo, l'unica registrata (⚠️: TIA può mostrare un'altra esecuzione).
 - **Costo:** senza monitor attivo è zero, nessuna allocazione per istruzione.
@@ -89,10 +113,12 @@ Regole:
 ### Task 2: Ospite del simulatore e Worker
 
 **Files:**
+
 - Create: `packages/ui/src/sim/protocol.ts`, `packages/ui/src/sim/host.ts` (`SimHost`, puro), `packages/ui/src/sim/simWorker.ts` (solo collegamento), `packages/ui/src/sim/session.ts` (`SimSession`, lato renderer)
 - Test: `packages/ui/test/sim/host.test.ts`, `packages/ui/test/sim/session.test.ts` (con un finto worker che fa girare `SimHost` in memoria)
 
 **Interfaces:**
+
 - Produces:
   ```ts
   export type SimRequest =
@@ -110,6 +136,7 @@ Regole:
   `WatchItem` / `WatchValue` / `WriteItemReq` usano un operando già risolto: area, db, byte, bit, dimensione, formato.
 
 Regole:
+
 - **Ciclo:** in RUN, `cycle()` gira finché sono passati `minCycleMs`. Poi si cede con `setTimeout(0)` almeno ogni 10 ms di esecuzione; per il resto si attende fino al prossimo ciclo. L'orologio è `performance.now()`.
 - **Notifiche:**
   - `status` al più ogni 200 ms, e subito a ogni cambio di modo;
@@ -130,11 +157,13 @@ Regole:
 ### Task 3: Comandi online sul simulatore
 
 **Files:**
+
 - Modify: `packages/ui/src/state/store.ts` (stato `sim`: spento | avvio | attivo, con il dispositivo, l'ultimo `status`, gli errori), `src/commands/commands.ts` (`online.simulation` come interruttore; `online.download`, `online.startCpu`, `online.stopCpu` abilitati con la simulazione attiva), `src/project/StatusBar.tsx` (indicatore «Simulazione: RUN/STOP»), il percorso di chiusura del progetto e dell'app (`dispose`)
 - Create: `packages/ui/src/sim/downloadOrder.ts` (ordine di caricamento)
 - Test: `packages/ui/test/sim/commands.test.ts`, `downloadOrder.test.ts`
 
 Regole:
+
 - **Simulazione:** si avvia per il dispositivo selezionato, con la CPU del catalogo e le proprietà del progetto (ciclo, merker di clock, ritentività, OB35).
 - **«Carica nel dispositivo»:**
   - compila le modifiche con `compileProgram`; se ci sono errori, si ferma e mostra la compilazione;
@@ -155,11 +184,13 @@ Regole:
 ### Task 4: Pannello di comando CPU e stack di chiamata
 
 **Files:**
+
 - Create: `packages/ui/src/project/taskcards/CpuPanel.tsx`, `CallStack.tsx`
 - Modify: `TaskCards.tsx` (sezioni `cpuPanel`, `callStack`), `it.json`
 - Test: `packages/ui/test/taskcards/cpuPanel.test.tsx`
 
 Regole:
+
 - **LED** RUN (verde), STOP (giallo), SF (rosso se l'ultima voce di diagnostica è un errore), con le scritte.
 - **Pulsanti:** RUN, STOP e MRES. MRES è attivo solo in STOP e chiede conferma.
 - **Dati:** tempo di ciclo ultimo, minimo e massimo; buffer di diagnostica (dal più recente, con ora, codice e testo in italiano, blocco e offset); avvisi «non simulata».
@@ -172,11 +203,13 @@ Regole:
 ### Task 5: Pannello I/O del simulatore
 
 **Files:**
+
 - Create: `packages/ui/src/project/taskcards/IoPanel.tsx`
 - Modify: `TaskCards.tsx` (nuova sezione `ioPanel` nella task card Test), `it.json`
 - Test: `packages/ui/test/taskcards/ioPanel.test.tsx`
 
 Regole:
+
 - **Byte mostrati:** quelli usati dalle variabili del progetto (tabelle delle variabili, aree I e Q), più quelli aggiunti a mano («+ byte»). Per ogni byte si vedono 8 bit con il simbolo, se c'è.
 - **Ingressi:** un clic commuta il bit, che va in `setInputs`.
 - **Uscite:** in sola lettura, dalla notifica `status`.
@@ -189,11 +222,13 @@ Regole:
 ### Task 6: Osservazione del programma AWL
 
 **Files:**
+
 - Create: `packages/ui/src/editors/awl/monitorExtension.ts` (StateField + StateEffect + gutter o widget di fine riga)
 - Modify: `AwlEditor.tsx` (estensione opzionale), `editors/block/NetworksView.tsx`, la barra dell'editor del blocco (pulsante «Osserva on/off», comando `online.monitor` con l'icona degli occhiali), `store.ts` (righe dei blocchi compilati: `compile.lines[blockId]`)
 - Test: `packages/ui/test/editors/monitorExtension.test.ts`
 
 Regole:
+
 - **Accensione:** con la simulazione attiva e il blocco aperto, «Osserva» manda `monitor` con il blocco e mostra, riga per riga, le colonne RLO, STA, ACCU1 e ACCU2 (esadecimale o decimale, secondo un'impostazione) e STW.
 - **Righe non eseguite** in questo ciclo: grigie, senza valori.
 - **Osservazione non disponibile** se il blocco:
@@ -202,6 +237,7 @@ Regole:
   - è importato senza righe.
 
   Il messaggio dice il motivo.
+
 - **Modifica del testo:** l'osservazione si sospende fino al nuovo caricamento.
 - **Una CALL espansa:** mostra lo stato dopo l'ultima istruzione della sua sequenza.
 
@@ -211,15 +247,18 @@ Regole:
 ### Task 7: Tabelle di controllo
 
 **Files:**
+
 - Modify: `packages/project/src/model.ts` (`PlcDevice.watchTables: WatchTable[]`), `baapFile.ts` (formato 4 e migrazione da 3), il controllo del progetto (`checks.ts`)
 - Modify: `packages/ui/src/project/navigation/treeModel.ts` (cartella `watch` abilitata: aggiungi, rinomina, elimina), `state/workArea.ts` (`EditorKind` + `'watchTable'`), `editors/registry.tsx`
 - Create: `packages/ui/src/editors/watch/WatchTableView.tsx`, `watchRows.ts` (risoluzione degli operandi)
 - Test: `packages/project/test/watchTables.test.ts`, `packages/ui/test/editors/watchTable.test.tsx`
 
 **Interfaces:**
+
 - Produces: `interface WatchTable { id: string; name: string; rows: WatchRow[] }` e `interface WatchRow { id: string; operand: string /* simbolo o indirizzo, come scritto */; format: 'BOOL'|'DEC'|'HEX'|'BIN'|'CHAR'|'FLOAT'|'S5TIME'|'TIME'|'BCD'; modify?: string; comment?: string }`.
 
 Regole:
+
 - **Operandi:** simboli delle variabili e dei DB (`"Motore".velocita`), indirizzi I, Q, M, DB…DBX/B/W/D, PIW e PQW, T e C. La risoluzione usa gli stessi servizi dell'editor AWL.
 - **Formato:** quello predefinito segue il tipo.
 - **Colonne:**
@@ -245,6 +284,7 @@ Regole:
 ### Task 8: E2E, documentazione, limiti noti, versione
 
 **Files:**
+
 - Create: `apps/desktop/e2e/tappa2-fatto-quando.spec.ts`
 - Modify:
   - `docs/protocollo/sim.md`: ospite, Worker, protocollo, osservazione;
@@ -254,6 +294,7 @@ Regole:
   - `apps/desktop/package.json` 0.8.0 e `package-lock.json`.
 
 Regole della e2e, sull'app costruita (come le altre e2e):
+
 - nuovo progetto, CPU 315-2 PN/DP;
 - OB1 in AWL: `A I 0.0` / `= Q 4.0`, più un contatore su `I 0.1`;
 - Simulazione → Carica nel dispositivo → Avvia → pannello I/O: I 0.0 = 1 → Q 4.0 = 1;
@@ -263,6 +304,7 @@ Regole della e2e, sull'app costruita (come le altre e2e):
 - chiusura del progetto e simulazione spenta.
 
 **Limiti noti:**
+
 - l'osservazione rileva la prima esecuzione nel ciclo;
 - nessun FORCE;
 - il tempo di ciclo del Worker non è quello di una CPU vera;
@@ -278,8 +320,8 @@ Regole della e2e, sull'app costruita (come le altre e2e):
 
 ## Decisioni prese in questo piano (Rulings)
 
-- **R1. Un Web Worker nel renderer, non utilityProcess** (spec §7). Il simulatore è TypeScript puro e non ha bisogno di node. Il Worker evita nuovi canali IPC e non blocca l'interfaccia. *Se fosse sbagliato:* `SimHost` è puro e si sposta in un utilityProcess cambiando solo il trasporto.
-- **R2. La tabella delle righe viene dal compilatore**, non da una nuova decodifica. Il compilatore sa quale riga ha prodotto quali byte, anche per le CALL espanse. *Se fosse sbagliato:* per i blocchi importati si aggiunge la stessa tabella a `decodeCode`.
-- **R3. L'osservazione registra la prima esecuzione nel ciclo.** È deterministica e costa poco. ⚠️ Una CPU vera ha le sue regole di rilevamento. *Se fosse sbagliato:* si aggiunge un'opzione «ultima esecuzione».
-- **R4. Il pannello I/O simula gli ingressi fisici, non forza.** FORCE è una funzione di manutenzione della tappa 7. *Se fosse sbagliato:* si aggiunge una maschera di forzamento in `SimCpu`.
-- **R5. Le tabelle di controllo funzionano solo sul simulatore in questo piano.** Il modello e l'editor sono già quelli definitivi; il PLC vero si aggancia nella tappa 3 con lo stesso `watch`/`write`. *Se fosse sbagliato:* niente da rifare.
+- **R1. Un Web Worker nel renderer, non utilityProcess** (spec §7). Il simulatore è TypeScript puro e non ha bisogno di node. Il Worker evita nuovi canali IPC e non blocca l'interfaccia. _Se fosse sbagliato:_ `SimHost` è puro e si sposta in un utilityProcess cambiando solo il trasporto.
+- **R2. La tabella delle righe viene dal compilatore**, non da una nuova decodifica. Il compilatore sa quale riga ha prodotto quali byte, anche per le CALL espanse. _Se fosse sbagliato:_ per i blocchi importati si aggiunge la stessa tabella a `decodeCode`.
+- **R3. L'osservazione registra la prima esecuzione nel ciclo.** È deterministica e costa poco. ⚠️ Una CPU vera ha le sue regole di rilevamento. _Se fosse sbagliato:_ si aggiunge un'opzione «ultima esecuzione».
+- **R4. Il pannello I/O simula gli ingressi fisici, non forza.** FORCE è una funzione di manutenzione della tappa 7. _Se fosse sbagliato:_ si aggiunge una maschera di forzamento in `SimCpu`.
+- **R5. Le tabelle di controllo funzionano solo sul simulatore in questo piano.** Il modello e l'editor sono già quelli definitivi; il PLC vero si aggancia nella tappa 3 con lo stesso `watch`/`write`. _Se fosse sbagliato:_ niente da rifare.

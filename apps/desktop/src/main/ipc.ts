@@ -15,6 +15,8 @@ import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ConfirmTexts, QuestionTexts, RecentEntry, RecoveryInfo } from '@baaportal/ui';
 import { writeFileAtomic } from './fsAtomic';
+import { listFolderFiles } from './listFolder';
+import { setDialogLang } from './plc/dialogText';
 import { toIpcResult } from '../shared/ipcResult';
 import { isTrustedFrame, type FrameLike, type TrustOptions } from './trust';
 import { deleteRecovery, listRecovery, readRecovery, writeRecovery } from './recoveryStore';
@@ -131,6 +133,15 @@ export function registerIpc(
     return r.canceled ? null : (r.filePaths[0] ?? null);
   });
 
+  handle('dialog:select-folder-files', async (_e, extensions: unknown) => {
+    if (!Array.isArray(extensions) || !extensions.every((x) => typeof x === 'string')) return null;
+    const win = getWindow();
+    const opts = { properties: ['openDirectory' as const] };
+    const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
+    const dir = r.canceled ? undefined : r.filePaths[0];
+    return dir ? await listFolderFiles(dir, extensions) : null;
+  });
+
   handle('fs:read', (_e, path: string) =>
     toIpcResult(async () => new Uint8Array(await readFile(path))),
   );
@@ -196,6 +207,8 @@ export function registerIpc(
     if (typeof text === 'string') clipboard.writeText(text);
   });
   handle('clipboard:read-text', () => clipboard.readText());
+  // Lingua dell'app per le finestre native del processo principale (conferme delle scritture).
+  on('app:set-language', (_e, lang: unknown) => setDialogLang(lang));
 
   // File di recupero: la chiave è validata da recoveryStore prima di formare qualunque percorso.
   const recoveryDir = () => join(app.getPath('userData'), 'recovery');

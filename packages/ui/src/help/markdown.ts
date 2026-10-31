@@ -1,14 +1,16 @@
 // Markdown della guida → albero di nodi (mai HTML). Il sottoinsieme dei file di docs/uso:
 // titoli, paragrafi, elenchi (anche annidati), codice, tabelle, grassetto, corsivo, codice in riga e
 // collegamenti. L'albero lo disegna React con testi semplici: un `<script>` nel markdown resta testo.
-// shortcut: niente citazioni, immagini, HTML né note; se i documenti ne avranno bisogno, aggiungerli qui.
+// Citazioni (`>`) e immagini (`![alt](file)`) ci sono; HTML e note no.
+// shortcut: niente HTML né note; se i documenti ne avranno bisogno, aggiungerli qui.
 
 export type Inline =
   | { t: 'text'; text: string }
   | { t: 'code'; text: string }
   | { t: 'strong'; children: Inline[] }
   | { t: 'em'; children: Inline[] }
-  | { t: 'link'; href: string; children: Inline[] };
+  | { t: 'link'; href: string; children: Inline[] }
+  | { t: 'image'; alt: string; src: string };
 
 export interface ListItem {
   inline: Inline[];
@@ -21,6 +23,7 @@ export type Block =
   | { t: 'list'; ordered: boolean; items: ListItem[] }
   | { t: 'code'; text: string }
   | { t: 'table'; head: Inline[][]; rows: Inline[][][] }
+  | { t: 'quote'; blocks: Block[] }
   | { t: 'rule' };
 
 /** Identificatore di un titolo, per i collegamenti con `#`: minuscole, parole unite da «-». */
@@ -82,6 +85,20 @@ export function parseInline(s: string): Inline[] {
           i = end + 1;
           continue;
         }
+      }
+    }
+    if (c === '!' && s[i + 1] === '[') {
+      const close = s.indexOf('](', i + 2);
+      const end = close < 0 ? -1 : s.indexOf(')', close + 2);
+      if (close > i && end > close) {
+        flush();
+        out.push({
+          t: 'image',
+          alt: s.slice(i + 2, close),
+          src: s.slice(close + 2, end).trim(),
+        });
+        i = end + 1;
+        continue;
       }
     }
     if (c === '[') {
@@ -189,6 +206,13 @@ export function parseMarkdown(src: string): Block[] {
       i++;
       continue;
     }
+    if (/^\s*>/.test(line)) {
+      const body: string[] = [];
+      while (i < lines.length && /^\s*>/.test(lines[i]!))
+        body.push(lines[i++]!.replace(/^\s*> ?/, ''));
+      blocks.push({ t: 'quote', blocks: parseMarkdown(body.join('\n')) });
+      continue;
+    }
     if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) {
       blocks.push({ t: 'rule' });
       i++;
@@ -213,7 +237,7 @@ export function parseMarkdown(src: string): Block[] {
     while (
       i < lines.length &&
       lines[i]!.trim() !== '' &&
-      !/^\s*(```|#{1,6}\s)/.test(lines[i]!) &&
+      !/^\s*(```|#{1,6}\s|>)/.test(lines[i]!) &&
       !MARKER.test(lines[i]!) &&
       !(isTableRow(lines[i]!) && i + 1 < lines.length && isTableSep(lines[i + 1]!))
     )
@@ -226,6 +250,8 @@ export function parseMarkdown(src: string): Block[] {
 /** Il testo semplice di un blocco, per la ricerca. */
 export function inlineText(xs: Inline[]): string {
   return xs
-    .map((x) => (x.t === 'text' || x.t === 'code' ? x.text : inlineText(x.children)))
+    .map((x) =>
+      x.t === 'text' || x.t === 'code' ? x.text : x.t === 'image' ? x.alt : inlineText(x.children),
+    )
     .join('');
 }

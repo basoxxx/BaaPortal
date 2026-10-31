@@ -267,6 +267,30 @@ describe('SimHost', () => {
     await f.host.handle({ op: 'stop' });
   });
 
+  it('OB35 gira anche durante l attesa del ciclo minimo, senza allarmi persi', async () => {
+    const f = fake();
+    await f.host.handle({
+      op: 'start',
+      cpuTypeId: 'cpu-315-2-pn-dp',
+      props: { ...PROPS, minCycleMs: 50, cyclicInterruptMs: 10 },
+    });
+    await f.host.handle({
+      op: 'download',
+      files: [ob1(['\tNOP 0;']), ob1(['\tL MW 0;\n\tL 1;\n\t+I;\n\tT MW 0;'], 35)],
+    });
+    await f.host.handle({ op: 'mode', to: 'RUN' });
+    await f.advance(1000);
+    const [mw] = (await f.host.handle({
+      op: 'read',
+      items: [{ area: 'M', byte: 0, size: 'W' }],
+    })) as { bytes: Uint8Array }[];
+    const runs = (mw!.bytes[0]! << 8) | mw!.bytes[1]!;
+    expect(runs).toBeGreaterThanOrEqual(90);
+    const diag = f.of('status').at(-1)!.diagnostics;
+    expect(diag.filter((d) => d.code === 'ALLARME_PERSO')).toEqual([]);
+    await f.host.handle({ op: 'stop' });
+  });
+
   it("con l'orologio fermo una fetta è limitata e cede", async () => {
     const jobs: { fn: () => void; ms: number }[] = [];
     let tickJob: (() => void) | undefined;
@@ -420,5 +444,47 @@ describe('SimHost: blocchi cancellati e controlli', () => {
         items: [{ area: 'M', byte: 0, size: 'B', data: Uint8Array.of(1) }],
       }),
     ).resolves.toEqual([{ ok: true }]);
+  });
+
+  it('force: uscita forzata ai moduli, tabella nello status; area non forzabile rifiutata', async () => {
+    const f = fake();
+    await start(f.host);
+    await f.host.handle({ op: 'download', files: [ob1(['\tA I 0.0;\n\t= Q 4.0;'])] });
+    await f.host.handle({ op: 'mode', to: 'RUN' });
+    const q4 = { area: 'Q' as const, byte: 4, bit: 0, size: 'X' as const, data: Uint8Array.of(1) };
+    await f.host.handle({ op: 'force', items: [q4] });
+    await f.advance(300);
+    const st = f.of('status').at(-1)!;
+    expect(st.outputs[4]).toBe(1);
+    expect(st.forces).toHaveLength(1);
+    await expect(f.host.handle({ op: 'force', items: [{ ...q4, area: 'PQ' }] })).rejects.toThrow(
+      /forzabile/,
+    );
+    await f.host.handle({ op: 'force', items: [] });
+    await f.advance(300);
+    expect(f.of('status').at(-1)!.outputs[4]).toBe(0);
+  });
+
+  it('io della configurazione: uscite solo ai moduli, estrazione nello status, id sconosciuto rifiutato', async () => {
+    const f = fake();
+    await f.host.handle({
+      op: 'start',
+      cpuTypeId: 'cpu-315-2-pn-dp',
+      props: PROPS,
+      io: [{ id: 'do', name: 'DO', rack: 0, slot: 4, outputs: { start: 4, bytes: 1 } }],
+    });
+    await f.host.handle({ op: 'download', files: [ob1(['\tSET;\n\t= Q 4.0;\n\t= Q 8.0;'])] });
+    await f.host.handle({ op: 'mode', to: 'RUN' });
+    await f.advance(300);
+    let st = f.of('status').at(-1)!;
+    expect([st.outputs[4], st.outputs[8]]).toEqual([1, 0]);
+    await f.host.handle({ op: 'module', id: 'do', present: false });
+    await f.advance(300);
+    st = f.of('status').at(-1)!;
+    expect(st.pulled).toEqual(['do']);
+    expect(st.outputs[4]).toBe(0);
+    await expect(f.host.handle({ op: 'module', id: 'x', present: false })).rejects.toThrow(
+      /non configurato/,
+    );
   });
 });

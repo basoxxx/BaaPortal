@@ -93,6 +93,15 @@ function accessOf(instr: string): XrefAccess | undefined {
 
 const blockLabel = (kind: string, number: number) => `${kind === 'IDB' ? 'DB' : kind}${number}`;
 
+/** I DB aperti dal codice (`OPN DB`, `OPN DI`) in un punto del blocco; assenti se non noti. */
+interface OpenDbs {
+  db?: number;
+  di?: number;
+}
+/** Tipo delle voci per accessi tramite registro; e per `UC`/`CC` con destinazione calcolata. */
+export const INDIRECT = 'indiretto';
+export const COMPUTED_CALL = 'calcolato';
+
 type Entry = Omit<XrefOperand, 'uses' | 'overlaps'> & {
   /** Area, DB e bit occupati, per le sovrapposizioni. */
   span?: { area: string; from: number; to: number };
@@ -102,9 +111,24 @@ type Entry = Omit<XrefOperand, 'uses' | 'overlaps'> & {
 const textOf = (src: string, op: Operand) => src.slice(op.range.from.offset, op.range.to.offset);
 
 /** La voce di un operando; `undefined` per ciò che non è un operando del programma (locali, L, costanti scritte). */
-function entryOf(ctx: AwlContext, op: Operand, written: string): Entry | undefined {
+function entryOf(
+  ctx: AwlContext,
+  op: Operand,
+  written: string,
+  open: OpenDbs = {},
+): Entry | undefined {
   if (op.kind === 'local' || op.kind === 'labelRef' || op.kind === 'status') return undefined;
-  if (op.kind === 'special' || op.kind === 'indirect') return undefined;
+  if (op.kind === 'special') return undefined;
+  // Accesso tramite registro (`L DBW [AR1,P#4.0]`): l'indirizzo non si conosce, ma l'uso si elenca.
+  if (op.kind === 'indirect')
+    return op.via.kind === 'register'
+      ? {
+          key: `?indiretto:${written.toLowerCase()}`,
+          address: written,
+          kind: 'unknown',
+          type: INDIRECT,
+        }
+      : undefined;
   if (op.kind === 'address' && op.area === 'L') return undefined;
   let v;
   try {
@@ -168,10 +192,13 @@ function entryOf(ctx: AwlContext, op: Operand, written: string): Entry | undefin
       let address: string;
       let db: number | undefined;
       if (v.area === 'DB' || v.area === 'DI') {
-        const pre = v.area === 'DB' && v.db !== undefined ? `DB${v.db}.` : '';
-        const field = v.size === 'X' ? `${v.area}X${byte}.${bit}` : `${v.area}${v.size}${byte}`;
+        // DB senza numero: quello aperto da `OPN DB n` / `OPN DI n`, se lo si conosce.
+        const known = v.db ?? (v.area === 'DB' ? open.db : open.di);
+        const area = v.area === 'DI' && known !== undefined ? 'DB' : v.area;
+        const pre = area === 'DB' && known !== undefined ? `DB${known}.` : '';
+        const field = v.size === 'X' ? `${area}X${byte}.${bit}` : `${area}${v.size}${byte}`;
         address = `%${pre}${field}`;
-        if (v.db !== undefined) db = v.db;
+        if (known !== undefined) db = known;
       } else {
         const area = v.area as 'I' | 'Q' | 'M' | 'PI' | 'PQ';
         address = formatAddress(
@@ -179,14 +206,14 @@ function entryOf(ctx: AwlContext, op: Operand, written: string): Entry | undefin
         );
       }
       const span = {
-        area: `${v.area}${v.db ?? ''}`,
+        area: `${db === undefined ? v.area : 'DB'}${db ?? ''}`,
         from: v.bit,
         to: v.bit + SIZE_BITS[v.size],
       };
       return withSym({
         key: address,
         address,
-        kind: v.area as XrefKind,
+        kind: (v.area === 'DI' && db !== undefined ? 'DB' : v.area) as XrefKind,
         ...(type ? { type } : {}),
         ...(db !== undefined ? { db } : {}),
         span,
@@ -281,16 +308,54 @@ function hitsOf(ctx: AwlContext, block: CodeBlock, st: Statement, src: string): 
 const lineAt = <T>(lines: readonly T[], i: number): T | undefined =>
   lines[Math.min(i, lines.length - 1)];
 
+/** Aggiorna i DB aperti dopo `st`: `OPN` li imposta; chiamate e fine blocco, o un `OPN` calcolato, li azzerano. */
+function trackOpen(ctx: AwlContext, st: Statement, open: OpenDbs): void {
+  const instr = st.instruction.def?.id;
+  if (instr === 'OPN' && st.operand) {
+    let v;
+    try {
+      v = resolveGlobalOperand(st.operand, ctx);
+    } catch (e) {
+      if (!(e instanceof SymbolError)) throw e;
+    }
+    if (v?.k === 'block' && v.blockKind === 'DB') open.db = v.number;
+    else if (v?.k === 'block' && v.blockKind === 'DI') open.di = v.number;
+    else if (st.operand.kind === 'block' || st.operand.kind === 'symbol') delete open.db;
+    else {
+      delete open.db;
+      delete open.di;
+    }
+  } else if (instr && ['CALL', 'UC', 'CC', 'BE', 'BEC', 'BEU'].includes(instr)) {
+    delete open.db;
+    delete open.di;
+  }
+}
+
 /** I punti d'uso di un blocco, ognuno con la voce del suo operando. */
 function blockUses(dev: PlcDevice, block: CodeBlock): [Entry, XrefUse][] {
   const out: [Entry, XrefUse][] = [];
   const ctx = createAwlContext(dev, block.id, undefined);
   const label = blockLabel(block.kind, block.number);
+  let open: OpenDbs = {};
   kopSources(block, dev).forEach((net, n) => {
     const { statements } = parseNetwork(net.source, 'international' satisfies Mnemonic);
     for (const st of statements) {
+      // Dopo un'etichetta si può arrivare da un salto: il DB aperto non è più noto.
+      if (st.label) open = {};
       for (const h of hitsOf(ctx, block, st, net.source)) {
-        const e = entryOf(ctx, h.op, textOf(net.source, h.op));
+        const written = textOf(net.source, h.op);
+        let e = entryOf(ctx, h.op, written, open);
+        if (
+          h.access === 'call' &&
+          (h.instr === 'UC' || h.instr === 'CC') &&
+          (!e || !'block unknown'.includes(e.kind))
+        )
+          e = {
+            key: `?calcolato:${written.toLowerCase()}`,
+            address: written,
+            kind: 'unknown',
+            type: COMPUTED_CALL,
+          };
         if (!e) continue;
         let line = h.line;
         let elemId: string | undefined;
@@ -311,6 +376,7 @@ function blockUses(dev: PlcDevice, block: CodeBlock): [Entry, XrefUse][] {
           },
         ]);
       }
+      trackOpen(ctx, st, open);
     }
   });
   return out;

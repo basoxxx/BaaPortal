@@ -139,6 +139,10 @@ export class FakeBridge implements BaaBridge {
   async showSelectFolderDialog() {
     return this.folderResults.shift() ?? null;
   }
+  folderFilesResults: (string[] | null)[] = [];
+  async showSelectFolderFiles() {
+    return this.folderFilesResults.shift() ?? null;
+  }
   async showOpenFileDialog(opts: { filters: FileFilter[]; multi?: boolean }) {
     this.openFileCalls.push(opts);
     return this.openFileResults.shift() ?? [];

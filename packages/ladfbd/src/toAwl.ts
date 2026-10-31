@@ -58,6 +58,24 @@ const RAIL_UNCONDITIONAL = new Set<LadOut['k']>([
 
 const isContact = (e: LadElem): e is Contact => e.k === 'contact';
 
+/**
+ * Un ramo del parallelo (a qualunque profondità, gruppi esclusi) ha un NOT, un (#) o un fronte:
+ * lavorano sul flusso che arriva, che con logica davanti al parallelo dentro `O( … )` non c'è.
+ * Il parallelo salva allora il flusso in un bit L e ogni ramo riparte da lì (ipotesi H21).
+ */
+export function needsFlowBit(p: Parallel): boolean {
+  if (p.branches.length < 2) return false;
+  const walk = (list: LadElem[]): boolean =>
+    list.some(
+      (e) =>
+        e.k === 'not' ||
+        e.k === 'midline' ||
+        e.k === 'edge' ||
+        (e.k === 'parallel' && needsFlowBit(e)),
+    );
+  return p.branches.some(walk);
+}
+
 function hasTransfer(o: LadOut | LadNode): boolean {
   return isNode(o) ? o.outs.some(hasTransfer) : TRANSFERS.has(o.k);
 }
@@ -326,6 +344,17 @@ class Emitter {
 
   /** Regola 4: il parallelo va in A( … ) se ha logica davanti o dopo nella serie. */
   private parallel(p: Parallel, fresh: boolean, last: boolean): void {
+    if (!fresh && needsFlowBit(p)) {
+      // H21: `= bit` chiude la logica (/FC = 0), quindi il primo O( non si combina con lei
+      const bit = this.allocBit();
+      this.push(p.id, `= ${bit}`);
+      for (const b of p.branches) {
+        this.push(p.id, 'O(', `A ${bit}`);
+        this.series(b, false);
+        this.push(p.id, ')');
+      }
+      return;
+    }
     const wrap = !(fresh && last);
     if (wrap) this.push(p.id, 'A(');
     this.branches(p);
@@ -337,7 +366,14 @@ class Emitter {
     if (p.branches.length === 1) return this.series(p.branches[0]!, true);
     const single = (b: LadElem[]) => b.length === 1 && isContact(b[0]!);
     const simple = (b: LadElem[]) => b.every(isContact);
-    if (p.branches.every(single)) {
+    if (p.plain && p.branches.every(simple)) {
+      // OR di serie senza parentesi (AWL convertito): A…, poi O x o O / A… per ogni ramo
+      p.branches.forEach((b, i) => {
+        if (i > 0 && single(b)) return this.push(b[0]!.id, contactText(b[0] as Contact, true));
+        if (i > 0) this.push(p.id, 'O');
+        for (const e of b as Contact[]) this.push(e.id, contactText(e, false));
+      });
+    } else if (p.branches.every(single)) {
       // regola 1: O x per ramo
       for (const b of p.branches) this.push(b[0]!.id, contactText(b[0] as Contact, true));
     } else if (p.branches.every(simple)) {

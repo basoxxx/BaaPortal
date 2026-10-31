@@ -1,4 +1,4 @@
-import type { SimCpuProps } from '@baaportal/sim';
+import type { SimCpuProps, SimIoModule } from '@baaportal/sim';
 import type { SimNotice, SimRequest, SimWireMessage, SimWireRequest } from './protocol';
 
 /** La parte di `Worker` che serve alla sessione (i test la sostituiscono con un finto worker). */
@@ -13,6 +13,8 @@ export interface SimWorkerLike {
 export interface SimSessionOptions {
   cpuTypeId: string;
   props: SimCpuProps;
+  /** Moduli di I/O della configurazione hardware (assente: tutto il campo della CPU). */
+  io?: SimIoModule[];
   /** Fabbrica del worker; predefinita: il worker vero (modulo dello stesso origine, senza `blob:`). */
   createWorker?: () => SimWorkerLike;
 }
@@ -49,7 +51,12 @@ export class SimSession {
   static async start(o: SimSessionOptions): Promise<SimSession> {
     const s = new SimSession((o.createWorker ?? defaultWorker)());
     try {
-      await s.request({ op: 'start', cpuTypeId: o.cpuTypeId, props: o.props });
+      await s.request({
+        op: 'start',
+        cpuTypeId: o.cpuTypeId,
+        props: o.props,
+        ...(o.io ? { io: o.io } : {}),
+      });
     } catch (e) {
       s.dispose();
       throw e;

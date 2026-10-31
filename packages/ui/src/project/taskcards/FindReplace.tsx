@@ -66,7 +66,7 @@ export function FindReplace() {
   }
 
   const reasonText = (h: Hit) => (h.reason ? t(`find.reason.${h.reason}`) : undefined);
-  const check = (key: 'matchCase' | 'wholeWord' | 'regex') => (
+  const check = (key: 'matchCase' | 'wholeWord' | 'regex' | 'updateRefs') => (
     <label className="baa-find-check">
       <input
         type="checkbox"
@@ -112,6 +112,7 @@ export function FindReplace() {
         {check('matchCase')}
         {check('wholeWord')}
         {check('regex')}
+        {check('updateRefs')}
       </div>
       <label>
         <span>{t('find.scope')}</span>

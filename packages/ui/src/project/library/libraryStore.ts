@@ -39,6 +39,63 @@ interface LibraryState {
 const libStore = createStore<LibraryState>(() => ({ globals: [] }));
 let counter = 0;
 
+// Le librerie globali aperte si ricordano fra una sessione e l'altra (solo i percorsi).
+const OPEN_KEY = 'baa.libraries.v1';
+let restored = false;
+const readOpen = (): { path: string; editing: boolean }[] => {
+  try {
+    const raw: unknown = JSON.parse(localStorage.getItem(OPEN_KEY) ?? '[]');
+    return Array.isArray(raw)
+      ? raw
+          .filter((x) => x && typeof x.path === 'string')
+          .map((x) => ({ path: x.path, editing: x.editing === true }))
+      : [];
+  } catch {
+    return [];
+  }
+};
+libStore.subscribe((s, prev) => {
+  if (!restored || s.globals === prev.globals) return;
+  try {
+    localStorage.setItem(
+      OPEN_KEY,
+      JSON.stringify(s.globals.map((g) => ({ path: g.path, editing: g.editing }))),
+    );
+  } catch {
+    /* storage non disponibile: le librerie non si ricorderanno */
+  }
+});
+
+/** Riapre le librerie globali della sessione precedente (una volta); i file spariti si lasciano cadere. */
+export async function restoreGlobalLibraries(bridge: BaaBridge): Promise<void> {
+  if (restored) return;
+  restored = true;
+  for (const { path, editing } of readOpen()) {
+    try {
+      const library = readBaaplib(await bridge.readFile(path));
+      if (libStore.getState().globals.some((g) => g.path === path)) continue;
+      libStore.setState((s) => ({
+        globals: [...s.globals, { key: `lib${++counter}`, path, library, editing, dirty: false }],
+      }));
+    } catch {
+      /* file spostato o non più valido: non si riapre */
+    }
+  }
+}
+
+/** All'uscita dall'app: per ogni libreria con modifiche chiede se salvarle. */
+export async function saveDirtyGlobalLibraries(bridge: BaaBridge): Promise<void> {
+  for (const g of libStore.getState().globals.filter((x) => x.dirty)) {
+    const yes = await bridge.askQuestion({
+      title: t('library.closeTitle'),
+      message: t('library.saveOnExit', { name: globalTitle(g) }),
+      yes: t('objects.yes'),
+      no: t('objects.no'),
+    });
+    if (yes) await saveGlobalLibrary(bridge, g.key);
+  }
+}
+
 export const IEC_KEY = 'iec';
 export const PROJECT_KEY = 'project';
 
@@ -56,6 +113,12 @@ export const useGlobalLibraries = (): GlobalLibrary[] => useStore(libStore, (s) 
 
 /** Solo per i test: chiude tutte le librerie globali. */
 export function resetLibraries(): void {
+  restored = false;
+  try {
+    localStorage.removeItem(OPEN_KEY);
+  } catch {
+    /* niente da pulire */
+  }
   libStore.setState({ globals: [] });
 }
 

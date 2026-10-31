@@ -1,4 +1,13 @@
 {
+  "readOnlyView": {
+    "input": "Inputs",
+    "output": "Outputs",
+    "inOut": "In/outs",
+    "static": "Static",
+    "temp": "Temporary",
+    "graphics": "LAD/FBD graphics",
+    "openFailed": "This object cannot be opened read-only."
+  },
   "errors": {
     "title": "Error",
     "write": "Cannot write the file \"{{path}}\" (code {{code}}). Check permissions and free space, then try again.",
@@ -55,6 +64,7 @@
     "downloadingUpdate": "Downloading update {{version}}"
   },
   "messages": {
+    "simForceFailed": "The simulator did not accept the force: {{message}}",
     "replaced": "Replaced {{replaced}} texts, skipped {{skipped}}.",
     "detachBlocked": "The separate window could not be opened: the editor stays in the work area.",
     "created": "Project \"{{name}}\" created.",
@@ -257,6 +267,7 @@
     "replaceWith": "Replace with",
     "matchCase": "Match case",
     "wholeWord": "Whole word",
+    "updateRefs": "Update references",
     "regex": "Regular expression",
     "scope": "Scope",
     "scopeActive": "Active editor",
@@ -276,6 +287,8 @@
     }
   },
   "sim": {
+    "restartCpuCancelledMessage": "Download cancelled: nothing was written to the CPU, which BaaPortal stopped. Restart it (RUN)?",
+    "restartCpuPartialMessage": "The download did not finish: the CPU, stopped by BaaPortal, may hold a partial program. Restart it (RUN) anyway?",
     "monitor": {
       "title": "Program monitoring",
       "on": "Monitoring on: values are those of the first execution in the last cycle.",
@@ -353,6 +366,7 @@
     }
   },
   "onlineDiag": {
+    "utc": "in UTC (otherwise local time)",
     "title": "Online & diagnostics",
     "pages": "Pages",
     "loading": "Reading...",
@@ -447,6 +461,9 @@
     }
   },
   "compareView": {
+    "bytesSame": "MC7 code identical byte by byte.",
+    "bytesDifferent": "MC7 code differs: {{count}} bytes differ.",
+    "bytesUnreadable": "Byte-by-byte comparison not possible: a compiled block cannot be read.",
     "title": "Compare {{name}}",
     "project": "Project",
     "cpu": "CPU",
@@ -530,6 +547,7 @@
     }
   },
   "history": {
+    "simPanel": "Monitor format and I/O panel bytes",
     "replace": "Replace text",
     "author": "Project author",
     "comment": "Project comment",
@@ -802,6 +820,7 @@
     }
   },
   "reference": {
+    "viewTitle": "{{name}} (read-only)",
     "copyIntoProject": "Copy into project",
     "close": "Close reference {{name}}"
   },
@@ -1104,6 +1123,7 @@
     "orientation": "Orientation",
     "portrait": "Portrait",
     "landscape": "Landscape",
+    "preview": "Preview",
     "graphicNote": "LAD and FBD networks are printed as generated STL.",
     "nothing": "Nothing to print in the selection.",
     "ok": "Print",
@@ -1124,6 +1144,7 @@
       "instanceOf": "Instance of",
       "tagTable": "Tag table",
       "watchTable": "Watch table",
+      "source": "AWL source",
       "constants": "Constants",
       "xref": "Cross-references",
       "number": "Number",
@@ -1308,14 +1329,14 @@
       "KOP_RET_ON_RAIL": "Network {{network}}: RET is connected directly to the rail: add a condition before it.",
       "KOP_EDGE_ON_RAIL": "Network {{network}}: The edge needs logic on its left: it cannot start from the rail.",
       "KOP_NOT_ON_RAIL": "Network {{network}}: NOT needs logic on its left: it cannot start from the rail.",
-      "KOP_FLOW_IN_BRANCH": "Network {{network}}: This element transforms the flow and cannot sit in a parallel branch with logic on its left: start it from the rail or move it out of the branch.",
-      "KOP_BOX_IN_PIN": "Network {{network}}: A box cannot sit in the logic of a pin.",
-      "KOP_BOX_IN_PARALLEL": "Network {{network}}: A box cannot sit inside a parallel branch.",
-      "KOP_BOX_IN_TBRANCH": "Network {{network}}: A box cannot sit in a T branch after which the flow splits.",
+      "KOP_BOX_IN_PIN": "Network {{network}}: A box cannot sit in the logic of a pin: compute it in an earlier network with a coil on a memory bit, and use a contact of that bit in the pin.",
+      "KOP_BOX_IN_PARALLEL": "Network {{network}}: A box cannot sit inside a parallel branch: put it in series on the main line (or at the start of a T branch) with a coil on a memory bit after it, and use a contact of that bit in the branch.",
+      "KOP_BOX_IN_TBRANCH": "Network {{network}}: A box in a T branch can only be its first element: move the logic before it into the series ahead of the branch, or put it in its own network and carry the result with a memory bit.",
       "KOP_BAD_LABEL": "Network {{network}}: Invalid label \"{{label}}\": 1 to 4 characters, the first one a letter.",
       "KOP_BAD_INSTANCE": "Network {{network}}: The box instance is not valid.",
       "KOP_MUST_BE_ALONE": "Network {{network}}: This output must be the only one at its point: it cannot have other outputs in parallel.",
       "KOP_TOO_MANY_LABELS": "Network {{network}}: Too many jump labels in the network.",
+      "KOP_LINE_BREAK": "Network {{network}}: An operand contains a line break: write it on one line.",
       "JL_TARGET": "The JL label must follow the jump list.",
       "JUMP_ALIGN": "The jump target is not aligned.",
       "JUMP_TOO_FAR": "The jump is too far ({{words}} words).",
@@ -1343,6 +1364,13 @@
     }
   },
   "step7": {
+    "pickFolder": "Choose a folder…",
+    "choice": {
+      "replace": "Replace",
+      "rename": "Rename",
+      "renumber": "Renumber",
+      "label": "What to do with {{name}}"
+    },
     "menu": "Import from STEP 7…",
     "title": "Import from STEP 7",
     "filter": "STEP 7 exports (*.awl, *.scl, *.sdf, *.seq, *.dif, *.asc)",
@@ -1433,6 +1461,7 @@
     }
   },
   "cpuPanel": {
+    "frce": "FRCE",
     "needSim": "Start the simulation to use the panel",
     "run": "RUN",
     "stop": "STOP",
@@ -1474,7 +1503,9 @@
       "CANCELLAZIONE_TOTALE": "Memory reset",
       "OB_RICHIAMATO": "Event OB called",
       "SFC_NON_SIMULATA": "SFC not simulated",
-      "SFB_NON_SIMULATA": "SFB not simulated"
+      "SFB_NON_SIMULATA": "SFB not simulated",
+      "MESSAGGIO_UTENTE": "Program message (SFC 52)",
+      "ALLARME_PERSO": "Timed interrupt lost"
     },
     "ledOn": "on",
     "ledOff": "off",
@@ -1488,6 +1519,19 @@
     "openDiag": "Open Online & diagnostics"
   },
   "ioPanel": {
+    "modules": "Configured modules",
+    "moduleRack": "Rack {{rack}}, slot {{slot}}:",
+    "moduleStation": "Station {{station}}, slot {{slot}}:",
+    "modulePull": "Remove",
+    "modulePlug": "Insert",
+    "force": "Force",
+    "forceAddress": "Operand (I, Q, M)",
+    "forceValue": "Value",
+    "forceAdd": "Force",
+    "forceRemove": "Remove the force on {{operand}}",
+    "forceClear": "Stop forcing",
+    "forceBadAddress": "Invalid operand: only I, Q and M can be forced (bit, byte, word, double word).",
+    "forceBadValue": "Invalid value for the operand (0/1 for a bit, integer or 16#… otherwise).",
     "inputs": "Inputs",
     "outputs": "Outputs",
     "noBytes": "No bytes: add one with \"+ byte\".",
@@ -1771,14 +1815,14 @@
       "RET_ON_RAIL": "RET is connected directly to the rail: add a condition before it.",
       "EDGE_ON_RAIL": "The edge needs logic on its left: it cannot start from the rail.",
       "NOT_ON_RAIL": "NOT needs logic on its left: it cannot start from the rail.",
-      "FLOW_IN_BRANCH": "This element transforms the flow and cannot sit in a parallel branch with logic on its left: start it from the rail or move it out of the branch.",
-      "BOX_IN_PARALLEL": "A box cannot sit inside a parallel branch.",
-      "BOX_IN_TBRANCH": "A box cannot sit in a T branch after which the flow splits.",
-      "BOX_IN_PIN": "A box cannot sit in the logic of a pin.",
+      "BOX_IN_PARALLEL": "A box cannot sit inside a parallel branch: put it in series on the main line (or at the start of a T branch) with a coil on a memory bit after it, and use a contact of that bit in the branch.",
+      "BOX_IN_TBRANCH": "A box in a T branch can only be its first element: move the logic before it into the series ahead of the branch, or put it in its own network and carry the result with a memory bit.",
+      "BOX_IN_PIN": "A box cannot sit in the logic of a pin: compute it in an earlier network with a coil on a memory bit, and use a contact of that bit in the pin.",
       "BAD_LABEL": "Invalid label \"{{label}}\": 1 to 4 characters, the first one a letter.",
       "BAD_INSTANCE": "The box instance is not valid.",
       "MUST_BE_ALONE": "This output must be the only one at its point: it cannot have other outputs in parallel.",
-      "TOO_MANY_LABELS": "Too many jump labels in the network."
+      "TOO_MANY_LABELS": "Too many jump labels in the network.",
+      "LINE_BREAK": "An operand contains a line break: write it on one line."
     },
     "palette": {
       "contactNo": "NO contact",
@@ -1915,6 +1959,12 @@
     },
     "cannotClose": "Cannot close the branch here: pick an element that follows the open branch in the same series.",
     "cannotDo": "This operation is not possible here.",
+    "instanceDb": {
+      "title": "Instance DB",
+      "text": "FB \"{{fb}}\" has no instance DB. Create one for the CALL box?"
+    },
+    "pinOptional": "Optional: without an operand the value in the instance DB is kept.",
+    "pinRequired": "Required: an FC needs every parameter.",
     "cannotNegate": "Cannot negate here: pick a contact, a comparison, a POS/NEG, a `>=1` or a negation circle.",
     "cannotExtend": "Multiple selection works only on adjacent elements of the same series.",
     "multiSelected": "{{n}} elements selected.",
@@ -2038,6 +2088,7 @@
     "noOb": "No OB in the program.",
     "empty": "No blocks in the program.",
     "unreferenced": "Unused blocks",
+    "computed": "Computed calls (target unknown)",
     "recursion": "recursion",
     "open": "Open the block",
     "expand": "Expand {{name}}",
@@ -2101,6 +2152,7 @@
     "view": "Open read-only",
     "toProject": "Copy to project library",
     "deleteMessage": "Delete from the library?",
+    "saveOnExit": "Save changes to library {{name}} before exiting?",
     "viewTitle": "{{name}} (read-only)",
     "conflictTitle": "Insert “{{name}}”",
     "conflictMessage": "Some names or numbers are already used in the PLC. Choose what to do with each object.",
@@ -2246,6 +2298,8 @@
       "comment": "Comment",
       "text": "Text"
     },
+    "stale": "To review",
+    "markReviewed": "Mark as reviewed (the editing text changed after the translation)",
     "truncated": "Showing {{shown}} of {{total}} rows: narrow down with the filter.",
     "empty": "No titles or comments to translate.",
     "noColumns": "The Key column or the project language columns are missing.",

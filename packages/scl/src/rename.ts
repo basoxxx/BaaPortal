@@ -3,7 +3,7 @@
 // dentro una chiamata è il parametro del blocco chiamato.
 import type { BlockFamily, RenameTarget, Renumber } from '@baaportal/awl';
 import { sameName } from '@baaportal/s7-types';
-import { lex, type Tok } from './lexer.js';
+import { isNewAddress, lex, type Tok } from './lexer.js';
 
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const unquote = (s: string) => (s.startsWith('"') ? s.slice(1, -1) : s);
@@ -12,6 +12,12 @@ const ARROWS = [':=', '=>'];
 export type SclRenameOptions = {
   /** Con `callParam` di un FB: i DB di istanza con cui lo si chiama, `"Inst_DB"(…)`. */
   instanceDbs?: string[];
+  /**
+   * Con `symbol`: il testo è il codice della FC rinominata, senza variabili col suo nome. Il nome
+   * usato come valore di ritorno (`Fc := …`, `#Fc`) la segue (`RET_VAL` se il nome nuovo non è un
+   * identificatore SCL).
+   */
+  ownFc?: boolean;
 };
 
 /**
@@ -59,7 +65,10 @@ function sclEdits(
   newName: string,
   opts: SclRenameOptions,
 ): Map<Tok, string> {
-  const toks = lex(source, { errors: [] });
+  // `AW1`, `ED0`: per il traduttore restano una variabile se l'interfaccia ne ha una con quel nome
+  const toks = lex(source, { errors: [] }).map((t) =>
+    t.kind === 'addr' && isNewAddress(t.text) ? { ...t, kind: 'id' as const } : t,
+  );
   const quoted = `"${newName}"`;
   const bare = IDENT.test(newName) ? newName : quoted;
   const edits = new Map<Tok, string>();
@@ -93,6 +102,9 @@ function sclEdits(
         // la chiamata di una FC senza virgolette: `Fc(…)`
         else if (t.kind === 'id' && at(i + 1) === '(' && sameName(t.text, target.oldName))
           edits.set(t, bare);
+        // il nome nuovo potrebbe essere una TEMP o un indirizzo (`x`, `AW2`): sempre RET_VAL
+        else if (opts.ownFc && t.kind !== 'symbol' && isLocal(i, target.oldName))
+          edits.set(t, t.kind === 'local' ? '#RET_VAL' : 'RET_VAL');
         break;
       case 'local':
         // `Nome(…)` senza `#` chiama un blocco (come in sclToAwl), anche se c'è un locale `Nome`.

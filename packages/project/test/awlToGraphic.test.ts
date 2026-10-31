@@ -17,7 +17,7 @@ import { cpu315pn, makeDevice, now, seq } from './fixtures';
 const fmt = (s: string) => formatNetwork(s, 'international');
 const AND = 'A I 0.0\nA I 0.1\n= Q 4.0';
 const MOVE = 'A I 0.2\nJNB M001\nL MW 10\nT MW 12\nM001: NOP 0';
-const OR_AFTER_AND = 'A I 0.0\nO I 0.1\n= Q 4.0';
+const XOR_AFTER_AND = 'A I 0.0\nX I 0.1\n= Q 4.0';
 
 function fc(dev: PlcDevice, number: number, language: CodeBlock['language'], sources: string[]) {
   const b = createCodeBlock({ kind: 'FC', number, name: `F${number}`, language });
@@ -43,7 +43,7 @@ describe('convertBlockToGraphic', () => {
 
   it('un segmento senza forma KOP: il blocco non cambia e il motivo dice quale', () => {
     const dev = makeDevice(seq('a'));
-    const b = fc(dev, 31, 'AWL', [AND, OR_AFTER_AND]);
+    const b = fc(dev, 31, 'AWL', [AND, XOR_AFTER_AND]);
     const before = structuredClone(b);
     const r = convertBlockToGraphic(b, dev, 'FUP', seq('x'));
     expect(r).toEqual([{ network: 2, reason: { code: 'SHAPE', line: expect.any(Number) } }]);
@@ -118,7 +118,7 @@ describe('caricamento dalla CPU: lingua 0x02/0x03', () => {
   });
 
   it('un segmento senza forma KOP: resta AWL con la nota', () => {
-    const { file, target } = roundTrip('KOP', [AND, OR_AFTER_AND]);
+    const { file, target } = roundTrip('KOP', [AND, XOR_AFTER_AND]);
     const r = blockFromMc7(target, file, seq('i'));
     expect((r.block as CodeBlock).language).toBe('AWL');
     expect(r.notes).toContainEqual({

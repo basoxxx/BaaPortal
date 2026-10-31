@@ -2,6 +2,7 @@ import {
   decodeSourceBytes,
   parseTagsCsv,
   parseTagsXlsx,
+  constantsToCsv,
   tagsToCsv,
   tagsToXlsx,
   XlsxFormatError,
@@ -144,6 +145,10 @@ function formatMessage(e: unknown): string {
   return e instanceof XlsxFormatError ? t(`tagIo.formatErr.${e.code}`) : errorText(e);
 }
 
+/** Il file delle costanti accanto a un csv: `nome.csv` → `nome_costanti.csv` (se già tale, se stesso). */
+const companionPath = (path: string): string =>
+  /_costanti\.csv$/i.test(path) ? path : path.replace(/\.csv$/i, '_costanti.csv');
+
 /** "Esporta…": scrive la tabella in xlsx o csv, secondo l'estensione scelta nel dialogo. */
 export async function exportTagTable(
   ref: { deviceId: string; id: string },
@@ -179,6 +184,16 @@ export async function exportTagTable(
       textKey: 'messages.tagsExported',
       params: { name: table.name, path },
     });
+    if (chosen === 'csv' && table.constants.length > 0) {
+      // Il csv ha un solo foglio: le costanti vanno in un secondo file accanto al primo.
+      const constantsPath = companionPath(path);
+      await bridge.writeFileAtomic(constantsPath, new TextEncoder().encode(constantsToCsv(table)));
+      store.getState().pushMessage({
+        severity: 'info',
+        textKey: 'messages.tagsExported',
+        params: { name: table.name, path: constantsPath },
+      });
+    }
   } catch (e) {
     fail(store, 'messages.tagsExportFailed', { name: first.name, message: errorText(e) });
   }
@@ -208,6 +223,16 @@ export async function importTagTable(
     const bytes = await bridge.readFile(path);
     parsed =
       extOf(path) === 'csv' ? parseTagsCsv(decodeSourceBytes(bytes).text) : parseTagsXlsx(bytes);
+    // Accanto a un csv delle variabili può esserci quello delle costanti (`nome_costanti.csv`).
+    const companion = companionPath(path);
+    if (extOf(path) === 'csv' && companion !== path && (await bridge.fileExists(companion))) {
+      const more = parseTagsCsv(decodeSourceBytes(await bridge.readFile(companion)).text);
+      parsed = {
+        tags: parsed.tags,
+        constants: [...parsed.constants, ...more.constants],
+        errors: [...parsed.errors, ...more.errors],
+      };
+    }
   } catch (e) {
     fail(store, 'messages.tagsImportFailed', { name, message: formatMessage(e) });
     return;

@@ -1,7 +1,8 @@
 // Lexer SCL del sottoinsieme in prova: parole chiave senza distinzione di maiuscole, commenti
-// `//` e `(* *)` (non annidati), simboli "…", locali #nome, indirizzi assoluti I/Q/M, interi in
-// base 2/8/16 (`16#FF`) e tipizzati (`INT#5`, `W#16#FF`, `L#5`), durate e date (`T#5s`, `S5T#2s`,
-// `D#2024-01-01`, `TOD#12:00:00`), stringhe e caratteri fra apici.
+// `//` e `(* *)` (non annidati), simboli "…", locali #nome, indirizzi assoluti I/Q/M/PI/PQ (anche
+// coi mnemonici tedeschi E/A/PE/PA), interi in base 2/8/16 (`16#FF`) e tipizzati (`INT#5`,
+// `W#16#FF`, `L#5`), durate e date (`T#5s`, `S5T#2s`, `D#2024-01-01`, `TOD#12:00:00`, `DT#2024-01-01-12:00:00`), stringhe e
+// caratteri fra apici.
 import { parseLiteral, type ElementaryTypeName } from '@baaportal/s7-types';
 
 export type TokKind =
@@ -45,24 +46,41 @@ export const KEYWORDS = new Set([
   'RETURN', 'EXIT', 'CONTINUE',
 ]); // prettier-ignore
 
-/** Indirizzo assoluto internazionale: bit `I0.0`/`IX0.0`, oppure `IB`/`IW`/`ID` con il byte. */
-const ADDR = /^%?([IQM])(?:X?(\d+)\.([0-7])|([BWD])(\d+))$/i;
+/**
+ * Indirizzo assoluto, coi mnemonici internazionali o tedeschi come in AWL: bit `I0.0`/`IX0.0`
+ * (`E0.0`, `A0.0`), `IB`/`IW`/`ID` con il byte (`EW`, `AD`…), periferia `PIW`/`PQB`… (`PEW`, `PAB`…).
+ */
+const ADDR = /^%?(?:([IQMEA])(?:X?(\d+)\.([0-7])|([BWD])(\d+))|(P[IQEA])([BWD])(\d+))$/i;
+/** Mnemonico tedesco → internazionale. */
+const AREA: Record<string, string> = { E: 'I', A: 'Q', PE: 'PI', PA: 'PQ' };
+/**
+ * Un indirizzo che prima della 2.1 era un nome (`AW1`, `ED0`, `PIW256`): se l'interfaccia ha una
+ * variabile con quel nome, resta la variabile.
+ */
+export const isNewAddress = (text: string): boolean => /^(?:[EA]|P)/i.test(text);
 /** Intero: decimale o in base 2/8/16, col tipo davanti se c'è; `_` separa le cifre. */
 const INT_LIT =
   /^(?:(?:D?INT|D?WORD|BYTE|DW|W|B|L)#-?)?(?:(?:2|8|16)#[0-9A-Za-z_]+|\d[\d_]*)(?![0-9A-Za-z_#]|\.\d)/i;
 /** Durata o data tipizzata: `T#5s`, `TIME#1h2m`, `S5T#2s`, `D#2024-01-01`, `TOD#12:00:00.5`. */
 const TIME_LIT =
-  /^(?:(?:T|TIME|S5T|S5TIME)#-?[0-9A-Za-z_]+|(?:D|DATE)#[0-9-]+|(?:TOD|TIME_OF_DAY)#[0-9:.]+)(?![0-9A-Za-z_#])/i;
+  /^(?:(?:T|TIME|S5T|S5TIME)#-?[0-9A-Za-z_]+|(?:D|DATE)#[0-9-]+|(?:TOD|TIME_OF_DAY)#[0-9:.]+|(?:DT|DATE_AND_TIME)#[0-9:.-]+)(?![0-9A-Za-z_#])/i;
 const TIME_TYPES: [RegExp, TimeType, ElementaryTypeName][] = [
   [/^S5T(?:IME)?#/i, 'S5TIME', 'S5Time'],
   [/^T(?:IME)?#/i, 'TIME', 'Time'],
   [/^D(?:ATE)?#/i, 'DATE', 'Date'],
   [/^(?:TOD|TIME_OF_DAY)#/i, 'TOD', 'Time_Of_Day'],
 ];
-export type TimeType = 'TIME' | 'S5TIME' | 'DATE' | 'TOD';
+export type TimeType = 'TIME' | 'S5TIME' | 'DATE' | 'TOD' | 'DT';
 
-/** Tipo e forma AWL (`T#1H2M`, `D#2024-01-01`) di una durata o data; `undefined` se non è valida. */
+/**
+ * Tipo e forma AWL (`T#1H2M`, `D#2024-01-01`) di una durata o data; `undefined` se non è valida.
+ * Per DATE_AND_TIME la forma canonica `DT#2024-01-05-08:30:00.000`.
+ */
 export function timeLiteral(text: string): { ty: TimeType; awl: string } | undefined {
+  if (/^(?:DT|DATE_AND_TIME)#/i.test(text)) {
+    const r = parseLiteral({ kind: 'dateAndTime' }, text);
+    return r.ok ? { ty: 'DT', awl: r.canonical } : undefined;
+  }
   const k = TIME_TYPES.find(([re]) => re.test(text));
   if (!k) return undefined;
   const r = parseLiteral({ kind: 'elementary', name: k[2] }, text);
@@ -238,12 +256,17 @@ export function lex(text: string, opts: LexOptions = {}): Tok[] {
 }
 
 /** Larghezza e posizione di un indirizzo assoluto, nella forma AWL (`I 0.0`, `MW 10`). */
-export function parseAddress(text: string): { awl: string; size: 'X' | 'B' | 'W' | 'D' } {
+export function parseAddress(text: string): {
+  awl: string;
+  size: 'X' | 'B' | 'W' | 'D';
+  area: 'I' | 'Q' | 'M' | 'PI' | 'PQ';
+} {
   const m = ADDR.exec(text)!;
-  const area = m[1]!.toUpperCase();
-  if (m[2] !== undefined) return { awl: `${area} ${Number(m[2])}.${m[3]}`, size: 'X' };
-  const size = m[4]!.toUpperCase() as 'B' | 'W' | 'D';
-  return { awl: `${area}${size} ${Number(m[5])}`, size };
+  const raw = (m[1] ?? m[6]!).toUpperCase();
+  const area = (AREA[raw] ?? raw) as 'I' | 'Q' | 'M' | 'PI' | 'PQ';
+  if (m[2] !== undefined) return { awl: `${area} ${Number(m[2])}.${m[3]}`, size: 'X', area };
+  const size = (m[4] ?? m[7])!.toUpperCase() as 'B' | 'W' | 'D';
+  return { awl: `${area}${size} ${Number(m[5] ?? m[8])}`, size, area };
 }
 
 /**

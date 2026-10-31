@@ -608,6 +608,39 @@ describe('equivalenza KOP ↔ AWL generato', () => {
     );
   });
 
+  it('NOT, (#) e fronti nei rami di un parallelo con logica davanti (H21)', () => {
+    expectEquivalent(
+      net(
+        [c('I 0.0'), par([c('I 0.1'), not()], [not(), c('I 0.2')], [c('I 0.3')])],
+        [coil('Q 4.0')],
+      ),
+    );
+    expectEquivalent(
+      net(
+        [nc('I 0.4'), par([edge('P', 'M 0.0')], [c('I 0.5'), mid('M 0.1')]), c('I 0.6')],
+        [coil('Q 4.1')],
+      ),
+    );
+    // un segmento per volta: con tutti insieme le combinazioni sono 2^14
+    expectEquivalent(
+      net(
+        [c('I 0.7'), par([c('I 1.0'), par([not()], [c('I 1.1')])], [edge('N', 'M 0.2')])],
+        [coil('Q 4.2'), node([par([not()], [c('I 1.2')])], [coil('Q 4.3')])],
+      ),
+    );
+  });
+
+  it('parallelo plain (OR di serie senza parentesi), sulla barra e dopo logica', () => {
+    const plain = (...b: LadElem[][]): LadElem => ({ ...par(...b), plain: true }) as LadElem;
+    expectEquivalent(
+      net(
+        [plain([c('I 0.0'), nc('I 0.1')], [c('I 0.2')], [c('I 0.3'), c('I 0.4')])],
+        [coil('Q 4.0')],
+      ),
+      net([c('I 0.5'), plain([c('I 0.6')], [nc('I 0.7')]), c('I 1.0')], [coil('Q 4.1')]),
+    );
+  });
+
   it('fronti in linea e box POS/NEG', () => {
     expectEquivalent(
       net(

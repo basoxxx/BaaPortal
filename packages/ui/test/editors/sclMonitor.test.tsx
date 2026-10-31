@@ -63,12 +63,12 @@ describe('osservazione di un blocco SCL nel simulatore', () => {
         });
         app.store.setState((x) => ({ compile: { ...x.compile, lines: { [f.id]: map } } }));
       });
-      expect(cells()).toEqual(['5', 'FALSE', 'non elaborato', '1.5']);
+      expect(cells()).toEqual(['MW10 = 5', 'FALSE', 'non elaborato', 'MD20 = 1.5']);
       expect(document.querySelectorAll('.baa-mon-off')).toHaveLength(1);
-      expect(document.querySelector('.baa-scl-mon')!.getAttribute('title')).toBe('5');
+      expect(document.querySelector('.baa-scl-mon')!.getAttribute('title')).toBe('MW10 = 5');
       // esadecimale
       act(() => app.store.getState().setSim({ monitorHex: true }));
-      expect(cells()[0]).toBe('16#0005');
+      expect(cells()[0]).toBe('MW10 = 16#0005');
       // il testo cambia: i valori spariscono e l'osservazione è sospesa
       const cm = EditorView.findFromDOM(document.querySelector<HTMLElement>('.cm-editor')!)!;
       act(() => cm.dispatch({ changes: { from: 0, insert: ' ' }, userEvent: 'input.type' }));
@@ -110,7 +110,7 @@ describe('osservazione di un blocco SCL sulla CPU', () => {
     async () => {
       // solo la prima riga SCL nella finestra
       await plc((l) => (l.sclLine === 1 ? { stw: 0, accu1: 5 } : 'absent'));
-      expect(cells()).toEqual(['5', '?', '?', '?']);
+      expect(cells()).toEqual(['MW10 = 5', '?', '?', '?']);
       const q = document.querySelectorAll('.baa-scl-mon')[1]!;
       expect(q.getAttribute('aria-label')).toContain('fuori dalla finestra');
       expect(document.querySelector('.baa-mon-off')).toBeNull();
@@ -122,7 +122,7 @@ describe('osservazione di un blocco SCL sulla CPU', () => {
     'righe null: non elaborate, in grigio',
     async () => {
       await plc((l) => (l.sclLine === 1 ? { stw: 0, accu1: 5 } : null));
-      expect(cells()).toEqual(['5', 'non elaborato', 'non elaborato', 'non elaborato']);
+      expect(cells()).toEqual(['MW10 = 5', 'non elaborato', 'non elaborato', 'non elaborato']);
       expect(document.querySelectorAll('.baa-mon-off')).toHaveLength(3);
     },
     T,
@@ -132,7 +132,7 @@ describe('osservazione di un blocco SCL sulla CPU', () => {
     'risposta incerta (parziale, in attesa): le righe null sono sconosciute',
     async () => {
       await plc((l) => (l.sclLine === 1 ? { stw: 0, accu1: 5 } : null), true);
-      expect(cells()).toEqual(['5', '?', '?', '?']);
+      expect(cells()).toEqual(['MW10 = 5', '?', '?', '?']);
       expect(document.querySelector('.baa-mon-off')).toBeNull();
     },
     T,

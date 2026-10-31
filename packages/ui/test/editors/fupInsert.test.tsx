@@ -1,12 +1,14 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { I18nextProvider } from 'react-i18next';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { emptyNetwork, networkToAwl } from '@baaportal/ladfbd';
-import type { LadNetwork } from '@baaportal/ladfbd';
+import type { LadNetwork, LadNode } from '@baaportal/ladfbd';
 import { FupNetworkView } from '../../src/editors/fbd/FupNetworkView';
 import { LadNetworkEditor } from '../../src/editors/lad/LadNetworkEditor';
 import type { LadInsertApi } from '../../src/editors/lad/LadNetworkEditor';
+import { LAD_CLIP_TYPE, ladClipFromText } from '../../src/editors/lad/useLadEdit';
 import { i18next, initI18n } from '../../src/i18n';
 import { fakeDataTransfer } from '../blockFixtures';
 
@@ -254,6 +256,41 @@ const contacts = (id: () => string): LadNetwork => ({
   },
 });
 
+describe('FUP: selezione non contigua e copia con le uscite', () => {
+  const ops = (n: LadNetwork) => n.root.series.map((e) => (e as { op: string }).op);
+  const btn = (name: string) => screen.getByRole('button', { name });
+
+  it('Ctrl+clic aggiunge e toglie elementi lontani; Canc li toglie tutti', async () => {
+    const { user, net } = setup(contacts);
+    await user.click(btn('Contatto NA I 0.0'));
+    await user.keyboard('{Control>}');
+    await user.click(btn('Contatto NA I 0.2'));
+    await user.click(btn('Contatto NA I 0.3'));
+    await user.click(btn('Contatto NA I 0.3'));
+    await user.keyboard('{/Control}');
+    expect(screen.getByRole('status')).toHaveTextContent('2 elementi selezionati.');
+    expect(btn('Contatto NA I 0.1')).toHaveAttribute('aria-pressed', 'false');
+    await user.keyboard('{Delete}');
+    expect(ops(net())).toEqual(['I 0.1', 'I 0.3']);
+  });
+
+  it('una serie copiata con la sua bobina si incolla come ramo a T', async () => {
+    const { user, net } = setup(contacts);
+    await user.click(btn('Contatto NA I 0.1'));
+    await user.keyboard('{Control>}');
+    await user.click(btn('Bobina Q 0.0'));
+    await user.keyboard('{/Control}');
+    await user.keyboard('{Control>}c{/Control}');
+    await user.click(btn('Contatto NA I 0.3'));
+    await user.keyboard('{Control>}v{/Control}');
+    await waitFor(() => expect(net().root.outs).toHaveLength(2));
+    const t = net().root.outs[1] as LadNode;
+    expect(t.series.map((e) => (e as { op: string }).op)).toEqual(['I 0.1']);
+    expect(t.outs).toMatchObject([{ k: 'coil', op: 'Q 0.0' }]);
+    expect(networkToAwl(net(), { tempEnd: 0, firstLabel: 1 }).diagnostics).toEqual([]);
+  });
+});
+
 describe('FUP: negazione di un’entrata in mezzo alla serie', () => {
   it('N su un confronto dopo un contatto lo mette in A( … NOT ), con il cerchietto sul suo pin', async () => {
     const { user, net } = setup((id) => ({
@@ -325,6 +362,28 @@ describe.each([
     expect(ops(net())).toEqual(['I 0.0', 'I 0.1', 'I 0.3', 'I 0.1', 'I 0.2']);
   });
 
+  it('appunti di sistema: la copia scrive JSON col marcatore, l’incolla legge anche da fuori', async () => {
+    const { user, net } = setup(contacts, { kop });
+    await user.click(btn(names[0]!));
+    await user.keyboard('{Control>}c{/Control}');
+    const text = await navigator.clipboard.readText();
+    expect(JSON.parse(text)).toMatchObject({ type: LAD_CLIP_TYPE, elems: [{ op: 'I 0.0' }] });
+    // testo scritto da un'altra finestra (o a mano): entra con id nuovi
+    const other = {
+      type: LAD_CLIP_TYPE,
+      elems: [{ id: 'z', k: 'contact', neg: true, op: 'M 9.9' }],
+    };
+    await navigator.clipboard.writeText(JSON.stringify(other));
+    await user.click(btn(names[3]!));
+    await user.keyboard('{Control>}v{/Control}');
+    await waitFor(() => expect(ops(net())).toEqual([...names, 'M 9.9']));
+    expect(net().root.series.at(-1)!.id).not.toBe('z');
+    // testo qualsiasi: restano gli appunti interni
+    await navigator.clipboard.writeText('{"type":"altro"}');
+    await user.keyboard('{Control>}v{/Control}');
+    await waitFor(() => expect(ops(net())).toEqual([...names, 'M 9.9', 'I 0.0']));
+  });
+
   it('un elemento di un’altra serie non si aggiunge alla selezione', async () => {
     const { user } = setup(
       (id) => ({
@@ -351,5 +410,45 @@ describe.each([
     await user.click(btn('I 0.1'));
     await user.keyboard('{/Shift}');
     expect(screen.getByRole('status')).toHaveTextContent('La selezione multipla vale solo');
+  });
+});
+
+describe('ladClipFromText', () => {
+  it('accetta solo il marcatore e gli elementi (o il nodo) validi', () => {
+    const ok = { type: LAD_CLIP_TYPE, elems: [{ id: 'a', k: 'not' }] };
+    expect(ladClipFromText(JSON.stringify(ok))).toEqual({ elems: [{ id: 'a', k: 'not' }] });
+    const node = {
+      id: 'n',
+      series: [{ id: 'a', k: 'not' }],
+      outs: [{ id: 'q', k: 'coil', op: 'Q 0.0' }],
+    };
+    expect(ladClipFromText(JSON.stringify({ type: LAD_CLIP_TYPE, node }))).toEqual({ node });
+    expect(
+      ladClipFromText(JSON.stringify({ type: LAD_CLIP_TYPE, node: { id: 'n' } })),
+    ).toBeUndefined();
+    for (const bad of [
+      'non json',
+      'null',
+      '[]',
+      JSON.stringify({ ...ok, type: 'x' }),
+      JSON.stringify({ ...ok, elems: [] }),
+      JSON.stringify({ ...ok, elems: [{ id: 'a', k: 'contact' }] }),
+      JSON.stringify({ ...ok, elems: [{ id: 'a', k: 'coil', op: 'Q 0.0' }] }),
+    ])
+      expect(ladClipFromText(bad), bad).toBeUndefined();
+  });
+});
+
+describe('colori di KOP e FUP', () => {
+  it('vengono tutti dai token del tema (nessun colore scritto nei fogli di stile)', () => {
+    for (const f of ['../../src/editors/lad/lad.css', '../../src/editors/fbd/fbd.css']) {
+      const css = readFileSync(new URL(f, import.meta.url), 'utf8');
+      // l'ombra del menu a tendina è l'unica eccezione: nero trasparente, vale su ogni fondo
+      const colors = css.match(/#[0-9a-f]{3,8}\b|rgba?\([^)]*\)|\b(?:white|black)\b(?!-)/gi) ?? [];
+      expect(
+        colors.filter((c) => c !== 'rgba(0, 0, 0, 0.25)'),
+        f,
+      ).toEqual([]);
+    }
   });
 });

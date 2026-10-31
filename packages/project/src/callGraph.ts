@@ -1,7 +1,7 @@
 // Struttura di chiamata e dipendenze (tappa 7A): chi chiama chi, ricavato dai riferimenti incrociati
 // (le CALL, UC e CC, multi-istanze comprese) senza rileggere il codice.
 import type { PlcDevice } from './model';
-import { crossReferences, type XrefOperand, type XrefUse } from './crossRef';
+import { COMPUTED_CALL, crossReferences, type XrefOperand, type XrefUse } from './crossRef';
 
 /** Un blocco del grafo: del progetto (`blockId`) o di sistema/mancante (solo la chiave). */
 export interface CallBlock {
@@ -30,6 +30,8 @@ export interface CallGraph {
   unreferenced: string[];
   /** Blocchi che, seguendo le chiamate, richiamano sé stessi. */
   recursive: Set<string>;
+  /** `UC`/`CC` con destinazione calcolata: il blocco chiamato non si conosce (`callee` è il testo scritto). */
+  computed: CallEdge[];
 }
 
 const CODE = new Set(['FC', 'FB', 'SFC', 'SFB']);
@@ -44,7 +46,10 @@ export function callGraph(dev: PlcDevice, xref: XrefOperand[] = crossReferences(
   const calls = new Map<string, CallEdge[]>();
   const callers = new Map<string, CallEdge[]>();
   const referenced = new Set<string>();
+  const computed: CallEdge[] = [];
   for (const op of xref) {
+    if (op.type === COMPUTED_CALL)
+      computed.push(...op.uses.map((use) => ({ caller: use.block, callee: op.address, use })));
     if (op.db !== undefined) referenced.add(`DB${op.db}`);
     if (op.kind !== 'block') continue;
     referenced.add(op.key);
@@ -81,5 +86,5 @@ export function callGraph(dev: PlcDevice, xref: XrefOperand[] = crossReferences(
       for (const e of calls.get(k) ?? []) stack.push(e.callee);
     }
   }
-  return { blocks, calls, callers, roots, unreferenced, recursive };
+  return { blocks, calls, callers, roots, unreferenced, recursive, computed };
 }

@@ -1,6 +1,6 @@
 import { findCpu, findSystemBlock } from '@baaportal/catalog';
 import { buildSzl, type CpuBackend } from '@baaportal/s7-server';
-import { readBlockFile } from '@baaportal/mc7';
+import { parseAdd, readBlockFile } from '@baaportal/mc7';
 import { diagFromError, syntheticEventId, type DiagEntry } from './diagnostics';
 import { SimError, StopRequest } from './errors';
 import { EVENT, PRIORITY, hwEventId, syncFaultOf, type HwInterrupt } from './events';
@@ -17,6 +17,8 @@ import { Program } from './program';
 import { SimMemory, memorySizesFor } from './memory';
 import {
   ob100StartInfo,
+  ob10StartInfo,
+  ob20StartInfo,
   ob121StartInfo,
   ob122StartInfo,
   ob1StartInfo,
@@ -30,10 +32,38 @@ import {
 import { newRegisters } from './registers';
 import { CounterBank } from './counters';
 import { TimerBank } from './timers';
-import type { SystemServices } from './system/params';
+import { SysState, type FaultMasks, type SystemServices } from './system/params';
+import { maskedFault } from './system/registry';
+import { nextTod } from './system/sfc';
 import { simBackend } from './backend';
 
 export type SimMode = 'STOP' | 'STARTUP' | 'RUN';
+
+/** Area forzabile nel simulatore. */
+export type ForceArea = 'I' | 'Q' | 'M';
+
+/** Voce della tabella di forzamento: operando e valore (big-endian; per `X` conta se il byte è ≠ 0). */
+export interface ForceEntry {
+  area: ForceArea;
+  byte: number;
+  bit?: number;
+  size: 'X' | 'B' | 'W' | 'D';
+  data: Uint8Array;
+}
+
+const FORCE_BYTES = { X: 1, B: 1, W: 2, D: 4 } as const;
+
+/** Modulo di I/O della configurazione hardware, con i suoi byte nell'area di periferia. */
+export interface SimIoModule {
+  id: string;
+  name: string;
+  rack: number;
+  slot: number;
+  /** Numero della stazione ET 200 (indirizzo PROFIBUS); assente nel rack centrale. */
+  station?: number;
+  inputs?: { start: number; bytes: number };
+  outputs?: { start: number; bytes: number };
+}
 
 /** Proprietà della CPU che servono al simulatore (stessa forma di `CpuProperties`, senza dipendere da `project`). */
 export interface SimCpuProps {
@@ -53,6 +83,11 @@ export interface SimCpuOptions {
   now?: () => number;
   /** Limite di istruzioni per ciclo (predefinito `MAX_INSTRUCTIONS`; più basso nei test). */
   maxInstructions?: number;
+  /**
+   * Moduli di I/O della configurazione hardware. Con almeno un modulo, la periferia e l'aggiornamento
+   * delle immagini di processo valgono solo per i loro byte; senza, per tutto il campo della CPU.
+   */
+  io?: readonly SimIoModule[];
 }
 
 /** OB in esecuzione, con la sua classe di priorità. */
@@ -63,12 +98,17 @@ interface RunningOb {
   startInfo?: Uint8Array;
   /** Ritardi degli allarmi attivi (SFC 41 DIS_AIRT): finiscono con l'OB. */
   airt?: number;
+  /** Maschere degli errori sincroni (SFC 36–38): finiscono con l'OB (⚠️). */
+  faults?: FaultMasks;
 }
+
+/** Evento di avvio degli OB di programma (⚠️ OB10 16#1111 e OB20 16#1121 dedotti da STRT_INF). */
+const START_EVENT: Record<number, number> = { 1: 0x1103, 10: 0x1111, 20: 0x1121, 35: 0x1136 };
 
 /** Id del suo evento di avvio, per OB80_ERR_EV_CLASS/NUM (⚠️ OB1: 16#1103, OB35: 16#1136). */
 function obRef(r: RunningOb | undefined): ObRef {
   if (!r) return { evClass: 0, evNum: 0, priority: 0, ob: 0 };
-  const ev = r.ob === 1 ? 0x1103 : r.ob === 35 ? 0x1136 : 0;
+  const ev = START_EVENT[r.ob] ?? 0;
   return { evClass: ev >> 8, evNum: ev & 255, priority: r.prio, ob: r.ob };
 }
 
@@ -105,8 +145,11 @@ const DEFAULT_COUNTER_COUNT = 256;
 /** Numero massimo di DB se la CPU non è nel catalogo. */
 const DEFAULT_MAX_DB = 16000;
 
-/** Voci di diagnostica conservate (le più vecchie si perdono). */
+/** Voci di diagnostica conservate (le più vecchie si perdono); ⚠️ la dimensione per CPU non è nel catalogo. */
 const MAX_DIAGNOSTICS = 100;
+
+/** Allarme a tempo perso (OB35 saltato perché la CPU era occupata): ⚠️ id 16#3503 dedotto. */
+const EVENT_INTERRUPT_LOST = 0x3503;
 
 /** Periodo in ms dei bit 0..7 del merker di clock (manuale delle CPU 31x: 10, 5, 2.5, 2, 1.25, 1, 0.625, 0.5 Hz). */
 const CLOCK_PERIODS_MS = [100, 200, 400, 500, 800, 1000, 1600, 2000];
@@ -118,7 +161,10 @@ export class SimCpu {
   readonly timers: TimerBank;
   readonly counters: CounterBank;
 
-  private readonly props: SimCpuProps;
+  private props: SimCpuProps;
+  /** Moduli della configurazione hardware e quelli estratti dal pannello (`setModulePresent`). */
+  readonly io: readonly SimIoModule[];
+  private readonly pulled = new Set<string>();
   private readonly cpuTypeId: string;
   /** Orologio di sistema: quello iniettato più il tempo di SFC 47 (WAIT), mai indietro. */
   private now: () => number;
@@ -153,6 +199,9 @@ export class SimCpu {
   private pending: HwInterrupt[] = [];
   /** Errori di tempo (OB80) ritardati da SFC 41 DIS_AIRT: girano alla fine del ritardo. */
   private pendingTime: ((ctx: ExecContext) => void)[] = [];
+  /** Tabella di forzamento e, per area, maschera dei bit forzati e loro valori. */
+  private forces: ForceEntry[] = [];
+  private forceMasks: Partial<Record<ForceArea, { mask: Uint8Array; value: Uint8Array }>> = {};
   /** Osservazione di un blocco (`setMonitor`); `undefined` = nessuna, costo zero nell'esecutore. */
   private monitor: MonitorSink | undefined;
 
@@ -188,9 +237,21 @@ export class SimCpu {
         top: (this.running.at(-1)?.startInfo ?? new Uint8Array(12)).slice(0, 12),
         startUp: this.startUpInfo.slice(0, 12),
       }),
+      state: new SysState(),
+      faults: () => {
+        const top = this.running.at(-1);
+        if (!top) return { prg: 0, acc: 0, prgErr: 0, accErr: 0 };
+        return (top.faults ??= { prg: 0, acc: 0, prgErr: 0, accErr: 0 });
+      },
+      onFault: (e, st) => this.syncFault(e, st),
+      modules: () => this.presentModules(),
+      userMessage: (eventId, detail) =>
+        void this.record({ time: this.now(), code: 'MESSAGGIO_UTENTE', eventId, detail }),
     };
     this.maxInstructions = o.maxInstructions;
     this.memory = new SimMemory(memorySizesFor(o.cpuTypeId));
+    this.io = o.io?.filter((m) => m.inputs || m.outputs) ?? [];
+    this.updatePeriphery();
     this.counters = new CounterBank(findCpu(o.cpuTypeId)?.limits.counters ?? DEFAULT_COUNTER_COUNT);
     this.timers = new TimerBank(findCpu(o.cpuTypeId)?.limits.timers ?? DEFAULT_TIMER_COUNT, () =>
       this.now(),
@@ -216,6 +277,16 @@ export class SimCpu {
     return (findCpu(this.cpuTypeId)?.workMemoryKB ?? 64) * 1024;
   }
 
+  /**
+   * Nuove proprietà senza riavviare: tempo di ciclo e merker di clock dal ciclo successivo, OB35 con
+   * la griglia ripartita da adesso se l'intervallo cambia; la ritentività vale al prossimo avvio.
+   */
+  setProps(props: SimCpuProps): void {
+    const iv = props.cyclicInterruptMs;
+    if (iv !== this.props.cyclicInterruptMs && this._mode === 'RUN') this.ob35Due = this.now() + iv;
+    this.props = props;
+  }
+
   /** Tempi di ciclo configurati (proprietà della CPU), in ms. */
   get cycleConfig(): { minMs: number; maxMs: number } {
     return { minMs: this.props.minCycleMs, maxMs: this.props.maxCycleMs };
@@ -232,6 +303,114 @@ export class SimCpu {
   onEvent(cb: (e: SimEvent) => void): () => void {
     this.listeners.add(cb);
     return () => this.listeners.delete(cb);
+  }
+
+  /** Il modulo è presente (non estratto dal pannello). */
+  modulePresent(id: string): boolean {
+    return this.io.some((m) => m.id === id) && !this.pulled.has(id);
+  }
+
+  /**
+   * Estrae o reinserisce un modulo (pannello I/O). I suoi byte di periferia diventano irraggiungibili
+   * (OB122) e i suoi ingressi non si aggiornano più nella PII. Evento entrante all'estrazione, uscente
+   * al reinserimento: OB86 per un modulo di una stazione ET 200 (guasto della stazione), OB82 nel
+   * rack centrale (⚠️ la S7-300 non ha l'allarme di estrazione OB83). In STOP nessun OB.
+   */
+  setModulePresent(id: string, present: boolean): void {
+    const m = this.io.find((x) => x.id === id);
+    if (!m) throw new RangeError(`modulo ${id} non configurato`);
+    if (present === !this.pulled.has(id)) return;
+    if (present) this.pulled.delete(id);
+    else this.pulled.add(id);
+    this.updatePeriphery();
+    const address = m.inputs?.start ?? m.outputs?.start ?? 0;
+    this.raiseInterrupt(m.station !== undefined ? 86 : 82, { address, coming: !present });
+  }
+
+  /** Moduli presenti con il loro indirizzo (SFC 5, 49, 58, 59). */
+  presentModules(): SimIoModule[] {
+    return this.io.filter((m) => !this.pulled.has(m.id));
+  }
+
+  private updatePeriphery(): void {
+    const mem = this.memory;
+    if (this.io.length === 0) {
+      mem.periphery = undefined;
+      return;
+    }
+    const p = { in: new Uint8Array(mem.physIn.length), out: new Uint8Array(mem.physOut.length) };
+    for (const m of this.presentModules()) {
+      if (m.inputs) p.in.fill(1, m.inputs.start, m.inputs.start + m.inputs.bytes);
+      if (m.outputs) p.out.fill(1, m.outputs.start, m.outputs.start + m.outputs.bytes);
+    }
+    mem.periphery = p;
+  }
+
+  /** PII dagli ingressi fisici: solo i byte dei moduli presenti, se c'è una configurazione. */
+  private readInputs(): void {
+    const m = this.memory;
+    const io = m.periphery?.in;
+    if (!io) return m.I.set(m.physIn);
+    for (let i = 0; i < m.I.length; i++) if (io[i]) m.I[i] = m.physIn[i]!;
+  }
+
+  /** Uscite ai moduli dalla PIQ: solo i byte dei moduli presenti (gli altri restano a 0). */
+  private writeOutputs(): void {
+    const m = this.memory;
+    const io = m.periphery?.out;
+    if (!io) return m.physOut.set(m.Q);
+    for (let i = 0; i < m.Q.length; i++) m.physOut[i] = io[i] ? m.Q[i]! : 0;
+  }
+
+  /** Tabella di forzamento attiva (LED FRCE). */
+  get forceTable(): readonly ForceEntry[] {
+    return this.forces;
+  }
+
+  get forceActive(): boolean {
+    return this.forces.length > 0;
+  }
+
+  /**
+   * Sostituisce la tabella di forzamento (vuota = forzamento terminato). Vale in ogni modo, anche in
+   * STOP, finché non la si cambia o con la cancellazione totale. Una voce fuori area fa rifiutare
+   * tutta la tabella (RangeError) e lascia quella di prima.
+   */
+  setForce(entries: readonly ForceEntry[]): void {
+    const masks: typeof this.forceMasks = {};
+    for (const f of entries) {
+      const buf = this.memory[f.area];
+      const len = FORCE_BYTES[f.size];
+      const bitOk = f.size !== 'X' || (Number.isInteger(f.bit) && f.bit! >= 0 && f.bit! <= 7);
+      if (!buf || !Number.isInteger(f.byte) || f.byte < 0 || f.byte + len > buf.length || !bitOk)
+        throw new RangeError(`forzamento fuori area: ${f.area} ${f.byte}`);
+      if (f.size !== 'X' && f.data.length !== len)
+        throw new RangeError(`forzamento ${f.area} ${f.byte}: servono ${len} byte`);
+      const m = (masks[f.area] ??= {
+        mask: new Uint8Array(buf.length),
+        value: new Uint8Array(buf.length),
+      });
+      if (f.size === 'X') {
+        const b = 1 << f.bit!;
+        m.mask[f.byte]! |= b;
+        m.value[f.byte] = f.data[0] ? m.value[f.byte]! | b : m.value[f.byte]! & ~b;
+      } else
+        for (let i = 0; i < len; i++) {
+          m.mask[f.byte + i] = 0xff;
+          m.value[f.byte + i] = f.data[i]!;
+        }
+    }
+    this.forces = entries.map((f) => ({ ...f, data: f.data.slice() }));
+    this.forceMasks = masks;
+  }
+
+  /** Scrive i valori forzati nell'area (immagine di processo o merker). */
+  private applyForce(area: ForceArea): void {
+    const f = this.forceMasks[area];
+    if (!f) return;
+    const buf = this.memory[area];
+    for (let i = 0; i < buf.length; i++)
+      if (f.mask[i]) buf[i] = (buf[i]! & ~f.mask[i]!) | (f.value[i]! & f.mask[i]!);
   }
 
   /** Osserva un blocco: dopo ogni ciclo `monitorSnapshot` dà lo stato dopo le sue istruzioni. */
@@ -271,6 +450,9 @@ export class SimCpu {
       });
       return;
     }
+    // Una sezione ADD che non si legge (reti oltre il codice, lunghezze sbagliate) fa rifiutare il blocco.
+    if (f.addRaw.length > 0 && !parseAdd(f.addRaw, f.mc7.length))
+      throw new Error(`${f.header.kind ?? ''}${f.header.number}: sezione ADD corrotta`);
     this.program.load(file);
     // Solo a caricamento riuscito: un file respinto lascia il blocco (e l'osservazione) com'erano.
     this.monitorGone(f.header.kind ?? '', f.header.number);
@@ -292,6 +474,7 @@ export class SimCpu {
     this.services.sfbState.clear();
     this.record({ time: t0, code: 'AVVIO' });
     this.warmRestart();
+    this.services.state.restart(t0);
     this.pending = [];
     this.pendingTime = [];
     this.startUpInfo = ob100StartInfo(this.stamp(t0));
@@ -335,6 +518,8 @@ export class SimCpu {
     this.counters.reset(0);
     this.services.sfbState.clear();
     for (const db of m.dbs.values()) db.data.set(db.initial);
+    // ⚠️ La cancellazione totale termina anche il forzamento.
+    this.setForce([]);
     this.st = { last: 0, min: 0, max: 0, cycles: 0 };
     this.record({ time: this.now(), code: 'CANCELLAZIONE_TOTALE' });
   }
@@ -354,9 +539,11 @@ export class SimCpu {
     const start = this.now();
     this.watchdog = start;
     this.overrun = false;
-    const m = this.memory;
     this.updateClock(start);
-    m.I.set(m.physIn);
+    this.readInputs();
+    // Forzamento S7-300: ingressi (e merker, ⚠️) all'inizio del ciclo; il programma può sovrascriverli.
+    this.applyForce('I');
+    this.applyForce('M');
     if (this.monitor) {
       this.monitor.steps = [];
       this.monitor.seen.clear();
@@ -368,7 +555,8 @@ export class SimCpu {
       this.serviceInterrupts(ctx, PRIORITY.OB1, start);
       if (!this.program.get('OB', 1)) {
         // Senza OB1 il ciclo gira a vuoto: le immagini di processo si aggiornano lo stesso.
-        m.physOut.set(m.Q);
+        this.applyForce('Q');
+        this.writeOutputs();
         return { ran: true, ok: true, elapsedMs: 0 };
       }
       this.runOb(
@@ -392,7 +580,9 @@ export class SimCpu {
       if (e instanceof StopRequest) return this.stopRequested(e, start);
       return this.failedCycle(this.fail(e), start);
     }
-    m.physOut.set(m.Q);
+    // Uscite forzate nella PIQ prima del trasferimento ai moduli.
+    this.applyForce('Q');
+    this.writeOutputs();
     this.firstCycle = false;
     const s = this.st;
     s.last = elapsedMs;
@@ -402,6 +592,26 @@ export class SimCpu {
     const result: CycleResult = { ran: true, ok: true, elapsedMs };
     this.emit({ type: 'cycle', result });
     return result;
+  }
+
+  /**
+   * Attesa del ciclo minimo: gli allarmi dovuti (OB35, OB20, OB10, OB82/86) girano come durante OB1.
+   * Restituisce i ms alla prossima scadenza, o niente se non ce n'è.
+   */
+  idle(): number | undefined {
+    if (this._mode !== 'RUN') return undefined;
+    const t = this.now();
+    this.watchdog = t;
+    this.updateClock(t);
+    try {
+      this.serviceInterrupts(this.newContext(t), PRIORITY.OB1, t);
+    } catch (e) {
+      if (e instanceof StopRequest) this.stop(e.reason);
+      else this.fail(e);
+      return undefined;
+    }
+    const due = this.nextDeadline();
+    return due === undefined ? undefined : Math.max(0, due - this.now());
   }
 
   /** STP dal programma: STOP con la voce `STOP_RICHIESTO`; il ciclo non è un errore. */
@@ -454,6 +664,8 @@ export class SimCpu {
       cycleStart,
       ...(this.monitor ? { monitor: this.monitor } : {}),
       ...(this.maxInstructions !== undefined ? { maxInstructions: this.maxInstructions } : {}),
+      maxBlockDepth: findCpu(this.cpuTypeId)?.limits.blockNesting ?? 16,
+      nextDeadline: () => this.nextDeadline(),
       onTick: (st) => this.tick(st),
       onOverrun: (st, reason) => {
         const t = this.now();
@@ -499,6 +711,22 @@ export class SimCpu {
     }
   }
 
+  /** Prima scadenza fra OB35, OB20 e OB10 (orologio di sistema), per la latenza dell'esecutore. */
+  private nextDeadline(): number | undefined {
+    // In AVVIO gli allarmi non girano: nessuna lettura dell'orologio in più.
+    if (this._mode !== 'RUN') return undefined;
+    let due: number | undefined;
+    const take = (t: number | undefined): void => {
+      if (t !== undefined && (due === undefined || t < due)) due = t;
+    };
+    if (this.props.cyclicInterruptMs > 0 && this.program.get('OB', 35)) take(this.ob35Due);
+    const s = this.services.state;
+    take(s.delay.get(20)?.due);
+    const tod = s.tod.get(10);
+    if (tod?.active && tod.next !== undefined) take(tod.next - this.clockOffsetMs);
+    return due;
+  }
+
   private currentPrio(): number {
     return this.running.at(-1)?.prio ?? 0;
   }
@@ -526,13 +754,28 @@ export class SimCpu {
     if (this.running.some((r) => (r.airt ?? 0) > 0)) return;
     while (this.pendingTime.length > 0) this.pendingTime.shift()!(ctx);
     while (this.pending.length > 0) this.hwInterrupt(ctx, this.pending.shift()!, t);
+    this.serviceOb35(ctx, prio, t);
+    // `t` resta quello d'ingresso: un OB35 appena finito sposta OB20/OB10 al tick seguente.
+    this.serviceTimed(ctx, prio, t);
+  }
+
+  private serviceOb35(ctx: ExecContext, prio: number, t: number): void {
     const iv = this.props.cyclicInterruptMs;
     if (!(iv > 0) || t < this.ob35Due) return;
     // Scaduto mentre OB35 gira ancora: l'esecuzione richiesta si perde (OB80, 16#3502).
     if (this.ob35Running) return this.ob35Lost(ctx, t);
     if (prio >= PRIORITY.OB35) return;
+    const lost = Math.floor((t - this.ob35Due) / iv);
+    if (lost > 0)
+      this.record({
+        time: t,
+        code: 'ALLARME_PERSO',
+        eventId: EVENT_INTERRUPT_LOST,
+        detail: `OB35: ${lost} avvii persi`,
+      });
     this.ob35Due = nextDue(this.ob35Due, iv, t);
-    if (!this.program.get('OB', 35)) return;
+    // SFC 39 DIS_IRT: l'allarme si scarta.
+    if (!this.program.get('OB', 35) || this.services.state.disabled.has(35)) return;
     this.ob35Running = true;
     try {
       this.runOb(ctx, 35, PRIORITY.OB35, ob35StartInfo(iv, this.stamp(t)));
@@ -541,6 +784,33 @@ export class SimCpu {
     }
     const end = this.now();
     if (end >= this.ob35Due) this.ob35Lost(ctx, end);
+  }
+
+  /** Allarme di ritardo (OB20, SFC 32) e dall'orologio (OB10, SFC 28/30), se scaduti. */
+  private serviceTimed(ctx: ExecContext, prio: number, t: number): void {
+    const s = this.services.state;
+    const delay = s.delay.get(20);
+    if (delay && prio < PRIORITY.OB20 && t >= delay.due) {
+      s.delay.delete(20);
+      const info = ob20StartInfo(delay.sign, delay.dtimeMs, this.stamp(t));
+      this.timedOb(ctx, 20, PRIORITY.OB20, info, t);
+    }
+    const tod = s.tod.get(10);
+    const clock = this.stamp(t);
+    if (tod?.active && tod.next !== undefined && prio < PRIORITY.OB10 && clock >= tod.next) {
+      // ⚠️ Le scadenze saltate (orologio spostato in avanti) danno un solo OB10.
+      const next = nextTod(tod.start, tod.period, clock);
+      if (next === undefined) tod.active = false;
+      else tod.next = next;
+      this.timedOb(ctx, 10, PRIORITY.OB10, ob10StartInfo(tod.period, this.stamp(t)), t);
+    }
+  }
+
+  /** OB10 o OB20: scartato se bloccato da SFC 39; se manca, OB85 (manuale, OB85) o STOP. */
+  private timedOb(ctx: ExecContext, ob: number, prio: number, info: Uint8Array, t: number): void {
+    if (this.services.state.disabled.has(ob)) return;
+    if (this.program.get('OB', ob)) return this.runOb(ctx, ob, prio, info);
+    this.missingOb(ctx, ob, START_EVENT[ob] ?? 0, prio, t);
   }
 
   private ob35Lost(ctx: ExecContext, t: number): void {
@@ -592,6 +862,13 @@ export class SimCpu {
     }
     if (!this.program.get('OB', 80) || this.inOb(80))
       throw new SimError('TEMPO_CICLO_SUPERATO', reason, { eventId });
+    // Dentro OB82/OB85/OB86 (stessa classe 26) l'OB80 aspetta in coda la fine dell'OB in corso.
+    if (this.currentPrio() >= PRIORITY.ASYNC_ERROR) {
+      this.pendingTime.push((c) => this.timeError(c, fltId, eventId, errorInfo, ref, t, reason));
+      return;
+    }
+    // SFC 39 DIS_IRT: l'errore di tempo si scarta (⚠️); il secondo superamento resta uno STOP.
+    if (this.services.state.disabled.has(80)) return;
     this.record({ time: t, code: 'OB_RICHIAMATO', eventId, detail: `OB80: ${reason}` });
     this.runOb(ctx, 80, PRIORITY.ASYNC_ERROR, ob80StartInfo(fltId, errorInfo, ref, this.stamp(t)));
   }
@@ -599,6 +876,7 @@ export class SimCpu {
   /** OB82 o OB86; se manca, OB85 (16#35A1); se manca anche OB85, STOP. */
   private hwInterrupt(ctx: ExecContext, ev: HwInterrupt, t: number): void {
     const id = hwEventId(ev);
+    if (this.services.state.disabled.has(ev.ob)) return;
     if (this.program.get('OB', ev.ob)) {
       this.record({ time: t, code: 'OB_RICHIAMATO', eventId: id, detail: `OB${ev.ob}` });
       const info =
@@ -608,20 +886,21 @@ export class SimCpu {
       this.runOb(ctx, ev.ob, PRIORITY.ASYNC_ERROR, info);
       return;
     }
-    const detail = `OB${ev.ob} non caricato`;
+    this.missingOb(ctx, ev.ob, id, PRIORITY.ASYNC_ERROR, t);
+  }
+
+  /** OB d'evento non caricato: OB85 (16#35A1) con l'evento richiesto; se manca anche OB85, STOP. */
+  private missingOb(ctx: ExecContext, ob: number, id: number, priority: number, t: number): void {
+    const detail = `OB${ob} non caricato`;
     if (!this.program.get('OB', 85)) throw new SimError('OB_NON_CARICATO', detail);
+    if (this.services.state.disabled.has(85)) return;
     this.record({
       time: t,
       code: 'OB_RICHIAMATO',
       eventId: EVENT.OB_NOT_LOADED,
       detail: `OB85: ${detail}`,
     });
-    const missing = {
-      evClass: id >> 8,
-      evNum: id & 255,
-      priority: PRIORITY.ASYNC_ERROR,
-      ob: ev.ob,
-    };
+    const missing = { evClass: id >> 8, evNum: id & 255, priority, ob };
     this.runOb(ctx, 85, PRIORITY.ASYNC_ERROR, ob85StartInfo(missing, this.stamp(t)));
   }
 
@@ -632,8 +911,9 @@ export class SimCpu {
    */
   private syncFault(e: SimError, st: ExecState): boolean {
     const f = syncFaultOf(e);
-    if (!f || !this.program.get('OB', f.ob)) return false;
     const top = this.running.at(-1);
+    if (top?.faults && maskedFault(top.faults, e)) return true;
+    if (!f || !this.program.get('OB', f.ob)) return false;
     if (!top || top.ob === 121 || top.ob === 122) return false;
     const t = this.now();
     const site = {
@@ -701,6 +981,7 @@ export class SimCpu {
     this.memory.physOut.fill(0);
     this.pending = [];
     this.pendingTime = [];
+    this.services.state.stopRtm(this.now());
     this.setMode('STOP');
   }
 

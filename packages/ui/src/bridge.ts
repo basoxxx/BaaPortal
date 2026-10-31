@@ -146,6 +146,8 @@ export interface BaaBridge {
   showOpenProjectDialog(): Promise<string | null>; // filtro *.baap
   showSaveProjectDialog(suggestedName: string): Promise<string | null>;
   showSelectFolderDialog(): Promise<string | null>;
+  /** Sceglie una cartella e ne elenca i file con le estensioni date (primo livello, al massimo 500); null se annullato. */
+  showSelectFolderFiles(extensions: string[]): Promise<string[] | null>;
   showOpenFileDialog(opts: { filters: FileFilter[]; multi?: boolean }): Promise<string[]>; // [] se annullato
   showSaveFileDialog(opts: { defaultName: string; filters: FileFilter[] }): Promise<string | null>;
   readFile(path: string): Promise<Uint8Array>;
@@ -164,6 +166,8 @@ export interface BaaBridge {
   closeWindowCancelled(): void;
   rendererReady(): void; // sblocca le richieste di apertura in coda
   clipboardWriteText(text: string): void;
+  /** Lingua dell'app per le finestre native del processo principale (assente: restano in italiano). */
+  setLanguage?(lang: string): void;
   clipboardReadText(): Promise<string>;
   askQuestion(texts: QuestionTexts): Promise<boolean>; // finestra nativa, true = sì
   recoveryWrite(key: string, data: Uint8Array, info: RecoveryInfo): Promise<void>;

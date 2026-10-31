@@ -328,6 +328,9 @@ export function simBackend(
     get diagnosticRecords() {
       return [...log].reverse();
     },
+    get forceActive() {
+      return cpu.forceActive;
+    },
     get faultLed() {
       // come nel pannello della CPU (2C): l'ultima voce del buffer è un errore
       const last = cpu.diagnostics.at(-1);

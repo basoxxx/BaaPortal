@@ -66,6 +66,9 @@ function tokensOf(source: string): Tok[] | null {
   const toks: Tok[] = [];
   for (const st of r.statements) {
     if (!st.instruction.def) return null;
+    // i marcatori BLD di STEP 7 non fanno nulla nella CPU: la conversione li ignora (H5)
+    // un BLD con etichetta resta un token: la conversione fallisce ma etichetta e salti restano visibili
+    if (st.instruction.def.id === 'BLD' && !st.label) continue;
     const t: Tok = {
       op: st.instruction.def.id,
       arg: st.operand ? slice(st.operand) + (st.instanceDb ? `, ${slice(st.instanceDb)}` : '') : '',
@@ -444,11 +447,27 @@ class Parser {
 
   private *parallel(i: number, fresh: boolean, pre: Pre): Gen<LadElem> {
     const par = (branches: LadElem[][]): LadElem => ({ id: this.id(), k: 'parallel', branches });
+    const plain = (branches: LadElem[][]): LadElem => ({
+      id: this.id(),
+      k: 'parallel',
+      branches,
+      plain: true,
+    });
     if (this.bare(i, 'A(')) {
       for (const [bs, j] of this.branches(i + 1, pre))
         if (this.bare(j, ')')) yield [par(bs), j + 1];
+      for (const [bs, j] of this.plainBranches(i + 1))
+        if (this.bare(j, ')')) yield [plain(bs), j + 1];
     }
-    if (fresh) for (const [bs, j] of this.branches(i, pre)) yield [par(bs), j];
+    if (fresh) {
+      for (const [bs, j] of this.branches(i, pre)) yield [par(bs), j];
+      for (const [bs, j] of this.plainBranches(i)) yield [plain(bs), j];
+    }
+    // H21: `= bit` e ogni ramo in `O( A bit … )` (NOT, (#) o fronti nei rami con logica davanti)
+    const bit = fresh ? undefined : this.arg(i, '=');
+    if (this.hidden(bit))
+      for (const [bs, j] of this.flowBranches(i + 1, bit, pre))
+        if (bs.length >= 2) yield [par(bs), j];
     // gruppo `A( … NOT )`: la negazione di un'entrata in mezzo alla serie (un solo ramo)
     if (this.bare(i, 'A('))
       for (const [s, j] of this.series(i + 1, true, pre, 'none')) {
@@ -479,6 +498,52 @@ class Parser {
     if (groups.length >= 2 && !this.bare(j - 1, 'O')) yield [groups, j];
     // regole 1 e 3: O x per un contatto solo, O( … ) per gli altri rami
     for (const [bs, k] of this.orBranches(i, pre)) if (bs.length >= 2) yield [bs, k];
+  }
+
+  /**
+   * OR di serie senza parentesi (`A a; A b; O c; O; A d`): il primo ramo è una serie di A/AN, gli
+   * altri `O x`/`ON x` o `O` seguito da A/AN. Diventa un parallelo `plain`.
+   */
+  private *plainBranches(i: number): Gen<LadElem[][]> {
+    const series = (j: number): [LadElem[], number] => {
+      const g: LadElem[] = [];
+      for (let a: string | undefined; ; j++) {
+        const neg = !(a = this.arg(j, 'A'));
+        if (neg) a = this.arg(j, 'AN');
+        if (!a) return [g, j];
+        g.push({ id: this.id(), k: 'contact', neg, op: a });
+      }
+    };
+    const [first, start] = series(i);
+    if (first.length === 0) return;
+    let j = start;
+    const groups = [first];
+    for (;;) {
+      let a: string | undefined;
+      const neg = !(a = this.arg(j, 'O'));
+      if (neg) a = this.arg(j, 'ON');
+      if (a) {
+        groups.push([{ id: this.id(), k: 'contact', neg, op: a }]);
+        j++;
+        continue;
+      }
+      if (!this.bare(j, 'O')) break;
+      const [g, k] = series(j + 1);
+      if (g.length === 0) break;
+      groups.push(g);
+      j = k;
+    }
+    if (groups.length >= 2) yield [groups, j];
+  }
+
+  private *flowBranches(i: number, bit: string, pre: Pre): Gen<LadElem[][]> {
+    if (this.bare(i, 'O(') && this.arg(i + 1, 'A') === bit)
+      for (const [s, j] of this.series(i + 2, false, pre, 'none')) {
+        if (!s || !this.bare(j, ')')) continue;
+        const branch = this.list(s);
+        for (const [rest, k] of this.flowBranches(j + 1, bit, pre)) yield [[branch, ...rest], k];
+      }
+    yield [[], i];
   }
 
   private *orBranches(i: number, pre: Pre): Gen<LadElem[][]> {

@@ -255,6 +255,11 @@ export interface PlcDevice {
   groups: { blocks: string[]; tags: string[]; types: string[] };
   /** Configurazione hardware (tappa 6A); assente nei progetti che non l'hanno mai aperta. */
   hardware?: DeviceHardware;
+  /**
+   * Preferenze del pannello di test salvate nel progetto (2.1): formato degli accumulatori
+   * nell'osservazione e byte aggiunti a mano nel pannello I/O. Assente nei file precedenti.
+   */
+  simPanel?: { hex?: boolean; inputs?: number[]; outputs?: number[] };
   /** Schermate HMI (1.9) legate alle variabili di questo PLC; assente se non ce ne sono mai state. */
   hmi?: DeviceHmi;
   /** Chiavi sconosciute della voce del dispositivo in project.json: si riscrivono com'erano. */
@@ -418,6 +423,8 @@ export interface Project {
   languages?: ProjectLanguages;
   /** Testi tradotti (facoltativo). */
   texts?: ProjectTexts;
+  /** Testo di modifica di ogni chiave quando la si è tradotta: se cambia, la traduzione è «da rivedere». */
+  textSources?: Record<string, string>;
   /** Libreria di progetto (facoltativa: assente nei file scritti prima della tappa 7B). */
   library?: Library;
   /** Sottoreti MPI, PROFIBUS e Ethernet (tappa 6B); assenti nei file precedenti. */

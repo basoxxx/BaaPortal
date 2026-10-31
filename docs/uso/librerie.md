@@ -11,27 +11,27 @@ Task card _Librerie_ (a destra), con due sezioni:
 
 ## Modelli
 
-Un modello è la copia master di uno o più oggetti: blocchi (OB, FB, FC, DB), UDT, tabelle delle variabili e tabelle di controllo. Quando si aggiunge un oggetto, il modello porta con sé anche le sue dipendenze: gli UDT e gli FB usati come tipo (anche annidati), l'FB di un DB di istanza e i blocchi chiamati (CALL, UC, CC). Un FB entra quindi con i suoi UDT e gli FC che chiama.
+Un modello è la copia master di uno o più oggetti: blocchi (OB, FB, FC, DB), UDT, tabelle delle variabili e tabelle di controllo. Quando si aggiunge un oggetto, il modello porta con sé anche le sue dipendenze: gli UDT e gli FB usati come tipo (anche annidati), l'FB di un DB di istanza e i blocchi chiamati (CALL, UC, CC), poi i DB usati dal codice (`OPN`, `"Dati".x`) e i DB di istanza delle CALL. I tag usati dal codice entrano in una tabella generata «Nome (tag)». Un FB entra quindi con i suoi UDT e gli FC che chiama.
 
 - **Aggiungere:** trascinare blocchi, UDT o tabelle dall'albero del progetto su una libreria (o su una sua cartella), oppure selezionare un oggetto nell'albero e premere _Aggiungi la selezione_. Le tabelle di controllo si aggiungono solo con _Aggiungi la selezione_.
 - **Cartelle:** _Nuova cartella_; un modello si sposta trascinandolo su una cartella.
 - **Ricerca:** il campo _Cerca_ filtra per nome e commento del modello e per nome e numero degli oggetti che contiene.
-- **Menu contestuale** (tasto destro o tasto Menu): _Inserisci nel PLC_, _Apri in sola lettura_ (la sorgente AWL di blocchi e UDT, l'elenco delle tabelle), _Copia nella libreria di progetto_ (dalle librerie globali), _Rinomina_ (F2), _Elimina_ (Canc).
+- **Menu contestuale** (tasto destro o tasto Menu): _Inserisci nel PLC_, _Apri in sola lettura_ (la sorgente AWL di blocchi e UDT, i grafici dei blocchi KOP e FUP, l'elenco delle tabelle), _Copia nella libreria di progetto_ (dalle librerie globali), _Rinomina_ (F2), _Elimina_ (Canc).
 
 ## Inserire nel PLC
 
-_Inserisci nel PLC_ copia il modello nel PLC selezionato nell'albero (o nel primo), oppure si trascina il modello su un nodo qualsiasi del PLC. Se un nome o un numero è già usato, una finestra chiede per ogni oggetto:
+_Inserisci nel PLC_ copia il modello nel PLC selezionato nell'albero (o nel primo), oppure si trascina il modello su un nodo qualsiasi del PLC; rilasciandolo su un gruppo, gli oggetti dell'area di quel gruppo (blocchi, tipi o tabelle) entrano lì. Se un nome o un numero è già usato, una finestra chiede per ogni oggetto:
 
 - **Rinomina:** l'oggetto prende un nome libero (`Nome_1`) e, se serve, un numero libero. Le CALL, i tipi e i DB di istanza dentro il modello seguono il nuovo nome.
 - **Rinumera** (solo se è preso il numero ma non il nome): stesso nome, primo numero libero.
 - **Sostituisci:** l'oggetto del PLC con lo stesso nome o lo stesso numero viene eliminato e sostituito. Non si offre se il nome è di un tag o di una costante.
 - **Salta:** l'oggetto non si copia; gli altri oggetti del modello useranno quello che c'è già nel PLC con lo stesso nome.
 
-Tutto l'inserimento è un solo passo da annullare. Gli oggetti finiscono nella radice delle cartelle del PLC.
+Tutto l'inserimento è un solo passo da annullare. Senza un gruppo di rilascio gli oggetti finiscono nella radice delle cartelle del PLC.
 
 ## Librerie globali
 
-- Un file `.baaplib` si apre **in sola lettura**; _Modifica_ lo apre per la modifica, _Sola lettura_ torna indietro. Con modifiche non salvate il nome ha un asterisco e compare _Salva_; chiudendo (×) BaaPortal chiede conferma.
+- Un file `.baaplib` si apre **in sola lettura**; _Modifica_ lo apre per la modifica, _Sola lettura_ torna indietro. Con modifiche non salvate il nome ha un asterisco e compare _Salva_; chiudendo (×) BaaPortal chiede conferma, e all'uscita dall'app chiede se salvare le modifiche. Le librerie aperte si riaprono all'avvio successivo.
 - Lo stesso file non si apre due volte. Un file rovinato, troppo grande o di una versione più recente non si apre e un messaggio dice perché.
 
 ## Libreria standard IEC

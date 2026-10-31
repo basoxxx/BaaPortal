@@ -1,4 +1,13 @@
 {
+  "readOnlyView": {
+    "input": "Ingressi",
+    "output": "Uscite",
+    "inOut": "Ingressi/uscite",
+    "static": "Statici",
+    "temp": "Temporanei",
+    "graphics": "Grafici KOP/FUP",
+    "openFailed": "Questo oggetto non si può aprire in sola lettura."
+  },
   "errors": {
     "title": "Errore",
     "write": "Impossibile scrivere il file \"{{path}}\" (codice {{code}}). Controlla i permessi e lo spazio disponibile, poi riprova.",
@@ -55,6 +64,7 @@
     "downloadingUpdate": "Download aggiornamento {{version}}"
   },
   "messages": {
+    "simForceFailed": "Il simulatore non ha accettato il forzamento: {{message}}",
     "replaced": "Sostituiti {{replaced}} testi, saltati {{skipped}}.",
     "detachBlocked": "Impossibile aprire la finestra separata: l'editor resta nell'area di lavoro.",
     "created": "Progetto \"{{name}}\" creato.",
@@ -257,6 +267,7 @@
     "replaceWith": "Sostituisci con",
     "matchCase": "Maiuscole/minuscole",
     "wholeWord": "Parola intera",
+    "updateRefs": "Aggiorna i riferimenti",
     "regex": "Espressione regolare",
     "scope": "Ambito",
     "scopeActive": "Editor attivo",
@@ -276,6 +287,8 @@
     }
   },
   "sim": {
+    "restartCpuCancelledMessage": "Caricamento annullato: nella CPU, fermata da BaaPortal, non è stato scritto nulla. Riavviarla (RUN)?",
+    "restartCpuPartialMessage": "Il caricamento non è finito: la CPU, fermata da BaaPortal, può contenere un programma parziale. Riavviarla (RUN) lo stesso?",
     "monitor": {
       "title": "Osservazione del programma",
       "on": "Osservazione attiva: i valori sono quelli della prima esecuzione nell'ultimo ciclo.",
@@ -353,6 +366,7 @@
     }
   },
   "onlineDiag": {
+    "utc": "in UTC (altrimenti ora locale)",
     "title": "Online e diagnostica",
     "pages": "Pagine",
     "loading": "Lettura in corso...",
@@ -447,6 +461,9 @@
     }
   },
   "compareView": {
+    "bytesSame": "Codice MC7 identico byte per byte.",
+    "bytesDifferent": "Codice MC7 diverso: {{count}} byte diversi.",
+    "bytesUnreadable": "Confronto byte per byte non possibile: un compilato non si legge.",
     "title": "Confronto {{name}}",
     "project": "Progetto",
     "cpu": "CPU",
@@ -530,6 +547,7 @@
     }
   },
   "history": {
+    "simPanel": "Formato dell’osservazione e byte del pannello I/O",
     "replace": "Sostituisci testo",
     "author": "Autore del progetto",
     "comment": "Commento del progetto",
@@ -802,6 +820,7 @@
     }
   },
   "reference": {
+    "viewTitle": "{{name}} (sola lettura)",
     "copyIntoProject": "Copia nel progetto",
     "close": "Chiudi il riferimento {{name}}"
   },
@@ -1104,6 +1123,7 @@
     "orientation": "Orientamento",
     "portrait": "Verticale",
     "landscape": "Orizzontale",
+    "preview": "Anteprima",
     "graphicNote": "I segmenti KOP e FUP escono come AWL generato.",
     "nothing": "Niente da stampare nella selezione.",
     "ok": "Stampa",
@@ -1124,6 +1144,7 @@
       "instanceOf": "Istanza di",
       "tagTable": "Tabella delle variabili",
       "watchTable": "Tabella di controllo",
+      "source": "Sorgente AWL",
       "constants": "Costanti",
       "xref": "Riferimenti incrociati",
       "number": "Numero",
@@ -1308,14 +1329,14 @@
       "KOP_RET_ON_RAIL": "Rete {{network}}: RET collegato direttamente alla barra: aggiungi una condizione davanti.",
       "KOP_EDGE_ON_RAIL": "Rete {{network}}: Il fronte ha bisogno di logica a sinistra: non può partire dalla barra.",
       "KOP_NOT_ON_RAIL": "Rete {{network}}: NOT ha bisogno di logica a sinistra: non può partire dalla barra.",
-      "KOP_FLOW_IN_BRANCH": "Rete {{network}}: Questo elemento trasforma il flusso e non può stare in un ramo parallelo con logica a sinistra: parte dalla barra o spostalo fuori dal ramo.",
-      "KOP_BOX_IN_PIN": "Rete {{network}}: Un box non può stare nella logica di un pin.",
-      "KOP_BOX_IN_PARALLEL": "Rete {{network}}: Un box non può stare dentro un ramo parallelo.",
-      "KOP_BOX_IN_TBRANCH": "Rete {{network}}: Un box non può stare in un ramo a T dopo il quale il flusso si dirama.",
+      "KOP_BOX_IN_PIN": "Rete {{network}}: Un box non può stare nella logica di un pin: calcolalo in un segmento prima, con una bobina su un merker, e usa nel pin un contatto di quel merker.",
+      "KOP_BOX_IN_PARALLEL": "Rete {{network}}: Un box non può stare dentro un ramo parallelo: mettilo in serie sulla linea principale (o all'inizio di un ramo a T) con una bobina su un merker dopo di lui, e usa nel ramo un contatto di quel merker.",
+      "KOP_BOX_IN_TBRANCH": "Rete {{network}}: Un box in un ramo a T sta solo al suo inizio: sposta la logica che lo precede nella serie prima del ramo, o mettilo in un segmento suo e riporta il risultato con un merker.",
       "KOP_BAD_LABEL": "Rete {{network}}: Etichetta «{{label}}» non valida: da 1 a 4 caratteri, il primo è una lettera.",
       "KOP_BAD_INSTANCE": "Rete {{network}}: L'istanza del box non è valida.",
       "KOP_MUST_BE_ALONE": "Rete {{network}}: Questa uscita deve essere la sola del suo punto: non può avere altre uscite in parallelo.",
       "KOP_TOO_MANY_LABELS": "Rete {{network}}: Troppe etichette di salto nel segmento.",
+      "KOP_LINE_BREAK": "Rete {{network}}: Un operando contiene un a capo: scrivilo su una riga sola.",
       "JL_TARGET": "L'etichetta di JL deve seguire la lista dei salti.",
       "JUMP_ALIGN": "La destinazione del salto non è allineata.",
       "JUMP_TOO_FAR": "Il salto è troppo lontano ({{words}} parole).",
@@ -1343,6 +1364,13 @@
     }
   },
   "step7": {
+    "pickFolder": "Scegli una cartella…",
+    "choice": {
+      "replace": "Sostituisci",
+      "rename": "Rinomina",
+      "renumber": "Rinumera",
+      "label": "Cosa fare di {{name}}"
+    },
     "menu": "Importa da STEP 7…",
     "title": "Importa da STEP 7",
     "filter": "Esportazioni di STEP 7 (*.awl, *.scl, *.sdf, *.seq, *.dif, *.asc)",
@@ -1433,6 +1461,7 @@
     }
   },
   "cpuPanel": {
+    "frce": "FRCE",
     "needSim": "Avvia la simulazione per usare il pannello",
     "run": "RUN",
     "stop": "STOP",
@@ -1474,7 +1503,9 @@
       "CANCELLAZIONE_TOTALE": "Cancellazione totale",
       "OB_RICHIAMATO": "OB d'evento richiamato",
       "SFC_NON_SIMULATA": "SFC non simulata",
-      "SFB_NON_SIMULATA": "SFB non simulato"
+      "SFB_NON_SIMULATA": "SFB non simulato",
+      "MESSAGGIO_UTENTE": "Messaggio del programma (SFC 52)",
+      "ALLARME_PERSO": "Allarme a tempo perso"
     },
     "ledOn": "acceso",
     "ledOff": "spento",
@@ -1488,6 +1519,19 @@
     "openDiag": "Apri Online e diagnostica"
   },
   "ioPanel": {
+    "modules": "Moduli della configurazione",
+    "moduleRack": "Rack {{rack}}, posto {{slot}}:",
+    "moduleStation": "Stazione {{station}}, posto {{slot}}:",
+    "modulePull": "Estrai",
+    "modulePlug": "Inserisci",
+    "force": "Forzamento",
+    "forceAddress": "Operando (I, Q, M)",
+    "forceValue": "Valore",
+    "forceAdd": "Forza",
+    "forceRemove": "Togli il forzamento di {{operand}}",
+    "forceClear": "Termina forzamento",
+    "forceBadAddress": "Operando non valido: si forzano solo I, Q e M (bit, byte, parola, doppia parola).",
+    "forceBadValue": "Valore non valido per l'operando (0/1 per un bit, intero o 16#… per gli altri).",
     "inputs": "Ingressi",
     "outputs": "Uscite",
     "noBytes": "Nessun byte: aggiungine uno con «+ byte».",
@@ -1771,14 +1815,14 @@
       "RET_ON_RAIL": "RET collegato direttamente alla barra: aggiungi una condizione davanti.",
       "EDGE_ON_RAIL": "Il fronte ha bisogno di logica a sinistra: non può partire dalla barra.",
       "NOT_ON_RAIL": "NOT ha bisogno di logica a sinistra: non può partire dalla barra.",
-      "FLOW_IN_BRANCH": "Questo elemento trasforma il flusso e non può stare in un ramo parallelo con logica a sinistra: parte dalla barra o spostalo fuori dal ramo.",
-      "BOX_IN_PARALLEL": "Un box non può stare dentro un ramo parallelo.",
-      "BOX_IN_TBRANCH": "Un box non può stare in un ramo a T dopo il quale il flusso si dirama.",
-      "BOX_IN_PIN": "Un box non può stare nella logica di un pin.",
+      "BOX_IN_PARALLEL": "Un box non può stare dentro un ramo parallelo: mettilo in serie sulla linea principale (o all'inizio di un ramo a T) con una bobina su un merker dopo di lui, e usa nel ramo un contatto di quel merker.",
+      "BOX_IN_TBRANCH": "Un box in un ramo a T sta solo al suo inizio: sposta la logica che lo precede nella serie prima del ramo, o mettilo in un segmento suo e riporta il risultato con un merker.",
+      "BOX_IN_PIN": "Un box non può stare nella logica di un pin: calcolalo in un segmento prima, con una bobina su un merker, e usa nel pin un contatto di quel merker.",
       "BAD_LABEL": "Etichetta «{{label}}» non valida: da 1 a 4 caratteri, il primo è una lettera.",
       "BAD_INSTANCE": "L'istanza del box non è valida.",
       "MUST_BE_ALONE": "Questa uscita deve essere la sola del suo punto: non può avere altre uscite in parallelo.",
-      "TOO_MANY_LABELS": "Troppe etichette di salto nel segmento."
+      "TOO_MANY_LABELS": "Troppe etichette di salto nel segmento.",
+      "LINE_BREAK": "Un operando contiene un a capo: scrivilo su una riga sola."
     },
     "palette": {
       "contactNo": "Contatto NA",
@@ -1915,6 +1959,12 @@
     },
     "cannotClose": "Impossibile chiudere il ramo qui: scegli un elemento che segue il ramo aperto, nella stessa serie.",
     "cannotDo": "Operazione non possibile in questo punto.",
+    "instanceDb": {
+      "title": "DB di istanza",
+      "text": "Il FB «{{fb}}» non ha un DB di istanza. Crearlo per il box CALL?"
+    },
+    "pinOptional": "Facoltativo: senza operando resta il valore nel DB di istanza.",
+    "pinRequired": "Obbligatorio: una FC vuole tutti i parametri.",
     "cannotNegate": "Qui non si nega: scegli un contatto, un confronto, un POS/NEG, un `>=1` o un cerchietto di negazione.",
     "cannotExtend": "La selezione multipla vale solo per elementi vicini della stessa serie.",
     "multiSelected": "{{n}} elementi selezionati.",
@@ -2038,6 +2088,7 @@
     "noOb": "Nessun OB nel programma.",
     "empty": "Nessun blocco nel programma.",
     "unreferenced": "Blocchi non usati",
+    "computed": "Richiami calcolati (destinazione non nota)",
     "recursion": "ricorsione",
     "open": "Apri il blocco",
     "expand": "Espandi {{name}}",
@@ -2101,6 +2152,7 @@
     "view": "Apri in sola lettura",
     "toProject": "Copia nella libreria di progetto",
     "deleteMessage": "Eliminare dalla libreria?",
+    "saveOnExit": "Salvare le modifiche alla libreria «{{name}}» prima di uscire?",
     "viewTitle": "{{name}} (sola lettura)",
     "conflictTitle": "Inserisci «{{name}}»",
     "conflictMessage": "Nel PLC alcuni nomi o numeri sono già usati. Scegliere cosa fare per ciascun oggetto.",
@@ -2246,6 +2298,8 @@
       "comment": "Commento",
       "text": "Testo"
     },
+    "stale": "Da rivedere",
+    "markReviewed": "Segna come rivista (il testo di modifica è cambiato dopo la traduzione)",
     "truncated": "Mostrate {{shown}} righe di {{total}}: restringi con il filtro.",
     "empty": "Nessun titolo o commento da tradurre.",
     "noColumns": "Mancano la colonna Key o le colonne delle lingue del progetto.",

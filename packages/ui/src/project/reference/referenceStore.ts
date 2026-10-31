@@ -1,14 +1,22 @@
 import { createStore, useStore } from 'zustand';
 import { findCpu } from '@baaportal/catalog';
-import { findDevice, type Project } from '@baaportal/project';
+import { createLibraryItem, findDevice, type PlcDevice, type Project } from '@baaportal/project';
 import type { StoreApi } from 'zustand/vanilla';
 import type { BaaBridge } from '../../bridge';
 import { t } from '../../i18n';
+import type { ReadOnlyObjects } from '../../components/ReadOnlyObjects';
 import { copyToClipboard, type ClipboardItem } from '../../services/clipboard';
 import { readProjectFile } from '../../services/projectService';
 import type { AppState } from '../../state/store';
 import { itemName, itemsOf, refsOfNodes, reportSkipped } from '../navigation/objectCommands';
 import { targetPlcId, type TreeArea } from '../navigation/treeIds';
+import {
+  defaultResolution,
+  findConflicts,
+  insertLibraryItem,
+  type Drop,
+  type Resolution,
+} from '../library/libraryInsert';
 import { areaOfItem, pasteObjects } from '../objectActions';
 
 /** Un progetto aperto per consultazione: letto una volta, mai modificato né salvato. */
@@ -150,4 +158,70 @@ export function copyIntoProject(
   });
   reportSkipped(store, got.items.length - pasted);
   return true;
+}
+
+/** Blocchi, UDT e tabelle dei nodi, congelati come il riferimento, per aprirli in sola lettura. */
+export function readOnlyObjectsOf(key: string, nodeIds: string[]): ReadOnlyObjects | null {
+  const got = itemsFromReference(key, nodeIds);
+  if (!got) return null;
+  return {
+    blocks: got.items.flatMap((i) => (i.type === 'block' ? [i.block] : [])),
+    udts: got.items.flatMap((i) => (i.type === 'udt' ? [i.udt] : [])),
+    tagTables: got.items.flatMap((i) => (i.type === 'tagTable' ? [i.table] : [])),
+  };
+}
+
+/**
+ * Trascinamento di oggetti di un riferimento su un PLC del progetto: come l'inserimento di un modello
+ * di libreria (dipendenze comprese; gli scontri di nome o di numero si risolvono con la scelta
+ * proposta: rinumera, rinomina o salta).
+ */
+export function insertFromReference(
+  store: StoreApi<AppState>,
+  key: string,
+  nodeIds: string[],
+  deviceId: string,
+  drop?: Drop,
+): void {
+  const ref = refStore.getState().list.find((r) => r.key === key);
+  const local = nodeIds.flatMap((q) => {
+    const u = unqualify(q);
+    return u && u.key === key ? [u.nodeId] : [];
+  });
+  const refs = refsOfNodes(local);
+  const src = ref && refs[0] && findDevice(ref.doc as Project, refs[0].deviceId);
+  const doc = store.getState().doc;
+  const target = doc && findDevice(doc.project, deviceId);
+  if (!src || !target) return;
+  const item = createLibraryItem(
+    src as PlcDevice,
+    refs.filter((r) => r.deviceId === src.id),
+    { newId: () => globalThis.crypto.randomUUID() },
+  );
+  if (!item) return;
+  const choices = new Map<string, Resolution>(
+    findConflicts(target, item).map((c) => [c.id, defaultResolution(c)]),
+  );
+  let done: ReturnType<typeof insertLibraryItem> | null = null;
+  store.getState().edit('history.libraryInsert', (p) => {
+    const d = findDevice(p, deviceId);
+    if (d) {
+      done = insertLibraryItem(
+        d,
+        item,
+        choices,
+        findCpu(d.cpu.typeId),
+        () => globalThis.crypto.randomUUID(),
+        drop,
+      );
+    }
+  });
+  const result = done as ReturnType<typeof insertLibraryItem> | null;
+  if (!result) return;
+  reportSkipped(store, result.skipped);
+  store.getState().pushMessage({
+    severity: 'info',
+    textKey: 'messages.libraryInserted',
+    params: { name: item.name, count: String(result.created.length) },
+  });
 }

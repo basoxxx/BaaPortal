@@ -22,6 +22,13 @@ describe('validateNetwork', () => {
     ]);
   });
 
+  it('LINE_BREAK: un a capo in operandi, pin o istanze (appunti, file) blocca la rete', () => {
+    expect(validateNetwork(net([c('a', 'M0.0\n= Q9.7')], [coil('q', 'Q 4.0\r')]))).toEqual([
+      { elemId: 'a', code: 'LINE_BREAK' },
+      { elemId: 'q', code: 'LINE_BREAK' },
+    ]);
+  });
+
   it('EMPTY_OPERAND: contatto, confronto, bobine, temporizzatore e salto senza operando', () => {
     const diags = validateNetwork(
       net(
@@ -89,18 +96,18 @@ describe('validateNetwork', () => {
     ]);
   });
 
-  it('FLOW_IN_BRANCH: NOT, (#) o fronte in un ramo parallelo con logica davanti', () => {
+  it('NOT, (#) e fronte in un ramo parallelo con logica davanti: ammessi, anche a inizio ramo', () => {
     const n: LadElem = { id: 'n', k: 'not' };
-    const p: LadElem = { id: 'p', k: 'parallel', branches: [[c('a')], [c('b'), n]] };
-    expect(validateNetwork(net([c('x'), p], [coil('q')]))).toEqual([
-      { elemId: 'n', code: 'FLOW_IN_BRANCH' },
-    ]);
-    // sulla barra il ramo parte dalla barra: ammesso
-    expect(validateNetwork(net([p], [coil('q')]))).toEqual([]);
-    // dopo il nodo di un ramo a T la logica davanti esiste sempre
+    const e: LadElem = { id: 'e', k: 'edge', dir: 'P', mem: 'M 1.0' };
+    const m: LadElem = { id: 'm', k: 'midline', op: 'M 2.0' };
+    const p: LadElem = { id: 'p', k: 'parallel', branches: [[e, c('a')], [c('b'), n], [m]] };
+    expect(validateNetwork(net([c('x'), p], [coil('q')]))).toEqual([]);
     const t: LadNode = { id: 't', series: [p], outs: [coil('q2')] };
-    expect(validateNetwork(net([c('x')], [coil('q'), t]))).toEqual([
-      { elemId: 'n', code: 'FLOW_IN_BRANCH' },
+    expect(validateNetwork(net([c('x')], [coil('q'), t]))).toEqual([]);
+    // sulla barra il ramo parte dalla barra: all'inizio del ramo restano errori
+    expect(validateNetwork(net([p], [coil('q')]))).toEqual([
+      { elemId: 'e', code: 'EDGE_ON_RAIL' },
+      { elemId: 'm', code: 'MIDLINE_ON_RAIL' },
     ]);
   });
 

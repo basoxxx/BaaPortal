@@ -14,7 +14,8 @@ import {
   removeElem,
   updateElem,
 } from '@baaportal/ladfbd';
-import type { BoxKind, InsertPoint, LadElem, LadNetwork, LadOut } from '@baaportal/ladfbd';
+import { ladElemSchema, ladNodeSchema, walk } from '@baaportal/ladfbd';
+import type { BoxKind, InsertPoint, LadElem, LadNetwork, LadNode, LadOut } from '@baaportal/ladfbd';
 import type { LadAction } from './ladKeys';
 import type { CallParams } from './ladOps';
 import {
@@ -24,6 +25,7 @@ import {
   findNodeById,
   newBox,
   cloneFresh,
+  cloneNodeFresh,
   nodeOfPoint,
   placeOf,
   rangeBetween,
@@ -33,8 +35,37 @@ export const LAD_DRAG_TYPE = 'application/x-baaportal-lad';
 /** Trascinamento di oggetti dall'albero del progetto (`beginDrag`), accettato per creare un CALL. */
 export const TREE_DRAG_TYPE = 'application/x-baaportal';
 const HISTORY_KEY = 'history.editLad';
-/** Appunti interni di KOP e FUP: una serie contigua di elementi copiata o tagliata. */
-let clipboard: LadElem[] = [];
+/**
+ * Appunti interni di KOP e FUP: elementi copiati o tagliati (in ordine di documento), da incollare
+ * in serie; oppure una serie con le sue uscite, da incollare come ramo a T (`node`).
+ */
+type Clip = { elems: LadElem[] } | { node: LadNode };
+let clipboard: Clip = { elems: [] };
+/** Marcatore del testo negli appunti di sistema: JSON `{ type, elems }`. */
+export const LAD_CLIP_TYPE = 'baaportal/lad-elems@1';
+
+/**
+ * Contenuto KOP/FUP dal testo degli appunti di sistema; `undefined` se il testo non è nostro o
+ * non è valido (JSON rotto, marcatore diverso, elementi o nodo che non passano lo schema).
+ */
+export function ladClipFromText(text: string): Clip | undefined {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+  if (!raw || typeof raw !== 'object' || (raw as { type?: unknown }).type !== LAD_CLIP_TYPE)
+    return undefined;
+  const { elems, node } = raw as { elems?: unknown; node?: unknown };
+  if (node !== undefined) {
+    const r = ladNodeSchema.safeParse(node);
+    return r.success ? { node: r.data } : undefined;
+  }
+  if (!Array.isArray(elems) || elems.length === 0) return undefined;
+  const ok = elems.map((e) => ladElemSchema.safeParse(e));
+  return ok.every((r) => r.success) ? { elems: ok.map((r) => r.data!) } : undefined;
+}
 
 export type LadSelection = { t: 'elem'; id: string } | { t: 'slot'; at: InsertPoint } | null;
 
@@ -51,7 +82,7 @@ export type LadEditOpts = {
   newId: () => string;
   callParams?: CallParams;
   onActive?: (api: LadInsertApi, active: boolean) => void;
-  callOfDrop?: (raw: string) => string | undefined;
+  callOfDrop?: (raw: string) => string | Promise<string | undefined> | undefined;
   /** Contenitore della vista: dopo una modifica il fuoco va all'elemento selezionato o a lui. */
   root: RefObject<HTMLElement | null>;
   /** Attributo `data-…` con l'id dell'elemento, per ritrovarlo nel DOM. */
@@ -213,37 +244,87 @@ export function useLadEdit(o: LadEditOpts) {
     return true;
   }
 
-  /** Elementi su cui agiscono elimina, copia e taglia: la selezione multipla o l'elemento solo. */
+  /** Ctrl/Cmd+clic: aggiunge o toglie `id` dalla selezione, anche lontano dagli altri. */
+  function toggle(id: string) {
+    const cur = multi?.ids ?? (sel?.t === 'elem' && sel.id !== rootId ? [sel.id] : []);
+    const ids = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
+    setStatus(ids.length > 1 ? t('lad.multiSelected', { n: ids.length }) : '');
+    setSelRaw(ids.length > 0 ? { t: 'elem', id: ids.at(-1)! } : null);
+    setMulti(ids.length > 1 ? { anchor: ids[0]!, ids } : null);
+    wantFocus.current = true;
+  }
+
+  /**
+   * Elementi su cui agiscono elimina, copia e taglia: la selezione multipla o l'elemento solo, in
+   * ordine di documento; un elemento dentro un altro scelto (ramo di un parallelo) conta col padre.
+   */
   function picked(): string[] {
-    if (multi) return multi.ids;
-    return sel?.t === 'elem' && sel.id !== rootId ? [sel.id] : [];
+    const ids = multi ? multi.ids : sel?.t === 'elem' && sel.id !== rootId ? [sel.id] : [];
+    if (ids.length < 2) return ids;
+    const inner = new Set<string>();
+    for (const id of ids) {
+      const e = findElem(net, id);
+      if (e && 'k' in e && (e.k === 'parallel' || e.k === 'box'))
+        for (const x of walk({ root: { id: '', series: [e], outs: [] } }))
+          if (x.id !== id && x.id !== '') inner.add(x.id);
+    }
+    const order = [...walk(net)].map((x) => x.id);
+    return ids.filter((id) => !inner.has(id)).sort((a, b) => order.indexOf(a) - order.indexOf(b));
   }
 
   function doDelete() {
     const ids = picked();
     if (ids.length === 0) return;
-    apply(() => ids.reduce((n, id) => removeElem(n, id, newId), net), null);
+    // un elemento già sparito con uno tolto prima (ramo svuotato) non c'è più: si salta
+    apply(() => ids.reduce((n, id) => (findElem(n, id) ? removeElem(n, id, newId) : n), net), null);
   }
 
   function clip(kind: 'copy' | 'cut' | 'paste') {
     if (kind === 'paste') {
-      if (readOnly || clipboard.length === 0) return;
-      const at = target().at;
-      const fresh = clipboard.map((e) => cloneFresh(e, newId));
-      apply(
-        () => fresh.reduce((n, e, i) => insertElem(n, { ...at, index: at.index + i }, e), net),
-        { t: 'elem', id: fresh.at(-1)!.id },
+      if (readOnly) return;
+      const { at, nodeId } = target();
+      const paste = (c: Clip) => {
+        if ('node' in c) {
+          const fresh = cloneNodeFresh(c.node, newId);
+          apply(() => addOutput(net, nodeId, fresh), {
+            t: 'elem',
+            id: fresh.outs[0]?.id ?? fresh.id,
+          });
+          return;
+        }
+        if (c.elems.length === 0) return;
+        const fresh = c.elems.map((e) => cloneFresh(e, newId));
+        apply(
+          () => fresh.reduce((n, e, i) => insertElem(n, { ...at, index: at.index + i }, e), net),
+          { t: 'elem', id: fresh.at(-1)!.id },
+        );
+      };
+      // gli appunti di sistema (anche da un'altra finestra); senza contenuto nostro, quelli interni
+      const sys = globalThis.navigator?.clipboard;
+      if (!sys?.readText) return paste(clipboard);
+      void sys.readText().then(
+        (text) => paste(ladClipFromText(text) ?? clipboard),
+        () => paste(clipboard),
       );
       return;
     }
     const ids = picked();
     if (ids.length === 0) return;
-    // solo elementi di serie: un'uscita incollata in serie farebbe una rete non valida
-    if (ids.some((id) => placeOf(net, id)?.t !== 'elem')) {
+    const isElem = (id: string) => placeOf(net, id)?.t === 'elem';
+    const elems = ids.filter(isElem).map((id) => structuredClone(findElem(net, id) as LadElem));
+    const outs = ids.filter((id) => !isElem(id)).map((id) => findElem(net, id));
+    // uscite da sole non si incollano (un'uscita in serie farebbe una rete non valida); con una
+    // serie diventano un ramo a T con quella serie
+    if (elems.length === 0 || outs.some((o) => !o || 'series' in o)) {
       setStatus(t('lad.cannotDo'));
       return;
     }
-    clipboard = ids.map((id) => structuredClone(findElem(net, id) as LadElem));
+    clipboard =
+      outs.length === 0
+        ? { elems }
+        : { node: { id: newId(), series: elems, outs: structuredClone(outs as LadOut[]) } };
+    const text = JSON.stringify({ type: LAD_CLIP_TYPE, ...clipboard });
+    void globalThis.navigator?.clipboard?.writeText?.(text).catch(() => undefined);
     setStatus(t('lad.copied', { n: ids.length }));
     if (kind === 'cut' && !readOnly) doDelete();
   }
@@ -280,7 +361,9 @@ export function useLadEdit(o: LadEditOpts) {
       const tree = dt.getData(TREE_DRAG_TYPE);
       const instance = tree ? o.callOfDrop?.(tree) : undefined;
       if (instance === undefined) return false;
-      insertCall(instance, at);
+      // un FB senza DB di istanza: il box entra solo dopo la risposta alla finestra
+      if (typeof instance === 'string') insertCall(instance, at);
+      else void instance.then((i) => i !== undefined && insertCall(i, at));
       return true;
     }
     let payload: { palette?: string; box?: BoxKind };
@@ -299,6 +382,7 @@ export function useLadEdit(o: LadEditOpts) {
     setSel,
     multi,
     extendTo,
+    toggle,
     clip,
     status,
     setStatus,

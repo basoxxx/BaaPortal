@@ -2,12 +2,20 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createCodeBlock, readBaap } from '@baaportal/project';
-import { expect, launchApp, mod, removeDir, test, writeFixtureProject } from './helpers';
+import {
+  expect,
+  launchApp,
+  mod,
+  removeDir,
+  stubMessageBox,
+  test,
+  writeFixtureProject,
+} from './helpers';
 
-// Editor KOP sull'app costruita: FC1 in KOP (I 0.0 in serie con I 0.1, bobina Q 4.0), OB1 in AWL con
-// CALL FC 1. Si controlla il disegno, l'AWL generato, il salvataggio e una compilazione senza errori.
-// La corsa nel simulatore (Q 4.0 segue I 0.0 e I 0.1) è provata da packages/project/test/kopCompile.test.ts:
-// pilotarla dalla tabella di controllo qui sarebbe fragile.
+// Editor KOP sull'app costruita: FC1 in KOP (I 0.0 in serie con I 0.1, bobina Q 4.0), OB1 in AWL che
+// scrive I 0.0 e I 0.1 a 1 nell'immagine di processo e chiama FC 1. Si controlla il disegno, l'AWL
+// generato, il salvataggio, una compilazione senza errori, il caricamento nel simulatore in RUN e
+// l'osservazione attiva su FC1 (le combinazioni di ingressi sono in packages/project/test/kopCompile.test.ts).
 test.setTimeout(90_000);
 
 let tmp: string;
@@ -18,16 +26,20 @@ test.afterEach(() => {
   removeDir(tmp);
 });
 
-test('KOP: disegna un contatto in serie e una bobina, vede l’AWL, salva e compila', async () => {
+test('KOP: disegna, vede l’AWL, salva, compila e osserva il blocco nel simulatore', async () => {
   const file = join(tmp, 'kop.baap');
   writeFixtureProject(file, (dev) => {
+    // Tempo di ciclo massimo al limite (6 s): con la macchina carica il worker del simulatore può
+    // restare fermo oltre i 150 ms di serie e la CPU andrebbe in STOP (TEMPO_CICLO_SUPERATO).
+    dev.properties.cycle.maxCycleMs = 6000;
     dev.blocks = dev.blocks.filter((b) => b.kind !== 'FB' || b.name !== 'Nastro');
     dev.blocks.push(createCodeBlock({ kind: 'FC', number: 1, name: 'Logica', language: 'KOP' }));
     const ob = dev.blocks.find((b) => b.kind === 'OB' && b.number === 1);
     if (!ob || ob.kind === 'DB' || ob.kind === 'IDB') throw new Error('OB1 mancante');
-    ob.networks[0]!.source = 'CALL FC 1';
+    ob.networks[0]!.source = 'SET\n= I 0.0\n= I 0.1\nCALL FC 1';
   });
-  const { page } = await launchApp({ args: [file] });
+  const { app, page } = await launchApp({ args: [file] });
+  await stubMessageBox(app, 0); // «Avviare la CPU?» → Sì
   await page.getByTestId('link-project-view').click();
   await expect(page.getByTestId('menu-bar')).toBeVisible();
 
@@ -86,4 +98,16 @@ test('KOP: disegna un contatto in serie e una bobina, vede l’AWL, salva e comp
     timeout: 30_000,
   });
   await expect(page.locator('[data-testid="compile-row"][data-status="error"]')).toHaveCount(0);
+
+  // Nel simulatore: caricamento, RUN e osservazione di FC1.
+  await page.getByRole('button', { name: 'Simulazione', exact: true }).click();
+  await expect(page.getByTestId('sim-indicator')).toHaveText('Simulazione: STOP');
+  await page.getByRole('button', { name: 'Carica nel dispositivo', exact: true }).click();
+  await expect(page.getByTestId('sim-indicator')).toHaveText('Simulazione: RUN');
+  await page.getByRole('button', { name: 'Osserva programma', exact: true }).click();
+  await expect(page.getByTestId('monitor-bar')).toContainText('Osservazione attiva');
+  // I 0.0 e I 0.1 a 1 (le scrive OB1): i due contatti chiusi e la bobina a 1.
+  await expect(page.getByRole('button', { name: /^Contatto NA I 0\.0 \(stato 1/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Contatto NA I 0\.1 \(stato 1/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Bobina Q 4\.0 \(stato 1/ })).toBeVisible();
 });

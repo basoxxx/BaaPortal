@@ -313,6 +313,7 @@ describe('Carica nel dispositivo (PLC vero)', () => {
 
   it('errore a metà dopo STOP: «CPU lasciata in STOP»', async () => {
     const { app } = await setupOnline([['OB', 35]]);
+    app.bridge.questionAnswers.push(false);
     app.bridge.plcDownloadResults.push({
       ok: false,
       loaded: [],
@@ -325,7 +326,20 @@ describe('Carica nel dispositivo (PLC vero)', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: 'Arresta la CPU' }));
     await press();
     expect(await screen.findByTestId('download-result')).toHaveTextContent('CPU lasciata in STOP');
-    expect(app.bridge.questions).toHaveLength(0);
+    // Fermata da noi: si propone il riavvio, avvisando del programma parziale; «No» → nessun RUN.
+    expect(app.bridge.questions).toHaveLength(1);
+    expect(app.bridge.questions[0]!.message).toContain('programma parziale');
+  }, 30_000);
+
+  it('errore a metà dopo STOP, riavvio accettato → RUN (con la conferma nativa del main)', async () => {
+    const { app } = await setupOnline([['OB', 35]]);
+    app.bridge.plcDownloadResults.push({ ok: false, loaded: [], deleted: [], error: 'x' });
+    app.bridge.questionAnswers.push(true);
+    await runDownload(app);
+    await ok();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Arresta la CPU' }));
+    await press();
+    await waitFor(() => expect(app.bridge.plcWriteLog).toEqual(['STOP', 'download', 'RUN']));
   }, 30_000);
 
   it('doppio avvio: una sola scrittura', async () => {
@@ -392,6 +406,9 @@ describe('Carica nel dispositivo: esiti dopo un STOP', () => {
     const res = await screen.findByTestId('download-result');
     expect(res).toHaveTextContent('Caricamento annullato. CPU lasciata in STOP.');
     expect(res).not.toHaveTextContent('nessuna modifica');
+    // Annullata la conferma «Carica»: non si è scritto nulla, il programma non è parziale.
+    expect(app.bridge.questions.at(-1)!.message).toContain('non è stato scritto nulla');
+    expect(app.bridge.questions.at(-1)!.message).not.toContain('parziale');
   }, 30_000);
 
   it('collegamento perso dopo il STOP riuscito: «CPU arrestata, nessun blocco caricato»', async () => {

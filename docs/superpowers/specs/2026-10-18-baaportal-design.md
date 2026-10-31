@@ -46,31 +46,38 @@ L'interfaccia deve ricalcare il più possibile quella di TIA Portal, così chi l
 ## 5. Vincoli
 
 ### Legali (sviluppo "clean room")
+
 Fonti ammesse:
+
 - manuali Siemens **pubblici**: AWL/STL, KOP, FUP, SCL per S7-300/400, "Software di sistema per S7-300/400 – Funzioni standard e di sistema", manuali delle CPU 31x;
 - documentazione online pubblica di TIA Portal (es. docs.tia.siemens.cloud), da usare **solo** per layout, nomi e comportamento dell'interfaccia;
 - progetti open source come documentazione di protocollo e formati: snap7 (LGPL-3), libnodave, DotNetSiemensPLCToolBoxLibrary (LGPL-2.1), il dissector S7comm di Wireshark (GPL). **Non si copia codice da questi progetti** dentro BaaPortal: si leggono come documentazione e si scrive un'implementazione nostra in TypeScript;
 - i blocchi caricati dai PLC della ditta e il traffico di rete tra BaaPortal e quei PLC. Analizzarli è lecito, perché serve all'interoperabilità con hardware di proprietà.
 
 ### Piattaforme
+
 - Windows 10/11 x64; macOS 13+ (Apple Silicon e Intel).
 - Linux viene "gratis" con la tecnologia scelta, ma non viene testato né garantito.
 
 ### Lingua
+
 - Interfaccia in italiano, con i termini della versione italiana di TIA Portal.
 - Tutti i testi in file di traduzione, così l'inglese si aggiunge senza toccare il codice.
 
 ### Sicurezza sulle macchine
+
 - Ogni funzione che scrive nel PLC (caricamento, RUN/STOP, forzamento, scrittura variabili) viene provata prima su una **CPU S7-300 di prova** fornita dalla ditta, con collegamento Ethernet (CPU PN oppure CP 343-1). Mai prima su una macchina in produzione.
 - Il simulatore è il primo banco di prova di ogni programma.
 
 ### Firma degli installatori
+
 - Gli installatori iniziali **non sono firmati**: per uso interno basta autorizzarli al primo avvio (macOS 13–14: tasto destro → Apri; macOS 15+: Impostazioni di Sistema → Privacy e sicurezza → "Apri comunque", oppure `xattr -dr com.apple.quarantine /Applications/BaaPortal.app`; un dmg costruito in locale non è in quarantena; Windows: "Esegui comunque").
 - La firma (Apple Developer ID, certificato Windows) si aggiunge se e quando la ditta vuole distribuirlo più largamente.
 
 ## 6. Decisioni prese
 
 ### Prese dall'utente
+
 - BaaPortal è scritto **da zero**, per **Windows e macOS**.
 - Interfaccia **simile a TIA Portal**.
 - PLC di riferimento: **S7-300**.
@@ -81,6 +88,7 @@ Fonti ammesse:
 - Caricamenti provati prima su una **CPU di prova**.
 
 ### Scelte del progettista (modificabili su richiesta)
+
 - **Tecnologia**: Electron + TypeScript + React. Un solo programma per Windows e macOS, adatto a un'interfaccia complessa con pannelli.
 - **Comunicazione S7 scritta in TypeScript puro**, senza librerie native: niente da ricompilare per ogni sistema operativo, pieno controllo su errori e tempi.
 - **Catena di compilazione unica**: KOP, FUP e SCL si traducono in AWL, e l'AWL si traduce in MC7. È lo stesso schema degli strumenti Siemens classici, e AWL e MC7 si corrispondono quasi uno a uno.
@@ -95,6 +103,7 @@ Fonti ammesse:
 - **Lettore di schede / memoria USB (scrittura delle Micro Memory Card)**: escluso, perché il formato della scheda non è documentato e serve un programmatore Siemens. Il programma si carica via rete.
 
 ### Decisioni sulle domande aperte (delegate al progettista dall'utente)
+
 - **Collegamento alle CPU**:
   - si supportano dalla tappa 3 sia le CPU con Ethernet integrata (PN) sia quelle con CP 343-1;
   - sempre dalla tappa 3 si supportano gli **adattatori/gateway Ethernet-MPI/DP che parlano ISO-on-TCP (RFC 1006)**: per il client S7 cambiano solo i parametri di connessione (indirizzo MPI/DP di destinazione);
@@ -105,7 +114,7 @@ Fonti ammesse:
   - consigliata una **CPU 315-2 PN/DP**, che ha sia Ethernet sia MPI/DP;
   - dalla tappa 3 si aggiunge al banco un CP 343-1, così si collaudano entrambe le vie Ethernet;
   - la CPU di prova serve **dalla tappa 1**, e la tappa 1 non si chiude senza i test di conformità su CPU reale (§10).
-- **Sostituzione di CPU**: si assume che sia rara. Sugli S7-300 con Micro Memory Card basta spostare la scheda nella CPU nuova. Come rete di sicurezza, il *Backup online* della tappa 3 copia anche i blocchi di sistema (SDB) così come sono e li sa ricaricare, senza bisogno di capirne il formato (da verificare sulla CPU di prova). Il caricamento di una configurazione hardware *nuova* e l'assegnazione dell'IP a una CPU vuota restano alla tappa 6.
+- **Sostituzione di CPU**: si assume che sia rara. Sugli S7-300 con Micro Memory Card basta spostare la scheda nella CPU nuova. Come rete di sicurezza, il _Backup online_ della tappa 3 copia anche i blocchi di sistema (SDB) così come sono e li sa ricaricare, senza bisogno di capirne il formato (da verificare sulla CPU di prova). Il caricamento di una configurazione hardware _nuova_ e l'assegnazione dell'IP a una CPU vuota restano alla tappa 6.
 - **Compatibilità con gli strumenti Siemens**: i blocchi caricati con BaaPortal devono aprirsi correttamente in STEP 7 / TIA Portal, almeno in AWL e con l'interfaccia giusta. Per questo:
   - testata del blocco (linguaggio, autore, famiglia, nome, versione) e tabella delle reti rispettano le convenzioni viste nei blocchi della ditta;
   - il codice generato da KOP/FUP segue gli schemi che STEP 7 riconosce, ricavati dai manuali pubblici e dai blocchi caricati dai PLC della ditta, così si riapre in KOP/FUP;
@@ -114,28 +123,30 @@ Fonti ammesse:
 ## 7. Architettura
 
 ### Processi
+
 - **Processo principale (Electron main)**: file system, comunicazione con i PLC, finestre, menu nativi.
 - **Interfaccia (renderer, React)**: tutto ciò che si vede.
 - **Worker** separati per compilatore e simulatore, così l'interfaccia non si blocca mai.
 
 ### Moduli (monorepo, un pacchetto ciascuno, ciascuno testabile da solo)
 
-| Modulo | Compito |
-|---|---|
-| `app` | Shell Electron, finestre, menu, installatori |
-| `ui` | Interfaccia React: Vista portale, Vista progetto, editor, tabelle |
-| `project` | Modello del progetto, salvataggio/apertura `.baap`, annulla/ripeti |
-| `s7-types` | Tipi di dati S7 (BOOL…DT, STRING, ARRAY, STRUCT, UDT), aree e indirizzi (I, Q, M, DB, L, T, C, P) |
-| `awl` | Parser, controllo semantico e risoluzione simboli dell'AWL |
-| `scl` | Parser e compilatore SCL → AWL |
-| `ladfbd` | Modello di reti KOP/FUP, traduzione KOP/FUP ↔ AWL |
-| `mc7` | Codificatore AWL → MC7, decodificatore MC7 → AWL, formato del blocco (testata, interfaccia, codice, tabella reti) |
-| `sim` | Simulatore CPU S7-300: esecuzione MC7, ciclo OB, temporizzatori, contatori, immagini di processo, SFC/SFB principali |
-| `s7comm` | Client S7 su ISO-on-TCP (porta 102): connessione, lettura/scrittura variabili, SZL, elenco/informazioni blocchi, carica nel e dal dispositivo, cancellazione blocchi, RUN/STOP, ora, buffer di diagnostica |
-| `catalog` | Catalogo delle CPU e dei moduli S7-300 (dati tecnici da manuali pubblici) |
-| `importers` | Importazione/esportazione: sorgenti AWL/SCL, tabelle variabili (xlsx/csv), progetti STEP 7 V5.5 (.s7p) |
+| Modulo      | Compito                                                                                                                                                                                                    |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `app`       | Shell Electron, finestre, menu, installatori                                                                                                                                                               |
+| `ui`        | Interfaccia React: Vista portale, Vista progetto, editor, tabelle                                                                                                                                          |
+| `project`   | Modello del progetto, salvataggio/apertura `.baap`, annulla/ripeti                                                                                                                                         |
+| `s7-types`  | Tipi di dati S7 (BOOL…DT, STRING, ARRAY, STRUCT, UDT), aree e indirizzi (I, Q, M, DB, L, T, C, P)                                                                                                          |
+| `awl`       | Parser, controllo semantico e risoluzione simboli dell'AWL                                                                                                                                                 |
+| `scl`       | Parser e compilatore SCL → AWL                                                                                                                                                                             |
+| `ladfbd`    | Modello di reti KOP/FUP, traduzione KOP/FUP ↔ AWL                                                                                                                                                          |
+| `mc7`       | Codificatore AWL → MC7, decodificatore MC7 → AWL, formato del blocco (testata, interfaccia, codice, tabella reti)                                                                                          |
+| `sim`       | Simulatore CPU S7-300: esecuzione MC7, ciclo OB, temporizzatori, contatori, immagini di processo, SFC/SFB principali                                                                                       |
+| `s7comm`    | Client S7 su ISO-on-TCP (porta 102): connessione, lettura/scrittura variabili, SZL, elenco/informazioni blocchi, carica nel e dal dispositivo, cancellazione blocchi, RUN/STOP, ora, buffer di diagnostica |
+| `catalog`   | Catalogo delle CPU e dei moduli S7-300 (dati tecnici da manuali pubblici)                                                                                                                                  |
+| `importers` | Importazione/esportazione: sorgenti AWL/SCL, tabelle variabili (xlsx/csv), progetti STEP 7 V5.5 (.s7p)                                                                                                     |
 
 ### Flusso
+
 ```
 editor (KOP/FUP/AWL/SCL) → AST → controllo (simboli, tipi, indirizzi)
    → AWL intermedio → MC7 + testata e interfaccia del blocco
@@ -148,14 +159,16 @@ PLC → carica dal dispositivo → MC7 → decodificatore → AWL (→ KOP/FUP q
 Riferimento: la struttura dell'interfaccia descritta nella documentazione pubblica di TIA Portal, in italiano. I nomi qui sotto sono quelli da usare.
 
 ### 8.1 Vista portale (all'avvio)
-- **Portali** a sinistra: *Avvio*, *Dispositivi e reti*, *Programmazione PLC*, *Online e diagnostica*. *Visualizzazione* compare con la tappa 8.
-- **Operazioni del portale selezionato** al centro. Per *Avvio*: Apri progetto esistente, Crea nuovo progetto, Migra progetto (= importa), Chiudi progetto, Primi passi, Software installato, Guida, Lingua dell'interfaccia utente.
+
+- **Portali** a sinistra: _Avvio_, _Dispositivi e reti_, _Programmazione PLC_, _Online e diagnostica_. _Visualizzazione_ compare con la tappa 8.
+- **Operazioni del portale selezionato** al centro. Per _Avvio_: Apri progetto esistente, Crea nuovo progetto, Migra progetto (= importa), Chiudi progetto, Primi passi, Software installato, Guida, Lingua dell'interfaccia utente.
 - **Finestra di selezione** a destra: il contenuto cambia con l'operazione scelta, per esempio l'elenco dei progetti recenti o il modulo di creazione di un progetto.
 - **Link "Vista progetto"** in basso a sinistra.
 - **Progetto aperto** in basso: nome e percorso.
 - Aspetto: sfondo scuro sfumato con accento petrolio/turchese, come lo stile di TIA Portal, ma con grafica nostra.
 
 ### 8.2 Vista progetto (13 elementi, come TIA Portal)
+
 1. **Barra del titolo**: nome del progetto.
 2. **Barra dei menu**: Progetto, Modifica, Visualizza, Inserisci, Online, Opzioni, Strumenti, Finestra, Guida.
 3. **Barra degli strumenti**: Nuovo, Apri, Salva, Stampa, Taglia/Copia/Incolla/Elimina, Annulla/Ripeti, Compila, Carica nel dispositivo, Carica dal dispositivo, Avvia simulazione, Collegamento online, Interrompi collegamento online, Dispositivi accessibili, Avvia/Arresta CPU, Dividi area di lavoro, Ricerca.
@@ -179,24 +192,27 @@ Riferimento: la struttura dell'interfaccia descritta nella documentazione pubbli
    - Accessi online
 
    Ogni oggetto ha a destra l'icona di stato: compilato, da compilare, errore e, online, i simboli di confronto (uguale / diverso / solo offline / solo online).
+
 5. **Progetti di riferimento**: un progetto aperto in sola lettura, da cui copiare.
 6. **Vista dettagli**: contenuto dell'oggetto selezionato nell'albero, per esempio le variabili di una tabella, da trascinare negli editor.
 7. **Area di lavoro**: gli editor. Si può dividere in orizzontale/verticale e staccare in finestra separata.
 8. **Barre di divisione** con frecce per mostrare/nascondere i pannelli; ogni pannello si può fissare o nascondere automaticamente.
 9. **Finestra di ispezione**, con tre schede:
-   - *Proprietà*: proprietà modificabili dell'oggetto selezionato;
-   - *Informazioni*: sottoschede Generale, Riferimenti incrociati, Compila, con i messaggi cliccabili che portano al punto dell'errore;
-   - *Diagnostica*: eventi di sistema e di diagnostica.
+   - _Proprietà_: proprietà modificabili dell'oggetto selezionato;
+   - _Informazioni_: sottoschede Generale, Riferimenti incrociati, Compila, con i messaggi cliccabili che portano al punto dell'errore;
+   - _Diagnostica_: eventi di sistema e di diagnostica.
 10. **Link "Vista portale"** in basso a sinistra.
 11. **Barra degli editor**: un pulsante per ogni editor aperto; quelli dello stesso tipo si raggruppano.
 12. **Barra di stato**: avanzamento delle operazioni in corso con pulsante di interruzione; altrimenti l'ultimo messaggio.
 13. **Task card** a destra, a schede verticali:
-   - *Istruzioni*: Preferiti, Istruzioni di base, Istruzioni avanzate, Comunicazione, Pacchetti opzionali;
-   - *Test*: Pannello di comando CPU, Stack di chiamata;
-   - *Task*: Trova e sostituisci;
-   - *Librerie*: Libreria di progetto, Librerie globali.
+
+- _Istruzioni_: Preferiti, Istruzioni di base, Istruzioni avanzate, Comunicazione, Pacchetti opzionali;
+- _Test_: Pannello di comando CPU, Stack di chiamata;
+- _Task_: Trova e sostituisci;
+- _Librerie_: Libreria di progetto, Librerie globali.
 
 ### 8.3 Editor
+
 - **Editor di blocco**, come in TIA:
   - interfaccia del blocco in alto (Input, Output, InOut, Static, Temp, con Nome, Tipo di dati, Valore iniziale, Commento);
   - barra delle istruzioni preferite;
@@ -208,15 +224,19 @@ Riferimento: la struttura dell'interfaccia descritta nella documentazione pubbli
 - **Configurazione dispositivi** (tappa 6): Vista dispositivi (rack S7-300 con posti connettore), Vista di rete, Panoramica dispositivi, catalogo hardware nella task card.
 
 ### 8.4 Modalità online
+
 Come in TIA Portal:
+
 - barra del titolo e intestazioni degli editor arancioni quando si è online;
 - simboli di confronto online/offline nell'albero;
 - in osservazione, in KOP/FUP i collegamenti diventano verdi (continui) dove passa corrente e blu tratteggiati dove non passa, e in AWL compaiono le colonne RLO/STA/ACCU1/ACCU2/Stato.
 
 ### 8.5 Scorciatoie
+
 Le stesse di TIA Portal. Il costruttore le verifica sulla documentazione pubblica: per esempio Ctrl+S salva, Ctrl+B compila, Ctrl+L carica nel dispositivo, Ctrl+K collegamento online, Ctrl+M interrompi collegamento online. Su macOS Ctrl diventa ⌘.
 
 ### 8.6 Aspetto
+
 - Tema chiaro grigio come TIA Portal, con densità alta (righe compatte).
 - Le icone sono **disegnate da zero** ma con lo stesso significato e lo stesso codice colore per tipo di oggetto (OB, FB, FC, DB, UDT, tabelle variabili…), così l'occhio di chi conosce TIA le riconosce.
 
@@ -225,6 +245,7 @@ Le stesse di TIA Portal. Il costruttore le verifica sulla documentazione pubblic
 Ogni tappa si chiude solo quando i criteri "Fatto quando" sono verificati.
 
 ### Tappa 1 — Fondamenta: interfaccia, progetto, AWL, compilatore
+
 - Vista portale e Vista progetto complete (§8.1, §8.2) con tutti i pannelli, divisioni, nascondi/mostra, barra degli editor e barra di stato.
 - Progetto: nuovo, apri, salva, salva con nome, chiudi, progetti recenti, archivia/ritira archivio, proprietà del progetto, salvataggio di recupero automatico.
 - Annulla/ripeti, taglia/copia/incolla, trascinamento, trova e sostituisci.
@@ -234,7 +255,7 @@ Ogni tappa si chiude solo quando i criteri "Fatto quando" sono verificati.
 - Tipi di dati PLC (UDT).
 - Blocchi OB, FB, FC, DB globali, DB di istanza, con interfaccia, multi-istanza, protezione know-how (flag del blocco).
 - Editor AWL completo, con tutte le istruzioni AWL dell'S7-300.
-- Compilazione (solo modifiche / tutto) AWL → MC7, con errori e avvisi in *Informazioni → Compila*.
+- Compilazione (solo modifiche / tutto) AWL → MC7, con errori e avvisi in _Informazioni → Compila_.
 - Decodificatore MC7 → AWL, necessario per i test di andata e ritorno.
 - Definizioni (interfaccia) di tutte le SFC/SFB dell'S7-300 elencate nel manuale pubblico, richiamabili dai blocchi.
 - Sorgenti esterne AWL: genera blocchi da sorgente / genera sorgente dai blocchi, nel formato di testo standard Siemens che anche TIA Portal e STEP 7 esportano.
@@ -243,16 +264,18 @@ Ogni tappa si chiude solo quando i criteri "Fatto quando" sono verificati.
 - Installatori Windows e macOS.
 
 **Fatto quando:**
+
 - un progetto con OB1, FB/FC/DB e tabelle variabili si crea, si salva, si riapre e si compila;
 - l'MC7 prodotto passa i test di andata e ritorno (§10);
 - l'interfaccia ha tutti gli elementi di §8.1–8.2 e funziona su Windows e macOS.
 
 ### Tappa 2 — Simulatore (equivalente PLCSIM)
+
 - CPU simulata S7-300: STOP/RUN, cancellazione totale, OB1 ciclico, OB100 all'avvio, OB di schedulazione orologio (OB35) e di errore principali (OB80, OB82, OB85, OB86, OB121, OB122).
 - Esecuzione MC7 completa: parola di stato (RLO, STA, OR, OS, OV, CC0/CC1, BR, /FC), ACCU1/ACCU2, registri di indirizzo AR1/AR2, registri DB, stack L, stack di annidamento.
 - Temporizzatori S5 (SI, SV, SE, SS, SA), contatori (ZV, ZR), temporizzatori/contatori IEC (SFB 0–5), merker di clock.
 - SFC/SFB più usati simulati (SFC 0, 1, 20, 21, 46, 51 per le SZL principali, ecc.). Le altre, se richiamate, danno un avviso chiaro "non simulata".
-- Pannello di comando CPU nella task card *Test*.
+- Pannello di comando CPU nella task card _Test_.
 - Pannello I/O del simulatore: forzare ingressi, vedere uscite.
 - Osservazione del programma in AWL; tabelle di controllo sul simulatore.
 - Carica nel simulatore come se fosse un PLC (stesso percorso del caricamento reale).
@@ -260,6 +283,7 @@ Ogni tappa si chiude solo quando i criteri "Fatto quando" sono verificati.
 **Fatto quando:** una batteria di programmi di prova, scritti a partire dagli esempi dei manuali pubblici, dà nel simulatore i risultati attesi istruzione per istruzione.
 
 ### Tappa 3 — Collegamento a S7-300 reali
+
 - Dispositivi accessibili (scansione della sottorete e IP manuale, §6), collegamento online / interruzione.
 - Collegamento diretto (CPU PN, CP 343-1) e tramite gateway Ethernet-MPI/DP RFC 1006 (§6).
 - Carica nel dispositivo, con finestra di confronto e conferma (§4), anche di singoli blocchi.
@@ -271,10 +295,12 @@ Ogni tappa si chiude solo quando i criteri "Fatto quando" sono verificati.
 - Backup online, compresi i blocchi di sistema (SDB) copiati così come sono, e ripristino (§6).
 
 **Fatto quando:**
+
 - sulla CPU di prova un programma creato in BaaPortal si carica, va in RUN, si osserva e si ricarica identico;
 - un programma esistente della ditta si carica dal PLC, si ricodifica identico byte per byte e si ricarica senza differenze.
 
 ### Tappa 4 — KOP e FUP
+
 - Editor grafici KOP e FUP con tutte le istruzioni di base S7-300: contatti, bobine, set/reset, fronti, temporizzatori, contatori, confronto, matematica, conversione, trasferimento, logica a parole, scorrimento/rotazione, salti, richiami di blocco.
 - Cambio linguaggio di un segmento KOP ↔ FUP ↔ AWL, come in STEP 7: AWL → KOP/FUP solo quando il codice è rappresentabile, altrimenti il segmento resta in AWL.
 - Visualizzazione in KOP/FUP dei blocchi caricati dal PLC, quando rappresentabili.
@@ -283,6 +309,7 @@ Ogni tappa si chiude solo quando i criteri "Fatto quando" sono verificati.
 **Fatto quando:** reti KOP/FUP di prova compilano in AWL equivalente a quello atteso, e girano identiche nel simulatore e sulla CPU di prova.
 
 ### Tappa 5 — SCL
+
 - Editor SCL e compilatore SCL → AWL → MC7: IF, CASE, FOR, WHILE, REPEAT, espressioni, richiami di blocco, accesso a DB/UDT/ARRAY/STRUCT.
 - Sorgenti esterne SCL.
 - Osservazione SCL.
@@ -290,6 +317,7 @@ Ogni tappa si chiude solo quando i criteri "Fatto quando" sono verificati.
 **Fatto quando:** i programmi SCL di prova danno nel simulatore e sulla CPU di prova gli stessi risultati della loro versione AWL scritta a mano.
 
 ### Tappa 6 — Configurazione dispositivi e reti
+
 - Vista dispositivi del rack S7-300: CPU, PS, SM digitali/analogici, FM, CP.
 - Catalogo hardware dai manuali pubblici, con indirizzi I/O automatici e modificabili e proprietà dei moduli.
 - Vista di rete e Panoramica dispositivi, configurazione indirizzi PROFINET/MPI/PROFIBUS, periferia decentrata ET 200 (quanto basta per gli impianti della ditta).
@@ -297,6 +325,7 @@ Ogni tappa si chiude solo quando i criteri "Fatto quando" sono verificati.
 - **Da verificare:** il caricamento nel PLC della configurazione hardware (blocchi di sistema SDB) ha un formato non documentato pubblicamente. Si studia analizzando solo ciò che sta sul PLC della ditta. Finché non è verificato, la configurazione hardware resta un documento offline e serve per indirizzi e controlli, mentre il programma si carica normalmente.
 
 ### Tappa 7 — Completamento e strumenti per la manutenzione
+
 - Riferimenti incrociati, struttura di richiamo, struttura delle dipendenze, assegnazione (uso di I/Q/M/T/C), occupazione memoria.
 - Ricablaggio (sostituzione di indirizzi in tutto il programma).
 - Librerie di progetto e librerie globali.
@@ -307,9 +336,11 @@ Ogni tappa si chiude solo quando i criteri "Fatto quando" sono verificati.
 - Guida in linea di BaaPortal.
 
 ### Tappa 8 — HMI (progetto separato)
+
 Pagine operatore e runtime. Si progetta a parte, con il suo documento, dopo la tappa 7.
 
 ### Tappa 9 — Estensioni
+
 GRAPH, regolatori PID (equivalenti funzionali scritti da zero), punti di arresto sulle CPU che li supportano, supporto S7-400 (stesso MC7), gateway Ethernet-MPI con protocollo proprietario.
 
 ## 10. Qualità e test
@@ -324,13 +355,13 @@ GRAPH, regolatori PID (equivalenti funzionali scritti da zero), punti di arresto
 
 ## 11. Rischi e incognite
 
-| Rischio | Gestione |
-|---|---|
-| Codifica MC7 di tutte le istruzioni: le informazioni pubbliche sono parziali | Decodificatori open source come documentazione, poi andata e ritorno su blocchi reali; la CPU di prova rifiuta blocchi errati |
-| Sequenza esatta di caricamento nel PLC (richiesta, trasferimento, fine, inserimento blocco) | Documentata da snap7 e Wireshark; verifica sulla CPU di prova |
-| I blocchi caricati dal PLC non hanno simboli né commenti | Previsto: si recuperano importando sorgenti, tabelle variabili o progetti .s7p (tappe 1 e 7) |
-| Configurazione hardware (SDB) non documentata | Tappa 6 la tratta come "da verificare"; il programma si carica comunque |
-| Mole di lavoro: TIA Portal è un prodotto enorme | Tappe chiuse una alla volta; ogni tappa è già utilizzabile da sola |
+| Rischio                                                                                     | Gestione                                                                                                                      |
+| ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Codifica MC7 di tutte le istruzioni: le informazioni pubbliche sono parziali                | Decodificatori open source come documentazione, poi andata e ritorno su blocchi reali; la CPU di prova rifiuta blocchi errati |
+| Sequenza esatta di caricamento nel PLC (richiesta, trasferimento, fine, inserimento blocco) | Documentata da snap7 e Wireshark; verifica sulla CPU di prova                                                                 |
+| I blocchi caricati dal PLC non hanno simboli né commenti                                    | Previsto: si recuperano importando sorgenti, tabelle variabili o progetti .s7p (tappe 1 e 7)                                  |
+| Configurazione hardware (SDB) non documentata                                               | Tappa 6 la tratta come "da verificare"; il programma si carica comunque                                                       |
+| Mole di lavoro: TIA Portal è un prodotto enorme                                             | Tappe chiuse una alla volta; ogni tappa è già utilizzabile da sola                                                            |
 
 ## 12. Lasciato al costruttore
 
@@ -344,63 +375,63 @@ GRAPH, regolatori PID (equivalenti funzionali scritti da zero), punti di arresto
 
 ## Appendice A — Mappa delle funzioni TIA Portal (per S7-300) → tappa
 
-| Area | Funzione | Tappa |
-|---|---|---|
-| Progetto | Nuovo, apri, salva, salva con nome, chiudi, recenti | 1 |
-| Progetto | Archivia / ritira archivio | 1 |
-| Progetto | Progetti di riferimento | 1 |
-| Progetto | Annulla/ripeti, copia/incolla, trova e sostituisci | 1 |
-| Progetto | Stampa, anteprima, impostazioni documentazione | 7 |
-| Progetto | Lingue del progetto, testi multilingua | 7 |
-| Progetto | Migra/importa progetto STEP 7 V5.5 | 7 |
-| Progetto | Aprire progetti TIA Portal | No (formato proprietario); si importano le sorgenti esportate |
-| Dispositivi | Aggiungi CPU S7-300 e proprietà principali | 1 |
-| Dispositivi | Vista dispositivi, rack, moduli, indirizzi | 6 |
-| Dispositivi | Vista di rete, PROFINET/MPI/PROFIBUS, ET 200 | 6 |
-| Dispositivi | Vista topologica | 9 |
-| Dispositivi | Caricamento configurazione hardware | 6 (da verificare) |
-| Programmazione | OB, FB, FC, DB, DB di istanza, multi-istanza | 1 |
-| Programmazione | Tipi di dati PLC (UDT) | 1 |
-| Programmazione | Tabelle variabili, costanti | 1 |
-| Programmazione | AWL | 1 |
-| Programmazione | KOP, FUP, conversione tra linguaggi | 4 |
-| Programmazione | SCL | 5 |
-| Programmazione | GRAPH | 9 |
-| Programmazione | Sorgenti esterne AWL | 1 |
-| Programmazione | Sorgenti esterne SCL | 5 |
-| Programmazione | Protezione know-how | 1 |
-| Programmazione | Istruzioni di base | 1 (AWL), 4 (KOP/FUP), 5 (SCL) |
-| Programmazione | Temporizzatori S5 e IEC, contatori | 1 (AWL), 4 (KOP/FUP), 5 (SCL) |
-| Programmazione | SFC/SFB di sistema (interfacce) | 1 |
-| Programmazione | Libreria IEC standard | 7 |
-| Programmazione | Riferimenti incrociati, struttura di richiamo, dipendenze, assegnazione, memoria | 7 |
-| Programmazione | Ricablaggio | 7 |
-| Programmazione | Librerie di progetto e globali | 7 |
-| Programmazione | Regolatori PID | 9 |
-| Compilazione | Compila (modifiche / tutto), messaggi cliccabili | 1 |
-| Test | Simulatore (PLCSIM) | 2 |
-| Test | Pannello di comando CPU | 2 (sim), 3 (reale) |
-| Test | Osservazione programma AWL | 2/3 |
-| Test | Osservazione programma KOP/FUP | 4 |
-| Test | Osservazione programma SCL | 5 |
-| Test | Tabelle di controllo | 2 (sim), 3 (reale) |
-| Test | Tabelle di forzamento | 3 |
-| Test | Stack di chiamata | 3 |
-| Test | Punti di arresto | 9 |
-| Online | Dispositivi accessibili, collegamento online/offline | 3 |
-| Online | Carica nel dispositivo / dal dispositivo | 3 |
-| Online | Confronto online/offline | 3 |
-| Online | Confronto offline/offline | 7 |
-| Online | RUN/STOP, cancellazione totale, copia RAM→ROM, compressione | 3 |
-| Online | Buffer di diagnostica, info CPU, tempo di ciclo, memoria, ora | 3 |
-| Online | Backup online | 3 |
-| Online | Stato dei moduli | 6 |
-| Online | Assegnazione nome/IP PROFINET | 6 |
-| Online | Aggiornamento firmware | No (rischio di danneggiare la CPU) |
-| Online | Lettore di schede / memoria USB (Micro Memory Card) | No (formato non documentato, serve programmatore Siemens) |
-| Online | Blocchi con protezione know-how | Si rispetta la protezione: solo interfaccia, niente codice |
-| HMI | WinCC, pannelli operatore | 8 (progetto separato) |
-| Altro | Lingua interfaccia, impostazioni | 1 |
-| Altro | Guida in linea | 7 |
-| Altro | Safety, Startdrive, Motion, Openness, Multiuser, Teamcenter, Energy Suite | No (§3) |
-| Altro | Trace, ProDiag, funzioni solo S7-1200/1500 | No (non esistono per S7-300) |
+| Area           | Funzione                                                                         | Tappa                                                         |
+| -------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| Progetto       | Nuovo, apri, salva, salva con nome, chiudi, recenti                              | 1                                                             |
+| Progetto       | Archivia / ritira archivio                                                       | 1                                                             |
+| Progetto       | Progetti di riferimento                                                          | 1                                                             |
+| Progetto       | Annulla/ripeti, copia/incolla, trova e sostituisci                               | 1                                                             |
+| Progetto       | Stampa, anteprima, impostazioni documentazione                                   | 7                                                             |
+| Progetto       | Lingue del progetto, testi multilingua                                           | 7                                                             |
+| Progetto       | Migra/importa progetto STEP 7 V5.5                                               | 7                                                             |
+| Progetto       | Aprire progetti TIA Portal                                                       | No (formato proprietario); si importano le sorgenti esportate |
+| Dispositivi    | Aggiungi CPU S7-300 e proprietà principali                                       | 1                                                             |
+| Dispositivi    | Vista dispositivi, rack, moduli, indirizzi                                       | 6                                                             |
+| Dispositivi    | Vista di rete, PROFINET/MPI/PROFIBUS, ET 200                                     | 6                                                             |
+| Dispositivi    | Vista topologica                                                                 | 9                                                             |
+| Dispositivi    | Caricamento configurazione hardware                                              | 6 (da verificare)                                             |
+| Programmazione | OB, FB, FC, DB, DB di istanza, multi-istanza                                     | 1                                                             |
+| Programmazione | Tipi di dati PLC (UDT)                                                           | 1                                                             |
+| Programmazione | Tabelle variabili, costanti                                                      | 1                                                             |
+| Programmazione | AWL                                                                              | 1                                                             |
+| Programmazione | KOP, FUP, conversione tra linguaggi                                              | 4                                                             |
+| Programmazione | SCL                                                                              | 5                                                             |
+| Programmazione | GRAPH                                                                            | 9                                                             |
+| Programmazione | Sorgenti esterne AWL                                                             | 1                                                             |
+| Programmazione | Sorgenti esterne SCL                                                             | 5                                                             |
+| Programmazione | Protezione know-how                                                              | 1                                                             |
+| Programmazione | Istruzioni di base                                                               | 1 (AWL), 4 (KOP/FUP), 5 (SCL)                                 |
+| Programmazione | Temporizzatori S5 e IEC, contatori                                               | 1 (AWL), 4 (KOP/FUP), 5 (SCL)                                 |
+| Programmazione | SFC/SFB di sistema (interfacce)                                                  | 1                                                             |
+| Programmazione | Libreria IEC standard                                                            | 7                                                             |
+| Programmazione | Riferimenti incrociati, struttura di richiamo, dipendenze, assegnazione, memoria | 7                                                             |
+| Programmazione | Ricablaggio                                                                      | 7                                                             |
+| Programmazione | Librerie di progetto e globali                                                   | 7                                                             |
+| Programmazione | Regolatori PID                                                                   | 9                                                             |
+| Compilazione   | Compila (modifiche / tutto), messaggi cliccabili                                 | 1                                                             |
+| Test           | Simulatore (PLCSIM)                                                              | 2                                                             |
+| Test           | Pannello di comando CPU                                                          | 2 (sim), 3 (reale)                                            |
+| Test           | Osservazione programma AWL                                                       | 2/3                                                           |
+| Test           | Osservazione programma KOP/FUP                                                   | 4                                                             |
+| Test           | Osservazione programma SCL                                                       | 5                                                             |
+| Test           | Tabelle di controllo                                                             | 2 (sim), 3 (reale)                                            |
+| Test           | Tabelle di forzamento                                                            | 3                                                             |
+| Test           | Stack di chiamata                                                                | 3                                                             |
+| Test           | Punti di arresto                                                                 | 9                                                             |
+| Online         | Dispositivi accessibili, collegamento online/offline                             | 3                                                             |
+| Online         | Carica nel dispositivo / dal dispositivo                                         | 3                                                             |
+| Online         | Confronto online/offline                                                         | 3                                                             |
+| Online         | Confronto offline/offline                                                        | 7                                                             |
+| Online         | RUN/STOP, cancellazione totale, copia RAM→ROM, compressione                      | 3                                                             |
+| Online         | Buffer di diagnostica, info CPU, tempo di ciclo, memoria, ora                    | 3                                                             |
+| Online         | Backup online                                                                    | 3                                                             |
+| Online         | Stato dei moduli                                                                 | 6                                                             |
+| Online         | Assegnazione nome/IP PROFINET                                                    | 6                                                             |
+| Online         | Aggiornamento firmware                                                           | No (rischio di danneggiare la CPU)                            |
+| Online         | Lettore di schede / memoria USB (Micro Memory Card)                              | No (formato non documentato, serve programmatore Siemens)     |
+| Online         | Blocchi con protezione know-how                                                  | Si rispetta la protezione: solo interfaccia, niente codice    |
+| HMI            | WinCC, pannelli operatore                                                        | 8 (progetto separato)                                         |
+| Altro          | Lingua interfaccia, impostazioni                                                 | 1                                                             |
+| Altro          | Guida in linea                                                                   | 7                                                             |
+| Altro          | Safety, Startdrive, Motion, Openness, Multiuser, Teamcenter, Energy Suite        | No (§3)                                                       |
+| Altro          | Trace, ProDiag, funzioni solo S7-1200/1500                                       | No (non esistono per S7-300)                                  |

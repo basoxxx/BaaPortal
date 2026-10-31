@@ -143,4 +143,64 @@ describe('pannello I/O del simulatore', () => {
     expect(screen.getByTestId('fault-ob82')).toBeDisabled();
     expect(screen.getByTestId('fault-ob86')).toBeDisabled();
   });
+
+  it('Forzamento: aggiunge una voce, la sostituisce, termina; LED FRCE dalla tabella', async () => {
+    const { app } = await setup();
+    const setForce = vi.spyOn(simControllerFor(app.store), 'setForce').mockResolvedValue();
+    await app.user.type(screen.getByTestId('force-address'), 'MW 10');
+    await app.user.clear(screen.getByTestId('force-value'));
+    await app.user.type(screen.getByTestId('force-value'), '-2');
+    await app.user.click(screen.getByTestId('force-add'));
+    expect(setForce).toHaveBeenCalledWith([
+      { area: 'M', byte: 10, size: 'W', data: Uint8Array.of(0xff, 0xfe) },
+    ]);
+    await app.user.clear(screen.getByTestId('force-address'));
+    await app.user.type(screen.getByTestId('force-address'), 'PIW 0');
+    await app.user.click(screen.getByTestId('force-add'));
+    expect(screen.getByRole('alert')).toHaveTextContent('si forzano solo I, Q e M');
+    act(() =>
+      app.store.getState().setSim({
+        forces: [{ area: 'Q', byte: 4, bit: 1, size: 'X', data: Uint8Array.of(1) }],
+      }),
+    );
+    expect(screen.getByTestId('force-row-Q 4.1')).toHaveTextContent('Q 4.1 = 1');
+    expect(screen.getByTestId('plc-force-warning')).toBeInTheDocument();
+    await app.user.click(screen.getByTestId('force-clear'));
+    expect(setForce).toHaveBeenLastCalledWith([]);
+  });
+
+  it('Moduli della configurazione: estrai e inserisci', async () => {
+    const app = await renderApp({ view: 'project', withProject: true, withPlc: true });
+    const dev = findDevice(app.store.getState().doc!.project, PLC)!;
+    dev.hardware = {
+      modules: [
+        {
+          id: 'm1',
+          rack: 0,
+          slot: 4,
+          orderNumber: '6ES7 321-1BL00-0AA0',
+          name: 'DI32',
+          comment: '',
+          inputStart: 0,
+        },
+      ],
+    };
+    act(() => app.store.getState().setTaskCard('test'));
+    act(() =>
+      app.store.getState().setSim({
+        phase: 'on',
+        deviceId: PLC,
+        mode: 'RUN',
+        inputs: new Uint8Array(8),
+        outputs: new Uint8Array(8),
+      }),
+    );
+    const c = simControllerFor(app.store);
+    const toggle = vi.spyOn(c, 'setModulePresent').mockResolvedValue();
+    expect(screen.getByTestId('module-m1')).toHaveTextContent('Rack 0, posto 4: DI32 I 0..3');
+    await app.user.click(screen.getByTestId('module-toggle-m1'));
+    expect(toggle).toHaveBeenCalledWith('m1', false);
+    act(() => app.store.getState().setSim({ pulled: ['m1'] }));
+    expect(screen.getByTestId('module-toggle-m1')).toHaveTextContent('Inserisci');
+  });
 });

@@ -29,6 +29,8 @@ export interface PrintSelection {
   udts: string[];
   tagTables: string[];
   watchTables: string[];
+  /** Sorgenti AWL esterne del PLC (facoltativo). */
+  sources?: string[];
 }
 
 export interface PrintOptions {
@@ -218,11 +220,13 @@ const stamp = (d: Date) => {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 };
 
-export function buildPrintDocument(
+/** Le sezioni (oggetti) di un PLC; con più PLC nel documento il titolo porta il nome del PLC. */
+function deviceSections(
   project: Project,
   sel: PrintSelection,
   opts: PrintOptions,
-): string {
+  prefix: string,
+): { title: string; body: string }[] {
   const { t } = opts;
   const dev = findDevice(project, sel.deviceId);
   if (!dev) throw new Error('PLC not found');
@@ -246,15 +250,40 @@ export function buildPrintDocument(
       .filter((x) => sel.watchTables.includes(x.id))
       .map((x) => ({ title: `${t('print.doc.watchTable')}: ${x.name}`, body: watchHtml(x, t) })),
   ];
+  // Sorgenti AWL esterne: il testo salvato, com'è.
+  for (const s of dev.sources.filter((x) => sel.sources?.includes(x.id)))
+    sections.push({
+      title: `${t('print.doc.source')}: ${s.name}`,
+      body: `<pre>${esc(s.text)}</pre>`,
+    });
   if (o.includeXref)
     sections.push({
       title: t('print.doc.xref'),
       body: xrefHtml(dev, new Set(blocks.map((b) => b.id)), t),
     });
+  return prefix === '' ? sections : sections.map((s) => ({ ...s, title: `${prefix}${s.title}` }));
+}
+
+export function buildPrintDocument(
+  project: Project,
+  selection: PrintSelection | PrintSelection[],
+  opts: PrintOptions,
+): string {
+  const { t } = opts;
+  const o = opts;
+  const sels = Array.isArray(selection) ? selection : [selection];
+  const devs = sels.map((s) => {
+    const d = findDevice(project, s.deviceId);
+    if (!d) throw new Error('PLC not found');
+    return d;
+  });
+  const sections = sels.flatMap((s, i) =>
+    deviceSections(project, s, opts, sels.length > 1 ? `${devs[i]!.name} › ` : ''),
+  );
   const cover: [string, string][] = [
     ['project', project.meta.name],
-    ['plc', dev.name],
-    ['cpu', `${dev.cpu.typeId} ${dev.cpu.orderNumber}`.trim()],
+    ['plc', devs.map((d) => d.name).join(', ')],
+    ['cpu', devs.map((d) => `${d.cpu.typeId} ${d.cpu.orderNumber}`.trim()).join(', ')],
     ['date', stamp(o.now)],
     ['version', `BaaPortal ${o.appVersion}`],
   ];

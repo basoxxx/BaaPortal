@@ -44,7 +44,7 @@ Con il collegamento attivo, _Carica nel dispositivo_ (barra degli strumenti, men
 3. **Conferme.** Con _Arresta la CPU_ spuntato compaiono due finestre di conferma del sistema: prima quella per lo STOP, poi quella per il caricamento. Senza la spunta, solo quella del caricamento. Il pulsante predefinito è _Annulla_: se si chiude la finestra, non si scrive nulla.
 4. **Avvio.** Dopo un caricamento riuscito, se la CPU è stata arrestata da BaaPortal, chiede «Avviare la CPU?» (predefinito _No_). Se era già in STOP prima del caricamento non chiede nulla e la lascia com'è. Con _Sì_ compare la conferma del sistema per il RUN. Se si risponde _No_, la CPU resta com'è e si può riavviare più tardi con _Avvia CPU_ (con una sua conferma).
 5. **Controllo prima di scrivere.** Prima di ogni scrittura BaaPortal rilegge il modulo e controlla che sia quello previsto (numero d'ordine, e numero di serie se lo conosce); se non coincide, non scrive.
-6. **Esito.** L'esito (caricati, cancellati, fallito) resta nella finestra. Alla fine il confronto riparte da solo.
+6. **Esito.** L'esito (caricati, cancellati, fallito) resta nella finestra. Alla fine il confronto riparte da solo. Se BaaPortal aveva fermato la CPU e il caricamento finisce con un errore o viene annullato, chiede (predefinito _No_) se riavviarla, avvisando dopo un errore che il programma può essere parziale (annullando la conferma non si scrive nulla); il RUN chiede poi la sua conferma.
 
 ## Confronto e distintivi
 
@@ -54,14 +54,14 @@ Il confronto parte da solo al collegamento e dopo ogni caricamento; si rilancia 
 - **Diverso dalla CPU**.
 - **Solo nel progetto**: la CPU non ha il blocco.
 - **Solo nella CPU**: il progetto non ha il blocco (nella cartella _Solo online_).
-- **Da compilare**: il blocco è cambiato dopo l'ultimo confronto o non ha un compilato valido. Dopo una modifica i distintivi non si aggiornano da soli: va rilanciato il confronto.
+- **Da compilare**: il blocco non ha un compilato valido (errori). Dopo una modifica i distintivi si aggiornano da soli dopo un attimo: BaaPortal compila in silenzio ciò che è cambiato e lo confronta con l'ultimo elenco letto dalla CPU, senza rileggerla; una modifica fatta sulla CPU da altri si vede solo rilanciando il confronto.
 - **Illeggibile**: le informazioni del blocco non si sono potute leggere dalla CPU.
 
 I blocchi di sistema (SDB, SFC, SFB) non si confrontano.
 
 ## Editor di confronto
 
-Sul menu contestuale di un blocco che risulta _diverso_ c'è _Confronta online/offline_: apre una scheda con checksum, lunghezze e data del codice dei due lati, e sotto le reti con le righe cambiate (a sinistra il progetto, a destra la CPU). Il confronto è sul codice compilato di entrambi i lati. _Ricarica dalla CPU_ rilegge il blocco. Se il blocco non è compilato, il confronto è sul testo sorgente e gli operandi simbolici possono risultare diversi. Se la CPU ha un blocco che non si decodifica, si vedono i suoi byte in esadecimale.
+Sul menu contestuale di un blocco che risulta _diverso_ c'è _Confronta online/offline_: apre una scheda con checksum, lunghezze e data del codice dei due lati, e sotto le reti con le righe cambiate (a sinistra il progetto, a destra la CPU). Il confronto è sul codice compilato di entrambi i lati. _Ricarica dalla CPU_ rilegge il blocco. Sotto la tabella una riga dice se il codice MC7 è identico byte per byte o quanti byte sono diversi. Se il blocco non è compilato, il confronto è sul testo sorgente e gli operandi simbolici possono risultare diversi. Se la CPU ha un blocco che non si decodifica, si vedono i suoi byte in esadecimale.
 
 ## Comandi della CPU
 
@@ -90,7 +90,7 @@ Se la CPU non fornisce un'informazione, la pagina dice «non disponibile su ques
 
 ## Imposta ora
 
-La pagina _Imposta ora_ mostra l'ora della CPU, quella del PC e la differenza. Si può impostare l'ora del PC con un solo pulsante, oppure scrivere a mano data (AAAA-MM-GG) e ora (hh:mm:ss) e premere _Applica_. È una scrittura nella CPU: chiede conferma. L'ora è quella locale del PC, senza fuso né ora legale.
+La pagina _Imposta ora_ mostra l'ora della CPU, quella del PC e la differenza. Si può impostare l'ora del PC con un solo pulsante, oppure scrivere a mano data (AAAA-MM-GG) e ora (hh:mm:ss) e premere _Applica_. È una scrittura nella CPU: chiede conferma. L'ora del PC è quella locale, oppure UTC con la casella _in UTC_ (la CPU non conosce il fuso: riceve i campi scelti). Le finestre di conferma native seguono la lingua dell'app (italiano o inglese).
 
 ## Tabelle di controllo online
 

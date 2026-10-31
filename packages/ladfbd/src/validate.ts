@@ -13,14 +13,14 @@ export type LadDiagCode =
   | 'RET_ON_RAIL'
   | 'EDGE_ON_RAIL'
   | 'NOT_ON_RAIL'
-  | 'FLOW_IN_BRANCH'
   | 'MUST_BE_ALONE'
   | 'BOX_IN_PARALLEL'
   | 'BOX_IN_TBRANCH'
   | 'BOX_IN_PIN'
   | 'BAD_LABEL'
   | 'BAD_INSTANCE'
-  | 'TOO_MANY_LABELS';
+  | 'TOO_MANY_LABELS'
+  | 'LINE_BREAK';
 
 export type LadDiag = { elemId: string; code: LadDiagCode; params?: Record<string, string> };
 
@@ -72,9 +72,9 @@ function checkBox(b: LadBox, add: Add): void {
 }
 
 /**
- * Elementi che trasformano il flusso che ricevono (NOT, (#), fronti): in un ramo parallelo
- * si traducono bene solo se il ramo parte dalla barra, perché il parallelo con logica davanti
- * diventa A( … ) e dentro la parentesi il flusso in ingresso non c'è.
+ * Elementi che trasformano il flusso che ricevono (NOT, (#), fronti): vogliono un flusso che non
+ * sia quello della barra. In un ramo di un parallelo con logica davanti il flusso arriva dal bit L
+ * del parallelo (`needsFlowBit`), anche all'inizio del ramo.
  */
 const FLOW_CODE = { not: 'NOT_ON_RAIL', midline: 'MIDLINE_ON_RAIL', edge: 'EDGE_ON_RAIL' } as const;
 
@@ -107,8 +107,7 @@ function checkSeries(
       case 'edge':
         if ((e.k === 'midline' && blank(e.op)) || (e.k === 'edge' && blank(e.mem)))
           add(e.id, 'EMPTY_OPERAND');
-        if (inBranch && !railInput) add(e.id, 'FLOW_IN_BRANCH');
-        else if (!logic) add(e.id, FLOW_CODE[e.k]);
+        if (!logic) add(e.id, FLOW_CODE[e.k]);
         break;
       case 'parallel':
         e.branches.forEach((b, i) => {
@@ -190,5 +189,16 @@ export function validateNetwork(net: LadNetwork): LadDiag[] {
   const label = net.label?.trim();
   if (label && !LABEL_RE.test(label)) add(net.root.id, 'BAD_LABEL', { label });
   checkNode(net.root, true, false, add);
+  // un a capo in un operando (appunti, file) diventerebbe un'istruzione AWL non disegnata
+  const breaks = (v: unknown, id: string): void => {
+    if (typeof v === 'string') {
+      if (/[\r\n]/.test(v)) add(id, 'LINE_BREAK');
+    } else if (v && typeof v === 'object') {
+      const own = (v as { id?: unknown }).id;
+      const at = typeof own === 'string' ? own : id;
+      for (const x of Object.values(v)) breaks(x, at);
+    }
+  };
+  breaks(net, net.root.id);
   return diags;
 }

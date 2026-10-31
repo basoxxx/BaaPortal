@@ -22,6 +22,8 @@ export interface CpuType {
     maxFc: number;
     maxDb: number;
     localDataBytesPerClass: number;
+    /** Blocchi annidati per classe di priorità (manuale delle CPU 31x, dati tecnici). */
+    blockNesting: number;
   };
   retentiveMax: { mBytes: number; timers: number; counters: number };
   obs: number[];

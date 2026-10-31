@@ -207,6 +207,40 @@ export async function preparePlcDownload(ctx: DownloadCtx, blockIds?: string[]):
 }
 
 /**
+ * Propone di riavviare la CPU fermata da BaaPortal (predefinito «No»); il RUN passa comunque per la
+ * conferma nativa del processo principale.
+ */
+async function offerRun(
+  store: StoreApi<AppState>,
+  bridge: BaaBridge,
+  plan: DownloadPlan,
+  messageKey: string,
+): Promise<void> {
+  let yes = false;
+  try {
+    yes = await bridge.askQuestion({
+      title: t('sim.startCpuTitle'),
+      message: t(messageKey),
+      yes: t('sim.yes'),
+      no: t('sim.no'),
+      defaultNo: true,
+    });
+  } catch {
+    yes = false;
+  }
+  if (!yes || !sameSession(store, plan)) return;
+  let run: Awaited<ReturnType<BaaBridge['plcControl']>>;
+  try {
+    run = await bridge.plcControl('RUN');
+  } catch (e) {
+    run = { ok: false, error: errorText(e) };
+  }
+  if (!run.ok && !('cancelled' in run) && sameSession(store, plan)) {
+    push(store, 'error', 'plcRunFailed', { message: run.error });
+  }
+}
+
+/**
  * Seconda parte, dopo «Carica» nell'anteprima: eventuale STOP, scrittura (ognuna con la sua conferma
  * nativa nel processo principale), domanda «Avviare la CPU?» e nuovo confronto. Se nel frattempo il
  * progetto o il collegamento sono cambiati, lo stato non si tocca più.
@@ -270,6 +304,8 @@ export async function executePlcDownload(
   const live = sameSession(store, plan);
   if (!res.ok && 'cancelled' in res) {
     if (live) push(store, 'warning', 'plcDownloadCancelled');
+    // Annullato («Carica» non confermato) dopo lo STOP fatto da noi: nulla scritto, si propone il RUN.
+    if (live && stopped) await offerRun(store, bridge, plan, 'sim.restartCpuCancelledMessage');
     return { status: 'cancelled', ...none, ...(stopped ? { cpuStopped: true } : {}) };
   }
   const outcome: DownloadOutcome = res.ok
@@ -301,30 +337,14 @@ export async function executePlcDownload(
     });
   }
   // Si chiede solo se l'abbiamo arrestata noi: una CPU già in STOP resta com'è (c'è «Avvia CPU»).
-  if (res.ok && something && stopped) {
-    let yes = false;
-    try {
-      yes = await bridge.askQuestion({
-        title: t('sim.startCpuTitle'),
-        message: t('sim.startCpuMessage'),
-        yes: t('sim.yes'),
-        no: t('sim.no'),
-        defaultNo: true,
-      });
-    } catch {
-      yes = false;
-    }
-    if (yes && sameSession(store, plan)) {
-      let run: Awaited<ReturnType<BaaBridge['plcControl']>>;
-      try {
-        run = await bridge.plcControl('RUN');
-      } catch (e) {
-        run = { ok: false, error: errorText(e) };
-      }
-      if (!run.ok && !('cancelled' in run) && sameSession(store, plan)) {
-        push(store, 'error', 'plcRunFailed', { message: run.error });
-      }
-    }
+  // Dopo un errore si chiede lo stesso, avvisando che il programma nella CPU può essere parziale.
+  if (stopped && (!res.ok || something)) {
+    await offerRun(
+      store,
+      bridge,
+      plan,
+      res.ok ? 'sim.startCpuMessage' : 'sim.restartCpuPartialMessage',
+    );
   }
   if (something && sameSession(store, plan)) {
     await plcControllerFor(store, bridge).compare(false);

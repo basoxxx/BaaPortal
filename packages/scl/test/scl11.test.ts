@@ -163,7 +163,7 @@ describe('sclToAwl 1.1: temporanei BYTE e MD', () => {
 describe('sclToAwl 1.1: diagnostiche', () => {
   it('stringhe di bit, costanti, cicli', () => {
     expect(diag('w := w + 1;').message).toContain('WORD');
-    expect(diag('x := w < 1;').message).toContain('solo = e <>');
+    expect(diag('x := w + 1 > 0;').message).toContain('solo i confronti');
     expect(diag('a := a AND 1;').message).toContain('AND');
     expect(diag('w := a;').message).toContain('INT_TO_WORD');
     expect(diag('a := ROUND(r);').message).toContain('DINT_TO_INT');

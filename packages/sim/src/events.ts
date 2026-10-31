@@ -8,6 +8,8 @@ import type { SimError } from './errors';
 /** Classi di priorità fisse della S7-300. */
 export const PRIORITY = {
   OB1: 1,
+  OB10: 2,
+  OB20: 3,
   OB35: 12,
   /** OB80, OB82, OB85, OB86. */
   ASYNC_ERROR: 26,

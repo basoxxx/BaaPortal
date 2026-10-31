@@ -9,13 +9,22 @@ import {
   findElem,
   insertElem,
   isNode,
+  needsFlowBit,
   negateElem,
   updateElem,
 } from '@baaportal/ladfbd';
 import type { LadBox, LadElem, LadNetwork, LadNode, LadOut } from '@baaportal/ladfbd';
 import { LadToolbar } from '../lad/LadToolbar';
 import { LAD_TOOL_KEYS, ladAction, ladClipKey } from '../lad/ladKeys';
-import { fieldPatch, fieldValue, fieldsOf, flowPin, paletteIdOf, placeOf } from '../lad/ladOps';
+import {
+  callPinHint,
+  fieldPatch,
+  fieldValue,
+  fieldsOf,
+  flowPin,
+  paletteIdOf,
+  placeOf,
+} from '../lad/ladOps';
 import type { CallParams, LadField } from '../lad/ladOps';
 import { monAttr, monText, pinValues, type LadMonitor } from '../lad/ladMonitor';
 import { useLadEdit } from '../lad/useLadEdit';
@@ -31,7 +40,7 @@ type Props = {
   newId?: () => string;
   /** Come in `LadNetworkEditor`: la tavolozza inserisce nell'ultima vista attiva. */
   onActive?: (api: LadInsertApi, active: boolean) => void;
-  callOfDrop?: (raw: string) => string | undefined;
+  callOfDrop?: (raw: string) => string | Promise<string | undefined> | undefined;
   /** Osservazione del programma: stato degli elementi, solo da mostrare. */
   monitor?: LadMonitor;
 };
@@ -41,7 +50,8 @@ type Editing = { id: string; key: string };
 interface Ctx {
   sel: string | null;
   multi: readonly string[];
-  select: (id: string, extend: boolean) => void;
+  /** `range`: Maiusc (intervallo della serie); `toggle`: Ctrl/Cmd (aggiunge o toglie). */
+  select: (id: string, mode?: 'range' | 'toggle') => void;
   editing: Editing | null;
   edit: (id: string, key: string) => void;
   commit: (id: string, fld: LadField, value: string) => void;
@@ -102,11 +112,11 @@ function Sel({
       data-mon={fupMon(c.monitor, item)}
       onClick={(ev) => {
         ev.stopPropagation();
-        c.select(item.id, ev.shiftKey || ev.ctrlKey || ev.metaKey);
+        c.select(item.id, ev.shiftKey ? 'range' : ev.ctrlKey || ev.metaKey ? 'toggle' : undefined);
       }}
       onFocus={(ev) => {
         // Solo il proprio fuoco: l'evento deve risalire fino alla vista (tavolozza attiva).
-        if (ev.target === ev.currentTarget && c.sel !== item.id) c.select(item.id, false);
+        if (ev.target === ev.currentTarget && c.sel !== item.id) c.select(item.id);
       }}
     >
       {children}
@@ -138,12 +148,14 @@ function Operand({ item, fld }: { item: Item; fld: LadField }) {
     );
   }
   const live = pinValues(c.monitor, item)[fld.key];
+  const hint = item.k === 'box' && fld.pin ? callPinHint(item, fld.key) : undefined;
   return (
     <span
-      className={`baa-fup-op${value === '' ? ' baa-fup-op--empty' : ''}`}
+      className={`baa-fup-op${value === '' && hint !== 'optional' ? ' baa-fup-op--empty' : ''}`}
+      title={hint ? t(hint === 'optional' ? 'lad.pinOptional' : 'lad.pinRequired') : undefined}
       onDoubleClick={() => c.edit(item.id, fld.key)}
     >
-      {value || EMPTY}
+      {value || (hint === 'optional' ? '…' : EMPTY)}
       {live !== undefined ? <i className="baa-lad-val">{live}</i> : null}
     </span>
   );
@@ -272,12 +284,27 @@ function Input({ e }: { e: LadElem }) {
   }
 }
 
-type Chain = Extract<LadElem, { k: 'edge' | 'midline' | 'box' }>;
-/** Elementi che in AWL lavorano sull'RLO di ciò che li precede (FP/FN, `= op`, EN o primo pin). */
-const isChain = (e: LadElem): e is Chain => e.k === 'edge' || e.k === 'midline' || e.k === 'box';
+type Chain = Extract<LadElem, { k: 'edge' | 'midline' | 'box' | 'parallel' }>;
+/**
+ * Elementi che in AWL lavorano sull'RLO di ciò che li precede (FP/FN, `= op`, EN o primo pin) e
+ * i paralleli con NOT, (#) o fronti nei rami (H21): ogni ramo parte dal flusso davanti.
+ */
+const isChain = (e: LadElem): e is Chain =>
+  e.k === 'edge' || e.k === 'midline' || e.k === 'box' || (e.k === 'parallel' && needsFlowBit(e));
 
 /** Un elemento a catena con la logica che lo precede come entrata. */
 function Chained({ e, before }: { e: Chain; before: LadElem[] }) {
+  if (e.k === 'parallel')
+    return (
+      <Sel item={e} className="baa-fup-boxel">
+        <Gate
+          title=">=1"
+          ins={e.branches.map((br, i) => (
+            <Logic key={i} elems={[...before, ...br]} />
+          ))}
+        />
+      </Sel>
+    );
   const input = <Logic elems={before} />;
   if (e.k === 'box') return <BoxView b={e} input={input} />;
   return (
@@ -292,7 +319,8 @@ function Chained({ e, before }: { e: Chain; before: LadElem[] }) {
  * La logica di una serie: vuota = sempre vera, una voce sola = l'entrata, più voci = riquadro `&`.
  * Un `NOT` nega tutto ciò che lo precede nella serie: è il cerchietto sull'uscita di quella
  * logica, cioè sul pin con cui entra, negata, nel resto della serie. Allo stesso modo un fronte
- * (P)/(N), un `#` o un box dopo la prima voce prendono come entrata tutto ciò che li precede.
+ * (P)/(N), un `#` o un box dopo la prima voce prendono come entrata tutto ciò che li precede; un
+ * `>=1` con NOT, `#` o fronti nei rami la ripete in ogni ramo.
  */
 function Logic({ elems }: { elems: LadElem[] }) {
   let k = elems.length - 1;
@@ -407,8 +435,9 @@ export function FupNetworkView({
   const ctx: Ctx = {
     sel,
     multi: ed.multi?.ids ?? [],
-    select: (id, extend) => {
-      if (!extend || !ed.extendTo(id)) ed.setSel({ t: 'elem', id });
+    select: (id, mode) => {
+      if (mode === 'toggle') ed.toggle(id);
+      else if (mode !== 'range' || !ed.extendTo(id)) ed.setSel({ t: 'elem', id });
     },
     editing,
     edit: (id, key) => {

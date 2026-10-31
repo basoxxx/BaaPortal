@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { I18nextProvider } from 'react-i18next';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
@@ -324,6 +324,23 @@ describe('LadNetworkEditor: ramo a T, barra, CALL, pin, F9, Tab', () => {
     expect(screen.getByRole('textbox', { name: 'speed' })).toBeTruthy();
   });
 
+  it('pin vuoti di un CALL: obbligatori per una FC, facoltativi («…») per un FB', () => {
+    for (const [inst, hint] of [
+      ['FC 1', 'Obbligatorio'],
+      ['FB 1, DB 1', 'Facoltativo'],
+      ['#multi', 'Facoltativo'],
+    ] as const) {
+      let net = emptyNetwork(newId);
+      const box = { ...newBox('CALL', newId()), instance: inst, pins: { speed: '', out: 'MW 2' } };
+      net = insertElem(net, { node: net.root.id, index: 0 }, box);
+      const { canvas } = setup(net);
+      const hints = canvas.querySelectorAll('.baa-lad-pin-hint');
+      expect(hints).toHaveLength(1);
+      expect(hints[0]!.getAttribute('title')).toContain(hint);
+      cleanup();
+    }
+  });
+
   it('copiare o tagliare una bobina non riempie gli appunti: niente uscita incollata in serie', async () => {
     const { onChange, user, canvas } = setup();
     await user.click(screen.getByRole('button', { name: /^Bobina / }));
@@ -351,7 +368,6 @@ describe('chiavi i18n lad.*', () => {
         'RET_ON_RAIL',
         'EDGE_ON_RAIL',
         'NOT_ON_RAIL',
-        'FLOW_IN_BRANCH',
         'BOX_IN_PARALLEL',
         'BOX_IN_TBRANCH',
         'BAD_LABEL',

@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { Tag, TagTable } from '@baaportal/project';
-import { TAG_COLUMNS, fromLogicalAddress, parseTagsCsv, tagsToCsv, toLogicalAddress } from '../src';
+import {
+  TAG_COLUMNS,
+  constantsToCsv,
+  fromLogicalAddress,
+  parseTagsCsv,
+  tagsToCsv,
+  toLogicalAddress,
+} from '../src';
 
 const tag = (name: string, type: string, address: string, comment = '', hmi = true): Tag => ({
   id: name,
@@ -185,6 +192,25 @@ describe('tabelle variabili csv', () => {
     );
     expect(p.tags.map((t) => t.name)).toEqual(['A']);
     expect(p.errors).toEqual([{ line: 3, code: 'RIGA_ILLEGGIBILE' }]);
+  });
+
+  it('virgolette non chiuse: errore sulla riga, le righe dopo si leggono', () => {
+    const p = parseTagsCsv(
+      'Name;Data Type;Logical Address;Comment\nA;Bool;%M0.0;"aperta\nB;Bool;%M0.1;x\nC;Bool;%M0.2;y\n',
+    );
+    expect(p.tags.map((t) => t.name)).toEqual(['B', 'C']);
+    expect(p.errors).toEqual([{ line: 2, code: 'RIGA_ILLEGGIBILE' }]);
+  });
+
+  it('costanti in un csv a parte: si esportano e si riconoscono', () => {
+    const t = {
+      ...table([]),
+      constants: [{ id: 'c', name: 'Max', type: 'Int', value: '100', comment: 'x' }],
+    };
+    const p = parseTagsCsv(constantsToCsv(t));
+    expect(p.tags).toEqual([]);
+    expect(p.constants).toMatchObject([{ name: 'Max', type: 'Int', value: '100', comment: 'x' }]);
+    expect(p.errors).toEqual([]);
   });
 
   it('NOME_VUOTO', () => {

@@ -52,6 +52,14 @@ export function CpuPanel() {
         >
           {t('cpuPanel.sf')}
         </span>
+        <span
+          data-testid="led-frce"
+          data-on={sim.forces.length > 0}
+          aria-label={`${t('cpuPanel.frce')}: ${t(sim.forces.length > 0 ? 'cpuPanel.ledOn' : 'cpuPanel.ledOff')}`}
+          className="baa-led baa-led-frce"
+        >
+          {t('cpuPanel.frce')}
+        </span>
       </div>
       <div className="baa-cpu-buttons">
         <button

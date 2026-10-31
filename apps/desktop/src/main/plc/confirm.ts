@@ -1,4 +1,5 @@
 import { app, type BrowserWindow, type MessageBoxOptions } from 'electron';
+import { tr } from './dialogText';
 
 /** Testi della finestra di conferma di una scrittura nella CPU. */
 export interface WriteConfirmTexts {
@@ -29,7 +30,7 @@ export function createConfirm(
     if (!app.isPackaged && (hook === 'yes' || hook === 'no')) return hook === 'yes';
     const opts: MessageBoxOptions = {
       type: 'warning',
-      buttons: [t.confirmLabel, 'Annulla'],
+      buttons: [t.confirmLabel, tr('Annulla')],
       defaultId: 1,
       cancelId: 1,
       title: t.title,

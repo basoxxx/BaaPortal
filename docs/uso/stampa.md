@@ -8,7 +8,7 @@ Guida breve alla documentazione del programma (tappa 7D): stampare o salvare in 
 - _Progetto → Esporta in PDF…_
 - Tasto destro nell'albero su un PLC, una cartella, un gruppo o uno o più oggetti: _Stampa…_
 
-Si stampa ciò che è selezionato nell'albero (un blocco, più blocchi, una cartella, un gruppo, tutto il PLC). Senza selezione, tutto il primo PLC.
+Si stampa ciò che è selezionato nell'albero (un blocco, più blocchi, una cartella, un gruppo, tutto il PLC). Senza selezione, tutto il primo PLC. Se la selezione attraversa più PLC escono tutti nello stesso documento; le sorgenti AWL esterne selezionate si stampano come testo. _Anteprima_ mostra il documento nella finestra prima di stampare.
 
 ## La finestra
 

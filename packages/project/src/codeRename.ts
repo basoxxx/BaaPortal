@@ -90,6 +90,18 @@ function rewrite(
         }
       : {};
   for (const b of blocks) {
+    // il codice SCL della FC rinominata: il suo nome come valore di ritorno (`b.name` è già il nuovo)
+    const own = { ...sclOpts };
+    if (
+      target.kind === 'symbol' &&
+      b.kind === 'FC' &&
+      b.language === 'SCL' &&
+      sameName(b.name, newName) &&
+      ![...EXTERNAL, 'temp' as const].some((sec) =>
+        b.interface[sec].some((m) => sameName(m.name, target.oldName)),
+      )
+    )
+      own.ownFc = true;
     let lad = false;
     for (const n of b.networks) {
       if (n.lad && isGraphic(b.language)) {
@@ -108,13 +120,13 @@ function rewrite(
       }
       // Scorciatoia: se il nome vecchio non compare nel testo non c'e niente da fare.
       if (!nameKey(n.source).includes(key)) continue;
-      if (b.language === 'SCL' && sclRenameSkipped(n.source, target, newName, sclOpts)) {
+      if (b.language === 'SCL' && sclRenameSkipped(n.source, target, newName, own)) {
         if (!skipped.includes(b.name)) skipped.push(b.name);
         continue;
       }
       n.source =
         b.language === 'SCL'
-          ? renameInScl(n.source, target, newName, sclOpts)
+          ? renameInScl(n.source, target, newName, own)
           : renameInSource(n.source, target, newName, 'international');
     }
     // La sorgente generata segue il grafico (come dopo ogni modifica dell'editor).

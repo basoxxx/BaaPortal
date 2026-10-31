@@ -26,6 +26,8 @@ const bridge: RawBridge = {
   showOpenProjectDialog: () => ipcRenderer.invoke('dialog:open-project'),
   showSaveProjectDialog: (name) => ipcRenderer.invoke('dialog:save-project', name),
   showSelectFolderDialog: () => ipcRenderer.invoke('dialog:select-folder'),
+  showSelectFolderFiles: (extensions) =>
+    ipcRenderer.invoke('dialog:select-folder-files', extensions),
   showOpenFileDialog: (opts) => ipcRenderer.invoke('dialog:open-file', opts),
   showSaveFileDialog: (opts) => ipcRenderer.invoke('dialog:save-file', opts),
   readFile: (path) => ipcRenderer.invoke('fs:read', path),
@@ -43,6 +45,7 @@ const bridge: RawBridge = {
   closeWindowCancelled: () => ipcRenderer.send('window:close-cancelled'),
   rendererReady: () => ipcRenderer.send('app:renderer-ready'),
   clipboardWriteText: (text) => ipcRenderer.send('clipboard:write-text', text),
+  setLanguage: (lang) => ipcRenderer.send('app:set-language', lang),
   clipboardReadText: () => ipcRenderer.invoke('clipboard:read-text'),
   askQuestion: (texts) => ipcRenderer.invoke('dialog:question', texts),
   recoveryWrite: (key, data, info) => ipcRenderer.invoke('recovery:write', key, data, info),

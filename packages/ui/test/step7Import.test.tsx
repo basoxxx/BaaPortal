@@ -92,6 +92,22 @@ describe('planStep7Import e applyStep7Plan', () => {
     expect(d.udts[0]!.members[0]!.type).toBe('DInt');
   });
 
+  it('Rinomina e Rinumera importano accanto all\u2019oggetto esistente', async () => {
+    const app = await renderApp({ view: 'project', withProject: true, withPlc: true });
+    const d = structuredClone(dev(app));
+    planAndApply(d, [{ name: 'a.awl', bytes: enc(UDT) }]);
+    const plan = planStep7Import(d, [
+      { name: 'a.awl', bytes: enc(UDT.replace('Pos : INT', 'Pos : DINT')) },
+    ]);
+    const key = plan.items[0]!.key;
+    applyStep7Plan(d, plan, new Set([key]), new Map([[key, 'rename']]));
+    expect(d.udts.map((u) => [u.name, u.members[0]!.type])).toEqual([
+      ['Axis', 'Int'],
+      ['Axis_1', 'DInt'],
+    ]);
+    expect(new Set(d.udts.map((u) => u.number)).size).toBe(2);
+  });
+
   it('un oggetto nuovo col nome di un altro blocco è bloccato nell\u2019anteprima', async () => {
     const app = await renderApp({ view: 'project', withProject: true, withPlc: true });
     const d = structuredClone(dev(app));

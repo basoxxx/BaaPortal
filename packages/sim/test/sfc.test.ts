@@ -485,23 +485,28 @@ describe('giro 1: effetti parziali e aree ANY', () => {
     expect(cpu.memory.dbs.size).toBe(0);
   });
 
-  it('SET_CLK con PDT in un DB non caricato: RET_VAL 16#813A, BR = 0', () => {
-    const { cpu } = run(
-      ob1Raw(
-        '\tOPN DB 9;',
-        rawSfc(23, [M(0), M(2)]),
-        rawSfc(0, [ptr(0x84, 0), M(6)]),
-        '\tA BR;\n\t= M 10.0;',
-      ),
-      (m, c) => {
-        c.memory.dbs.set(9, {
-          data: new Uint8Array(8),
-          initial: new Uint8Array(8),
-          retentive: false,
-        });
-        m.set([0, 9], 0);
-      },
-    );
+  it('DEL_DB del DB aperto → 16#80C1 (⚠️), il DB resta', () => {
+    const { cpu } = run(ob1Raw('\tOPN DB 9;', rawSfc(23, [M(0), M(2)])), (m, c) => {
+      c.memory.dbs.set(9, {
+        data: new Uint8Array(8),
+        initial: new Uint8Array(8),
+        retentive: false,
+      });
+      m.set([0, 9], 0);
+    });
+    expect((cpu.memory.M[2]! << 8) | cpu.memory.M[3]!).toBe(0x80c1);
+    expect(cpu.memory.dbs.has(9)).toBe(true);
+  });
+
+  it('SET_CLK con PDT in un DB non aperto: RET_VAL 16#813A, BR = 0', () => {
+    const { cpu } = run(ob1Raw(rawSfc(0, [ptr(0x84, 0), M(6)]), '\tA BR;\n\t= M 10.0;'), (m, c) => {
+      c.memory.dbs.set(9, {
+        data: new Uint8Array(8),
+        initial: new Uint8Array(8),
+        retentive: false,
+      });
+      m.set([0, 9], 0);
+    });
     expect(cpu.mode).toBe('RUN');
     expect(ret(cpu.memory.M)).toBe(0x813a);
     expect(cpu.memory.M[10]! & 1).toBe(0);

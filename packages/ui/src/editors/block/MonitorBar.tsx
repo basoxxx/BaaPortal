@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { plcControllerFor } from '../../online/plcController';
 import { plcMonitorFor } from '../../online/plcMonitor';
 import { useAppStore, useServices } from '../../state/AppContext';
+import { setMonitorHex } from '../../sim/simController';
 
 const NO_REGS = { accu2: false, ar1: false };
 
@@ -65,7 +66,7 @@ export function MonitorBar({ deviceId, blockId }: { deviceId: string; blockId: s
           aria-pressed={hex}
           aria-label={t('sim.monitor.format')}
           title={t('sim.monitor.format')}
-          onClick={() => store.getState().setSim({ monitorHex: !hex })}
+          onClick={() => setMonitorHex(store, deviceId, !hex)}
         >
           {t(hex ? 'sim.monitor.hex' : 'sim.monitor.dec')}
         </button>
@@ -91,7 +92,7 @@ export function MonitorBar({ deviceId, blockId }: { deviceId: string; blockId: s
         aria-pressed={hex}
         aria-label={t('sim.monitor.format')}
         title={t('sim.monitor.format')}
-        onClick={() => store.getState().setSim({ monitorHex: !hex })}
+        onClick={() => setMonitorHex(store, deviceId, !hex)}
       >
         {t(hex ? 'sim.monitor.hex' : 'sim.monitor.dec')}
       </button>

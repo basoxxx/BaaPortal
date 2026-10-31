@@ -35,6 +35,8 @@ interface Spec {
   timers: number;
   counters: number;
   ioBytes: number;
+  /** Profondità di annidamento per classe di priorità; 16 se non indicata (CPU 312/312C: 8). */
+  nesting?: number;
   source: string;
 }
 
@@ -58,6 +60,7 @@ function cpu(s: Spec): CpuType {
       maxFc: MAX_FB_FC,
       maxDb: MAX_DB,
       localDataBytesPerClass: LOCAL_V3,
+      blockNesting: s.nesting ?? 16,
     },
     retentiveMax: { mBytes: s.mBytes, timers: s.timers, counters: s.counters },
     obs: s.dp || s.pn ? OBS_WITH_86 : OBS_BASE,
@@ -79,6 +82,7 @@ export const CPU_CATALOG: readonly CpuType[] = [
     timers: 256,
     counters: 256,
     ioBytes: 1024,
+    nesting: 8,
     source: MANUALS,
   }),
   cpu({
@@ -178,6 +182,7 @@ export const CPU_CATALOG: readonly CpuType[] = [
     timers: 256,
     counters: 256,
     ioBytes: 1024,
+    nesting: 8,
     source: MANUALS,
   }),
   cpu({

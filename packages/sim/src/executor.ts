@@ -76,6 +76,13 @@ export interface ExecContext {
   onTick?: (st: ExecState) => void;
   /** Limite di istruzioni per ciclo (predefinito `MAX_INSTRUCTIONS`). */
   maxInstructions?: number;
+  /** Profondità massima dei blocchi annidati (catalogo della CPU; predefinita `MAX_BLOCK_STACK`). */
+  maxBlockDepth?: number;
+  /**
+   * Prossima scadenza di un allarme a tempo (OB35, OB20, OB10) sull'orologio di sistema, o
+   * `undefined`. Se c'è, ogni `DEADLINE_EVERY` istruzioni si legge l'orologio e, scaduta, si fa un tick.
+   */
+  nextDeadline?: () => number | undefined;
   /**
    * Limite di istruzioni superato. Se c'è e ritorna, il ciclo prosegue (OB80 richiamato, contatore
    * azzerato); se manca, l'esecutore lancia TEMPO_CICLO_SUPERATO.
@@ -153,6 +160,9 @@ function recordStep(mon: MonitorSink, st: ExecState, at: number): void {
 
 /** Ogni quante istruzioni si controlla il tempo di ciclo (Global Constraints, piano 2A). */
 export const TICK_EVERY = 1024;
+
+/** Ogni quante istruzioni si guarda la scadenza degli allarmi a tempo (latenza di OB35/OB20/OB10). */
+export const DEADLINE_EVERY = 128;
 
 /** Limite fisso di istruzioni per ciclo (e per OB100), indipendente dall'orologio. */
 export const MAX_INSTRUCTIONS = 10_000_000;
@@ -312,7 +322,8 @@ export function execBlock(st: ExecState): void {
   const { block, ctx } = st;
   const code = block.code;
   const max = ctx.maxInstructions ?? MAX_INSTRUCTIONS;
-  const scratch = ctx.onError ? newSaved() : undefined;
+  // Il gestore può comparire a metà blocco (SFC 36 MSK_FLT): lo si guarda a ogni istruzione.
+  let scratch: Saved | undefined;
   let mon =
     ctx.monitor && ctx.monitor.kind === block.kind && ctx.monitor.number === block.number
       ? ctx.monitor
@@ -335,13 +346,17 @@ export function execBlock(st: ExecState): void {
         ctx.onOverrun(st, reason);
       }
       if (ctx.onTick && (n & (TICK_EVERY - 1)) === 0) ctx.onTick(st);
+      else if (ctx.onTick && ctx.nextDeadline && (n & (DEADLINE_EVERY - 1)) === 0) {
+        const due = ctx.nextDeadline();
+        if (due !== undefined && ctx.now() >= due) ctx.onTick(st);
+      }
       d = decodeAt(block, at);
       if (!('stmt' in d)) throw new SimError('MC7_NON_ESEGUIBILE', `byte grezzi a ${at}`);
       const handler = OPS[d.stmt.id];
       if (!handler)
         throw new SimError('MC7_NON_ESEGUIBILE', `operazione non implementata: ${d.stmt.id}`);
-      if (scratch) {
-        save(st, scratch);
+      if (ctx.onError) {
+        save(st, (scratch ??= newSaved()));
         saved = true;
       }
       // BE e BEU cambiano lo stato lasciato al chiamante (STA = 1, OS = OR = /FC = 0): il passo

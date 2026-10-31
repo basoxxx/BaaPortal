@@ -1,6 +1,6 @@
 # Prove su una CPU S7-300 reale
 
-Questa è la lista di prove per la versione 2.0.0. BaaPortal non è mai stato provato su una CPU reale: i test automatici girano contro un PLC finto e contro catture di rete pubbliche. Queste prove servono a sapere che cosa funziona davvero.
+Questa è la lista di prove per la versione 2.1.0. BaaPortal non è mai stato provato su una CPU reale: i test automatici girano contro un PLC finto e contro catture di rete pubbliche. Queste prove servono a sapere che cosa funziona davvero.
 
 **Regola fissa:** le prove della parte B scrivono nella CPU. Si fanno **solo su una CPU non in produzione**: una CPU di scorta o una comprata allo scopo, mai su quella di una macchina che lavora. La parte A legge soltanto.
 
@@ -16,7 +16,7 @@ In caso di problemi, salva anche il progetto (`.baap`) e, se è possibile, il fi
 
 - [ ] Annota il modello della CPU (numero d'ordine e firmware) e come è collegata: Ethernet integrata, CP 343-1, gateway RFC 1006 o adattatore MPI seriale/USB-COM (con marca e modello dell'adattatore).
 - [ ] Fai un backup del programma della CPU con lo strumento che usi di solito, prima di qualsiasi prova della parte B.
-- [ ] Installa BaaPortal 2.0.0 da _Releases_ su GitHub. Al primo avvio vanno autorizzati Windows («Esegui comunque») e macOS (vedi le note di rilascio).
+- [ ] Installa BaaPortal 2.1.0 da _Releases_ su GitHub. Al primo avvio vanno autorizzati Windows («Esegui comunque») e macOS (vedi le note di rilascio).
 
 ## M. Adattatore MPI (solo se colleghi la CPU con l'adattatore seriale o USB-COM)
 
@@ -58,6 +58,10 @@ Se qualcosa non va, annota il messaggio esatto, la variante e le impostazioni us
 21. [ ] **Attributi dei DB.** Crea due DB globali di prova, uno con _Non ritentivo_ e uno con _Solo nella memoria di caricamento_ (proprietà del DB, _Attributi_), caricali e poi _Carica dal dispositivo_ in un progetto nuovo: gli attributi tornano uguali. Annota anche che cosa succede ai valori del DB non ritentivo dopo uno spegnimento e riaccensione, e se il DB solo nella memoria di caricamento si legge da una tabella di controllo.
 22. [ ] **Blocchi KOP ricaricati come KOP.** Dopo il punto 15, _Carica dal dispositivo_ in un progetto nuovo: il blocco KOP si riapre in KOP (non in AWL), con gli stessi segmenti. Annota anche come lo apre STEP 7 o TIA Portal, se li hai (BaaPortal non scrive i marcatori `BLD`).
 23. [ ] **Runtime HMI con scritture (solo CPU di prova).** Una schermata con una lampada su un'uscita, un campo di immissione su un merker e tre pulsanti: _Imposta bit_, _Scrivi valore_ e _Impulso_. Avvia il runtime con _Consenti scritture nella CPU_: compare **una** conferma all'avvio e poi nessuna. Il merker e l'uscita cambiano davvero; con _Impulso_ il bit è 1 solo finché tieni premuto, anche premendo e rilasciando in fretta. Poi tieni premuto il pulsante a impulsi e stacca il cavo: annota se il bit resta a 1 (è un limite noto) e che cosa dice BaaPortal.
+
+24. [ ] **Funzioni STRING e DATE_AND_TIME in SCL (2.1).** Un FC SCL con `CONCAT`, `MID`, `FIND`, un confronto fra STRING e una costante `DT#`: caricalo e controlla i valori con una tabella di controllo.
+25. [ ] **Caricamento annullato (2.1).** Con la CPU in RUN, avvia _Carica nel dispositivo_ scegliendo di fermarla, poi annulla la conferma _Carica_: BaaPortal chiede se riavviarla (predefinito _No_), e il RUN passa comunque dalla conferma.
+26. [ ] **Ora in UTC (2.1).** _Imposta ora_ con l'opzione UTC: annota l'ora che la CPU mostra.
 
 ## Che cosa rimandare
 

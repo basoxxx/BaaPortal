@@ -4,6 +4,7 @@ import { parseType, sameName } from '@baaportal/s7-types';
 import { BaapFormatError, parseLibrary } from './baapFile';
 import { BackupFormatError, inflateCapped } from './backupFile';
 import { callGraph } from './callGraph';
+import { crossReferences, type XrefOperand } from './crossRef';
 import type {
   Block,
   Library,
@@ -11,6 +12,7 @@ import type {
   Member,
   ObjectRef,
   PlcDevice,
+  Tag,
   TagTable,
   Udt,
   WatchTable,
@@ -42,6 +44,33 @@ const blockMembers = (b: Block): Member[] =>
 const keyOf = (b: { kind: string; number: number }) =>
   `${b.kind === 'IDB' ? 'DB' : b.kind}${b.number}`;
 
+/** I numeri dei DB toccati dal blocco `blockId`, dai riferimenti incrociati. */
+function dbsUsedBy(xref: XrefOperand[], blockId: string): Set<number> {
+  const out = new Set<number>();
+  for (const op of xref) {
+    if (!op.uses.some((u) => u.blockId === blockId)) continue;
+    if (op.db !== undefined) out.add(op.db);
+    else if (op.kind === 'block' && op.type === 'DB') out.add(Number(op.key.slice(2)));
+  }
+  return out;
+}
+
+/** I tag (della tabella dei simboli) che i blocchi dati usano, in copia, senza quelli già in `skip`. */
+function tagsUsedBy(dev: PlcDevice, blockIds: Set<string>, skip: Set<string>): Tag[] {
+  const names = new Set<string>();
+  for (const op of crossReferences(dev))
+    if (
+      op.symbol &&
+      op.kind !== 'block' &&
+      op.kind !== 'constant' &&
+      op.uses.some((u) => blockIds.has(u.blockId))
+    )
+      names.add(op.symbol.replace(/^"|"$/g, '').toLowerCase());
+  return dev.tagTables
+    .flatMap((t) => t.tags)
+    .filter((t) => names.has(t.name.toLowerCase()) && !skip.has(t.id));
+}
+
 /**
  * Gli oggetti dati più le loro dipendenze, in profondità: gli UDT e gli FB usati come tipo, l'FB di
  * un DB di istanza e i blocchi chiamati (CALL, UC, CC, dai riferimenti incrociati). L'ordine è
@@ -55,6 +84,7 @@ export function withDependencies(dev: PlcDevice, refs: ObjectRef[]): ObjectRef[]
     const b = dev.blocks.find((x) => x.kind === 'FB' && sameName(x.name, name));
     return b && { kind: 'block', deviceId: dev.id, id: b.id };
   };
+  let xref: XrefOperand[] | undefined;
   let graph: ReturnType<typeof callGraph> | undefined;
   const queue = [...refs];
   while (queue.length > 0) {
@@ -70,10 +100,16 @@ export function withDependencies(dev: PlcDevice, refs: ObjectRef[]): ObjectRef[]
       if (!b) continue;
       namedTypes(blockMembers(b)).forEach((n) => add(byName(n)));
       if (b.kind === 'IDB') add(byName(b.instanceOf));
-      graph ??= callGraph(dev);
+      xref ??= crossReferences(dev);
+      graph ??= callGraph(dev, xref);
       for (const e of graph.calls.get(keyOf(b)) ?? []) {
         const id = graph.blocks.get(e.callee)?.blockId;
         if (id) add({ kind: 'block', deviceId: dev.id, id });
+      }
+      // I DB usati (`OPN`, `"Dati".x`, istanze delle CALL).
+      for (const n of dbsUsedBy(xref, b.id)) {
+        const db = dev.blocks.find((x) => (x.kind === 'DB' || x.kind === 'IDB') && x.number === n);
+        if (db) add({ kind: 'block', deviceId: dev.id, id: db.id });
       }
     } else if (r.kind === 'tagTable') {
       if (!findTagTable(dev, r.id)) continue;
@@ -111,11 +147,26 @@ export function createLibraryItem(
     tagTables: structuredClone(pick<TagTable>('tagTable', (id) => findTagTable(dev, id))),
     watchTables: structuredClone(pick<WatchTable>('watchTable', (id) => findWatchTable(dev, id))),
   };
+  if (o.deps !== false && item.blocks.length > 0) {
+    // I tag usati dal codice, in una tabella generata (a meno che la sua tabella non sia già dentro).
+    const have = new Set(item.tagTables.flatMap((t) => t.tags.map((x) => x.id)));
+    const tags = tagsUsedBy(dev, new Set(item.blocks.map((b) => b.id)), have);
+    if (tags.length > 0)
+      item.tagTables.push({
+        id: o.newId(),
+        name: '',
+        group: '',
+        tags: structuredClone(tags),
+        constants: [],
+      });
+  }
   const objects = libraryItemObjects(item);
   if (objects.length === 0) return null;
   // Il nome è quello del primo oggetto scelto (non di una dipendenza).
   const first = refs[0] && objects.find((x) => 'id' in refs[0]! && x.id === refs[0].id);
   item.name = o.name ?? first?.name ?? objects[0]!.name;
+  const generated = item.tagTables.find((t) => t.name === '');
+  if (generated) generated.name = `${item.name} (tag)`;
   return item;
 }
 

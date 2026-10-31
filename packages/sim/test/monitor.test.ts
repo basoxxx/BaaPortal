@@ -169,7 +169,7 @@ describe('osservazione', () => {
     cpu.setMonitor({ kind: 'FC', number: 2 });
     cpu.run();
     clock.t = 95;
-    clock.step = 10;
+    clock.step = 2; // letture dell'orologio ogni 128 istruzioni (DEADLINE_EVERY)
     expect(cpu.cycle().ok).toBe(true);
     expect(cpu.memory.M[100]).toBe(99); // OB35 ha girato dentro FC2 (poi: L, nops e T dell'OB1)
     const s = cpu.monitorSnapshot()!;

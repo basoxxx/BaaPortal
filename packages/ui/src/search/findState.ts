@@ -13,6 +13,8 @@ export interface FindUi {
   matchCase: boolean;
   wholeWord: boolean;
   regex: boolean;
+  /** Rinominando una variabile con Sostituisci, si aggiornano anche i riferimenti nel codice. */
+  updateRefs: boolean;
   scope: 'project' | 'active';
   outcome: FindOutcome | null;
   /** Indice del risultato selezionato in `outcome.hits`. */
@@ -25,6 +27,7 @@ export const initialFindUi = (): FindUi => ({
   matchCase: false,
   wholeWord: false,
   regex: false,
+  updateRefs: true,
   scope: 'project',
   outcome: null,
   selected: null,

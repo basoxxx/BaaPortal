@@ -5,7 +5,7 @@ import type { LineMapRow } from '../editors/awl/monitorExtension';
 import type { OnlineCompare } from '../online/compare';
 import type { DownloadPlan } from '../online/plcDownload';
 import type { PlcAccess, PlcIdentity, PlcMode, PlcRegs } from '../online/plcTypes';
-import type { SimStats, SimWarning, WatchValue } from '../sim/protocol';
+import type { SimStats, SimWarning, WatchValue, WriteItemReq } from '../sim/protocol';
 import type { ImportSummary } from '../project/navigation/tagTableIo';
 import * as wa from './workArea';
 import type { FindRequest, FindUi, TagReveal } from '../search/findState';
@@ -142,6 +142,10 @@ export interface SimUiState {
   warnings: SimWarning[];
   inputs: Uint8Array;
   outputs: Uint8Array;
+  /** Tabella di forzamento della CPU simulata (LED FRCE acceso se non è vuota). */
+  forces: WriteItemReq[];
+  /** Moduli della configurazione estratti dal pannello I/O (id). */
+  pulled: string[];
   /** Un «Carica nel dispositivo» è in corso su questa sessione. */
   downloading: boolean;
   /** Byte aggiunti a mano nel pannello I/O («+ byte»): solo per questa simulazione, non nel progetto. */
@@ -154,8 +158,8 @@ export interface SimUiState {
   monitorSteps: MonitorStep[] | null;
   /** ACCU in esadecimale (predefinito) o in decimale; non si salva. */
   monitorHex: boolean;
-  /** Tabella di controllo osservata (una sola alla volta, quella aperta in un riquadro visibile). */
-  watch: { deviceId: string; tableId: string } | null;
+  /** Tabelle di controllo osservate insieme (quelle aperte in un riquadro visibile), in ordine di accensione. */
+  watch: { deviceId: string; tableId: string }[];
   /** Ultimi valori ricevuti, per id di riga (solo le righe che si osservano); `null` finché non arrivano. */
   watchValues: Record<string, WatchValue> | null;
 }
@@ -180,13 +184,15 @@ export const SIM_OFF: SimUiState = {
   warnings: [],
   inputs: new Uint8Array(0),
   outputs: new Uint8Array(0),
+  forces: [],
+  pulled: [],
   downloading: false,
   ioExtra: { inputs: [], outputs: [] },
   loaded: {},
   monitor: null,
   monitorSteps: null,
   monitorHex: true,
-  watch: null,
+  watch: [],
   watchValues: null,
 };
 

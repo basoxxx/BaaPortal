@@ -9,6 +9,8 @@ import {
   readBaap,
   setLanguages,
   setTranslation,
+  staleTranslations,
+  markReviewed,
   shownText,
   textKey,
   writeBaap,
@@ -90,6 +92,22 @@ describe('testi di progetto', () => {
       const z = zipSync({ ...files, 'project.json': strToU8(JSON.stringify(bad)) });
       expect(() => readBaap(z)).toThrow();
     }
+  });
+
+  it('una traduzione è «da rivedere» se il testo di modifica cambia dopo; si riscrive e si legge', () => {
+    const p = sample();
+    const e = listTextEntries(p).find((x) => x.source === 'Nastro')!;
+    setTranslation(p, e.key, 'en-US', 'Belt', e.source);
+    expect([...staleTranslations(p)]).toEqual([]);
+    const fb = p.devices[0]!.blocks.find((b) => b.kind === 'FB')!;
+    fb.header.title = 'Nastro 2';
+    expect([...staleTranslations(p)]).toEqual([e.key]);
+    const back = readBaap(writeBaap(p, { appVersion: '1' }));
+    expect([...staleTranslations(back)]).toEqual([e.key]);
+    markReviewed(p, e.key, 'Nastro 2');
+    expect([...staleTranslations(p)]).toEqual([]);
+    setTranslation(p, e.key, 'en-US', '');
+    expect(p.textSources).toBeUndefined();
   });
 
   it('applyTranslations ignora chiavi e lingue sconosciute, e i vuoti', () => {
