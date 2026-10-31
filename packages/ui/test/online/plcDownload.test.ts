@@ -406,7 +406,9 @@ describe('Carica nel dispositivo: esiti dopo un STOP', () => {
     const res = await screen.findByTestId('download-result');
     expect(res).toHaveTextContent('Caricamento annullato. CPU lasciata in STOP.');
     expect(res).not.toHaveTextContent('nessuna modifica');
-    expect(app.bridge.questions.at(-1)!.message).toContain('programma parziale');
+    // Annullata la conferma «Carica»: non si è scritto nulla, il programma non è parziale.
+    expect(app.bridge.questions.at(-1)!.message).toContain('non è stato scritto nulla');
+    expect(app.bridge.questions.at(-1)!.message).not.toContain('parziale');
   }, 30_000);
 
   it('collegamento perso dopo il STOP riuscito: «CPU arrestata, nessun blocco caricato»', async () => {

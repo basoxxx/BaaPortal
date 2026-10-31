@@ -287,6 +287,7 @@
     }
   },
   "sim": {
+    "restartCpuCancelledMessage": "Download cancelled: nothing was written to the CPU, which BaaPortal stopped. Restart it (RUN)?",
     "restartCpuPartialMessage": "The download did not finish: the CPU, stopped by BaaPortal, may hold a partial program. Restart it (RUN) anyway?",
     "monitor": {
       "title": "Program monitoring",

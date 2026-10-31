@@ -44,7 +44,7 @@ Con il collegamento attivo, _Carica nel dispositivo_ (barra degli strumenti, men
 3. **Conferme.** Con _Arresta la CPU_ spuntato compaiono due finestre di conferma del sistema: prima quella per lo STOP, poi quella per il caricamento. Senza la spunta, solo quella del caricamento. Il pulsante predefinito è _Annulla_: se si chiude la finestra, non si scrive nulla.
 4. **Avvio.** Dopo un caricamento riuscito, se la CPU è stata arrestata da BaaPortal, chiede «Avviare la CPU?» (predefinito _No_). Se era già in STOP prima del caricamento non chiede nulla e la lascia com'è. Con _Sì_ compare la conferma del sistema per il RUN. Se si risponde _No_, la CPU resta com'è e si può riavviare più tardi con _Avvia CPU_ (con una sua conferma).
 5. **Controllo prima di scrivere.** Prima di ogni scrittura BaaPortal rilegge il modulo e controlla che sia quello previsto (numero d'ordine, e numero di serie se lo conosce); se non coincide, non scrive.
-6. **Esito.** L'esito (caricati, cancellati, fallito) resta nella finestra. Alla fine il confronto riparte da solo. Se BaaPortal aveva fermato la CPU e il caricamento finisce con un errore o viene annullato, chiede (predefinito _No_) se riavviarla, avvisando che il programma può essere parziale; il RUN chiede poi la sua conferma.
+6. **Esito.** L'esito (caricati, cancellati, fallito) resta nella finestra. Alla fine il confronto riparte da solo. Se BaaPortal aveva fermato la CPU e il caricamento finisce con un errore o viene annullato, chiede (predefinito _No_) se riavviarla, avvisando dopo un errore che il programma può essere parziale (annullando la conferma non si scrive nulla); il RUN chiede poi la sua conferma.
 
 ## Confronto e distintivi
 

@@ -304,8 +304,8 @@ export async function executePlcDownload(
   const live = sameSession(store, plan);
   if (!res.ok && 'cancelled' in res) {
     if (live) push(store, 'warning', 'plcDownloadCancelled');
-    // Annullato dopo lo STOP fatto da noi: si propone di riavviarla (programma forse parziale).
-    if (live && stopped) await offerRun(store, bridge, plan, 'sim.restartCpuPartialMessage');
+    // Annullato («Carica» non confermato) dopo lo STOP fatto da noi: nulla scritto, si propone il RUN.
+    if (live && stopped) await offerRun(store, bridge, plan, 'sim.restartCpuCancelledMessage');
     return { status: 'cancelled', ...none, ...(stopped ? { cpuStopped: true } : {}) };
   }
   const outcome: DownloadOutcome = res.ok
