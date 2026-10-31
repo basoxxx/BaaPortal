@@ -477,3 +477,62 @@ describe('SimCpu', () => {
     expect(cpu.diagnostics[0]?.detail).not.toBe('n0');
   });
 });
+
+describe('tempo di ciclo e pause del processo (pauseMs)', () => {
+  /** Orologio che avanza di `step` ms a lettura e, armato, salta una volta di `jump` ms. */
+  const pausing = (step: number) => {
+    const c = { t: 0, jumpAt: -1, jump: 0, reads: 0 };
+    const now = () => {
+      if (c.reads++ === c.jumpAt) c.t += c.jump;
+      return (c.t += step);
+    };
+    return { c, now };
+  };
+  const make = (networks: string[], now: () => number, pauseMs?: number) => {
+    const cpu = new SimCpu({
+      cpuTypeId: 'cpu-315-2-pn-dp',
+      props: PROPS,
+      now,
+      ...(pauseMs !== undefined ? { pauseMs } : {}),
+    });
+    for (const b of buildProgram([ob1(...networks)]).list()) cpu.program.put(b);
+    cpu.run();
+    return cpu;
+  };
+
+  it('una pausa di 500 ms a metà ciclo non conta: niente STOP', () => {
+    const { c, now } = pausing(0);
+    const cpu = make([`${'\tNOP 0;\n'.repeat(1100)}\tSET;\n\t= Q 0.0;`], now, 50);
+    c.jumpAt = c.reads + 1; // dopo l'inizio del ciclo, prima del controllo delle 1024 istruzioni
+    c.jump = 500;
+    const r = cpu.cycle();
+    expect(r.ok).toBe(true);
+    expect(cpu.mode).toBe('RUN');
+    expect(cpu.memory.physOut[0]).toBe(1);
+  });
+
+  it('una pausa fra l’ultimo controllo e la fine del ciclo non conta', () => {
+    const { c, now } = pausing(0);
+    const cpu = make(['\tSET;\n\t= Q 0.0;'], now, 50);
+    c.jumpAt = c.reads + 1;
+    c.jump = 500;
+    expect(cpu.cycle().ok).toBe(true);
+  });
+
+  it('un loop infinito va comunque in STOP per tempo di ciclo', () => {
+    const { now } = pausing(1);
+    const cpu = make(['x: JU x;'], now, 50);
+    const r = cpu.cycle();
+    expect(r.error?.code).toBe('TEMPO_CICLO_SUPERATO');
+    expect(r.error?.detail ?? '').toContain('150 ms'); // non il limite di istruzioni
+    expect(cpu.mode).toBe('STOP');
+  });
+
+  it('senza pauseMs un salto dell’orologio resta tempo di ciclo (come prima)', () => {
+    const { c, now } = pausing(0);
+    const cpu = make(['\tNOP 0;'], now);
+    c.jumpAt = c.reads + 1;
+    c.jump = 500;
+    expect(cpu.cycle().ok).toBe(false);
+  });
+});

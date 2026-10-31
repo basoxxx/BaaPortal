@@ -84,6 +84,12 @@ export interface SimCpuOptions {
   /** Limite di istruzioni per ciclo (predefinito `MAX_INSTRUCTIONS`; più basso nei test). */
   maxInstructions?: number;
   /**
+   * Pausa del processo: un intervallo fra due controlli del tempo di ciclo più lungo di così (ms, a
+   * orologio reale, senza le attese di SFC 47) è il processo fermo (PC carico), non tempo di
+   * esecuzione, e non conta per `maxCycleMs`. Assente: tutto conta (orologio dei test).
+   */
+  pauseMs?: number;
+  /**
    * Moduli di I/O della configurazione hardware. Con almeno un modulo, la periferia e l'aggiornamento
    * delle immagini di processo valgono solo per i loro byte; senza, per tutto il campo della CPU.
    */
@@ -193,6 +199,9 @@ export class SimCpu {
   private overrun = false;
   /** Inizio del controllo del tempo di ciclo (si riparte dopo OB80). */
   private watchdog = 0;
+  /** Orologio senza attese di SFC 47 all'ultimo controllo del tempo di ciclo (`pauseMs`). */
+  private lastCheck = 0;
+  private readonly pauseMs: number | undefined;
   private ob35Due = 0;
   private ob35Running = false;
   /** Allarmi di diagnostica e guasti in attesa (`raiseInterrupt`). */
@@ -208,6 +217,7 @@ export class SimCpu {
   constructor(o: SimCpuOptions) {
     this.props = o.props;
     this.cpuTypeId = o.cpuTypeId;
+    this.pauseMs = o.pauseMs;
     const clock = o.now ?? (() => Date.now());
     this.now = () => clock() + Math.floor(this.waitedUs / 1000);
     this.services = {
@@ -480,7 +490,7 @@ export class SimCpu {
     this.startUpInfo = ob100StartInfo(this.stamp(t0));
     if (this.program.get('OB', 100)) {
       const t = this.now();
-      this.watchdog = t;
+      this.resetWatchdog(t);
       const ctx = this.newContext(t);
       try {
         this.runOb(ctx, 100, PRIORITY.OB100, ob100StartInfo(this.stamp(t)));
@@ -537,7 +547,7 @@ export class SimCpu {
   cycle(): CycleResult {
     if (this._mode !== 'RUN') return { ran: false, ok: true, elapsedMs: 0 };
     const start = this.now();
-    this.watchdog = start;
+    this.resetWatchdog(start);
     this.overrun = false;
     this.updateClock(start);
     this.readInputs();
@@ -571,7 +581,7 @@ export class SimCpu {
       );
       const end = this.now();
       elapsedMs = end - start;
-      if (end - this.watchdog > this.props.maxCycleMs)
+      if (this.watchdogExpired(end))
         this.cycleOverrun(ctx, `oltre ${this.props.maxCycleMs} ms`, elapsedMs, end, {
           ob: 1,
           prio: PRIORITY.OB1,
@@ -601,7 +611,7 @@ export class SimCpu {
   idle(): number | undefined {
     if (this._mode !== 'RUN') return undefined;
     const t = this.now();
-    this.watchdog = t;
+    this.resetWatchdog(t);
     this.updateClock(t);
     try {
       this.serviceInterrupts(this.newContext(t), PRIORITY.OB1, t);
@@ -735,10 +745,24 @@ export class SimCpu {
     return this.running.some((r) => r.ob === ob);
   }
 
+  private resetWatchdog(t: number): void {
+    this.watchdog = t;
+    this.lastCheck = t - Math.floor(this.waitedUs / 1000);
+  }
+
+  /** Tempo di ciclo superato all'istante `t`; un intervallo dal controllo precedente oltre `pauseMs` non conta. */
+  private watchdogExpired(t: number): boolean {
+    const raw = t - Math.floor(this.waitedUs / 1000);
+    if (this.pauseMs !== undefined && raw - this.lastCheck > this.pauseMs)
+      this.watchdog += raw - this.lastCheck;
+    this.lastCheck = raw;
+    return t - this.watchdog > this.props.maxCycleMs;
+  }
+
   /** Ogni `TICK_EVERY` istruzioni: tempo di ciclo, merker di clock, interruzioni dovute. */
   private tick(st: ExecState): void {
     const t = this.now();
-    if (t - this.watchdog > this.props.maxCycleMs)
+    if (this.watchdogExpired(t))
       this.cycleOverrun(st.ctx, `oltre ${this.props.maxCycleMs} ms`, t - st.ctx.cycleStart, t);
     this.updateClock(t);
     this.serviceInterrupts(st.ctx, this.currentPrio(), t);

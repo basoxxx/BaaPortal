@@ -9,6 +9,6 @@ Guida breve all'uso del simulatore integrato (piano 2C). La semantica della CPU 
 5. **Osserva programma.** Con un blocco AWL aperto e già caricato, mostra a fine riga RLO, STA, ACCU1, ACCU2 e parola di stato della prima esecuzione nell'ultimo ciclo. In un blocco KOP o FUP colora il grafico (vedi `docs/uso/kop.md`); in un blocco SCL mostra a fine riga i valori assegnati e controllati, dell'ultima esecuzione (vedi `docs/uso/fup-scl.md`). Il tasto esadecimale/decimale cambia il formato degli accumulatori e si salva nel progetto.
 6. **Tabelle di controllo.** Nell'albero, cartella _Tabelle di controllo e forzamento_: _Aggiungi nuova tabella di controllo_. Ogni riga ha operando (simbolico o assoluto), formato, valore di stato e valore di comando. _Osserva tutto_ legge i valori (anche di più tabelle insieme, nei due riquadri); _Comanda_ scrive una volta i valori di comando.
 
-Le proprietà della CPU (tempo di ciclo, merker di clock, intervallo di OB35) cambiate durante la simulazione valgono subito, senza riavviarla.
+Le proprietà della CPU (tempo di ciclo, merker di clock, intervallo di OB35) cambiate durante la simulazione valgono subito, senza riavviarla. Il controllo del tempo di ciclo massimo non conta le pause del simulatore oltre 50 ms dovute al computer carico (2.2): un programma che gira in un ciclo infinito va comunque in STOP.
 
 I limiti noti sono in `docs/limiti-noti.md`, sezione «Strumenti di test (piano 2C)».
