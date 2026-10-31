@@ -101,6 +101,9 @@ export function addIoByte(
  */
 export function simIoOf(dev: PlcDevice): SimIoModule[] {
   const out: SimIoModule[] = [];
+  // shortcut: le 31xC hanno I/O integrato (posto 2) senza indirizzi nel catalogo; limitare la periferia
+  // ai moduli lo escluderebbe, quindi tutto il campo della CPU (come la 2.0). Da togliere quando il catalogo li avrà.
+  if (findCpu(dev.cpu.typeId)?.group === 'compact') return out;
   const add = (m: HwModule, station?: number) => {
     const type = findIoModule(m.orderNumber);
     if (!type) return;

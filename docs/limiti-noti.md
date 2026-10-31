@@ -246,7 +246,7 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§4.1 per la semantica). T
 - **Confronti:** forzano OR = 0. Conseguenza: in `A a; A b; O; L; L; ==I; A c` l'`O` pendente è perso dal confronto e `A c` si combina in AND con il risultato.
 - **`T STW`** non segue MCR (scrive anche con MCR spento).
 - **`BTI`/`BTD`:** si controlla solo il bit di segno e le cifre > 9 (`BCD_NON_VALIDO`).
-- **Immagine di processo:** le dimensioni di I e Q sono quelle del catalogo della CPU. Con una configurazione hardware (2.1) la periferia e l'aggiornamento delle immagini valgono solo nei byte dei moduli presenti; un'area di immagine parziale configurabile (CPU più recenti) non c'è.
+- **Immagine di processo:** le dimensioni di I e Q sono quelle del catalogo della CPU. Con una configurazione hardware (2.1) la periferia e l'aggiornamento delle immagini valgono solo nei byte dei moduli presenti, tranne con le CPU compatte 31xC: il loro I/O integrato non ha indirizzi nel catalogo, quindi si usa tutto il campo della CPU come nella 2.0 (anche estrai e inserisci dei moduli non c'è); un'area di immagine parziale configurabile (CPU più recenti) non c'è.
 - **Watchdog di OB100:** il simulatore applica `maxCycleMs` (e il limite di 10 000 000 istruzioni) anche a OB100; su una CPU vera OB100 non ha il limite del tempo di ciclo.
 - **Limite di istruzioni:** 10 000 000 per ciclo, indipendente dall'orologio; scelta del simulatore.
 - **PQ → Q:** una scrittura diretta nella periferia (PQ o `P` da puntatore) scrive anche in Q se l'indirizzo vi cade; non verificato su una CPU.
