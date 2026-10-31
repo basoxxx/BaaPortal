@@ -336,7 +336,7 @@ Fonte: manuale delle CPU 31x e guida di STEP 7, «Forzamento delle variabili» (
 - ⚠️ Gli accessi diretti alla periferia (PI, PQ) non sono forzati; OB35 e gli altri OB d'allarme vedono i valori del ciclo in corso.
 - LED FRCE (SZL `0x0074`/`0x0174`, `forceActive` del backend) acceso con la tabella non vuota.
 
-## 13. SFB 0–5 IEC e avviso «non simulata»
+## 13. SFB 0–5 IEC, SFB 32 DRUM e avviso «non simulata»
 
 ### 13.1 SFB 0–5
 
@@ -362,9 +362,21 @@ Il tempo viene dall'orologio della CPU (lo stesso di TIME_TCK).
 - Le uscite (Q, ET, CV, QU, QD) cambiano **solo quando l'SFB viene chiamato**: non c'è un tempo di fondo.
 - CTUD: CV si rilegge dal DB di istanza a ogni chiamata, non da uno stato interno.
 
+### 13.1b SFB 32 DRUM (2.2)
+
+Fonte: lo stesso manuale (edizione 05/2010, 14.7 «Implementing a Sequencer with SFB 32 "DRUM"»). Il manuale documenta anche i dati statici (JOG_HIS, EOD, DSP, DSC, DCC, DTBP, PREV_TIME, S_PRESET, OUT_VAL, S_MASK), quindi qui **tutto lo stato sta nel DB di istanza** (disposizione IN, OUT, statici come `layoutInstance`), niente nella CPU.
+
+- RESET = 1: DSC = DSP, DCC = DTBP × S_PRESET[DSP], Q = EOD = 0. Il primo richiamo deve avere RESET = 1 (prima DSC vale 0: 16#8082).
+- Fronte di JOG (rispetto a JOG_HIS): passo seguente; nell'ultimo passo (DSC = LST_STEP) Q = EOD = 1 e DCC = 0, e l'SFB resta lì fino a RESET.
+- DRUM_EN = 1: con EVENTi del passo corrente a 1, DCC cala del tempo trascorso dal richiamo precedente (PREV_TIME, ms dell'orologio di CPU); a 0 si passa al passo seguente (o Q = EOD = 1 nell'ultimo). DTBP = 0 dà l'avanzamento solo a eventi. JOG fa avanzare anche con DRUM_EN = 1.
+- Uscite: OUTj = OUT_VAL[DSC, j] se S_MASK[DSC, j] = 1, altrimenti il valore che aveva (quello del passo precedente); OUT_WORD raccoglie OUT0..OUT15 (bit j).
+- ERR_CODE: 16#8081 LST_STEP fuori da 1..16, 16#8083 DSP fuori da 1..LST_STEP, 16#8082 DSC fuori da DSP..LST_STEP; con un errore l'SFB resta com'è.
+
+**⚠️ Da verificare su CPU reale:** le uscite si ricalcolano a ogni richiamo e non solo al cambio di passo; EVENTi letto al richiamo vale per tutto l'intervallo dal richiamo precedente; il tempo oltre lo scadere non passa al passo seguente; con un errore non si aggiornano neanche JOG_HIS e PREV_TIME; i limiti esatti di DSP e DSC per 16#8082/16#8083. 16#8084 (DCC oltre 2^32−1) non può capitare: DTBP e S_PRESET sono WORD. Il tempo in STOP conta (PREV_TIME resta quello dell'ultimo richiamo in RUN), mentre sulla CPU il timer di DRUM gira solo in STARTUP e RUN; l'azzeramento al riavvio a freddo non c'è (le S7-300 simulate fanno l'avvio a caldo).
+
 ### 13.2 SFC e SFB «non simulati»
 
-Una SFC o un SFB senza gestore (cioè **tutte** quelle diverse da SFC 0–6, 13–15, 20–24, 28–34, 36–43, 46, 47, 49, 51, 52, 58, 59, 64 e SFB 0–5) è un **avviso, non un errore** (R5): la chiamata non scrive alcuna uscita, imposta **BR = 0** e la CPU prosegue. L'avviso consiste in una voce nel buffer di diagnostica (`SFC_NON_SIMULATA` o `SFB_NON_SIMULATA`, con numero e nome del blocco) e in un evento `{ type: 'warning' }`; è emesso **una volta per numero e per periodo di RUN**. Una SFC o un SFB che non esiste nemmeno nel catalogo dà invece `BLOCCO_NON_CARICATO` (OB121 con SW_FLT 16#3D o 16#3F).
+Una SFC o un SFB senza gestore (cioè **tutte** quelle diverse da SFC 0–6, 13–15, 20–24, 28–34, 36–43, 46, 47, 49, 51, 52, 58, 59, 64 e SFB 0–5, 32) è un **avviso, non un errore** (R5): la chiamata non scrive alcuna uscita, imposta **BR = 0** e la CPU prosegue. L'avviso consiste in una voce nel buffer di diagnostica (`SFC_NON_SIMULATA` o `SFB_NON_SIMULATA`, con numero e nome del blocco) e in un evento `{ type: 'warning' }`; è emesso **una volta per numero e per periodo di RUN**. Una SFC o un SFB che non esiste nemmeno nel catalogo dà invece `BLOCCO_NON_CARICATO` (OB121 con SW_FLT 16#3D o 16#3F).
 
 ## 14. Ospite nell'app (piano 2C)
 
