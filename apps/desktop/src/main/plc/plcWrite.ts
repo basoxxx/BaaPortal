@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { tr } from './dialogText';
 import {
   diagRecordsFrom,
   modeFrom,
@@ -237,13 +238,17 @@ function checkTime(t: Record<string, unknown>): string | undefined {
   return undefined;
 }
 
-type ClockSpec = { pc: true } | { pc: false; time: S7DateTime };
+/** Ora del PC in ora locale o in UTC (la CPU non conosce il fuso: si scrive il campo scelto). */
+type ClockSpec = { pc: true; utc: boolean } | { pc: false; time: S7DateTime };
 
 /** Controlla ciò che arriva dal renderer prima di qualunque conferma. */
 export function parseClockRequest(raw: unknown): ClockSpec | string {
   if (typeof raw !== 'object' || raw === null) return 'Richiesta di ora non valida';
-  const r = raw as { source?: unknown; time?: unknown };
-  if (r.source === 'pc') return { pc: true };
+  const r = raw as { source?: unknown; time?: unknown; utc?: unknown };
+  if (r.source === 'pc') {
+    if (r.utc !== undefined && typeof r.utc !== 'boolean') return 'Fuso dell’ora non valido';
+    return { pc: true, utc: r.utc === true };
+  }
   if (r.source !== 'manual') return "Origine dell'ora non valida";
   if (typeof r.time !== 'object' || r.time === null) return 'Ora non valida';
   const t = r.time as Record<string, unknown>;
@@ -466,10 +471,10 @@ export class PlcWriteService {
       (err) => fail(errText(err)), // mai un'eccezione verso il renderer
       async (op) => {
         const p = await this.prepare(owner, op, (t) => ({
-          title: 'Carica nel dispositivo',
-          message: `Caricare nella CPU ${cpuName(t)}?`,
-          detail: `Operazione: Carica nel dispositivo\n${listLines(lines)}`,
-          confirmLabel: 'Carica',
+          title: tr('Carica nel dispositivo'),
+          message: tr('Caricare nella CPU {cpu}?', { cpu: cpuName(t) }),
+          detail: `${tr('Operazione: Carica nel dispositivo')}\n${listLines(lines)}`,
+          confirmLabel: tr('Carica'),
         }));
         if (!('c' in p)) return 'cancelled' in p.result ? p.result : fail(p.result.error);
         return this.runSteps(owner, op, p.c, steps);
@@ -486,10 +491,10 @@ export class PlcWriteService {
       (err) => ({ ok: false, error: errText(err) }),
       async (op) => {
         const p = await this.prepare(owner, op, (target) => ({
-          title: t.title,
-          message: `${t.what} della CPU ${cpuName(target)}?`,
-          detail: `Operazione: ${t.title}`,
-          confirmLabel: t.label,
+          title: tr(t.title),
+          message: tr('{what} della CPU {cpu}?', { what: tr(t.what), cpu: cpuName(target) }),
+          detail: tr('Operazione: {op}', { op: tr(t.title) }),
+          confirmLabel: tr(t.label),
         }));
         if (!('c' in p)) return p.result;
         try {
@@ -512,14 +517,19 @@ export class PlcWriteService {
     if (typeof spec === 'string') return { ok: false, error: spec };
     // Solo un'indicazione per la conferma; l'ora scritta si prende dopo. Se la CPU non può averla,
     // non si chiede nemmeno la conferma.
-    const preview = spec.pc ? fromDate(new Date(this.now())) : undefined;
+    const preview = spec.pc ? fromDate(new Date(this.now()), spec.utc) : undefined;
     if (preview) {
       const bad = checkTime(preview as unknown as Record<string, unknown>);
       if (bad) return { ok: false, error: `L'ora del PC non è impostabile: ${bad}` };
     }
     const shown = spec.pc
-      ? `Ora del PC al momento della conferma (adesso: ${formatTime(preview!)})`
-      : `Nuova ora: ${formatTime(spec.time)}`;
+      ? tr(
+          spec.utc
+            ? 'Ora del PC in UTC al momento della conferma (adesso: {time})'
+            : 'Ora del PC al momento della conferma (adesso: {time})',
+          { time: formatTime(preview!) },
+        )
+      : tr('Nuova ora: {time}', { time: formatTime(spec.time) });
     return this.exclusive<PlcClockResult>(
       owner,
       (m) => ({ ok: false, error: m }),
@@ -527,10 +537,10 @@ export class PlcWriteService {
       async (op) => {
         const p = await this.prepare(owner, op, (target) => {
           return {
-            title: 'Imposta ora',
-            message: `Impostare l'ora della CPU ${cpuName(target)}?`,
-            detail: `${shown}\nGli interrupt dall'orologio (OB10) possono saltare`,
-            confirmLabel: 'Imposta ora',
+            title: tr('Imposta ora'),
+            message: tr("Impostare l'ora della CPU {cpu}?", { cpu: cpuName(target) }),
+            detail: `${shown}\n${tr("Gli interrupt dall'orologio (OB10) possono saltare")}`,
+            confirmLabel: tr('Imposta ora'),
           };
         });
         if (!('c' in p)) return p.result;
@@ -539,7 +549,7 @@ export class PlcWriteService {
             return { ok: false, error: 'Operazione interrotta' };
           let t: S7DateTime;
           if (spec.pc) {
-            t = fromDate(new Date(this.now())); // un solo istante: data e ora insieme
+            t = fromDate(new Date(this.now()), spec.utc); // un solo istante: data e ora insieme
             const bad = checkTime(t as unknown as Record<string, unknown>);
             if (bad) return { ok: false, error: `L'ora del PC non è impostabile: ${bad}` };
           } else {
@@ -577,10 +587,15 @@ export class PlcWriteService {
       (err) => ({ ok: false, error: errText(err) }),
       async (op) => {
         const p = await this.prepare(owner, op, (target) => ({
-          title: 'Comanda variabili',
-          message: `Scrivere ${items.length} ${items.length === 1 ? 'valore' : 'valori'} nella CPU ${cpuName(target)}?`,
-          detail: `Operazione: Comanda variabili\n${listLines(lines)}${notice}`,
-          confirmLabel: 'Comanda',
+          title: tr('Comanda variabili'),
+          message: tr(
+            items.length === 1
+              ? 'Scrivere 1 valore nella CPU {cpu}?'
+              : 'Scrivere {n} valori nella CPU {cpu}?',
+            { n: items.length, cpu: cpuName(target) },
+          ),
+          detail: `${tr('Operazione: Comanda variabili')}\n${listLines(lines)}${notice}`,
+          confirmLabel: tr('Comanda'),
         }));
         if (!('c' in p)) return p.result;
         const target = this.o.service.target(owner);
@@ -611,11 +626,13 @@ export class PlcWriteService {
         const target = this.o.service.target(owner);
         if (!target) return { ok: false, error: 'Nessun collegamento online' };
         const ok = await this.o.confirm(owner, {
-          title: 'Runtime HMI',
-          message: `Il runtime HMI può scrivere nella CPU ${cpuName(target)}: consentire?`,
+          title: tr('Runtime HMI'),
+          message: tr('Il runtime HMI può scrivere nella CPU {cpu}: consentire?', {
+            cpu: cpuName(target),
+          }),
           detail:
             'Pulsanti e campi di immissione delle schermate scriveranno subito nella CPU (aree I, Q, M e DB), senza altre conferme, finché il runtime resta aperto e il collegamento online non cambia.\nUn pulsante a impulsi scrive 0 al rilascio e alla chiusura del runtime: se il PC o la rete cadono mentre è premuto, il bit resta a 1. Non usarli per movimenti pericolosi.',
-          confirmLabel: 'Consenti scritture',
+          confirmLabel: tr('Consenti scritture'),
         });
         if (!ok || op.aborted) return { ok: false, cancelled: true };
         if (owner.isDestroyed()) return { ok: false, error: 'Finestra chiusa' };
@@ -1068,10 +1085,10 @@ export class PlcWriteService {
     await this.beforeRestore?.(owner);
     const lines = restoreLines(plan);
     const go = await this.o.confirm(owner, {
-      title: 'Ripristina backup (sperimentale)',
-      message: `Ripristinare il backup nella CPU ${cpuName(target)}?`,
+      title: tr('Ripristina backup (sperimentale)'),
+      message: tr('Ripristinare il backup nella CPU {cpu}?', { cpu: cpuName(target) }),
       detail: `${listLines(lines)}\n${RESTORE_NOTICE}`,
-      confirmLabel: 'Ripristina backup (sperimentale)',
+      confirmLabel: tr('Ripristina backup (sperimentale)'),
     });
     if (!go || op.aborted) return cancelled();
     if (owner.isDestroyed()) return fin('Finestra chiusa');
@@ -1101,10 +1118,10 @@ export class PlcWriteService {
       }
       if (m0 !== 'STOP') {
         const stop = await this.o.confirm(owner, {
-          title: 'Ripristina backup (sperimentale)',
-          message: 'Portare la CPU in STOP?',
-          detail: 'Il ripristino degli SDB si fa solo con la CPU in STOP.',
-          confirmLabel: 'Porta in STOP',
+          title: tr('Ripristina backup (sperimentale)'),
+          message: tr('Portare la CPU in STOP?'),
+          detail: tr('Il ripristino degli SDB si fa solo con la CPU in STOP.'),
+          confirmLabel: tr('Porta in STOP'),
         });
         if (!stop || op.aborted) return cancelled();
         stopSent = true;
@@ -1164,10 +1181,10 @@ export class PlcWriteService {
       // 4. riavvio, solo con tutti i passi riusciti, richiesto e confermato
       if (ok && req.restart) {
         const run = await this.o.confirm(owner, {
-          title: 'Ripristina backup (sperimentale)',
-          message: 'Avviare la CPU (avviamento a caldo)?',
-          detail: 'Il ripristino è finito. La CPU è in STOP.',
-          confirmLabel: 'Avvia',
+          title: tr('Ripristina backup (sperimentale)'),
+          message: tr('Avviare la CPU (avviamento a caldo)?'),
+          detail: tr('Il ripristino è finito. La CPU è in STOP.'),
+          confirmLabel: tr('Avvia'),
         });
         if (run && !op.aborted) {
           try {
@@ -1483,16 +1500,26 @@ function cpuName(t: {
   return `${t.identity.moduleName ?? t.identity.orderNumber} (${accessLabel(t.access)})`;
 }
 
-function fromDate(d: Date): S7DateTime {
-  return {
-    year: d.getFullYear(),
-    month: d.getMonth() + 1,
-    day: d.getDate(),
-    hour: d.getHours(),
-    minute: d.getMinutes(),
-    second: d.getSeconds(),
-    ms: d.getMilliseconds(),
-  };
+function fromDate(d: Date, utc = false): S7DateTime {
+  return utc
+    ? {
+        year: d.getUTCFullYear(),
+        month: d.getUTCMonth() + 1,
+        day: d.getUTCDate(),
+        hour: d.getUTCHours(),
+        minute: d.getUTCMinutes(),
+        second: d.getUTCSeconds(),
+        ms: d.getUTCMilliseconds(),
+      }
+    : {
+        year: d.getFullYear(),
+        month: d.getMonth() + 1,
+        day: d.getDate(),
+        hour: d.getHours(),
+        minute: d.getMinutes(),
+        second: d.getSeconds(),
+        ms: d.getMilliseconds(),
+      };
 }
 
 async function runControl(c: WriteClient, op: PlcControlOp): Promise<string> {

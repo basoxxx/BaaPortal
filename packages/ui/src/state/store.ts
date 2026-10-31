@@ -158,8 +158,8 @@ export interface SimUiState {
   monitorSteps: MonitorStep[] | null;
   /** ACCU in esadecimale (predefinito) o in decimale; non si salva. */
   monitorHex: boolean;
-  /** Tabella di controllo osservata (una sola alla volta, quella aperta in un riquadro visibile). */
-  watch: { deviceId: string; tableId: string } | null;
+  /** Tabelle di controllo osservate insieme (quelle aperte in un riquadro visibile), in ordine di accensione. */
+  watch: { deviceId: string; tableId: string }[];
   /** Ultimi valori ricevuti, per id di riga (solo le righe che si osservano); `null` finché non arrivano. */
   watchValues: Record<string, WatchValue> | null;
 }
@@ -192,7 +192,7 @@ export const SIM_OFF: SimUiState = {
   monitor: null,
   monitorSteps: null,
   monitorHex: true,
-  watch: null,
+  watch: [],
   watchValues: null,
 };
 

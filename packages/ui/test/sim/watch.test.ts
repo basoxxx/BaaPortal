@@ -88,7 +88,7 @@ describe('tabelle di controllo sul simulatore', () => {
     await commands['online.simulation'].run(s.ctx);
     open(s);
     ctl(s).toggleWatch(DEV, 'wt1');
-    expect(st(s).sim.watch).toEqual({ deviceId: DEV, tableId: 'wt1' });
+    expect(st(s).sim.watch).toEqual([{ deviceId: DEV, tableId: 'wt1' }]);
     await vi.waitFor(() => expect(st(s).sim.watchValues).not.toBeNull());
     // il simbolo sconosciuto non si osserva; T e C sì (anche quello che non si può scrivere)
     expect(Object.keys(st(s).sim.watchValues!).sort()).toEqual([
@@ -105,7 +105,7 @@ describe('tabelle di controllo sul simulatore', () => {
     expect((s.watchReqs()[0] as { items: unknown[] }).items).toHaveLength(5);
     // chiudere l'editor ferma l'osservazione
     st(s).closeAllEditors();
-    expect(st(s).sim.watch).toBeNull();
+    expect(st(s).sim.watch).toEqual([]);
     expect(st(s).sim.watchValues).toBeNull();
     await vi.waitFor(() => expect(s.watchReqs().at(-1)).toEqual({ op: 'watch', items: [] }));
   });
@@ -168,16 +168,39 @@ describe('tabelle di controllo sul simulatore', () => {
     open(s);
     ctl(s).toggleWatch(DEV, 'wt1');
     ctl(s).toggleWatch(DEV, 'wt1');
-    expect(st(s).sim.watch).toBeNull();
+    expect(st(s).sim.watch).toEqual([]);
     ctl(s).toggleWatch(DEV, 'wt1');
     await commands['online.simulation'].run(s.ctx);
-    expect(st(s).sim.watch).toBeNull();
+    expect(st(s).sim.watch).toEqual([]);
     expect(st(s).sim.watchValues).toBeNull();
     expect(await ctl(s).commandWatch(DEV, 'wt1')).toBeNull();
     // senza simulazione non si osserva
     ctl(s).toggleWatch(DEV, 'wt1');
-    expect(st(s).sim.watch).toBeNull();
+    expect(st(s).sim.watch).toEqual([]);
     expect(table(s).rows).toHaveLength(6);
+  });
+
+  it('due tabelle visibili (riquadri divisi) si osservano insieme in una sola richiesta', async () => {
+    await initI18n('it');
+    const s = setup();
+    await commands['online.simulation'].run(s.ctx);
+    open(s);
+    st(s).setSplit('vertical');
+    st(s).focusPane(1);
+    st(s).openEditor({ kind: 'watchTable', deviceId: DEV, objectId: 'wt2' });
+    ctl(s).toggleWatch(DEV, 'wt1');
+    ctl(s).toggleWatch(DEV, 'wt2');
+    expect(st(s).sim.watch).toHaveLength(2);
+    await vi.waitFor(() =>
+      expect(Object.keys(st(s).sim.watchValues ?? {})).toEqual(
+        expect.arrayContaining(['r-mw', 'q1']),
+      ),
+    );
+    expect((s.watchReqs().at(-1) as { items: unknown[] }).items).toHaveLength(6);
+    // spegnerne una lascia l'altra
+    ctl(s).toggleWatch(DEV, 'wt1');
+    expect(st(s).sim.watch).toEqual([{ deviceId: DEV, tableId: 'wt2' }]);
+    await vi.waitFor(() => expect(Object.keys(st(s).sim.watchValues ?? {})).toEqual(['q1']));
   });
 
   it('passando da una tabella all altra le notifiche della vecchia non si applicano', async () => {
@@ -188,7 +211,7 @@ describe('tabelle di controllo sul simulatore', () => {
     ctl(s).toggleWatch(DEV, 'wt1');
     await vi.waitFor(() => expect(st(s).sim.watchValues).not.toBeNull());
     st(s).openEditor({ kind: 'watchTable', deviceId: DEV, objectId: 'wt2' });
-    expect(st(s).sim.watch).toBeNull(); // la prima non è più visibile
+    expect(st(s).sim.watch).toEqual([]); // la prima non è più visibile
     expect(st(s).sim.watchValues).toBeNull();
     ctl(s).toggleWatch(DEV, 'wt2');
     await vi.waitFor(() => expect(Object.keys(st(s).sim.watchValues ?? {})).toEqual(['q1']));

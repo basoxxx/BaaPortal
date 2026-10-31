@@ -7,7 +7,10 @@ import { beginProgress, getProgress } from '../project/progress';
 import { ONLINE_OFF, type AppState } from '../state/store';
 import { compareBlocks, type CompareProjectBlock } from './compare';
 import { accessWhere } from './accessInput';
-import type { PlcControlOp, PlcEvent, PlcLostReason } from './plcTypes';
+import type { OnlineBlock, PlcControlOp, PlcEvent, PlcLostReason } from './plcTypes';
+
+/** Attesa dopo l'ultima modifica prima di riallineare il confronto (nessun traffico con la CPU). */
+export const COMPARE_DEBOUNCE_MS = 800;
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const norm = (s: string) => s.replace(/\s+/g, '').toUpperCase();
@@ -28,10 +31,73 @@ export class PlcController {
     private readonly bridge: BaaBridge,
   ) {
     let load = store.getState().docLoadId;
+    let doc = store.getState().doc;
     store.subscribe((s) => {
+      if (s.doc !== doc) {
+        doc = s.doc;
+        this.scheduleRefresh();
+      }
       if (s.docLoadId === load) return;
       load = s.docLoadId;
       this.shutdown();
+    });
+  }
+
+  /** Blocchi letti dalla CPU all'ultimo confronto riuscito (della sessione `gen`). */
+  private cpuBlocks: { gen: number; deviceId: string; blocks: OnlineBlock[] } | undefined;
+  private refreshTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /** Dopo una modifica (con calma) il confronto si rifà sul compilato locale e sull'ultimo elenco della CPU. */
+  private scheduleRefresh(): void {
+    if (!this.cpuBlocks || this.cpuBlocks.gen !== this.generation) return;
+    if (this.refreshTimer) clearTimeout(this.refreshTimer);
+    this.refreshTimer = setTimeout(() => {
+      this.refreshTimer = undefined;
+      void this.refreshLocal();
+    }, COMPARE_DEBOUNCE_MS);
+  }
+
+  private async refreshLocal(): Promise<void> {
+    const cached = this.cpuBlocks;
+    const st = this.store.getState();
+    const { status, deviceId, comparing, downloading } = st.online;
+    if (!cached || cached.gen !== this.generation || status !== 'on' || comparing || downloading)
+      return;
+    if (deviceId !== cached.deviceId || getProgress()) return;
+    const gen = this.generation;
+    await compileProgram(
+      { store: this.store, bridge: this.bridge },
+      deviceId,
+      'changes',
+      undefined,
+      {
+        silent: true,
+      },
+    );
+    if (gen !== this.generation || this.store.getState().online.status !== 'on') return;
+    this.applyCompare(deviceId, cached.blocks);
+  }
+
+  /** Righe del confronto fra il compilato del progetto e i blocchi della CPU dati. */
+  private applyCompare(deviceId: string, blocks: OnlineBlock[]): void {
+    const { doc, compile } = this.store.getState();
+    const dev = doc && findDevice(doc.project, deviceId);
+    if (!dev) return;
+    const context = contextHashOf(dev);
+    const hashes: Record<string, string> = {};
+    const project: CompareProjectBlock[] = dev.blocks.map((b) => {
+      const hash = hashOf(b, context);
+      hashes[b.id] = hash;
+      const file = compile.hashes[b.id] === hash ? compile.files[b.id] : undefined;
+      return {
+        id: b.id,
+        type: b.kind === 'IDB' ? 'DB' : b.kind,
+        number: b.number,
+        ...(file ? { file } : {}),
+      };
+    });
+    this.store.getState().patchOnline({
+      compare: { deviceId, rows: compareBlocks(project, blocks), hashes },
     });
   }
 
@@ -120,8 +186,9 @@ export class PlcController {
    * Confronta i blocchi del progetto con quelli della CPU collegata: compila ciò che è cambiato,
    * elenca i blocchi della CPU (sola lettura) e tiene l'esito in `online.compare`. Parte da sola
    * al collegamento (`explicit` falso: compila in silenzio, senza aprire la scheda Compila e solo
-   * se serve) e col comando «Confronta» (`explicit`: come la compilazione normale); non a ogni
-   * modifica. Se un'altra operazione lunga impedisce di compilare, si confronta con ciò che c'è e
+   * se serve) e col comando «Confronta» (`explicit`: come la compilazione normale). Dopo ogni
+   * modifica il confronto si riallinea da solo (`scheduleRefresh`) sull'ultimo elenco letto, senza
+   * rileggere la CPU: una modifica fatta sulla CPU da altri si vede solo con un nuovo confronto. Se un'altra operazione lunga impedisce di compilare, si confronta con ciò che c'è e
    * i blocchi cambiati risultano da compilare.
    */
   async compare(explicit = true): Promise<void> {
@@ -163,25 +230,8 @@ export class PlcController {
         this.push('error', 'plcCompareFailed', { message: res.error });
         return;
       }
-      const { doc, compile } = this.store.getState();
-      const dev = doc && findDevice(doc.project, deviceId);
-      if (!dev) return;
-      const context = contextHashOf(dev);
-      const hashes: Record<string, string> = {};
-      const project: CompareProjectBlock[] = dev.blocks.map((b) => {
-        const hash = hashOf(b, context);
-        hashes[b.id] = hash;
-        const file = compile.hashes[b.id] === hash ? compile.files[b.id] : undefined;
-        return {
-          id: b.id,
-          type: b.kind === 'IDB' ? 'DB' : b.kind,
-          number: b.number,
-          ...(file ? { file } : {}),
-        };
-      });
-      this.store.getState().patchOnline({
-        compare: { deviceId, rows: compareBlocks(project, res.blocks), hashes },
-      });
+      this.cpuBlocks = { gen, deviceId, blocks: res.blocks };
+      this.applyCompare(deviceId, res.blocks);
     } finally {
       if (token === this.compareToken && this.store.getState().online.status !== 'off') {
         this.store.getState().patchOnline({ comparing: false });

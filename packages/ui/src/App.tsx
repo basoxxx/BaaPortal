@@ -126,6 +126,9 @@ export function App({ bridge, onReady }: AppProps) {
     async function start() {
       const [appVersion] = await Promise.all([bridge.appVersion(), initI18n()]);
       if (cancelled) return;
+      // Le conferme native del processo principale seguono la lingua dell'app.
+      bridge.setLanguage?.(i18next.language);
+      i18next.on('languageChanged', (lng) => bridge.setLanguage?.(lng));
       const store = createAppStore();
       const storage = layoutStorage();
       store.setState({ panels: loadLayout(storage) });

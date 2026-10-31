@@ -28,24 +28,24 @@ Per ogni voce si indica che cosa succede oggi. "Errore chiaro" vuol dire che Baa
 
 - **Mai provato su una CPU reale.** Ogni scrittura (carica nel dispositivo, cancellazione, RUN/STOP, copia RAM in ROM, comprimi) è provata solo contro il PLC di prova e il simulatore. Prima di usarla su una macchina, provarla su una CPU che non è in produzione.
 - **MRES non disponibile da remoto.** Non c'è un servizio documentato nelle fonti pubbliche per una S7-300: si usa il selettore di modo della CPU. Il pulsante è disabilitato.
-- **Il confronto usa checksum e lunghezze (lunghezza MC7), non il contenuto byte per byte.** Che il checksum letto dalla CPU coincida con quello del file compilato è un'ipotesi non verificata su una CPU reale.
+- **Il confronto dell'albero usa checksum e lunghezze (lunghezza MC7).** Che il checksum letto dalla CPU coincida con quello del file compilato è un'ipotesi non verificata su una CPU reale. Il confronto byte per byte del codice MC7 c'è solo nell'editor di confronto (2.1), che legge il blocco dalla CPU.
 - **Blocchi di sistema (SDB).** Il backup online li copia (3C, solo esportazione); non si caricano né si confrontano.
 - **Carica dal dispositivo senza simboli né commenti.** Il progetto nuovo ha solo i blocchi in AWL.
 - **Blocchi non caricati.** I blocchi che la CPU rifiuta o che non si decodificano non vengono caricati: sono elencati nel commento del progetto nuovo. I loro byte originali non si conservano.
 - **Cancellazione dei blocchi.** `_DELE` usa il filesystem 'A', come TIA nella cattura reale (§10.5). È verificato per gli SDB; per OB, FB, FC e DB è un'ipotesi.
 - **Controllo dell'identità prima di scrivere.** Confronta il numero d'ordine, e il numero di serie solo se ce l'hanno entrambi i lati.
-- **Il confronto non si aggiorna a ogni modifica.** Parte al collegamento, dopo ogni caricamento e col comando _Confronta con la CPU_. Dopo una modifica di un blocco il suo distintivo passa a «Da compilare» e resta tale finché non si rilancia il confronto; una modifica fatta sulla CPU da altri non si vede finché non lo si rilancia.
+- **Il confronto si aggiorna a ogni modifica (2.1) senza rileggere la CPU.** Dopo una modifica (attesa di 0,8 s) si compila in silenzio e si confronta con l'ultimo elenco letto; una modifica fatta sulla CPU da altri non si vede finché non si rilancia _Confronta con la CPU_. Con un'altra operazione lunga in corso il riallineamento salta.
 - **Editor di confronto.**
   - Le reti si allineano per contenuto (AWL normalizzato): quelle inserite o tolte compaiono come «solo progetto» o «solo CPU», e una rete modificata sul posto si affianca riga per riga. Con troppe reti l'allineamento ricade sulla posizione.
   - Titoli e commenti delle reti si confrontano solo se entrambi i lati li hanno, e le differenze si mostrano a parte senza toccare i dati di checksum: il compilato della CPU non conserva né titoli né commenti, quindi dopo un caricamento non si vedono differenze di questo tipo.
   - I DB si confrontano come elenco di membri.
   - Con un compilato assente o non aggiornato il confronto è sul testo sorgente e gli operandi simbolici possono risultare diversi.
   - I blocchi molto grandi ricadono su un confronto per posizione, con una nota.
-- **Caricamento interrotto senza ripristino.** Se un caricamento si interrompe (finestra chiusa dopo la conferma, uscita dall'app, cavo staccato, un blocco rifiutato) non c'è nessun ripristino: la CPU tiene un programma parziale e può essere ancora in RUN. Uno STOP fatto da BaaPortal non viene annullato dopo un errore o un annullamento. Chiudendo la finestra o uscendo durante la scrittura, l'app chiede prima se interromperla.
+- **Caricamento interrotto senza ripristino.** Se un caricamento si interrompe (finestra chiusa dopo la conferma, uscita dall'app, cavo staccato, un blocco rifiutato) non c'è nessun ripristino: la CPU tiene un programma parziale e può essere ancora in RUN. Dopo un errore o un annullamento, se BaaPortal aveva fermato la CPU, chiede se riavviarla (2.1, predefinito «No», poi la conferma nativa del RUN); con la finestra chiusa o il collegamento perso non chiede. Chiudendo la finestra o uscendo durante la scrittura, l'app chiede prima se interromperla.
 - **Un secondo collegamento PG per ogni scrittura.** Ogni scrittura apre un collegamento PG in più accanto a quello della sorveglianza. Se la CPU non ha collegamenti liberi (per esempio sono tutti usati da pannelli HMI), la scrittura fallisce alla connessione.
 - **L'avviso RUN è un'euristica.** Non vede un cambio di interfaccia di un FC; tratta «diverso» come «interfaccia cambiata».
 - **Nessuna gestione di password o livelli di protezione.** Una CPU protetta in scrittura rifiuta le scritture e BaaPortal non può inserire la password.
-- **Conferme native solo in italiano.** Le finestre di conferma del processo principale non sono tradotte.
+- **Conferme native in italiano e inglese (2.1).** Titoli, domande e pulsanti seguono la lingua dell'app; gli elenchi di dettaglio (blocchi, indirizzi), gli avvisi lunghi (runtime HMI, ripristino sperimentale, interruzione del caricamento) e i messaggi d'errore del processo principale restano in italiano.
 - **Cerca/Sostituisci nella scheda di confronto.** Agisce sul blocco sorgente del progetto, non sul testo mostrato (il compilato decodificato).
 - **Firmware del progetto nuovo.** Un progetto creato dalla CPU usa il firmware letto dalla CPU solo se è nel catalogo; altrimenti usa il più recente e mostra un avviso.
 - **DB creati con SFC 22 (CREAT_DB).** Vengono cancellati da un nuovo caricamento (vedi «Simulatore (piano 2A)», «Blocchi cancellati»). Su una CPU reale non è provato.
@@ -56,11 +56,11 @@ Per ogni voce si indica che cosa succede oggi. "Errore chiaro" vuol dire che Baa
 - **Testi degli eventi da documentazione.** Solo 4 ID evento sono stati visti in una cattura; gli altri hanno il testo preso dalla documentazione, oppure quello generico.
 - **«Ritentiva = indice 5» di `0x0013` è un'ipotesi.** La memoria è verificata su una sola cattura.
 - **Il tempo di sorveglianza (OB80) viene dalla documentazione.**
-- **Ora locale del PC.** L'ora si imposta in ora locale del PC, senza fuso né ora legale.
+- **Ora del PC locale o UTC (2.1).** Si sceglie fra l'ora locale del PC e UTC; la CPU non conosce fuso né ora legale.
 - **Impostazione dell'ora con protezione di livello 2.** Il PLC di prova risponde `0xD241`, ma è un'ipotesi (§12.0).
 - **Il PLC di prova registra ogni STOP come `0x4304` «STOP da PG».** Una CPU reale distingue altre cause.
 - **L'osservazione usa read var, non lo stato delle variabili TIS.** I valori non sono presi a un punto preciso del ciclo.
-- **Niente PQ online, niente comando di PI, T, C, niente forzamento.** Al massimo 200 righe osservate online.
+- **Niente PQ online, niente comando di PI, T, C, niente forzamento.** T e C si leggono (area 16#1D/16#1C, §5.8 di `docs/protocollo/s7comm.md`); la scrittura di T e C non è documentata nelle catture e resta esclusa. Al massimo 200 righe osservate online.
 - **Scritture da tabella in più richieste.** Se una fallisce, le precedenti restano scritte. L'«esito sconosciuto» riguarda tutta la richiesta in corso (fino a 20 righe); le righe successive dicono «Non scritto», e un rifiuto della CPU dice «Rifiutato dalla CPU».
 - **Numero di richieste nella conferma.** È un massimo calcolato per PDU 240, non il numero esatto.
 - **Backup: il ripristino è del 3D (sperimentale).** Non si sa se i DB caricati hanno i valori attuali o quelli iniziali (§19.4).
@@ -69,7 +69,7 @@ Per ogni voce si indica che cosa succede oggi. "Errore chiaro" vuol dire che Baa
 - **`_DELE` usa 'A'.** Vedi «Caricamento e confronto (piano 3B)».
 - **Impostazione dell'ora con protezione di livello 3.** Anche la risposta `0xD0A1` è un'ipotesi (§12.0).
 - **Il numero di richieste nella conferma è un massimo solo se la CPU concorda una PDU di almeno 240 byte.** Con una PDU più piccola le richieste possono essere di più.
-- **Più tabelle online osservano insieme.** Le loro richieste si uniscono in un solo giro di letture per PLC (operandi uguali letti una volta) e il limite di 200 righe vale per l'insieme: le righe oltre il limite, in ordine di accensione, danno un errore di riga e un avviso. Una tabella che non è più aperta in un riquadro smette di interrogare. Sul simulatore resta una sola tabella osservata (vedi «Tabelle di controllo»).
+- **Più tabelle online osservano insieme.** Le loro richieste si uniscono in un solo giro di letture per PLC (operandi uguali letti una volta) e il limite di 200 righe vale per l'insieme: le righe oltre il limite, in ordine di accensione, danno un errore di riga e un avviso. Una tabella che non è più aperta in un riquadro smette di interrogare. Anche sul simulatore più tabelle visibili si osservano insieme (2.1).
 - **Il backup si ferma se il collegamento online finisce** (offline, perso, finestra chiusa): errore «Collegamento online finito: backup interrotto», nessun file. Se finisce mentre il file si sta già scrivendo, il backup è salvato.
 - **I record di diagnostica più corti di 20 byte si scartano.**
 - **Il pulsante si chiama «Osserva tutto»,** il nome del 2C, e non «Controlla tutto» come in TIA.
@@ -303,7 +303,7 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
 - **Tabelle di controllo.**
   - La scrittura di T e C non è supportata (lo stato si legge).
   - Non si osservano L, DI, accessi indiretti, puntatori, variabili locali (`#x`) né tipi composti (ARRAY, STRUCT, STRING interi).
-  - Sul simulatore si osserva una sola tabella alla volta (online invece più tabelle insieme): quella su cui si è attivato «Osserva tutto», finché è visibile in un riquadro qualsiasi; una tabella in una finestra staccata smette di essere osservata.
+  - Sul simulatore più tabelle si osservano insieme (2.1), come online: quelle su cui si è attivato «Osserva tutto», finché sono visibili in un riquadro; una tabella in una finestra staccata smette di essere osservata. Oltre 1000 righe in tutto le righe in più restano senza valore, senza errore di riga.
   - Gli operandi si risolvono sul **progetto offline**, non sul programma caricato: se si modifica il layout di un DB senza caricarlo, letture e scritture usano i nuovi offset della modifica e non c'è confronto online/offline.
   - Le modifiche alle proprietà della CPU valgono subito (2.1): tempo di ciclo e merker di clock dal ciclo dopo, OB35 con la griglia ripartita dal momento del cambio; la ritentività al prossimo avvio a caldo. Cambiare il tipo di CPU richiede ancora di riavviare la simulazione.
   - La rinomina di un tag, di una costante o di un blocco/DB aggiorna le righe che usano `"Nome"` o `"Nome".membro`; anche la rinomina di un **membro** di un DB, di un UDT o di un FB (DB di istanza) aggiorna le righe, nello stesso passo annullabile.

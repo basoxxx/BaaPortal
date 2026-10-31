@@ -252,7 +252,7 @@ export type PlcDiagResult = { ok: true; data: Partial<PlcDiagData> } | { ok: fal
 
 /** Ora della CPU: quella del PC al momento della conferma, o una data scelta a mano. */
 export type PlcClockRequest =
-  | { source: 'pc' }
+  | { source: 'pc'; utc?: boolean }
   | {
       source: 'manual';
       time: {

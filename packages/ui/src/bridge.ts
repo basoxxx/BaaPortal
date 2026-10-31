@@ -166,6 +166,8 @@ export interface BaaBridge {
   closeWindowCancelled(): void;
   rendererReady(): void; // sblocca le richieste di apertura in coda
   clipboardWriteText(text: string): void;
+  /** Lingua dell'app per le finestre native del processo principale (assente: restano in italiano). */
+  setLanguage?(lang: string): void;
   clipboardReadText(): Promise<string>;
   askQuestion(texts: QuestionTexts): Promise<boolean>; // finestra nativa, true = sì
   recoveryWrite(key: string, data: Uint8Array, info: RecoveryInfo): Promise<void>;

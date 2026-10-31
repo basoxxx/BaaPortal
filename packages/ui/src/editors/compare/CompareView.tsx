@@ -13,6 +13,7 @@ import { useAppStore, useServices } from '../../state/AppContext';
 import type { EditorRef } from '../../state/workArea';
 import { diffNetworks, hexDump, type NetworkText } from './lineDiff';
 import { contextHashOf, hashOf } from '../../project/compile/compileActions';
+import { mc7ByteDiff } from '../../online/compare';
 import './compare.css';
 
 interface Side {
@@ -141,6 +142,12 @@ export function CompareView({ editor }: { editor: EditorRef }) {
   const diffs = useMemo(() => (decoded ? diffNetworks(left, decoded) : []), [left, decoded]);
   const offSide = useMemo(() => sideOf(offlineFile), [offlineFile]);
   const onSide = useMemo(() => (online.state === 'ready' ? sideOf(online.bytes) : {}), [online]);
+  // Confronto byte per byte del codice MC7 (il blocco della CPU è già letto per questo editor).
+  const byteDiff = useMemo(
+    () =>
+      online.state === 'ready' && offlineFile ? mc7ByteDiff(offlineFile, online.bytes) : undefined,
+    [online, offlineFile],
+  );
 
   if (!block) return null;
   const dash = '-';
@@ -202,6 +209,15 @@ export function CompareView({ editor }: { editor: EditorRef }) {
       )}
       {online.state === 'loading' ? (
         <p className="baa-compare-note">{t('compareView.loading')}</p>
+      ) : null}
+      {online.state === 'ready' && offlineFile ? (
+        <p className="baa-compare-note" data-testid="compare-bytes">
+          {byteDiff === undefined
+            ? t('compareView.bytesUnreadable')
+            : byteDiff === 0
+              ? t('compareView.bytesSame')
+              : t('compareView.bytesDifferent', { count: byteDiff })}
+        </p>
       ) : null}
       {online.state === 'error' ? (
         <p className="baa-compare-note is-error" role="alert">

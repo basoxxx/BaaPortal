@@ -1,4 +1,5 @@
 import type { BrowserWindow, MessageBoxOptions } from 'electron';
+import { tr } from './dialogText';
 
 export const INTERRUPT_MESSAGE =
   'Un caricamento nella CPU è in corso. Interromperlo? La CPU può restare con un programma incompleto.';
@@ -20,10 +21,10 @@ export function createInterruptAsk(
     const win = windowOf();
     const opts: MessageBoxOptions = {
       type: 'warning',
-      buttons: ['Annulla', 'Interrompi'],
+      buttons: [tr('Annulla'), tr('Interrompi')],
       defaultId: 0,
       cancelId: 0,
-      title: 'Caricamento in corso',
+      title: tr('Caricamento in corso'),
       message: INTERRUPT_MESSAGE,
       noLink: true,
     };

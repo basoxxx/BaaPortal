@@ -24,7 +24,13 @@ import {
 import { SIM_OFF, type AppState } from '../state/store';
 import { downloadOrder } from './downloadOrder';
 import { activeCodeBlock, codeBlockOf, monitorReasonOf, monitorStillShown } from './monitorStatus';
-import type { WatchItem, WatchValue, WriteItemReq, WriteResult } from './protocol';
+import {
+  MAX_WATCH_ITEMS,
+  type WatchItem,
+  type WatchValue,
+  type WriteItemReq,
+  type WriteResult,
+} from './protocol';
 import { SimSession, type SimSessionOptions } from './session';
 import { watchStillShown } from './watchStatus';
 
@@ -145,9 +151,11 @@ export class SimController {
   private watchInFlight = 0;
   /** Le voci la cui ultima richiesta è stata rifiutata (segnalato una volta). */
   private failedWatch: string | undefined;
-  /** Piano già calcolato per un dato dispositivo e una data tabella (oggetti immutabili). */
-  private watchPlanFor:
-    { dev: PlcDevice; table: WatchTable; rowIds: string[]; items: WatchItem[] } | undefined;
+  /** Piani già calcolati per tabella (oggetti immutabili: una tabella cambiata è un oggetto nuovo). */
+  private watchPlanFor = new WeakMap<
+    WatchTable,
+    { dev: PlcDevice; rowIds: string[]; items: WatchItem[] }
+  >();
 
   constructor(
     private readonly store: StoreApi<AppState>,
@@ -299,7 +307,6 @@ export class SimController {
     this.session = undefined;
     this.sentMonitor = undefined;
     this.sentWatch = undefined;
-    this.watchPlanFor = undefined;
     s?.dispose();
     if (this.store.getState().sim.phase !== 'off') this.store.getState().setSim(SIM_OFF);
   }
@@ -471,21 +478,24 @@ export class SimController {
   toggleWatch(deviceId: string, tableId: string): void {
     const st = this.store.getState();
     if (st.sim.phase !== 'on' || st.sim.deviceId !== deviceId) return;
-    const w = st.sim.watch;
-    if (w && w.deviceId === deviceId && w.tableId === tableId) {
-      st.setSim({ watch: null, watchValues: null });
-    } else st.setSim({ watch: { deviceId, tableId }, watchValues: null });
+    const on = st.sim.watch.some((w) => w.deviceId === deviceId && w.tableId === tableId);
+    // Più tabelle osservano insieme (come online): «Osserva tutto» accende o spegne solo questa.
+    st.setSim({
+      watch: on
+        ? st.sim.watch.filter((w) => !(w.deviceId === deviceId && w.tableId === tableId))
+        : [...st.sim.watch, { deviceId, tableId }],
+    });
   }
 
   /** Piano di osservazione della tabella (righe con operando risolto e formato adatto). */
   private planOf(dev: PlcDevice, table: WatchTable) {
-    const cached = this.watchPlanFor;
-    if (cached && cached.dev === dev && cached.table === table) return cached;
+    const cached = this.watchPlanFor.get(table);
+    if (cached && cached.dev === dev) return cached;
     const resolve = watchResolverFor(dev, findCpu(dev.cpu.typeId));
     const infos = resolveRows(resolve, table.rows);
-    const plan = watchPlan(table.rows, (row) => infos.get(row.id)!);
-    this.watchPlanFor = { dev, table, ...plan };
-    return this.watchPlanFor;
+    const plan = { dev, ...watchPlan(table.rows, (row) => infos.get(row.id)!) };
+    this.watchPlanFor.set(table, plan);
+    return plan;
   }
 
   /**
@@ -494,14 +504,28 @@ export class SimController {
    */
   private syncWatch(): void {
     const st = this.store.getState();
-    const w = st.sim.watch;
-    const dev = w && st.doc ? findDevice(st.doc.project, w.deviceId) : undefined;
-    const table = w && dev ? findWatchTable(dev, w.tableId) : undefined;
-    if (w && !(dev && table && watchStillShown(st, w.deviceId, w.tableId))) {
-      st.setSim({ watch: null, watchValues: null });
+    const tables = st.sim.watch.map((w) => {
+      const dev = st.doc ? findDevice(st.doc.project, w.deviceId) : undefined;
+      const table = dev ? findWatchTable(dev, w.tableId) : undefined;
+      return dev && table && watchStillShown(st, w.deviceId, w.tableId)
+        ? { dev, table }
+        : undefined;
+    });
+    if (tables.some((x) => !x)) {
+      const watch = st.sim.watch.filter((_, i) => tables[i]);
+      st.setSim({ watch, ...(watch.length === 0 ? { watchValues: null } : {}) });
       return; // lo stato è cambiato: la sottoscrizione richiama questa funzione
     }
-    const plan = dev && table ? this.planOf(dev, table) : undefined;
+    // Le voci delle tabelle in fila, nell'ordine di accensione (gli id di riga sono unici).
+    const plans = tables.map((x) => this.planOf(x!.dev, x!.table));
+    const plan =
+      plans.length > 0
+        ? {
+            // shortcut: oltre MAX_WATCH_ITEMS in tutto le righe in più restano senza valore, senza errore di riga.
+            rowIds: plans.flatMap((p) => p.rowIds).slice(0, MAX_WATCH_ITEMS),
+            items: plans.flatMap((p) => p.items).slice(0, MAX_WATCH_ITEMS),
+          }
+        : undefined;
     const key = plan ? JSON.stringify(plan.items) : undefined;
     const s = this.session;
     if (!s) return;

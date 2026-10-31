@@ -16,6 +16,7 @@ import { join } from 'node:path';
 import type { ConfirmTexts, QuestionTexts, RecentEntry, RecoveryInfo } from '@baaportal/ui';
 import { writeFileAtomic } from './fsAtomic';
 import { listFolderFiles } from './listFolder';
+import { setDialogLang } from './plc/dialogText';
 import { toIpcResult } from '../shared/ipcResult';
 import { isTrustedFrame, type FrameLike, type TrustOptions } from './trust';
 import { deleteRecovery, listRecovery, readRecovery, writeRecovery } from './recoveryStore';
@@ -206,6 +207,8 @@ export function registerIpc(
     if (typeof text === 'string') clipboard.writeText(text);
   });
   handle('clipboard:read-text', () => clipboard.readText());
+  // Lingua dell'app per le finestre native del processo principale (conferme delle scritture).
+  on('app:set-language', (_e, lang: unknown) => setDialogLang(lang));
 
   // File di recupero: la chiave è validata da recoveryStore prima di formare qualunque percorso.
   const recoveryDir = () => join(app.getPath('userData'), 'recovery');

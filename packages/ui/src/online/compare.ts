@@ -44,6 +44,21 @@ export function signatureOf(file: Uint8Array): { checksum: number; mc7Length: nu
 }
 
 /**
+ * Byte del codice MC7 diversi fra due compilati (i byte in più del più lungo contano come diversi);
+ * `undefined` se uno dei due non si legge.
+ */
+export function mc7ByteDiff(a: Uint8Array, b: Uint8Array): number | undefined {
+  try {
+    const [x, y] = [parseBlockFile(a).mc7, parseBlockFile(b).mc7];
+    let n = Math.abs(x.length - y.length);
+    for (let i = 0; i < Math.min(x.length, y.length); i++) if (x[i] !== y[i]) n++;
+    return n;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Confronta i blocchi compilati del progetto con quelli della CPU. «Uguale» vuol dire stesso
  * checksum e stessa lunghezza MC7; ogni altra differenza è «diverso». Un blocco senza compilato
  * aggiornato è «da compilare» qualunque cosa abbia la CPU. Un blocco della CPU le cui informazioni

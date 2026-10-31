@@ -287,6 +287,7 @@
     }
   },
   "sim": {
+    "restartCpuPartialMessage": "Il caricamento non è finito: la CPU, fermata da BaaPortal, può contenere un programma parziale. Riavviarla (RUN) lo stesso?",
     "monitor": {
       "title": "Osservazione del programma",
       "on": "Osservazione attiva: i valori sono quelli della prima esecuzione nell'ultimo ciclo.",
@@ -364,6 +365,7 @@
     }
   },
   "onlineDiag": {
+    "utc": "in UTC (altrimenti ora locale)",
     "title": "Online e diagnostica",
     "pages": "Pagine",
     "loading": "Lettura in corso...",
@@ -458,6 +460,9 @@
     }
   },
   "compareView": {
+    "bytesSame": "Codice MC7 identico byte per byte.",
+    "bytesDifferent": "Codice MC7 diverso: {{count}} byte diversi.",
+    "bytesUnreadable": "Confronto byte per byte non possibile: un compilato non si legge.",
     "title": "Confronto {{name}}",
     "project": "Progetto",
     "cpu": "CPU",

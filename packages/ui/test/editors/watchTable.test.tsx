@@ -170,7 +170,7 @@ describe('editor della tabella di controllo', () => {
     simOn(app);
     act(() =>
       app.store.getState().setSim({
-        watch: { deviceId: PLC, tableId: 'wt1' },
+        watch: [{ deviceId: PLC, tableId: 'wt1' }],
         watchValues: { r1: { bytes: Uint8Array.of(0xff, 0xfb) } },
       }),
     );
