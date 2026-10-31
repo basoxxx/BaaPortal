@@ -108,9 +108,14 @@ const creatDb: SystemHandler = (call) => {
   call.ret(0);
 };
 
+/** ⚠️ DEL_DB: 16#80C1 il DB è in uso (aperto nel registro DB o DI del blocco chiamante). */
+const DB_IN_USE = 0x80c1;
+
 const delDb: SystemHandler = (call) => {
   const n = call.param('DB_NUMBER').read('W');
   if (n < 1 || n > call.services.maxDb) return call.ret(BAD_DB_NUMBER);
+  const { db, di } = call.ctx.regs;
+  if (call.ctx.mem.dbs.has(n) && (db === n || di === n)) return call.ret(DB_IN_USE);
   if (!call.ctx.mem.dbs.delete(n)) return call.ret(BAD_LENGTH_OR_MISSING);
   call.ret(0);
 };

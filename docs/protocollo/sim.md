@@ -50,8 +50,8 @@ Sorgente: manuale AWL S7-300/400, operazioni logiche a bit e parola di stato.
 
 ## 3. Richiamo dei blocchi
 
-- **Stack dei blocchi**: profondità massima **16** (il 17° blocco annidato dà `STACK_BLOCCHI_PIENO`; l'OB è il livello 0). ⚠️ Il manuale [CPU] dà valori che cambiano con la CPU e con la classe di priorità; qui la costante è unica (`MAX_BLOCK_STACK`).
-- **Stack L**: un array solo, di `localDataBytesPerClass` byte. Ogni blocco riceve una finestra subito dopo quella del chiamante; se non c'è spazio, `STACK_L_PIENO`. Fuori dalla propria finestra si ha `AREA_LUNGHEZZA`. ⚠️ La finestra **non viene azzerata** all'ingresso (contenuto indefinito, come sulla CPU), salvo i 20 byte iniziali dell'OB.
+- **Stack dei blocchi**: profondità massima per classe di priorità dal catalogo della CPU (`limits.blockNesting`: 8 per CPU 312 e 312C, 16 per le altre, dati tecnici delle CPU 31x); oltre, `STACK_BLOCCHI_PIENO` (l'OB è il livello 0). ⚠️ I 4 livelli in più dentro un OB d'errore non sono simulati.
+- **Stack L**: un array solo, di `localDataBytesPerClass` byte. Ogni blocco riceve una finestra subito dopo quella del chiamante; se non c'è spazio, `STACK_L_PIENO`. Fuori dalla propria finestra si ha `AREA_LUNGHEZZA`. La finestra **non viene azzerata** all'ingresso: sulla S7-300 i dati locali temporanei hanno contenuto indefinito finché il blocco non li scrive ([AWL], dati locali); fanno eccezione i 20 byte dei dati di avvio dell'OB.
 - **UC / CC** (e la CALL espansa dal compilatore con la lista dei puntatori): `UC` chiama sempre; `CC` solo con RLO = 1, e mette RLO = 1 anche senza chiamare.
 - **Parametri**: la lista dei puntatori che segue la chiamata viene risolta nel blocco **chiamante**; `L` e `V` nella lista indicano i dati locali del blocco che contiene la chiamata. Il parametro formale `#PAR` si risolve nel chiamato. La dimensione viene dal tipo (Bool, Byte, Word, DWord); Un parametro formale di tipo Timer o Counter porta il numero del T o del C del chiamante e si usa come l'operando diretto (§10, §11); i parametri Block_* danno `MC7_NON_ESEGUIBILE`.
 - **Registri DB/DI**: salvati e ripristinati attorno alla chiamata. ⚠️ Dopo `CALL FB` il compilatore chiude con `CDB`, quindi DB = DB di istanza: il simulatore non lo corregge (coerente con il comportamento reale di STEP 7).
@@ -126,7 +126,7 @@ Senza OB1 il ciclo gira a vuoto: gli ingressi e le uscite si aggiornano lo stess
 **⚠️ Modello del tempo**:
 
 - l'orologio è **iniettato** (`now(): number` in ms) e nei test è deterministico;
-- il tempo di ciclo si controlla **ogni 1024 istruzioni** e alla fine del ciclo, contro `maxCycleMs` delle proprietà della CPU. Indipendente dall'orologio c'è un **limite fisso di 10 000 000 istruzioni per ciclo** (e per OB100): oltre, `TEMPO_CICLO_SUPERATO`. Un salto su se stesso termina quindi sempre, anche con un orologio fermo (⚠️ il limite è una scelta del simulatore);
+- il tempo di ciclo si controlla **ogni 1024 istruzioni** e alla fine del ciclo; con un allarme a tempo in attesa (OB35 caricato, OB20 avviato, OB10 attivo) l'orologio si legge anche **ogni 128 istruzioni** e, se la scadenza è passata, si fa subito un tick (2.1); contro `maxCycleMs` delle proprietà della CPU. Indipendente dall'orologio c'è un **limite fisso di 10 000 000 istruzioni per ciclo** (e per OB100): oltre, `TEMPO_CICLO_SUPERATO`. Un salto su se stesso termina quindi sempre, anche con un orologio fermo (⚠️ il limite è una scelta del simulatore);
 - il **byte del merker di clock** si aggiorna all'inizio del ciclo e ogni 1024 istruzioni, non a ogni lettura: può restare indietro fino a 1024 istruzioni. Periodi dei bit 0–7: 100, 200, 400, 500, 800, 1000, 1600, 2000 ms ([CPU], merker di clock);
 - il tempo di ciclo del simulatore non è quello di una CPU vera.
 
@@ -136,7 +136,7 @@ Senza OB1 il ciclo gira a vuoto: gli ingressi e le uscite si aggiornano lo stess
 - **`stop()`**: voce `STOP_RICHIESTO` (con il motivo) e STOP. In STOP le uscite della periferia (`physOut`) sono azzerate.
 - **Errore** durante OB100 o un ciclo: se ha un OB (OB121, OB122, OB80, OB85, §11) e quell'OB è caricato, viene richiamato; altrimenti voce di diagnostica e STOP. Un errore che non è un `SimError` (un difetto del simulatore) dà la voce `MC7_NON_ESEGUIBILE` con dettaglio «errore interno» e viene anche rilanciato.
 - **`memoryReset()`** (cancellazione totale, solo in STOP, altrimenti errore): azzera I, Q, M, `physOut`, T e C e torna ai **valori iniziali** dei DB; **⚠️** azzera anche le statistiche del ciclo. I blocchi restano caricati (R5: le CPU con MMC ricaricano il programma dalla scheda). **⚠️** I valori iniziali di un DB sono la sezione MC7 del file caricato, non quella letta dalle sezioni SSB.
-- **Buffer di diagnostica**: massimo **100** voci (le più vecchie si perdono, ⚠️ valore tipico). Sono emessi eventi `mode`, `diagnostic` e `cycle`; un ascoltatore che lancia un'eccezione viene ignorato.
+- **Buffer di diagnostica**: massimo **100** voci (le più vecchie si perdono, ⚠️ valore tipico: la dimensione per CPU non è nel catalogo). Sono emessi eventi `mode`, `diagnostic` e `cycle`; un ascoltatore che lancia un'eccezione viene ignorato.
 
 ## 7. Codici d'errore
 
@@ -148,7 +148,7 @@ Errori di programmazione: portano in STOP con una voce che contiene codice, bloc
 | `DB_NON_CARICATO`         | DB o DB di istanza assente                                                    |
 | `DB_NON_APERTO`           | accesso a DB/DI con il registro a 0                                           |
 | `BLOCCO_NON_CARICATO`     | blocco chiamato assente                                                       |
-| `STACK_BLOCCHI_PIENO`     | oltre 16 blocchi annidati                                                     |
+| `STACK_BLOCCHI_PIENO`     | oltre la profondità della CPU                                                 |
 | `STACK_ANNIDAMENTO_PIENO` | troppe parentesi aperte                                                       |
 | `STACK_L_PIENO`           | dati locali richiesti oltre lo stack L                                        |
 | `ISTRUZIONE_NON_S7300`    | `ENT`, `LEAVE`                                                                |
@@ -159,7 +159,7 @@ Errori di programmazione: portano in STOP con una voce che contiene codice, bloc
 | `NUMERO_CONTATORE`        | numero di C fuori dal campo della CPU                                         |
 | `OB_NON_CARICATO`         | un OB d'evento (OB82, OB86) manca e manca anche OB85                          |
 
-Altre voci del buffer: `AVVIO`, `STOP_RICHIESTO`, `CANCELLAZIONE_TOTALE`, `OB_RICHIAMATO` (§11), `SFC_NON_SIMULATA`, `SFB_NON_SIMULATA` (§13), `MESSAGGIO_UTENTE` (SFC 52, con l'EVENTN del programma come id).
+Altre voci del buffer: `AVVIO`, `STOP_RICHIESTO`, `CANCELLAZIONE_TOTALE`, `OB_RICHIAMATO` (§11), `SFC_NON_SIMULATA`, `SFB_NON_SIMULATA` (§13), `MESSAGGIO_UTENTE` (SFC 52, con l'EVENTN del programma come id), `ALLARME_PERSO` (§11.6).
 
 ## 8. Collegamento al server S7
 
@@ -168,7 +168,7 @@ Altre voci del buffer: `AVVIO`, `STOP_RICHIESTO`, `CANCELLAZIONE_TOTALE`, `OB_RI
 - ⚠️ Il download di un **SDB** è rifiutato (le configurazioni di sistema non sono simulate).
 - ⚠️ I blocchi caricati **non** tramite il backend (messi direttamente in `cpu.program`) compaiono nell'elenco ma non hanno upload né informazioni di blocco.
 - ⚠️ Gli identificatori degli eventi del buffer di diagnostica nelle SZL sono quelli del manuale dove esistono (§11.6); gli altri sono sintetici (da `0x9000`).
-- ⚠️ Una sezione ADD corrotta non fa rifiutare il download (il lettore MC7 è tollerante); un tipo che il simulatore non sa caricare (per esempio SFC) viene rifiutato dalla CPU.
+- Una sezione ADD che non si legge (numero di reti o di salti oltre la sezione, reti più lunghe del codice) fa rifiutare il blocco (2.1); un tipo che il simulatore non sa caricare (per esempio SFC) viene rifiutato dalla CPU.
 - Area `P`: lettura da `physIn`, scrittura in `physOut`; una scrittura in I è sovrascritta all'inizio del ciclo successivo.
 
 ## 9. Verifica
@@ -246,14 +246,14 @@ Fonte: manuale delle funzioni di sistema e standard S7-300/400, descrizione degl
 
 - Il tempo di ciclo si controlla ai tick (ogni 1024 istruzioni), al superamento del limite di istruzioni e a fine ciclo. Il **primo** superamento in un ciclo richiama OB80 (FLT_ID 16#01, ERROR_INFO = ms, ERR_EV_CLASS/NUM dell'OB interrotto: 16#1103 per OB1, 16#1136 per OB35), azzera il cane da guardia e il contatore d'istruzioni e il ciclo prosegue.
 - Un **secondo** superamento nello stesso ciclo, un superamento con OB80 mancante o già in esecuzione, o in STARTUP, porta in STOP (`TEMPO_CICLO_SUPERATO`, id 16#3501). ⚠️ In STARTUP (OB100) OB80 non è richiamato.
-- ⚠️ Se il superamento avviene dentro un OB82 o OB86 (stessa classe 26), OB80 viene annidato nella stessa classe; una CPU vera lo metterebbe in coda.
+- Se il superamento avviene dentro un OB82, OB85 o OB86 (stessa classe 26), OB80 **aspetta in coda** la fine di quell'OB e parte al tick o all'inizio del ciclo seguente (2.1; prima era annidato).
 - **OB35 troppo lento**: se l'allarme ciclico scade mentre OB35 è ancora in esecuzione, viene richiamato OB80 con FLT_ID 16#02 (id 16#3502, ERR_EV 16#1136, priorità 12, OB 35, ERROR_INFO = 0); senza OB80, STOP.
 
 ### 11.6 OB35: griglia e granularità
 
 - Intervallo: `cyclicInterruptMs` delle proprietà della CPU; 0 disattiva OB35. Le scadenze stanno su una **griglia fissa** a partire dall'ingresso in RUN (t0 + n · intervallo).
-- **Granularità**: OB35 si controlla all'inizio del ciclo e ad **ogni tick** (1024 istruzioni), non a ogni istruzione: la latenza è al più di 1024 istruzioni. ⚠️
-- ⚠️ Se per un tratto lungo senza tick la CPU salta intere scadenze, quelle perse sono **saltate in silenzio** (nessun evento, nessun OB80 oltre al caso del 16#3502). ⚠️ OB35 mancante: nessun OB85.
+- **Granularità**: OB35 (come OB20 e OB10) si controlla all'inizio del ciclo, a ogni tick e ogni 128 istruzioni se la scadenza è passata: la latenza è al più di 128 istruzioni (2.1; la CPU vera serve gli allarmi ai confini delle istruzioni). ⚠️
+- Se la CPU salta intere scadenze (occupata in una classe più alta o con gli allarmi ritardati), all'avvio successivo di OB35 si scrive la voce `ALLARME_PERSO` con il numero di avvii persi (⚠️ id 16#3503 dedotto, nessun OB80). ⚠️ OB35 mancante: nessun OB85.
 - Non gira in STARTUP; gira anche senza OB1. Può interrompere un OB1 a metà e anche un FC chiamato da OB1 (registri e pila L dell'interrotto restano intatti). OB35 non è registrato come `OB_RICHIAMATO` nel buffer (⚠️: una CPU vera non registra l'avvio degli OB ciclici).
 
 ### 11.7 OB82, OB86 e OB85
@@ -292,7 +292,7 @@ Codici generali ⚠️: 16#8x22 area d'origine fuori campo (lettura), 16#8x23 de
 | 20  | BLKMOV   | Copia SRCBLK in DSTBLK. Lunghezze diverse: si copia la minore. Aree sovrapposte (stesso blocco, stesso DB): RET_VAL 16#8091, nessuna copia ⚠️ (codice possibilmente inventato). BOOL solo in multipli di 8 allineati al byte (altrimenti 16#8x28).                                                                                                                                                                                  |
 | 21  | FILL     | Ripete BVAL in BLK; l'ultima copia è troncata se la lunghezza non è un multiplo ⚠️. Stessa regola di sovrapposizione (16#8091 ⚠️).                                                                                                                                                                                                                                                                                                  |
 | 22  | CREAT_DB | Crea un DB di COUNT byte nel primo numero libero fra LOW_LIMIT e UP_LIMIT; scrive DB_NUMBER (prima del DB, nessun DB orfano). Limiti errati 16#80A1; COUNT nullo, dispari o oltre 65534: 16#80B1; nessun numero libero: 16#80B2 ⚠️. Il numero massimo viene da `limits.maxDb`.                                                                                                                                                      |
-| 23  | DEL_DB   | Cancella il DB. Numero fuori campo 16#80A1; DB inesistente 16#80B1 ⚠️. ⚠️ Nessun controllo sul DB aperto nei registri o richiamato: il DB sparisce subito.                                                                                                                                                                                                                                                                          |
+| 23  | DEL_DB   | Cancella il DB. Numero fuori campo 16#80A1; DB inesistente 16#80B1; DB aperto nel registro DB o DI del blocco chiamante (anche se l'ha aperto un chiamante più esterno): 16#80C1, il DB resta ⚠️. Un DB aperto da una classe di priorità interrotta non si controlla ⚠️.                                                                                                                                                            |
 | 24  | TEST_DB  | DB_LENGTH = byte del DB; WRITE_PROT = 0 (la CPU simulata non ha DB protetti). Stessi codici di errore di SFC 23 ⚠️.                                                                                                                                                                                                                                                                                                                 |
 | 28  | SET_TINT | Manuale, 9.3. Solo OB_NR = 10 (16#8090 altrimenti). SDT in DATE_AND_TIME con secondi e ms ignorati (16#8091 se non valida), PERIOD 16#0000 una volta, 16#0201 minuto, 16#0401 ora, 16#1001 giorno, 16#1201 settimana, 16#1401 mese, 16#1801 anno, 16#2001 fine mese (16#8092 altrimenti). Imposta senza attivare. Ora locale dell'orologio della CPU (SET_CLK compreso).                                                            |
 | 29  | CAN_TINT | Manuale, 9.4. Cancella data e attivazione; 16#80A0 se non c'era una data ⚠️.                                                                                                                                                                                                                                                                                                                                                        |

@@ -234,15 +234,14 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§4.1 per la semantica). T
 - **Divisione per 0:** ACCU1 = 0 (il manuale non lo dice).
 - **REAL:** NaN memorizzato come 0x7FC00000; denormali conservati; CC per ±infinito e precisione delle funzioni trascendenti (float32) non verificati al ulp.
 - **`+AR1`/`+AR2` senza operando** e `L STW`/`T STW` (solo bit 0–8) seguono la lettura del manuale, non provata.
-- **Stack dei blocchi a 16** per ogni CPU e per ogni classe di priorità (nel manuale varia con la CPU); stack L con finestra per blocco (dal piano 2B uno per classe di priorità), **non azzerato** all'ingresso del blocco.
-- **Tempo:** orologio iniettato; controllo del tempo di ciclo ogni 1024 istruzioni e a fine ciclo (più il limite fisso di istruzioni); byte del merker di clock aggiornato all'inizio del ciclo e ogni 1024 istruzioni, non a ogni lettura. Dal piano 2B il superamento del tempo di ciclo richiama OB80 (un solo superamento per ciclo), prima di arrivare in STOP.
+- **Stack dei blocchi dal catalogo (2.1):** 8 livelli per CPU 312/312C, 16 per le altre, per classe di priorità; i 4 livelli in più degli OB d'errore non ci sono. Stack L con finestra per blocco (uno per classe di priorità), **non azzerato** all'ingresso del blocco, come sulla S7-300 (contenuto indefinito).
+- **Tempo:** orologio iniettato; controllo del tempo di ciclo ogni 1024 istruzioni e a fine ciclo (più il limite fisso di istruzioni), allarmi a tempo controllati ogni 128 istruzioni (2.1); byte del merker di clock aggiornato all'inizio del ciclo e ogni 1024 istruzioni, non a ogni lettura. Dal piano 2B il superamento del tempo di ciclo richiama OB80 (un solo superamento per ciclo), prima di arrivare in STOP.
 - **Chiamate:** lo stack MCR del chiamato parte vuoto; i puntatori `0x84`/`0x85` legano DB/DI al momento della chiamata; `0x86` è trattato come V; DB = DB di istanza dopo `CALL FB`.
 - **Salto alla fine esatta del codice** rifiutato (`MC7_NON_ESEGUIBILE`).
-- **Buffer di diagnostica** limitato a 100 voci; gli id degli eventi nelle SZL sono sintetici (da 0x9000) salvo quelli che il manuale dà (piano 2B). I cambi di modo del simulatore usano ora gli ID 0x43xx reali (piano 3C).
+- **Buffer di diagnostica** limitato a 100 voci per ogni CPU (la dimensione per CPU non è nel catalogo); gli id degli eventi nelle SZL sono sintetici (da 0x9000) salvo quelli che il manuale dà (piano 2B). I cambi di modo del simulatore usano ora gli ID 0x43xx reali (piano 3C).
 - **Errore non previsto del simulatore** (non `SimError`): voce `MC7_NON_ESEGUIBILE` con dettaglio «errore interno», STOP e l'eccezione viene rilanciata.
 - **Cancellazione totale** azzera anche le statistiche del ciclo e `physOut`; i DB tornano ai valori della sezione MC7 del file caricato (i valori iniziali separati non sono letti); i blocchi restano.
 - **Blocchi non caricati dal backend** (messi direttamente nel programma) non hanno upload né informazioni di blocco.
-- **Sezioni ADD corrotte** non fanno rifiutare il download.
 - **`*I`:** il prodotto a 32 bit va in ACCU1 intero; OV fuori dai 16 bit.
 - **Confronti:** forzano OR = 0. Conseguenza: in `A a; A b; O; L; L; ==I; A c` l'`O` pendente è perso dal confronto e `A c` si combina in AND con il risultato.
 - **`T STW`** non segue MCR (scrive anche con MCR spento).
@@ -264,16 +263,16 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§10–§13). Come per il 
 - **Lettura di T e C dal server S7:** T come parola `LC` (BCD con base), C come parola BCD, 2 byte big-endian; formato sul filo non verificato. Le scritture sulle aree T e C sono rifiutate.
 - **OB82 e OB86 dalla configurazione (2.1):** estrarre/inserire un modulo nel pannello I/O dà OB82 (rack) o OB86 (stazione ET 200) entrante/uscente; da verificare su CPU reale. Non ci sono OB83 né guasti di rack/espansioni, e i dati di diagnostica del modulo (set 0/1) non sono simulati.
 - **OB82/OB86 mancanti → OB85:** il manuale è ambiguo; se manca anche OB85 la CPU va in STOP (`OB_NON_CARICATO`).
-- **OB80 annidato in OB82/OB86:** se il tempo di ciclo si supera dentro un OB della classe 26, OB80 si annida nella stessa classe; una CPU vera lo metterebbe in coda.
-- **OB35, latenza:** si controlla all'inizio del ciclo e ogni 1024 istruzioni (tick), non a ogni istruzione: la latenza arriva fino a 1024 istruzioni.
-- **OB35, griglia fissa:** le scadenze sono multipli dell'intervallo dall'ingresso in RUN; le scadenze perse si saltano **senza evento**; nessun OB85 se OB35 non è caricato; nessuna voce `OB_RICHIAMATO` per OB35, OB1 e OB100.
+- **OB80 in coda dietro OB82/OB85/OB86 (2.1):** se il tempo di ciclo si supera dentro un OB della classe 26, OB80 parte dopo la sua fine (al tick o al ciclo seguente).
+- **OB35, latenza:** fino a 128 istruzioni (2.1), non a ogni istruzione come sulla CPU vera.
+- **OB35, griglia fissa:** le scadenze sono multipli dell'intervallo dall'ingresso in RUN; le scadenze perse danno una voce `ALLARME_PERSO` (⚠️ id 16#3503 dedotto, nessun OB80); nessun OB85 se OB35 non è caricato; nessuna voce `OB_RICHIAMATO` per OB35, OB1 e OB100.
 - **Superamento in STARTUP:** il superamento del tempo di ciclo (o del limite di istruzioni) in OB100 porta in STOP; OB80 non è richiamato.
 - **Dati di avvio degli OB** (STRT_INF 16#36 di OB35, IO_FLAG 16#54 e MDL_DEFECT di OB82, FLT_ID 16#C4 e RACKS_FLTD 0 di OB86, MEM_AREA/MEM_ADDR di OB122, ERR_EV di OB80): valori ricordati dai manuali, non confrontati con una CPU.
 - **`DB_NON_APERTO`** (accesso a DB/DI con registro a 0) è mappato su SW_FLT 16#22/16#23 (errore di area): la lista del manuale non ha un codice dedicato.
 - **OB121/OB122 non annidati** solo se l'OB più interno in esecuzione è già OB121/OB122; un OB di altra classe che li interrompe e sbaglia può richiamarli.
 - **Id diagnostici sintetici** dove il manuale non ne dà uno: `AVVIO`, `STOP_RICHIESTO`, `CANCELLAZIONE_TOTALE`, stack pieni, `MC7_NON_ESEGUIBILE`, `ISTRUZIONE_NON_S7300`, `OB_RICHIAMATO` generico, `SFC_NON_SIMULATA`, `SFB_NON_SIMULATA` (da 16#9000, in ordine stabile).
 - **Codici RET_VAL delle SFC non verificati:** 16#8091 per aree sovrapposte di BLKMOV/FILL potrebbe essere inventato; 16#8080 (SET_CLK), 16#80A1/16#80B1/16#80B2 (SFC 22–24), 16#0081/16#8082/16#8083 (RDSYSST) e i 16#8xyy generali (22 lettura, 23 scrittura, 24 ANY non valido, 28/29 allineamento, 3A DB) sono dedotti. Per i 16#8xyy il numero del parametro `x` conta IN, OUT, IN_OUT **escludendo RET_VAL**: potrebbe non corrispondere alla CPU vera.
-- **DEL_DB** di un DB aperto o richiamato: il DB sparisce subito, senza controlli.
+- **DEL_DB** di un DB aperto nel registro DB/DI del chiamante dà 16#80C1 (2.1, codice dedotto); un DB aperto da una classe interrotta non si controlla.
 - **Compilatore e SFC:** il compilatore MC7 non sa passare DATE_AND_TIME, SSL_HEADER e le strutture di RD_SINFO a SFC 0, 1, 6 e 51 da AWL; si provano con liste di puntatori scritte a mano.
 - **SFC 6, 13–15, 41–43 (da verificare su CPU reale):** SFC 13, 14 e 15 rispondono sempre «nessuno slave DP» (16#8090; SFC 13 con REQ = 0 dà 16#7000), perché la CPU simulata non ha periferia decentrata; il 16#8080 di EN_AIRT senza ritardi e il 16#7000 sono dedotti. DIS_AIRT ritarda OB35, OB80, OB82 e OB86; senza OB80 caricato un errore di tempo dà STOP subito, anche con il ritardo. RD_SINFO dà i dati di avvio dell'ultimo avvio a caldo anche senza OB100.
 - **SFC 64 TIME_TCK** conta dal primo RUN della CPU simulata, non dall'accensione; SFC 47 WAIT non attende davvero ma somma il tempo all'orologio; RDSYSST è sempre sincrona (BUSY 0).

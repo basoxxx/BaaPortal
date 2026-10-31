@@ -54,8 +54,9 @@ export function callBlock(
       missingBlock: kind,
       faultReg: number,
     });
-  if (st.depth + 1 > MAX_BLOCK_STACK)
-    throw new SimError('STACK_BLOCCHI_PIENO', `oltre ${MAX_BLOCK_STACK} blocchi annidati`);
+  const max = st.ctx.maxBlockDepth ?? MAX_BLOCK_STACK;
+  if (st.depth + 1 > max)
+    throw new SimError('STACK_BLOCCHI_PIENO', `oltre ${max} blocchi annidati`);
   const callerSize = st.frame.lSize ?? st.block.localBytes;
   const lBase = st.frame.lBase + callerSize;
   if (lBase + callee.localBytes > st.mem.L.length)

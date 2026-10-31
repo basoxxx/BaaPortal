@@ -1,6 +1,6 @@
 import { findCpu, findSystemBlock } from '@baaportal/catalog';
 import { buildSzl, type CpuBackend } from '@baaportal/s7-server';
-import { readBlockFile } from '@baaportal/mc7';
+import { parseAdd, readBlockFile } from '@baaportal/mc7';
 import { diagFromError, syntheticEventId, type DiagEntry } from './diagnostics';
 import { SimError, StopRequest } from './errors';
 import { EVENT, PRIORITY, hwEventId, syncFaultOf, type HwInterrupt } from './events';
@@ -145,8 +145,11 @@ const DEFAULT_COUNTER_COUNT = 256;
 /** Numero massimo di DB se la CPU non è nel catalogo. */
 const DEFAULT_MAX_DB = 16000;
 
-/** Voci di diagnostica conservate (le più vecchie si perdono). */
+/** Voci di diagnostica conservate (le più vecchie si perdono); ⚠️ la dimensione per CPU non è nel catalogo. */
 const MAX_DIAGNOSTICS = 100;
+
+/** Allarme a tempo perso (OB35 saltato perché la CPU era occupata): ⚠️ id 16#3503 dedotto. */
+const EVENT_INTERRUPT_LOST = 0x3503;
 
 /** Periodo in ms dei bit 0..7 del merker di clock (manuale delle CPU 31x: 10, 5, 2.5, 2, 1.25, 1, 0.625, 0.5 Hz). */
 const CLOCK_PERIODS_MS = [100, 200, 400, 500, 800, 1000, 1600, 2000];
@@ -447,6 +450,9 @@ export class SimCpu {
       });
       return;
     }
+    // Una sezione ADD che non si legge (reti oltre il codice, lunghezze sbagliate) fa rifiutare il blocco.
+    if (f.addRaw.length > 0 && !parseAdd(f.addRaw, f.mc7.length))
+      throw new Error(`${f.header.kind ?? ''}${f.header.number}: sezione ADD corrotta`);
     this.program.load(file);
     // Solo a caricamento riuscito: un file respinto lascia il blocco (e l'osservazione) com'erano.
     this.monitorGone(f.header.kind ?? '', f.header.number);
@@ -638,6 +644,8 @@ export class SimCpu {
       cycleStart,
       ...(this.monitor ? { monitor: this.monitor } : {}),
       ...(this.maxInstructions !== undefined ? { maxInstructions: this.maxInstructions } : {}),
+      maxBlockDepth: findCpu(this.cpuTypeId)?.limits.blockNesting ?? 16,
+      nextDeadline: () => this.nextDeadline(),
       onTick: (st) => this.tick(st),
       onOverrun: (st, reason) => {
         const t = this.now();
@@ -683,6 +691,22 @@ export class SimCpu {
     }
   }
 
+  /** Prima scadenza fra OB35, OB20 e OB10 (orologio di sistema), per la latenza dell'esecutore. */
+  private nextDeadline(): number | undefined {
+    // In AVVIO gli allarmi non girano: nessuna lettura dell'orologio in più.
+    if (this._mode !== 'RUN') return undefined;
+    let due: number | undefined;
+    const take = (t: number | undefined): void => {
+      if (t !== undefined && (due === undefined || t < due)) due = t;
+    };
+    if (this.props.cyclicInterruptMs > 0 && this.program.get('OB', 35)) take(this.ob35Due);
+    const s = this.services.state;
+    take(s.delay.get(20)?.due);
+    const tod = s.tod.get(10);
+    if (tod?.active && tod.next !== undefined) take(tod.next - this.clockOffsetMs);
+    return due;
+  }
+
   private currentPrio(): number {
     return this.running.at(-1)?.prio ?? 0;
   }
@@ -721,6 +745,14 @@ export class SimCpu {
     // Scaduto mentre OB35 gira ancora: l'esecuzione richiesta si perde (OB80, 16#3502).
     if (this.ob35Running) return this.ob35Lost(ctx, t);
     if (prio >= PRIORITY.OB35) return;
+    const lost = Math.floor((t - this.ob35Due) / iv);
+    if (lost > 0)
+      this.record({
+        time: t,
+        code: 'ALLARME_PERSO',
+        eventId: EVENT_INTERRUPT_LOST,
+        detail: `OB35: ${lost} avvii persi`,
+      });
     this.ob35Due = nextDue(this.ob35Due, iv, t);
     // SFC 39 DIS_IRT: l'allarme si scarta.
     if (!this.program.get('OB', 35) || this.services.state.disabled.has(35)) return;
@@ -810,6 +842,11 @@ export class SimCpu {
     }
     if (!this.program.get('OB', 80) || this.inOb(80))
       throw new SimError('TEMPO_CICLO_SUPERATO', reason, { eventId });
+    // Dentro OB82/OB85/OB86 (stessa classe 26) l'OB80 aspetta in coda la fine dell'OB in corso.
+    if (this.currentPrio() >= PRIORITY.ASYNC_ERROR) {
+      this.pendingTime.push((c) => this.timeError(c, fltId, eventId, errorInfo, ref, t, reason));
+      return;
+    }
     // SFC 39 DIS_IRT: l'errore di tempo si scarta (⚠️); il secondo superamento resta uno STOP.
     if (this.services.state.disabled.has(80)) return;
     this.record({ time: t, code: 'OB_RICHIAMATO', eventId, detail: `OB80: ${reason}` });
