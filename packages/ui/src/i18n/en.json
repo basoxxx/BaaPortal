@@ -541,6 +541,7 @@
     }
   },
   "history": {
+    "simPanel": "Monitor format and I/O panel bytes",
     "replace": "Replace text",
     "author": "Project author",
     "comment": "Project comment",

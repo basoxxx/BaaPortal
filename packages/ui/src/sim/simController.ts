@@ -52,6 +52,43 @@ export function simPropsOf(dev: PlcDevice): SimCpuProps {
   };
 }
 
+/** Salva nel dispositivo le preferenze del pannello di test (una voce di cronologia se cambiano). */
+function saveSimPanel(
+  store: StoreApi<AppState>,
+  deviceId: string | null | undefined,
+  patch: NonNullable<PlcDevice['simPanel']>,
+): void {
+  const st = store.getState();
+  if (!deviceId || !st.doc || !findDevice(st.doc.project, deviceId)) return;
+  st.edit('history.simPanel', (p) => {
+    const d = findDevice(p, deviceId);
+    if (d) d.simPanel = { ...d.simPanel, ...patch };
+  });
+}
+
+/** Esadecimale/decimale dell'osservazione: subito nello stato e nel progetto del dispositivo. */
+export function setMonitorHex(
+  store: StoreApi<AppState>,
+  deviceId: string | null | undefined,
+  hex: boolean,
+): void {
+  store.getState().setSim({ monitorHex: hex });
+  saveSimPanel(store, deviceId, { hex });
+}
+
+/** Byte aggiunto a mano al pannello I/O («+ byte»), salvato anche nel progetto. */
+export function addIoByte(
+  store: StoreApi<AppState>,
+  dir: 'inputs' | 'outputs',
+  byte: number,
+): void {
+  const sim = store.getState().sim;
+  if (sim.ioExtra[dir].includes(byte)) return;
+  const ioExtra = { ...sim.ioExtra, [dir]: [...sim.ioExtra[dir], byte] };
+  store.getState().setSim({ ioExtra });
+  saveSimPanel(store, sim.deviceId, { [dir]: ioExtra[dir] });
+}
+
 /**
  * Moduli di I/O della configurazione hardware (rack e stazioni ET 200) per il simulatore; vuoto se
  * non ce n'è nessuno (progetti senza configurazione: tutto il campo della CPU).
@@ -125,6 +162,23 @@ export class SimController {
     store.subscribe(() => {
       this.syncMonitor();
       this.syncWatch();
+      this.syncProps();
+    });
+  }
+
+  /** Proprietà della CPU mandate al worker (oggetto immutabile del progetto). */
+  private sentProps: PlcDevice['properties'] | undefined;
+
+  /** Le proprietà della CPU simulata cambiate nel progetto valgono subito (tempo di ciclo, clock, OB35). */
+  private syncProps(): void {
+    const s = this.session;
+    const st = this.store.getState();
+    if (!s || st.sim.phase !== 'on' || !st.doc || !st.sim.deviceId) return;
+    const dev = findDevice(st.doc.project, st.sim.deviceId);
+    if (!dev || dev.properties === this.sentProps) return;
+    this.sentProps = dev.properties;
+    s.request({ op: 'props', props: simPropsOf(dev) }).catch((e: unknown) => {
+      if (this.session === s) this.push('error', 'simModeFailed', { message: errorText(e) });
     });
   }
 
@@ -158,7 +212,14 @@ export class SimController {
     const dev = doc && target ? findDevice(doc.project, target) : undefined;
     if (!dev) return;
     const gen = ++this.generation;
-    state.setSim({ ...SIM_OFF, phase: 'starting', deviceId: dev.id });
+    // Preferenze del pannello salvate nel progetto (assenti nei file precedenti).
+    state.setSim({
+      ...SIM_OFF,
+      phase: 'starting',
+      deviceId: dev.id,
+      monitorHex: dev.simPanel?.hex ?? true,
+      ioExtra: { inputs: dev.simPanel?.inputs ?? [], outputs: dev.simPanel?.outputs ?? [] },
+    });
     let session: SimSession;
     try {
       session = await (this.deps.start ?? SimSession.start)({
@@ -180,6 +241,7 @@ export class SimController {
     // L'API non permette di registrare gli ascoltatori prima di `start`: le notifiche del primo
     // istante (solo STOP) si perdono, la successiva arriva entro 200 ms.
     this.session = session;
+    this.sentProps = dev.properties;
     this.inputsInFlight = 0;
     this.sentMonitor = undefined;
     this.sentWatch = undefined;

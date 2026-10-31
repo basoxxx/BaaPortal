@@ -10,7 +10,7 @@ import {
 } from '@baaportal/project';
 import { applyImport, blockToMc7File, planImport } from '@baaportal/project';
 import { commands, type CommandContext } from '../../src/commands/commands';
-import { simControllerFor } from '../../src/sim/simController';
+import { addIoByte, setMonitorHex, simControllerFor } from '../../src/sim/simController';
 import { SimSession } from '../../src/sim/session';
 import type { SimWireRequest } from '../../src/sim/protocol';
 import { createAppStore } from '../../src/state/store';
@@ -519,6 +519,23 @@ describe('comandi online sul simulatore', () => {
     expect(s.store.getState().messages.at(-1)!.textKey).toBe('messages.simInputsFailed');
     await s.controller.interrupt(82, 70000);
     expect(s.store.getState().messages.at(-1)!.textKey).toBe('messages.simInterruptFailed');
+  });
+
+  it('i byte aggiunti e il formato si salvano nel progetto e tornano alla simulazione dopo', async () => {
+    await initI18n('it');
+    const s = setup();
+    await on(s);
+    const dev = () =>
+      findDevice(s.store.getState().doc!.project, s.store.getState().sim.deviceId!)!;
+    addIoByte(s.store, 'inputs', 7);
+    setMonitorHex(s.store, s.store.getState().sim.deviceId, false);
+    expect(dev().simPanel).toEqual({ inputs: [7], hex: false });
+    await commands['online.simulation'].run(s.ctx);
+    expect(s.store.getState().sim.ioExtra.inputs).toEqual([]);
+    await commands['online.simulation'].run(s.ctx);
+    await vi.waitFor(() => expect(s.store.getState().sim.phase).toBe('on'));
+    expect(s.store.getState().sim.ioExtra.inputs).toEqual([7]);
+    expect(s.store.getState().sim.monitorHex).toBe(false);
   });
 
   it('spegnere la simulazione azzera i byte aggiunti a mano', async () => {

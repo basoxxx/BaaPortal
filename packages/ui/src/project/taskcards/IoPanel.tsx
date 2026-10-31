@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { parseAddress } from '@baaportal/s7-types';
 import { findDevice, type PlcDevice } from '@baaportal/project';
 import { useAppStore, useServices } from '../../state/AppContext';
-import { simControllerFor, simIoOf } from '../../sim/simController';
+import { addIoByte, simControllerFor, simIoOf } from '../../sim/simController';
 import type { WriteItemReq } from '../../sim/protocol';
 
 type Dir = 'inputs' | 'outputs';
@@ -76,8 +76,7 @@ function ByteGroup({ dir }: { dir: Dir }) {
     }
     setBad(false);
     setText('');
-    if (!sim.ioExtra[dir].includes(n))
-      store.getState().setSim({ ioExtra: { ...sim.ioExtra, [dir]: [...sim.ioExtra[dir], n] } });
+    addIoByte(store, dir, n);
   };
 
   return (

@@ -274,6 +274,16 @@ export class SimCpu {
     return (findCpu(this.cpuTypeId)?.workMemoryKB ?? 64) * 1024;
   }
 
+  /**
+   * Nuove proprietà senza riavviare: tempo di ciclo e merker di clock dal ciclo successivo, OB35 con
+   * la griglia ripartita da adesso se l'intervallo cambia; la ritentività vale al prossimo avvio.
+   */
+  setProps(props: SimCpuProps): void {
+    const iv = props.cyclicInterruptMs;
+    if (iv !== this.props.cyclicInterruptMs && this._mode === 'RUN') this.ob35Due = this.now() + iv;
+    this.props = props;
+  }
+
   /** Tempi di ciclo configurati (proprietà della CPU), in ms. */
   get cycleConfig(): { minMs: number; maxMs: number } {
     return { minMs: this.props.minCycleMs, maxMs: this.props.maxCycleMs };

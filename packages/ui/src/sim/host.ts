@@ -83,6 +83,10 @@ export class SimHost {
         if (req.to === 'RUN') await this.client.start();
         else await this.client.stop();
         return undefined;
+      case 'props':
+        this.minCycleMs = req.props.minCycleMs;
+        cpu.setProps(req.props);
+        return undefined;
       case 'mres':
         cpu.memoryReset();
         this.warnings = [];

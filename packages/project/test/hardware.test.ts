@@ -162,6 +162,14 @@ describe('configurazione hardware nel file .baap', () => {
     const project = makeProject();
     const back = readBaap(writeBaap(project, { appVersion: 'test' }));
     expect('hardware' in back.devices[0]!).toBe(false);
+    expect('simPanel' in back.devices[0]!).toBe(false);
+  });
+
+  it('preferenze del pannello di test (2.1): andata e ritorno', () => {
+    const project = makeProject();
+    project.devices[0]!.simPanel = { hex: false, inputs: [3, 9], outputs: [4] };
+    const back = readBaap(writeBaap(project, { appVersion: 'test' }));
+    expect(back.devices[0]!.simPanel).toEqual({ hex: false, inputs: [3, 9], outputs: [4] });
   });
 
   it('una configurazione malformata o con id ripetuti è INVALID_SCHEMA', () => {

@@ -244,6 +244,12 @@ const deviceShape = {
       .optional(),
   }).optional(),
   hmi: hmiSchema.optional(),
+  // Preferenze del pannello di test (2.1, facoltative).
+  simPanel: obj({
+    hex: z.boolean().optional(),
+    inputs: z.array(z.number().int().min(0).max(65535)).max(1024).optional(),
+    outputs: z.array(z.number().int().min(0).max(65535)).max(1024).optional(),
+  }).optional(),
   // Ordine degli oggetti: gli id dei file elencati.
   tagTables: z.array(id),
   udts: z.array(id),

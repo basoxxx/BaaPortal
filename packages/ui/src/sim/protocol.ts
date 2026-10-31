@@ -50,6 +50,8 @@ export type SimRequest =
       keep?: { kind: 'OB' | 'FB' | 'FC' | 'DB'; number: number }[];
     }
   | { op: 'mode'; to: 'RUN' | 'STOP' }
+  /** Proprietà della CPU cambiate nel progetto: valgono senza riavviare la simulazione. */
+  | { op: 'props'; props: SimCpuProps }
   | { op: 'mres' }
   | { op: 'setInputs'; byte: number; bytes: Uint8Array }
   /** Allarme di diagnostica (OB82) o guasto (OB86); `address` è l'indirizzo logico di base del modulo. */

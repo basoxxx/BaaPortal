@@ -297,16 +297,16 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
   - Rileva solo la prima esecuzione di ogni riga nel ciclo (in AWL, KOP e FUP; nei blocchi SCL l'ultima, vedi «SCL in prova»); non c'è l'opzione per scegliere.
   - I blocchi importati e non ricompilati non si possono osservare (mancano le righe del compilatore).
   - Gli editor nelle finestre staccate non vengono osservati.
-  - Il tasto esadecimale/decimale non viene salvato e torna esadecimale a ogni simulazione.
+  - Il tasto esadecimale/decimale si salva nel progetto, nel PLC (2.1); online vale quello scelto per ultimo nella sessione.
 - **Forzamento solo nel simulatore (2.1).** Il pannello I/O forza I, Q e M (ingressi e merker all'inizio del ciclo, uscite prima dei moduli; il programma può sovrascrivere, come sulla S7-300). Non si forzano PI/PQ né T/C; la cancellazione totale termina il forzamento (⚠️); non c'è la tabella di forzamento nell'albero né la colonna «Forza» nelle tabelle di controllo. Online il forzamento resta non fatto (vedi «Forzamento» nel piano 3D).
 - **Blocchi cancellati.** «Carica nel dispositivo» cancella dalla CPU simulata i blocchi (compresi i DB) non più nel progetto; un blocco cancellato che era in osservazione smette di essere osservato. Anche i DB creati dal programma con SFC 22 (CREAT_DB) vengono cancellati da un nuovo caricamento.
-- **Byte aggiunti a mano nel pannello I/O** («+ byte») durano solo la sessione di simulazione e non sono salvati nel progetto.
+- **Byte aggiunti a mano nel pannello I/O** («+ byte») si salvano nel progetto, nel PLC (2.1), e tornano alla simulazione successiva; non si tolgono dal pannello (si tolgono solo modificando il file).
 - **Tabelle di controllo.**
   - La scrittura di T e C non è supportata (lo stato si legge).
   - Non si osservano L, DI, accessi indiretti, puntatori, variabili locali (`#x`) né tipi composti (ARRAY, STRUCT, STRING interi).
   - Sul simulatore si osserva una sola tabella alla volta (online invece più tabelle insieme): quella su cui si è attivato «Osserva tutto», finché è visibile in un riquadro qualsiasi; una tabella in una finestra staccata smette di essere osservata.
   - Gli operandi si risolvono sul **progetto offline**, non sul programma caricato: se si modifica il layout di un DB senza caricarlo, letture e scritture usano i nuovi offset della modifica e non c'è confronto online/offline.
-  - Le modifiche alle proprietà della CPU (tempo di ciclo, merker di clock, intervallo di OB35) valgono solo dopo aver riavviato la simulazione.
+  - Le modifiche alle proprietà della CPU valgono subito (2.1): tempo di ciclo e merker di clock dal ciclo dopo, OB35 con la griglia ripartita dal momento del cambio; la ritentività al prossimo avvio a caldo. Cambiare il tipo di CPU richiede ancora di riavviare la simulazione.
   - La rinomina di un tag, di una costante o di un blocco/DB aggiorna le righe che usano `"Nome"` o `"Nome".membro`; anche la rinomina di un **membro** di un DB, di un UDT o di un FB (DB di istanza) aggiorna le righe, nello stesso passo annullabile.
   - Non c'è un forzamento permanente né un «trigger»: c'è solo «Comanda», una scrittura una tantum.
   - Le righe si copiano, tagliano, incollano (anche tra tabelle) e si riordinano trascinandole; le tabelle si copiano e incollano nell'albero (anche tra PLC, ma non si tagliano né si trascinano). Importazione ed esportazione solo in csv (colonne Operando, Formato, Valore di comando, Commento). Non ci sono gruppi.

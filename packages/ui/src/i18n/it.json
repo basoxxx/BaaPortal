@@ -541,6 +541,7 @@
     }
   },
   "history": {
+    "simPanel": "Formato dell’osservazione e byte del pannello I/O",
     "replace": "Sostituisci testo",
     "author": "Autore del progetto",
     "comment": "Commento del progetto",
