@@ -29,6 +29,9 @@ test.afterEach(() => {
 test('KOP: disegna, vede l’AWL, salva, compila e osserva il blocco nel simulatore', async () => {
   const file = join(tmp, 'kop.baap');
   writeFixtureProject(file, (dev) => {
+    // Tempo di ciclo massimo al limite (6 s): con la macchina carica il worker del simulatore può
+    // restare fermo oltre i 150 ms di serie e la CPU andrebbe in STOP (TEMPO_CICLO_SUPERATO).
+    dev.properties.cycle.maxCycleMs = 6000;
     dev.blocks = dev.blocks.filter((b) => b.kind !== 'FB' || b.name !== 'Nastro');
     dev.blocks.push(createCodeBlock({ kind: 'FC', number: 1, name: 'Logica', language: 'KOP' }));
     const ob = dev.blocks.find((b) => b.kind === 'OB' && b.number === 1);
@@ -103,7 +106,8 @@ test('KOP: disegna, vede l’AWL, salva, compila e osserva il blocco nel simulat
   await expect(page.getByTestId('sim-indicator')).toHaveText('Simulazione: RUN');
   await page.getByRole('button', { name: 'Osserva programma', exact: true }).click();
   await expect(page.getByTestId('monitor-bar')).toContainText('Osservazione attiva');
-  // shortcut: lo stato degli elementi non si controlla: nell'app costruita il KOP di FC1 risulta
-  // «non elaborato» anche se il simulatore lo esegue (Q 4.0 = 1 nella prova in node); da capire.
-  await expect(page.getByRole('button', { name: /^Bobina Q 4\.0 \(/ })).toBeVisible();
+  // I 0.0 e I 0.1 a 1 (le scrive OB1): i due contatti chiusi e la bobina a 1.
+  await expect(page.getByRole('button', { name: /^Contatto NA I 0\.0 \(stato 1/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Contatto NA I 0\.1 \(stato 1/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Bobina Q 4\.0 \(stato 1/ })).toBeVisible();
 });
