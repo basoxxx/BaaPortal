@@ -2,6 +2,7 @@
 // stessa sorgente; una sorgente che nessuna rete KOP genera resta AWL con un motivo.
 import { formatNetwork } from '@baaportal/awl';
 import { describe, expect, it } from 'vitest';
+import { awlLabels } from '../src/fromAwl.js';
 import { awlToLad, blockAwlToLad, networkToAwl, validateNetwork } from '../src/index.js';
 import type { BoxKind, CmpFn, LadBox, LadElem, LadNetwork, LadNode, LadOut } from '../src/index.js';
 import { BOX_CATALOG, BOX_KINDS, CMP_FNS } from '../src/index.js';
@@ -398,6 +399,10 @@ describe('awlToLad: resta AWL', () => {
       'M1: BLD 1\nA I 0.0\n= Q 4.0',
     ])
       expect(convert(src).ok).toBe(false);
+  });
+
+  it('un BLD con etichetta non nasconde le etichette e i salti del segmento', () => {
+    expect([...awlLabels('M5: BLD 1\nA I 0.1\nJC M2\nNOP 0')].sort()).toEqual(['M2', 'M5']);
   });
 
   it('errori di sintassi e segmento vuoto', () => {

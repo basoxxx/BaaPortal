@@ -19,7 +19,8 @@ export type LadDiagCode =
   | 'BOX_IN_PIN'
   | 'BAD_LABEL'
   | 'BAD_INSTANCE'
-  | 'TOO_MANY_LABELS';
+  | 'TOO_MANY_LABELS'
+  | 'LINE_BREAK';
 
 export type LadDiag = { elemId: string; code: LadDiagCode; params?: Record<string, string> };
 
@@ -188,5 +189,16 @@ export function validateNetwork(net: LadNetwork): LadDiag[] {
   const label = net.label?.trim();
   if (label && !LABEL_RE.test(label)) add(net.root.id, 'BAD_LABEL', { label });
   checkNode(net.root, true, false, add);
+  // un a capo in un operando (appunti, file) diventerebbe un'istruzione AWL non disegnata
+  const breaks = (v: unknown, id: string): void => {
+    if (typeof v === 'string') {
+      if (/[\r\n]/.test(v)) add(id, 'LINE_BREAK');
+    } else if (v && typeof v === 'object') {
+      const own = (v as { id?: unknown }).id;
+      const at = typeof own === 'string' ? own : id;
+      for (const x of Object.values(v)) breaks(x, at);
+    }
+  };
+  breaks(net, net.root.id);
   return diags;
 }

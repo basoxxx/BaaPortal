@@ -88,7 +88,7 @@ export function networkStatus(
     if (e.k === 'parallel') {
       // ogni ramo riparte dal flusso davanti al parallelo; l'uscita è l'OR dei rami. Con il bit
       // del flusso (H21) l'RLO del ramo lo contiene già; sulla barra il flusso è comunque 1.
-      const bctx = needsFlowBit(e) ? true : flow;
+      const bctx = needsFlowBit(e) ? ctx : flow;
       const outs = e.branches.map((b) => series(b, flow, bctx, false));
       // un ramo sconosciuto lascia sconosciuto l'OR, se nessun altro ramo dà 1
       const res = outs.includes(true) ? true : outs.includes(undefined) ? undefined : false;

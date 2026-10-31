@@ -1,7 +1,7 @@
 // Stato degli elementi da celle per riga scritte a mano (la verifica sul simulatore è in
 // packages/project/test/kopStatus.test.ts).
 import { describe, expect, it } from 'vitest';
-import { networkStatus, networkToAwl } from '../src/index.js';
+import { awlToLad, networkStatus, networkToAwl } from '../src/index.js';
 import type { LadBox, LadElem, LadNetwork, LadOut, LineOwner, LineState } from '../src/index.js';
 
 const on = (accu1 = 0): LineState => ({ rlo: true, sta: true, accu1 });
@@ -153,5 +153,30 @@ describe('networkStatus: NOT in un ramo con il bit del flusso (H21)', () => {
     expect(st.get('a')).toMatchObject({ out: false });
     expect(st.get('n')).toMatchObject({ in: false, out: true });
     expect(st.get('p')).toMatchObject({ out: true });
+  });
+});
+
+describe('networkStatus: bit del flusso dentro un gruppo', () => {
+  it('con flusso 0 dalla barra il parallelo nel gruppo non mostra flusso', () => {
+    let n = 0;
+    const src =
+      'A I0.0\nA(\nA I0.1\n= L20.0\nO(\nA L20.0\nNOT\n)\nO(\nA L20.0\nA I0.2\n)\nNOT\n)\n= Q0.0';
+    const r = awlToLad(src, { tempEnd: 20, firstLabel: 1, newId: () => `i${++n}` });
+    if (!r.ok) throw new Error('conversione fallita');
+    const net = r.network;
+    const t = networkToAwl(net, { tempEnd: 20, firstLabel: 1 });
+    const group = net.root.series[1];
+    if (group?.k !== 'parallel') throw new Error('gruppo atteso');
+    const par = group.branches[0]![1]!;
+    if (par.k !== 'parallel') throw new Error('parallelo atteso');
+    const branchNot = par.branches[0]![0]!;
+    const cells = new Map<number, LineState | null>(
+      t.lines.map((l) => [l.line, { rlo: false, sta: false, accu1: 0 }]),
+    );
+    // l'RLO dentro il gruppo (dove sta il NOT del ramo) è 1, ma il flusso dalla barra è 0
+    cells.set(t.lines.filter((l) => l.elemId === branchNot.id).at(-1)!.line, on());
+    const st = networkStatus(net, t.lines, cells);
+    expect(st.get(par.id)?.out).not.toBe(true);
+    expect(st.get(branchNot.id)?.out).not.toBe(true);
   });
 });

@@ -1328,6 +1328,7 @@
       "KOP_BAD_INSTANCE": "Rete {{network}}: L'istanza del box non è valida.",
       "KOP_MUST_BE_ALONE": "Rete {{network}}: Questa uscita deve essere la sola del suo punto: non può avere altre uscite in parallelo.",
       "KOP_TOO_MANY_LABELS": "Rete {{network}}: Troppe etichette di salto nel segmento.",
+      "KOP_LINE_BREAK": "Rete {{network}}: Un operando contiene un a capo: scrivilo su una riga sola.",
       "JL_TARGET": "L'etichetta di JL deve seguire la lista dei salti.",
       "JUMP_ALIGN": "La destinazione del salto non è allineata.",
       "JUMP_TOO_FAR": "Il salto è troppo lontano ({{words}} parole).",
@@ -1796,7 +1797,8 @@
       "BAD_LABEL": "Etichetta «{{label}}» non valida: da 1 a 4 caratteri, il primo è una lettera.",
       "BAD_INSTANCE": "L'istanza del box non è valida.",
       "MUST_BE_ALONE": "Questa uscita deve essere la sola del suo punto: non può avere altre uscite in parallelo.",
-      "TOO_MANY_LABELS": "Troppe etichette di salto nel segmento."
+      "TOO_MANY_LABELS": "Troppe etichette di salto nel segmento.",
+      "LINE_BREAK": "Un operando contiene un a capo: scrivilo su una riga sola."
     },
     "palette": {
       "contactNo": "Contatto NA",

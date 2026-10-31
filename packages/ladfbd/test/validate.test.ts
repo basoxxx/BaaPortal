@@ -22,6 +22,13 @@ describe('validateNetwork', () => {
     ]);
   });
 
+  it('LINE_BREAK: un a capo in operandi, pin o istanze (appunti, file) blocca la rete', () => {
+    expect(validateNetwork(net([c('a', 'M0.0\n= Q9.7')], [coil('q', 'Q 4.0\r')]))).toEqual([
+      { elemId: 'a', code: 'LINE_BREAK' },
+      { elemId: 'q', code: 'LINE_BREAK' },
+    ]);
+  });
+
   it('EMPTY_OPERAND: contatto, confronto, bobine, temporizzatore e salto senza operando', () => {
     const diags = validateNetwork(
       net(

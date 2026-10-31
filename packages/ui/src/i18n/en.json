@@ -1328,6 +1328,7 @@
       "KOP_BAD_INSTANCE": "Network {{network}}: The box instance is not valid.",
       "KOP_MUST_BE_ALONE": "Network {{network}}: This output must be the only one at its point: it cannot have other outputs in parallel.",
       "KOP_TOO_MANY_LABELS": "Network {{network}}: Too many jump labels in the network.",
+      "KOP_LINE_BREAK": "Network {{network}}: An operand contains a line break: write it on one line.",
       "JL_TARGET": "The JL label must follow the jump list.",
       "JUMP_ALIGN": "The jump target is not aligned.",
       "JUMP_TOO_FAR": "The jump is too far ({{words}} words).",
@@ -1796,7 +1797,8 @@
       "BAD_LABEL": "Invalid label \"{{label}}\": 1 to 4 characters, the first one a letter.",
       "BAD_INSTANCE": "The box instance is not valid.",
       "MUST_BE_ALONE": "This output must be the only one at its point: it cannot have other outputs in parallel.",
-      "TOO_MANY_LABELS": "Too many jump labels in the network."
+      "TOO_MANY_LABELS": "Too many jump labels in the network.",
+      "LINE_BREAK": "An operand contains a line break: write it on one line."
     },
     "palette": {
       "contactNo": "NO contact",

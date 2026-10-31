@@ -67,10 +67,8 @@ function tokensOf(source: string): Tok[] | null {
   for (const st of r.statements) {
     if (!st.instruction.def) return null;
     // i marcatori BLD di STEP 7 non fanno nulla nella CPU: la conversione li ignora (H5)
-    if (st.instruction.def.id === 'BLD') {
-      if (st.label) return null;
-      continue;
-    }
+    // un BLD con etichetta resta un token: la conversione fallisce ma etichetta e salti restano visibili
+    if (st.instruction.def.id === 'BLD' && !st.label) continue;
     const t: Tok = {
       op: st.instruction.def.id,
       arg: st.operand ? slice(st.operand) + (st.instanceDb ? `, ${slice(st.instanceDb)}` : '') : '',
