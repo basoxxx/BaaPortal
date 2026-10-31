@@ -172,7 +172,7 @@ Si crea solo con _Funzioni sperimentali_ attive; un blocco FUP già esistente si
 - **Osservazione della vista FUP** con gli stessi dati del KOP: il bordo inferiore di ogni elemento è verde (1), blu tratteggiato (0) o grigio punteggiato (non elaborato), senza bordo se fuori dalla finestra o in attesa; un'entrata mostra il segnale del suo operando, gli altri elementi la loro uscita. I riquadri `&` comuni e i fili non hanno colore; un elemento ripetuto (ramo a T) ha lo stesso stato in ogni copia.
 - **Aspetto chiaro/scuro** non controllato a mano.
 
-## SCL in prova (1.0.0, esteso in 1.1, 1.3, 1.4, 1.6 e 1.8)
+## SCL in prova (1.0.0, esteso in 1.1, 1.3, 1.4, 1.6, 1.8 e 2.1)
 
 Si crea solo con _Funzioni sperimentali_ attive. Il testo SCL si traduce in AWL (pacchetto `scl`), che si compila come gli altri blocchi.
 

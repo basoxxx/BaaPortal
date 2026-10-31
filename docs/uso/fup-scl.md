@@ -1,6 +1,6 @@
 # FUP e SCL (in prova)
 
-Guida breve ai due linguaggi in prova della versione 1.0.0 (SCL esteso nella 1.1, nella 1.4 e nella 1.8). Funzionano nel simulatore, ma non sono mai stati provati su una CPU reale.
+Guida breve ai due linguaggi in prova della versione 1.0.0 (SCL esteso nella 1.1, nella 1.4, nella 1.8 e nella 2.1). Funzionano nel simulatore, ma non sono mai stati provati su una CPU reale.
 
 ## Attivarli
 
