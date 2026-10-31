@@ -45,15 +45,27 @@ export function pinType(e: LadElem | LadOut, pin: string): string {
   return [...def.dataInputs, ...def.outputs].find((p) => p.name === pin)?.type ?? '';
 }
 
-/** Valori osservati dei pin di un elemento, già formattati. */
+/**
+ * Valori osservati dei pin di un elemento, già formattati; i pin BOOL con logica di un box
+ * mostrano il loro flusso, `1` o `0`.
+ */
 export function pinValues(
   mon: LadMonitor | undefined,
   e: LadElem | LadOut,
 ): Record<string, string> {
-  const v = mon?.status.get(e.id)?.values ?? {};
-  return Object.fromEntries(
-    Object.entries(v).map(([pin, x]) => [pin, formatPinValue(x, pinType(e, pin), mon!.hex)]),
+  const st = mon?.status.get(e.id);
+  const out = Object.fromEntries(
+    Object.entries(st?.values ?? {}).map(([pin, x]) => [
+      pin,
+      formatPinValue(x, pinType(e, pin), mon!.hex),
+    ]),
   );
+  if (e.k === 'box' && st && !st.notRun)
+    for (const [pin, list] of Object.entries(e.boolPins)) {
+      const v = st.pins?.[pin];
+      if (list.length > 0 && v !== undefined) out[pin] = v ? '1' : '0';
+    }
+  return out;
 }
 
 /**

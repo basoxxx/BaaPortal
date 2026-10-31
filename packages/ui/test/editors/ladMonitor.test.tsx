@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { networkStatus, type LadNetwork } from '@baaportal/ladfbd';
 import { createCodeBlock, kopSources } from '@baaportal/project';
 import { monitorLinesFromPlc, type LineMapRow } from '../../src/editors/awl/monitorExtension';
+import { pinValues } from '../../src/editors/lad/ladMonitor';
 import { dev, openEditor } from '../blockFixtures';
 
 const T = 30_000;
@@ -256,4 +257,20 @@ describe('osservazione sulla CPU: fuori finestra e non elaborato', () => {
     },
     T,
   );
+});
+
+describe('pinValues', () => {
+  it('i pin BOOL con logica di un box mostrano il loro flusso; senza logica o non elaborati no', () => {
+    const call = {
+      id: 'k',
+      k: 'box',
+      box: 'CALL',
+      instance: 'FC 2',
+      pins: { a: 'MW 0' },
+      boolPins: { x: [{ id: 'c', k: 'contact', neg: false, op: 'I 0.0' }], y: [] },
+    } as const;
+    const mon = (st: object) => ({ status: new Map([['k', st]]), hex: false });
+    expect(pinValues(mon({ pins: { EN: true, x: false, y: true } }), call)).toEqual({ x: '0' });
+    expect(pinValues(mon({ notRun: true, pins: { x: true } }), call)).toEqual({});
+  });
 });
