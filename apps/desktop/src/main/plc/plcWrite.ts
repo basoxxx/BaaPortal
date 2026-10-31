@@ -1300,11 +1300,12 @@ export class PlcWriteService {
         const certain =
           err instanceof S7Error && (err.code === 'CPU_ERROR' || err.code === 'FORBIDDEN');
         row.outcome = certain ? 'rejected' : 'unknown';
+        // in italiano e senza tr: il renderer riconosce questi testi e li traduce (plcRestore.ts)
         row.error = !certain
-          ? tr('Esito sconosciuto')
+          ? 'Esito sconosciuto'
           : err instanceof S7Error && err.code === 'FORBIDDEN'
-            ? tr(FILTER_REFUSED) // l'ha fermato il nostro filtro, non la CPU
-            : tr('Rifiutato dalla CPU: {why}', { why: errText(err) });
+            ? FILTER_REFUSED // l'ha fermato il nostro filtro, non la CPU
+            : `Rifiutato dalla CPU: ${errText(err)}`;
         return `${name}: ${row.error}`;
       }
       row.outcome = s.kind === 'deleteSdb' ? 'deleted' : 'loaded';

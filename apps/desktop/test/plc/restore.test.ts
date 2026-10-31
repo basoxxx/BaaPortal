@@ -1,4 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished as afterTest,
+  vi,
+} from 'vitest';
 const electronApp = vi.hoisted(() => ({ isPackaged: false }));
 vi.mock('electron', () => ({ app: electronApp }));
 import { createHash } from 'node:crypto';
@@ -9,6 +17,7 @@ import { listen, type ListeningCpu } from '@baaportal/s7-server/node';
 import { encodeBackup, type BackupManifest } from '@baaportal/project';
 import type { PlcAccess } from '@baaportal/ui';
 import type { ConfirmFn } from '../../src/main/plc/confirm';
+import { setDialogLang } from '../../src/main/plc/dialogText';
 import { PlcService } from '../../src/main/plc/plcService';
 import {
   PlcWriteService,
@@ -503,6 +512,9 @@ describe('ripristino contro il finto PLC', () => {
   });
 
   it('restore: errore del filtro → «Rifiutato da BaaPortal (frame non ammesso)»; errore della CPU → «dalla CPU»', async () => {
+    // anche in inglese le righe restano in italiano: le traduce il renderer (plcRestore.ts)
+    setDialogLang('en');
+    afterTest(() => setDialogLang('it'));
     for (const [code, want] of [
       ['FORBIDDEN', 'Rifiutato da BaaPortal (frame non ammesso)'],
       ['CPU_ERROR', 'Rifiutato dalla CPU'],
