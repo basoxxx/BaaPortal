@@ -750,13 +750,24 @@ export class SimCpu {
     this.lastCheck = t - Math.floor(this.waitedUs / 1000);
   }
 
-  /** Tempo di ciclo superato all'istante `t`; un intervallo dal controllo precedente oltre `pauseMs` non conta. */
+  /** Tempo di ciclo superato all'istante `t`, senza le pause del processo (`skipPause`). */
   private watchdogExpired(t: number): boolean {
-    const raw = t - Math.floor(this.waitedUs / 1000);
-    if (this.pauseMs !== undefined && raw - this.lastCheck > this.pauseMs)
-      this.watchdog += raw - this.lastCheck;
-    this.lastCheck = raw;
+    this.skipPause(t);
     return t - this.watchdog > this.props.maxCycleMs;
+  }
+
+  /**
+   * Dall'intervallo dal controllo precedente conta al massimo `pauseMs`: l'eccesso è il processo fermo
+   * e sposta avanti il cane da guardia e, se OB35 gira, la sua prossima scadenza.
+   */
+  private skipPause(t: number): void {
+    const raw = t - Math.floor(this.waitedUs / 1000);
+    const excess = raw - this.lastCheck - (this.pauseMs ?? Infinity);
+    if (excess > 0) {
+      this.watchdog += excess;
+      if (this.ob35Running) this.ob35Due += excess;
+    }
+    this.lastCheck = raw;
   }
 
   /** Ogni `TICK_EVERY` istruzioni: tempo di ciclo, merker di clock, interruzioni dovute. */
@@ -801,12 +812,14 @@ export class SimCpu {
     // SFC 39 DIS_IRT: l'allarme si scarta.
     if (!this.program.get('OB', 35) || this.services.state.disabled.has(35)) return;
     this.ob35Running = true;
+    let end: number;
     try {
       this.runOb(ctx, 35, PRIORITY.OB35, ob35StartInfo(iv, this.stamp(t)));
+      end = this.now();
+      this.skipPause(end);
     } finally {
       this.ob35Running = false;
     }
-    const end = this.now();
     if (end >= this.ob35Due) this.ob35Lost(ctx, end);
   }
 

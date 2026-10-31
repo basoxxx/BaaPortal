@@ -528,6 +528,42 @@ describe('tempo di ciclo e pause del processo (pauseMs)', () => {
     expect(cpu.mode).toBe('STOP');
   });
 
+  it('col PC lento (ogni controllo oltre pauseMs) un loop infinito va in STOP', () => {
+    const { c, now } = pausing(60);
+    const cpu = make(['x: JU x;'], now, 50);
+    const r = cpu.cycle();
+    expect(r.error?.code).toBe('TEMPO_CICLO_SUPERATO');
+    expect(r.error?.detail ?? '').toContain('150 ms');
+    expect(c.reads).toBeLessThan(40); // ogni intervallo conta almeno pauseMs
+  });
+
+  /** CPU con OB35 (`ob35` = corpo AWL) e orologio fermo a 100 ms, la prima scadenza. */
+  const withOb35 = (ob35: string) => {
+    const { c, now } = pausing(0);
+    const cpu = new SimCpu({ cpuTypeId: 'cpu-315-2-pn-dp', props: PROPS, now, pauseMs: 50 });
+    const specs: BlockSpec[] = [ob1('\tNOP 0;'), { kind: 'OB', number: 35, networks: [ob35] }];
+    for (const b of buildProgram(specs).list()) cpu.program.put(b);
+    cpu.run();
+    c.t = 100;
+    c.jumpAt = c.reads + 1; // la lettura dopo quella d'ingresso: dentro OB35
+    c.jump = 500;
+    return { c, cpu };
+  };
+
+  it('una pausa del processo durante OB35 sposta la scadenza: niente STOP', () => {
+    const { cpu } = withOb35(`${'\tNOP 0;\n'.repeat(1100)}\tSET;\n\t= M 0.0;`);
+    expect(cpu.idle()).toBeDefined();
+    expect(cpu.mode).toBe('RUN');
+    expect(cpu.memory.M[0]).toBe(1);
+  });
+
+  it('una pausa fra l’ultimo controllo e la fine di OB35 non lo dichiara perso', () => {
+    const { cpu } = withOb35('\tSET;\n\t= M 0.0;');
+    cpu.idle();
+    expect(cpu.mode).toBe('RUN');
+    expect(cpu.memory.M[0]).toBe(1);
+  });
+
   it('senza pauseMs un salto dell’orologio resta tempo di ciclo (come prima)', () => {
     const { c, now } = pausing(0);
     const cpu = make(['\tNOP 0;'], now);
