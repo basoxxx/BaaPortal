@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   MODULE_CATALOG,
   defaultStartAddress,
+  findCpu,
   findModule,
   moduleTypeSchema,
   slotAccepts,
@@ -66,6 +67,11 @@ describe('catalogo dei moduli S7-300', () => {
     expect(slotAccepts(im361, 0, 3)).toBe(false);
     expect(slotAccepts(im365, 1, 3)).toBe(true);
     expect(slotAccepts(im365, 2, 3)).toBe(false);
+    // 31xC: il posto 11 del rack 3 avrebbe gli indirizzi dell'I/O integrato.
+    expect(slotAccepts(di, 3, 11)).toBe(true);
+    expect(slotAccepts(di, 3, 11, findCpu('cpu-313c'))).toBe(false);
+    expect(slotAccepts(di, 3, 10, findCpu('cpu-313c'))).toBe(true);
+    expect(slotAccepts(di, 3, 11, findCpu('cpu-315-2-dp'))).toBe(true);
   });
   it('indirizzi fissi per posto', () => {
     const di = mod('6ES7 321-1BH02-0AA0');

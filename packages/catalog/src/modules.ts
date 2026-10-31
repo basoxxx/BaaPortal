@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { CpuType } from './types';
 
 // Catalogo dei moduli S7-300 per la vista dispositivi (tappa 6A). Fonti pubbliche, solo numeri
 // d'articolo, numero di canali e occupazione degli indirizzi; nessun testo copiato. Le descrizioni
@@ -390,8 +391,12 @@ export const FIRST_IO_SLOT = 4;
 /** Rack 0 con la CPU e fino a 3 rack di ampliamento. */
 export const MAX_RACKS = 4;
 
-/** Tipi di modulo ammessi nel posto `slot` del rack `rack`. */
-export function slotAccepts(m: ModuleType, rack: number, slot: number): boolean {
+/**
+ * Tipi di modulo ammessi nel posto `slot` del rack `rack`; con una CPU compatta 31xC non il posto 11
+ * del rack 3, i cui indirizzi predefiniti (124, 752) sono quelli del suo I/O integrato.
+ */
+export function slotAccepts(m: ModuleType, rack: number, slot: number, cpu?: CpuType): boolean {
+  if (cpu?.integratedIo && rack === MAX_RACKS - 1 && slot === RACK_SLOTS) return false;
   if (slot === 1) return m.kind === 'PS';
   if (slot === 2) return false; // la CPU, solo nel rack 0
   if (slot === 3) {
