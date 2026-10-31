@@ -246,7 +246,7 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§4.1 per la semantica). T
 - **Confronti:** forzano OR = 0. Conseguenza: in `A a; A b; O; L; L; ==I; A c` l'`O` pendente è perso dal confronto e `A c` si combina in AND con il risultato.
 - **`T STW`** non segue MCR (scrive anche con MCR spento).
 - **`BTI`/`BTD`:** si controlla solo il bit di segno e le cifre > 9 (`BCD_NON_VALIDO`).
-- **Immagine di processo:** le dimensioni di I e Q sono quelle del catalogo della CPU. Con una configurazione hardware (2.1) la periferia e l'aggiornamento delle immagini valgono solo nei byte dei moduli presenti, tranne con le CPU compatte 31xC: il loro I/O integrato non ha indirizzi nel catalogo, quindi si usa tutto il campo della CPU come nella 2.0 (anche estrai e inserisci dei moduli non c'è); un'area di immagine parziale configurabile (CPU più recenti) non c'è.
+- **Immagine di processo:** le dimensioni di I e Q sono quelle del catalogo della CPU. Con una configurazione hardware (2.1) la periferia e l'aggiornamento delle immagini valgono solo nei byte dei moduli presenti; per le CPU compatte 31xC (2.2) anche nei byte del loro I/O integrato, sempre agli indirizzi predefiniti dei dati tecnici (manuale 03/2011: per esempio 314C-2 DP DI 124..126, DO 124..125, AI 752..761, AO 752..755; 314C-2 PN/DP 136..138, 136..137, 800..809, 800..803): un indirizzamento cambiato in HW Config non c'è, e l'I/O integrato non si estrae (è la CPU). I contatori e le altre funzioni tecnologiche integrate (SFB 47 COUNT, 48 FREQUENC, 49 PULSE e gli altri) non sono simulati; un'area di immagine parziale configurabile (CPU più recenti) non c'è.
 - **Watchdog di OB100:** il simulatore applica `maxCycleMs` (e il limite di 10 000 000 istruzioni) anche a OB100; su una CPU vera OB100 non ha il limite del tempo di ciclo.
 - **Limite di istruzioni:** 10 000 000 per ciclo, indipendente dall'orologio; scelta del simulatore.
 - **PQ → Q:** una scrittura diretta nella periferia (PQ o `P` da puntatore) scrive anche in Q se l'indirizzo vi cade; non verificato su una CPU.
@@ -465,7 +465,7 @@ Le scelte sono descritte in `docs/protocollo/sim.md` (§14) e in `docs/uso/simul
 - **Niente parametri dei moduli.** Campi di misura e tipi di misura degli ingressi analogici, diagnostica, allarmi, valori sostitutivi, filtri: non ci sono. Del modulo si salvano solo posto, nome, commento e indirizzi iniziali.
 - **Controlli semplificati.** Non si controllano: gli I/O integrati delle CPU compatte 31xC (che occupano indirizzi propri nel posto 2), il numero di rack che la CPU accetta (la CPU 312 ne ha uno solo), la corrente assorbita dal bus e quella dell'alimentatore, i posti vuoti in mezzo, la memoria immagine di processo.
 - **Niente GSD.** Nessuna importazione di file GSD/GSDML; la periferia decentrata ET 200 di base è nella vista di rete (piano 6B, sotto).
-- **Il simulatore** usa la configurazione per la periferia e le immagini di processo (2.1), tranne con le CPU compatte 31xC (vedi _Simulatore_).
+- **Il simulatore** usa la configurazione per la periferia e le immagini di processo (2.1), con l'I/O integrato delle CPU compatte 31xC agli indirizzi predefiniti (2.2, vedi _Simulatore_).
 
 ## Vista di rete (piano 6B)
 

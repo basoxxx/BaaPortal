@@ -20,6 +20,22 @@ const MAX_FB_FC = 7999; // numeri FB/FC 0..7999
 const OBS_BASE = [1, 10, 20, 35, 40, 80, 82, 85, 100, 121, 122];
 const OBS_WITH_86 = [1, 10, 20, 35, 40, 80, 82, 85, 86, 100, 121, 122];
 
+// I/O integrato: "Default addresses of the integrated" nei dati tecnici delle 31xC del manuale 03/2011
+// (cap. 8: 312C p. 222, 313C p. 231, 313C-2 p. 243, 314C-2 p. 255, 314C-2 PN/DP p. 271).
+// Analogici: 2 byte per canale (AI 5 → 752..761, AO 2 → 752..755).
+const io = (
+  name: string,
+  inStart: number,
+  inBytes: number,
+  outStart: number,
+  outBytes: number,
+) => ({
+  name,
+  inputs: { start: inStart, bytes: inBytes },
+  outputs: { start: outStart, bytes: outBytes },
+});
+const IO_DI24_AI5 = [io('DI24/DO16', 124, 3, 124, 2), io('AI5/AO2', 752, 10, 752, 4)];
+
 const v = (orderNumber: string, ...firmware: string[]): CpuVersion => ({ orderNumber, firmware });
 
 interface Spec {
@@ -35,6 +51,7 @@ interface Spec {
   timers: number;
   counters: number;
   ioBytes: number;
+  integratedIo?: CpuType['integratedIo'];
   /** Profondità di annidamento per classe di priorità; 16 se non indicata (CPU 312/312C: 8). */
   nesting?: number;
   source: string;
@@ -64,6 +81,7 @@ function cpu(s: Spec): CpuType {
     },
     retentiveMax: { mBytes: s.mBytes, timers: s.timers, counters: s.counters },
     obs: s.dp || s.pn ? OBS_WITH_86 : OBS_BASE,
+    ...(s.integratedIo ? { integratedIo: s.integratedIo } : {}),
     source: s.source,
   };
 }
@@ -183,6 +201,7 @@ export const CPU_CATALOG: readonly CpuType[] = [
     counters: 256,
     ioBytes: 1024,
     nesting: 8,
+    integratedIo: [io('DI10/DO6', 124, 2, 124, 1)],
     source: MANUALS,
   }),
   cpu({
@@ -197,6 +216,7 @@ export const CPU_CATALOG: readonly CpuType[] = [
     timers: 256,
     counters: 256,
     ioBytes: 1024,
+    integratedIo: IO_DI24_AI5,
     source: MANUALS,
   }),
   cpu({
@@ -211,6 +231,7 @@ export const CPU_CATALOG: readonly CpuType[] = [
     timers: 256,
     counters: 256,
     ioBytes: 1024,
+    integratedIo: [io('DI16/DO16', 124, 2, 124, 2)],
     source: MANUALS,
   }),
   cpu({
@@ -225,6 +246,7 @@ export const CPU_CATALOG: readonly CpuType[] = [
     timers: 256,
     counters: 256,
     ioBytes: 2048,
+    integratedIo: [io('DI16/DO16', 124, 2, 124, 2)],
     source: MANUALS,
   }),
   cpu({
@@ -239,6 +261,7 @@ export const CPU_CATALOG: readonly CpuType[] = [
     timers: 256,
     counters: 256,
     ioBytes: 1024,
+    integratedIo: IO_DI24_AI5,
     source: MANUALS,
   }),
   cpu({
@@ -253,6 +276,7 @@ export const CPU_CATALOG: readonly CpuType[] = [
     timers: 256,
     counters: 256,
     ioBytes: 2048,
+    integratedIo: IO_DI24_AI5,
     source: MANUALS,
   }),
   cpu({
@@ -267,6 +291,7 @@ export const CPU_CATALOG: readonly CpuType[] = [
     timers: 256,
     counters: 256,
     ioBytes: 2048,
+    integratedIo: [io('DI24/DO16', 136, 3, 136, 2), io('AI5/AO2', 800, 10, 800, 4)],
     source: MAN_2011,
   }),
   // CPU F (in 1B si programma solo la parte standard)

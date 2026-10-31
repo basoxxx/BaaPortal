@@ -27,7 +27,17 @@ export interface CpuType {
   };
   retentiveMax: { mBytes: number; timers: number; counters: number };
   obs: number[];
+  /**
+   * I/O integrato delle CPU compatte 31xC (posto 2), agli indirizzi predefiniti dei dati tecnici;
+   * byte di ingresso e di uscita per sottomodulo. Assente nelle altre CPU.
+   */
+  integratedIo?: { name: string; inputs: ByteRange; outputs: ByteRange }[];
   source: string;
+}
+
+interface ByteRange {
+  start: number;
+  bytes: number;
 }
 
 export interface ObDefinition {
