@@ -46,6 +46,8 @@ export class PlcController {
   /** Blocchi letti dalla CPU all'ultimo confronto riuscito (della sessione `gen`). */
   private cpuBlocks: { gen: number; deviceId: string; blocks: OnlineBlock[] } | undefined;
   private refreshTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Un riallineamento saltato perché un confronto o un caricamento era in corso: si rifà alla fine del confronto. */
+  private refreshMissed = false;
 
   /** Dopo una modifica (con calma) il confronto si rifà sul compilato locale e sull'ultimo elenco della CPU. */
   private scheduleRefresh(): void {
@@ -61,8 +63,11 @@ export class PlcController {
     const cached = this.cpuBlocks;
     const st = this.store.getState();
     const { status, deviceId, comparing, downloading } = st.online;
-    if (!cached || cached.gen !== this.generation || status !== 'on' || comparing || downloading)
+    if (!cached || cached.gen !== this.generation || status !== 'on') return;
+    if (comparing || downloading) {
+      this.refreshMissed = true;
       return;
+    }
     if (deviceId !== cached.deviceId || getProgress()) return;
     const gen = this.generation;
     await compileProgram(
@@ -74,8 +79,17 @@ export class PlcController {
         silent: true,
       },
     );
-    if (gen !== this.generation || this.store.getState().online.status !== 'on') return;
-    this.applyCompare(deviceId, cached.blocks);
+    const now = this.store.getState().online;
+    if (gen !== this.generation || now.status !== 'on') return;
+    // Un confronto partito nel frattempo vale per sé; alla sua fine si riallinea di nuovo.
+    if (now.comparing || now.downloading) {
+      this.refreshMissed = true;
+      return;
+    }
+    // L'elenco più recente: un confronto finito durante la compilazione può averlo cambiato.
+    const latest = this.cpuBlocks;
+    if (!latest || latest.gen !== gen || latest.deviceId !== deviceId) return;
+    this.applyCompare(deviceId, latest.blocks);
   }
 
   /** Righe del confronto fra il compilato del progetto e i blocchi della CPU dati. */
@@ -235,6 +249,10 @@ export class PlcController {
     } finally {
       if (token === this.compareToken && this.store.getState().online.status !== 'off') {
         this.store.getState().patchOnline({ comparing: false });
+        if (this.refreshMissed) {
+          this.refreshMissed = false;
+          this.scheduleRefresh();
+        }
       }
     }
   }
