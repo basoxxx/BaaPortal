@@ -44,6 +44,7 @@ import { PlcService } from './plcService';
 import { ScanService } from './scanService';
 import { UploadService } from './uploadAll';
 import { readWatch } from './watchOnline';
+import { tr } from './dialogText';
 
 type Handle = (
   channel: string,
@@ -68,13 +69,13 @@ export function parsePlcAccess(raw: unknown): PlcAccess | string {
     r['link'].kind === 'mpi';
   // Con l'adattatore MPI l'host non si usa: può restare vuoto.
   if (typeof r['host'] !== 'string' || (!mpi && r['host'].length === 0) || r['host'].length > 255) {
-    return 'Indirizzo non valido';
+    return tr('Indirizzo non valido');
   }
   if (r['port'] !== undefined && !int(r['port'], 1, 65535)) return 'Porta non valida';
   if (!int(r['rack'], 0, 7)) return 'Rack non valido';
   if (!int(r['slot'], 0, 31)) return 'Slot non valido';
   if (typeof r['connectionType'] !== 'string' || !TYPES.includes(r['connectionType'])) {
-    return 'Tipo di collegamento non valido';
+    return tr('Tipo di collegamento non valido');
   }
   if (r['remoteTsap'] !== undefined && !int(r['remoteTsap'], 0, 0xffff)) return 'TSAP non valido';
   const out: PlcAccess = {
@@ -97,10 +98,10 @@ export function parsePlcAccess(raw: unknown): PlcAccess | string {
 
 /** Stessi intervalli dello schema del file `.baap`. */
 function parseLink(raw: unknown): PlcLink | string {
-  if (typeof raw !== 'object' || raw === null) return 'Tipo di collegamento non valido';
+  if (typeof raw !== 'object' || raw === null) return tr('Tipo di collegamento non valido');
   const l = raw as Record<string, unknown>;
   if (l['kind'] === 'tcp') return { kind: 'tcp' };
-  if (l['kind'] !== 'mpi') return 'Tipo di collegamento non valido';
+  if (l['kind'] !== 'mpi') return tr('Tipo di collegamento non valido');
   const port = l['port'];
   if (typeof port !== 'string' || port.length === 0 || port.length > 255) {
     return 'Porta seriale non valida';
@@ -141,7 +142,7 @@ export async function mpiNodes(
 ): Promise<PlcMpiNodesResult> {
   const link = parseLink(raw);
   if (typeof link === 'string') return { ok: false, error: link };
-  if (link.kind !== 'mpi') return { ok: false, error: 'Tipo di collegamento non valido' };
+  if (link.kind !== 'mpi') return { ok: false, error: tr('Tipo di collegamento non valido') };
   try {
     const nodes = await list(
       { path: link.port, baudRate: link.baudRate, parity: link.parity },
@@ -199,7 +200,7 @@ export function registerPlc(
   handle('plc:serialPorts', () => listSerialPorts());
   handle('plc:mpiNodes', (_e, raw) => mpiNodes(raw));
   handle('plc:scanStart', (e, address): PlcScanStartResult => {
-    if (typeof address !== 'string') return { ok: false, error: 'Indirizzo non valido' };
+    if (typeof address !== 'string') return { ok: false, error: tr('Indirizzo non valido') };
     return scans.start(e.sender, address);
   });
   handle('plc:scanCancel', (e) => scans.cancel(e.sender));
@@ -209,7 +210,7 @@ export function registerPlc(
     return writes.download(e.sender, files, opts);
   });
   handle('plc:control', async (e, op): Promise<PlcControlResult> => {
-    if (!isControlOp(op)) return { ok: false, error: 'Comando non valido' };
+    if (!isControlOp(op)) return { ok: false, error: tr('Comando non valido') };
     return writes.control(e.sender, op);
   });
   // Imposta l'ora: il servizio controlla la richiesta prima di qualunque conferma.
@@ -249,9 +250,9 @@ export function registerPlc(
   // Un solo blocco della CPU collegata: sola lettura, solo OB, FB, FC e DB.
   handle('plc:uploadBlock', (e, type, number): Promise<PlcUploadBlockResult> => {
     if (!isUploadableType(type))
-      return Promise.resolve({ ok: false, error: 'Tipo di blocco non valido' });
+      return Promise.resolve({ ok: false, error: tr('Tipo di blocco non valido') });
     if (!int(number, 0, 65535))
-      return Promise.resolve({ ok: false, error: 'Numero di blocco non valido' });
+      return Promise.resolve({ ok: false, error: tr('Numero di blocco non valido') });
     return uploadOneBlock(service, e.sender, type, number);
   });
   // Caricamento dalla CPU: collegamento proprio, in sola lettura, dall'accesso dato dalla finestra.

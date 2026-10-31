@@ -1,6 +1,7 @@
 import type { FoundDevice, NetInterface, PlcScanEvent, PlcScanStartResult } from '@baaportal/ui';
 import { hostsToScan, listInterfaces } from './interfaces';
 import { createIdentify, createProbe, scanSubnet, type IdentifyFn, type ProbeFn } from './scan';
+import { tr } from './dialogText';
 
 /** La pagina finisce: finestra distrutta, pagina ricaricata (un nuovo renderer) o renderer caduto. */
 export const GONE = ['destroyed', 'did-navigate', 'render-process-gone'] as const;
@@ -65,9 +66,9 @@ export class ScanService {
   /** Avvia la ricerca sull'interfaccia con questo indirizzo; `finished` della esecuzione non è atteso. */
   start(owner: ScanOwner, address: string): PlcScanStartResult {
     this.cancel(owner); // una sola ricerca per finestra
-    if (owner.isDestroyed()) return { ok: false, error: 'Finestra chiusa' };
+    if (owner.isDestroyed()) return { ok: false, error: tr('Finestra chiusa') };
     const iface = this.interfaces().find((i) => i.address === address);
-    if (!iface) return { ok: false, error: 'Interfaccia di rete non disponibile' };
+    if (!iface) return { ok: false, error: tr('Interfaccia di rete non disponibile') };
     const hosts = hostsToScan(iface.address, iface.netmask, this.maxHosts);
     const scanId = this.nextId++;
     const ctl = new AbortController();

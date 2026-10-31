@@ -203,4 +203,37 @@ describe('pannello I/O del simulatore', () => {
     act(() => app.store.getState().setSim({ pulled: ['m1'] }));
     expect(screen.getByTestId('module-toggle-m1')).toHaveTextContent('Inserisci');
   });
+
+  it("CPU compatta: l'I/O integrato è fra i moduli ma non si estrae", async () => {
+    const app = await renderApp({ view: 'project', withProject: true, withPlc: true });
+    const dev = findDevice(app.store.getState().doc!.project, PLC)!;
+    dev.cpu.typeId = 'cpu-312c';
+    dev.hardware = {
+      modules: [
+        {
+          id: 'm1',
+          rack: 0,
+          slot: 4,
+          orderNumber: '6ES7 321-1BH02-0AA0',
+          name: 'DI16',
+          comment: '',
+          inputStart: 0,
+        },
+      ],
+    };
+    act(() => app.store.getState().setTaskCard('test'));
+    act(() =>
+      app.store.getState().setSim({
+        phase: 'on',
+        deviceId: PLC,
+        mode: 'RUN',
+        inputs: new Uint8Array(8),
+        outputs: new Uint8Array(8),
+      }),
+    );
+    expect(screen.getByTestId('module-integrated-0')).toHaveTextContent(
+      'Rack 0, posto 2: DI10/DO6 I 124..125, Q 124..124',
+    );
+    expect(screen.queryByTestId('module-toggle-integrated-0')).toBeNull();
+  });
 });

@@ -48,6 +48,29 @@ describe('networkStatus', () => {
     expect(st.get('m')).toMatchObject({ in: true, out: true, values: { IN: 42, OUT: 42 } });
     expect(st.get('q')).toEqual({ in: true, out: true });
   });
+
+  it('box CALL: ogni parametro ha la sua riga e il suo valore', () => {
+    const call: LadBox = {
+      id: 'c',
+      k: 'box',
+      box: 'CALL',
+      instance: 'FB 1, DB 1',
+      pins: { SP: 'MW 10', PV: 'MD 20', EMPTY: '' },
+      boolPins: {},
+    };
+    const cn: LadNetwork = { root: { id: 'r', series: [call], outs: [] } };
+    const rc = networkToAwl(cn, { tempEnd: 0, firstLabel: 1 });
+    const text = rc.source.split('\n');
+    const pinLines = rc.lines.filter((l) => l.pin);
+    expect(pinLines.map((l) => [l.pin, text[l.line]!.trim().split(' ')[0]])).toEqual([
+      ['SP', 'SP'],
+      ['PV', 'PV'],
+    ]);
+    // solo le righe con una cella (copie osservate dal compilato) danno un valore
+    const cells = new Map(rc.lines.map((l) => [l.line, on(l.pin === 'SP' ? 7 : 0)]));
+    cells.delete(pinLines[1]!.line);
+    expect(networkStatus(cn, rc.lines, cells).get('c')?.values).toEqual({ SP: 7 });
+  });
 });
 
 /** Celle tutte a 1 fino alla riga `cut` compresa; dopo assenti (fuori finestra) o `null`. */

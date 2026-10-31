@@ -126,7 +126,7 @@ describe('richiami di FC', () => {
 
   it('UC SFB senza gestore non è un errore: BR = 0', () => {
     const p = new Program();
-    const r = encodeCode(['\tUC SFB 32;']);
+    const r = encodeCode(['\tUC SFB 52;']);
     p.put({
       kind: 'OB',
       number: 1,

@@ -17,6 +17,7 @@ import type {
 import { connectMessage, type PlcOwner, type PlcService } from './plcService';
 import type { TisJobStore } from './tisJobs';
 import { connectOptions, mpiKey } from './access';
+import { tr } from './dialogText';
 
 const FN = 0x13;
 const DEFAULT_PORT = 102;
@@ -254,15 +255,15 @@ export class BlockStatusService {
     const old = this.sessions.get(owner);
     if (old) await this.close(old);
     if (this.epochs.get(owner) !== epoch) {
-      return { ok: false, reason: 'error', error: 'Osservazione annullata' };
+      return { ok: false, reason: 'error', error: tr('Osservazione annullata') };
     }
     this.lastEnd.delete(owner);
     const target = this.o.service.target(owner);
     if (!target) {
-      return { ok: false, reason: 'offline', error: 'Nessun collegamento online' };
+      return { ok: false, reason: 'offline', error: tr('Nessun collegamento online') };
     }
     if (this.o.blocked?.(target.access)) {
-      return { ok: false, reason: 'busy', error: 'Ripristino in corso su questa CPU' };
+      return { ok: false, reason: 'busy', error: tr('Ripristino in corso su questa CPU') };
     }
     const cpu = cpuKey(target.access, target.identity.serial);
     const holder = this.cpuOwner.get(cpu);
@@ -270,7 +271,7 @@ export class BlockStatusService {
       return {
         ok: false,
         reason: 'busy',
-        error: "Osservazione già attiva su questa CPU in un'altra finestra",
+        error: tr("Osservazione già attiva su questa CPU in un'altra finestra"),
       };
     }
     const lock: CpuLock = { owner };
@@ -304,7 +305,7 @@ export class BlockStatusService {
           'La CPU raggiunta non è quella collegata (numero di ordinazione o di serie diverso)',
         );
       }
-      if (superseded()) return fail('error', 'Osservazione annullata');
+      if (superseded()) return fail('error', tr('Osservazione annullata'));
       const fns = await client.tisFunctions();
       if (!fns.blockStatusV2 || !fns.codeAreaTrigger) {
         return fail('unsupported', 'Questa CPU non supporta lo stato del blocco v2');
@@ -322,11 +323,11 @@ export class BlockStatusService {
         return fail('different', DIFFERENT);
       }
       await this.sweep(client, cpu);
-      if (superseded()) return fail('error', 'Osservazione annullata');
+      if (superseded()) return fail('error', tr('Osservazione annullata'));
       const pduLength = client.pduLength;
       const maxLines = maxBlockStatusLines(pduLength, req.mask);
       if (maxLines < 1) return fail('error', 'PDU troppo piccola per lo stato del blocco');
-      if (superseded()) return fail('error', 'Osservazione annullata');
+      if (superseded()) return fail('error', tr('Osservazione annullata'));
       const s: Session = {
         owner,
         cpu,
@@ -347,7 +348,7 @@ export class BlockStatusService {
       if (this.o.service.modeOf(owner) === 'RUN') {
         // un ripristino può essere partito mentre ci si collegava: niente job nuovi durante il ripristino
         if (this.o.blocked?.(target.access)) {
-          return fail('busy', 'Ripristino in corso su questa CPU');
+          return fail('busy', tr('Ripristino in corso su questa CPU'));
         }
         try {
           await this.createJob(s);
@@ -361,7 +362,7 @@ export class BlockStatusService {
       }
       if (superseded()) {
         await this.close(s);
-        return { ok: false, reason: 'error', error: 'Osservazione annullata' };
+        return { ok: false, reason: 'error', error: tr('Osservazione annullata') };
       }
       this.sessions.set(owner, s);
       s.offLink = this.o.service.onLinkEnd(owner, () => {
@@ -379,7 +380,7 @@ export class BlockStatusService {
   /** Cambia la finestra: si applica alla prossima lettura (più cambi di fila si riducono all'ultimo). */
   window(owner: PlcOwner, raw: unknown): PlcStatusWindowResult {
     const s = this.sessions.get(owner);
-    if (!s || s.closed) return { ok: false, error: 'Nessuna osservazione attiva' };
+    if (!s || s.closed) return { ok: false, error: tr('Nessuna osservazione attiva') };
     const req = parseStatusRequest(raw);
     if (typeof req === 'string') return { ok: false, error: req };
     if (
@@ -388,7 +389,7 @@ export class BlockStatusService {
       req.expect.checksum !== s.req.expect.checksum ||
       req.expect.mc7Length !== s.req.expect.mc7Length
     ) {
-      return { ok: false, error: 'La finestra riguarda un altro blocco' };
+      return { ok: false, error: tr('La finestra riguarda un altro blocco') };
     }
     const maxLines = maxBlockStatusLines(s.pduLength, req.mask);
     const fit = fitRequest(req, maxLines);
@@ -412,7 +413,7 @@ export class BlockStatusService {
   }
 
   private endedResult(owner: PlcOwner): PlcStatusReadResult {
-    const error = this.lastEnd.get(owner) ?? 'Nessuna osservazione attiva';
+    const error = this.lastEnd.get(owner) ?? tr('Nessuna osservazione attiva');
     this.lastEnd.delete(owner);
     return { ok: false, ended: true, error };
   }
@@ -439,7 +440,7 @@ export class BlockStatusService {
       if (mode !== 'RUN') return { ok: true, state: 'waiting' };
       const t = this.o.service.target(s.owner);
       if (t && this.o.blocked?.(t.access))
-        return this.endWith(s, 'Ripristino in corso su questa CPU');
+        return this.endWith(s, tr('Ripristino in corso su questa CPU'));
       try {
         await this.createJob(s);
       } catch (err) {

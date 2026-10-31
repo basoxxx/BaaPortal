@@ -443,6 +443,8 @@ function expand(stmt: Statement, network: number, line: number, env: CallEnv): C
 
   const rlo = !env.first(stmt, network);
   const plans: ParamPlan[] = [];
+  /** Riga sorgente (da 0) del parametro le cui copie si osservano. */
+  const paramLine = new Map<ParamPlan, number>();
   const forms: string[] = [];
   let instLayout: NamedLayout | undefined;
   if (!fcLike) {
@@ -473,6 +475,10 @@ function expand(stmt: Statement, network: number, line: number, env: CallEnv): C
     }
     const v = resolveValue(op, env.sym);
     const plan = fcLike ? planFc(p, v, mk, env) : planInstance(p, v, mk, callee, instLayout!);
+    // le copie di un dato non BOOL passano il valore in ACCU1: vanno sulla riga del parametro
+    // (osservazione); i BOOL e i puntatori costruiti (ANY, POINTER) restano sulla riga della CALL
+    const size = sizeOf(p.type);
+    if (size && size !== 'X') paramLine.set(plan, op.range.from.line);
     plans.push(plan);
     forms.push(plan.form);
   }
@@ -492,7 +498,11 @@ function expand(stmt: Statement, network: number, line: number, env: CallEnv): C
   bytePlans.forEach((p, i) => slotOf.set(p, { byte: slots.bytes[i]! }));
   env.ends.push(slots.end);
   const each = (f: (p: ParamPlan, s?: LocalSlot) => Statement[] | undefined): Statement[] =>
-    plans.flatMap((p) => f(p, slotOf.get(p)) ?? []);
+    plans.flatMap((p) => {
+      const line = paramLine.get(p);
+      const list = f(p, slotOf.get(p)) ?? [];
+      return line === undefined ? list : list.map((x): CompiledStatement => ({ ...x, line }));
+    });
   const ar2 = slots.ar2 !== undefined ? address('L', 'D', slots.ar2) : undefined;
   const rloSave = slots.rlo ? [mk('=', address('L', 'X', slots.rlo.byte, slots.rlo.bit))] : [];
 

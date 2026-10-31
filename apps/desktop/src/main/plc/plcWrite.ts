@@ -439,16 +439,18 @@ export class PlcWriteService {
         const name = h.type === undefined ? `0x${h.typeCode.toString(16)}` : `${h.type}${h.number}`;
         if (h.type === undefined || !LOADABLE.includes(h.type)) {
           return fail(
-            `Tipo di blocco non ammesso per il caricamento: ${name} (solo OB, FB, FC, DB)`,
+            tr('Tipo di blocco non ammesso per il caricamento: {block} (solo OB, FB, FC, DB)', {
+              block: name,
+            }),
           );
         }
         names.push(name);
       } catch (err) {
-        return fail(`File di blocco non valido: ${errText(err)}`);
+        return fail(tr('File di blocco non valido: {why}', { why: errText(err) }));
       }
     }
     if (req.files.length === 0 && req.deleteBlocks.length === 0)
-      return fail('Nessun blocco da caricare');
+      return fail(tr('Nessun blocco da caricare'));
     const steps: Step[] = [
       ...req.deleteBlocks.map<Step>((b) => ({
         name: `${b.type}${b.number}`,
@@ -462,8 +464,8 @@ export class PlcWriteService {
       })),
     ];
     const lines = [
-      ...req.deleteBlocks.map((b) => `Cancella ${b.type}${b.number}`),
-      ...names.map((n) => `Carica ${n}`),
+      ...req.deleteBlocks.map((b) => tr('Cancella {block}', { block: `${b.type}${b.number}` })),
+      ...names.map((n) => tr('Carica {block}', { block: n })),
     ];
     return this.exclusive<PlcDownloadResult>(
       owner,
@@ -483,7 +485,7 @@ export class PlcWriteService {
   }
 
   async control(owner: PlcWriteOwner, cmd: PlcControlOp): Promise<PlcControlResult> {
-    if (!isControlOp(cmd)) return { ok: false, error: 'Comando non valido' };
+    if (!isControlOp(cmd)) return { ok: false, error: tr('Comando non valido') };
     const t = CONTROL_TEXTS[cmd];
     return this.exclusive<PlcControlResult>(
       owner,
@@ -499,7 +501,7 @@ export class PlcWriteService {
         if (!('c' in p)) return p.result;
         try {
           if (owner.isDestroyed() || op.aborted)
-            return { ok: false, error: 'Operazione interrotta' };
+            return { ok: false, error: tr('Operazione interrotta') };
           return { ok: true, result: await runControl(p.c, cmd) };
         } finally {
           await p.c.close().catch(() => undefined);
@@ -520,7 +522,8 @@ export class PlcWriteService {
     const preview = spec.pc ? fromDate(new Date(this.now()), spec.utc) : undefined;
     if (preview) {
       const bad = checkTime(preview as unknown as Record<string, unknown>);
-      if (bad) return { ok: false, error: `L'ora del PC non è impostabile: ${bad}` };
+      if (bad)
+        return { ok: false, error: tr("L'ora del PC non è impostabile: {why}", { why: bad }) };
     }
     const shown = spec.pc
       ? tr(
@@ -546,12 +549,16 @@ export class PlcWriteService {
         if (!('c' in p)) return p.result;
         try {
           if (owner.isDestroyed() || op.aborted)
-            return { ok: false, error: 'Operazione interrotta' };
+            return { ok: false, error: tr('Operazione interrotta') };
           let t: S7DateTime;
           if (spec.pc) {
             t = fromDate(new Date(this.now()), spec.utc); // un solo istante: data e ora insieme
             const bad = checkTime(t as unknown as Record<string, unknown>);
-            if (bad) return { ok: false, error: `L'ora del PC non è impostabile: ${bad}` };
+            if (bad)
+              return {
+                ok: false,
+                error: tr("L'ora del PC non è impostabile: {why}", { why: bad }),
+              };
           } else {
             t = spec.time;
           }
@@ -579,7 +586,7 @@ export class PlcWriteService {
     const requests = planWrites(items, NOTICE_PDU).length;
     const notice =
       requests > 1
-        ? `\nLe scritture partono in più richieste (fino a ${requests}): se una fallisce, quelle precedenti restano scritte.`
+        ? `\n${tr('Le scritture partono in più richieste (fino a {n}): se una fallisce, quelle precedenti restano scritte.', { n: requests })}`
         : '';
     return this.exclusive<PlcWriteVarsResult>(
       owner,
@@ -624,21 +631,22 @@ export class PlcWriteService {
       (err) => ({ ok: false, error: errText(err) }),
       async (op) => {
         const target = this.o.service.target(owner);
-        if (!target) return { ok: false, error: 'Nessun collegamento online' };
+        if (!target) return { ok: false, error: tr('Nessun collegamento online') };
         const ok = await this.o.confirm(owner, {
           title: tr('Runtime HMI'),
           message: tr('Il runtime HMI può scrivere nella CPU {cpu}: consentire?', {
             cpu: cpuName(target),
           }),
-          detail:
+          detail: tr(
             'Pulsanti e campi di immissione delle schermate scriveranno subito nella CPU (aree I, Q, M e DB), senza altre conferme, finché il runtime resta aperto e il collegamento online non cambia.\nUn pulsante a impulsi scrive 0 al rilascio e alla chiusura del runtime: se il PC o la rete cadono mentre è premuto, il bit resta a 1. Non usarli per movimenti pericolosi.',
+          ),
           confirmLabel: tr('Consenti scritture'),
         });
         if (!ok || op.aborted) return { ok: false, cancelled: true };
-        if (owner.isDestroyed()) return { ok: false, error: 'Finestra chiusa' };
+        if (owner.isDestroyed()) return { ok: false, error: tr('Finestra chiusa') };
         const again = this.o.service.target(owner);
         if (!again || again.linkId !== target.linkId) {
-          return { ok: false, error: 'Collegamento online cambiato: operazione annullata' };
+          return { ok: false, error: tr('Collegamento online cambiato: operazione annullata') };
         }
         op.stage = 'running';
         const c = await this.open(target);
@@ -700,7 +708,7 @@ export class PlcWriteService {
       if (s && s.owner === owner) void this.hmiEnd(token as string, 'collegamento online cambiato');
       return {
         ok: false,
-        error: 'Scritture HMI non consentite: riavviare il runtime in scrittura',
+        error: tr('Scritture HMI non consentite: riavviare il runtime in scrittura'),
       };
     }
     const one = parsed.length === 1 ? parsed[0]! : undefined;
@@ -708,7 +716,7 @@ export class PlcWriteService {
     if (bit && bit.data[0] === 0 && s.held.has(heldKey(bit.target))) {
       return this.cleared(s.target, bit, await this.hmiRelease(s, bit.target));
     }
-    if (jog === true && !bit) return { ok: false, error: 'Pulsante a impulsi senza un bit' };
+    if (jog === true && !bit) return { ok: false, error: tr('Pulsante a impulsi senza un bit') };
     const items = parsed.map((x) => toWriteItem(x.target, x.data));
     return this.exclusive<PlcWriteVarsResult>(
       owner,
@@ -726,7 +734,11 @@ export class PlcWriteService {
         // Niente scritto di sicuro (rifiuto della CPU, collegamento non aperto): lo 0 di dopo
         // potrebbe disfare un 1 messo apposta da un altro pulsante sullo stesso bit.
         const x = r.ok ? r.results[0] : undefined;
-        if (press && (!r.ok || (x && !x.ok && x.error !== UNKNOWN_OUTCOME))) s.held.delete(k);
+        if (
+          press &&
+          (!r.ok || (x && !x.ok && x.error !== UNKNOWN_OUTCOME && x.error !== tr(UNKNOWN_OUTCOME)))
+        )
+          s.held.delete(k);
         return bit ? this.cleared(s.target, bit, r) : r;
       },
     );
@@ -774,7 +786,7 @@ export class PlcWriteService {
     fn: (c: WriteClient) => Promise<PlcWriteVarsResult>,
   ): Promise<PlcWriteVarsResult> {
     const run = async (): Promise<PlcWriteVarsResult> => {
-      if (s.ended) return { ok: false, error: 'Runtime HMI chiuso: non scritto' };
+      if (s.ended) return { ok: false, error: tr('Runtime HMI chiuso: non scritto') };
       if (!s.client) {
         const c = await this.open(s.target);
         if (typeof c === 'string') return { ok: false, error: c };
@@ -882,10 +894,10 @@ export class PlcWriteService {
       for (const group of groups) {
         if (failed || owner.isDestroyed() || op.aborted) {
           const why = failed
-            ? 'Non scritto: scrittura interrotta dopo un errore'
+            ? tr('Non scritto: scrittura interrotta dopo un errore')
             : op.aborted
-              ? "Uscita dall'app: non scritto"
-              : 'Finestra chiusa: non scritto';
+              ? tr("Uscita dall'app: non scritto")
+              : tr('Finestra chiusa: non scritto');
           for (let j = 0; j < group.length; j++) results.push({ ok: false, error: why });
           continue;
         }
@@ -900,8 +912,8 @@ export class PlcWriteService {
           // In ogni caso non si insiste.
           const error =
             e instanceof S7Error && e.code === 'CPU_ERROR'
-              ? `Rifiutato dalla CPU: ${e.message}`
-              : UNKNOWN_OUTCOME;
+              ? tr('Rifiutato dalla CPU: {why}', { why: e.message })
+              : tr(UNKNOWN_OUTCOME);
           for (let j = 0; j < group.length; j++) results.push({ ok: false, error });
           failed = true;
           broken = !(e instanceof S7Error && e.code === 'CPU_ERROR');
@@ -925,18 +937,18 @@ export class PlcWriteService {
   async restorePlan(owner: PlcOwner): Promise<PlcRestorePlanResult> {
     const io = this.restoreFileIo;
     const svc = this.o.service;
-    if (!io || !svc.read) return { ok: false, error: 'Ripristino non disponibile' };
+    if (!io || !svc.read) return { ok: false, error: tr('Ripristino non disponibile') };
     try {
       const target = this.o.service.target(owner);
-      if (!target) return { ok: false, error: 'Nessun collegamento online' };
+      if (!target) return { ok: false, error: tr('Nessun collegamento online') };
       const path = await io.pick(owner);
       if (path === null || owner.isDestroyed()) return { ok: false, cancelled: true };
       const now = this.o.service.target(owner);
       if (!now || now.linkId !== target.linkId) {
-        return { ok: false, error: 'Nessun collegamento online' };
+        return { ok: false, error: tr('Nessun collegamento online') };
       }
       if ((await io.size(path)) > BACKUP_MAX_BYTES) {
-        return { ok: false, error: 'File di backup troppo grande' };
+        return { ok: false, error: tr('File di backup troppo grande') };
       }
       let decoded;
       try {
@@ -959,15 +971,15 @@ export class PlcWriteService {
           force = forceFrom(await run((c) => c.readSzl(0x0174, FRCE_LED)));
         } catch (e) {
           if (e instanceof S7Error && (e.code === 'CLOSED' || e.code === 'TIMEOUT')) throw e;
-          warnings.push('Stato del forzamento non leggibile dalla CPU');
+          warnings.push(tr('Stato del forzamento non leggibile dalla CPU'));
         }
         let protection: string | undefined;
         try {
           const p = protectionFrom(await run((c) => c.readSzl(0x0232, 4)));
-          if ((p.validLevel ?? 0) >= 2) protection = PROTECTED;
+          if ((p.validLevel ?? 0) >= 2) protection = tr(PROTECTED);
         } catch (e) {
           if (e instanceof S7Error && (e.code === 'CLOSED' || e.code === 'TIMEOUT')) throw e;
-          protection = PROTECTION_UNREADABLE;
+          protection = tr(PROTECTION_UNREADABLE);
         }
         return { blocks, force, protection };
       });
@@ -976,7 +988,7 @@ export class PlcWriteService {
       if (online.value.force) {
         return {
           ok: false,
-          error: FORCE_ACTIVE,
+          error: tr(FORCE_ACTIVE),
         };
       }
       // §19.5.0: il backup si ripristina solo su una CPU dello stesso tipo
@@ -984,7 +996,10 @@ export class PlcWriteService {
       if (backupCpu !== target.identity.orderNumber) {
         return {
           ok: false,
-          error: `Il backup è di una CPU di tipo diverso (${backupCpu}) da quella collegata (${target.identity.orderNumber}): ripristino non possibile`,
+          error: tr(
+            'Il backup è di una CPU di tipo diverso ({backup}) da quella collegata ({cpu}): ripristino non possibile',
+            { backup: backupCpu, cpu: target.identity.orderNumber },
+          ),
         };
       }
       const plan = planRestore(decoded.manifest, decoded.files, online.value.blocks);
@@ -1043,19 +1058,19 @@ export class PlcWriteService {
   ): Promise<PlcRestoreResult> {
     const saved = this.plans.get(req.token);
     if (!saved || saved.owner !== owner) {
-      return restoreFail('Piano di ripristino non valido o già usato: prepararlo di nuovo');
+      return restoreFail(tr('Piano di ripristino non valido o già usato: prepararlo di nuovo'));
     }
     this.dropPlan(req.token); // monouso
     const plan = saved.plan;
     const target = this.o.service.target(owner);
     if (!target || target.linkId !== saved.linkId) {
-      return restoreFail('Il collegamento online è cambiato dopo la preparazione: ripetere');
+      return restoreFail(tr('Il collegamento online è cambiato dopo la preparazione: ripetere'));
     }
     const rows: RestoreOutcomeRow[] = [
       ...plan.steps.map<RestoreOutcomeRow>((s) => ({
         name: stepName(s.type, s.number),
         outcome: 'notDone',
-        error: 'Non caricato',
+        error: tr('Non caricato'),
       })),
       ...plan.skipped.map<RestoreOutcomeRow>((s) => ({
         name: stepName(s.type, s.number),
@@ -1087,14 +1102,14 @@ export class PlcWriteService {
     const go = await this.o.confirm(owner, {
       title: tr('Ripristina backup (sperimentale)'),
       message: tr('Ripristinare il backup nella CPU {cpu}?', { cpu: cpuName(target) }),
-      detail: `${listLines(lines)}\n${RESTORE_NOTICE}`,
+      detail: `${listLines(lines)}\n${tr(RESTORE_NOTICE)}`,
       confirmLabel: tr('Ripristina backup (sperimentale)'),
     });
     if (!go || op.aborted) return cancelled();
-    if (owner.isDestroyed()) return fin('Finestra chiusa');
+    if (owner.isDestroyed()) return fin(tr('Finestra chiusa'));
     const again = this.o.service.target(owner);
     if (!again || again.linkId !== target.linkId) {
-      return fin('Collegamento online cambiato: operazione annullata');
+      return fin(tr('Collegamento online cambiato: operazione annullata'));
     }
     op.stage = 'running';
     const opened = await this.open(target, this.restoreConnectFn);
@@ -1106,7 +1121,7 @@ export class PlcWriteService {
       // 1. nessun job di test: altrimenti la CPU rifiuterebbe l'assegnazione dei parametri
       const noJobs = async (): Promise<boolean> =>
         !(await c.readJobList()).some((j) => j.fn !== 0x10);
-      if (!(await noJobs())) return fin(JOBS_ACTIVE);
+      if (!(await noJobs())) return fin(tr(JOBS_ACTIVE));
       // forzamento e protezione si ricontrollano qui: dal piano può essere cambiato tutto
       const refusal = await safetyRefusal(c);
       if (refusal) return fin(refusal);
@@ -1114,7 +1129,7 @@ export class PlcWriteService {
       const mode = async (): Promise<string> => toPlcMode(modeFrom(await c.readSzl(0x0424, 0)));
       const m0 = await mode();
       if (m0 === 'HOLD') {
-        return fin('La CPU è in HOLD (arresto su breakpoint): ripristino rifiutato');
+        return fin(tr('La CPU è in HOLD (arresto su breakpoint): ripristino rifiutato'));
       }
       if (m0 !== 'STOP') {
         const stop = await this.o.confirm(owner, {
@@ -1144,7 +1159,7 @@ export class PlcWriteService {
       // un job può essere nato durante le conferme: ultimo controllo prima del primo passo
       if (!(await noJobs())) {
         return fin(
-          `${JOBS_ACTIVE}. La CPU è rimasta in STOP, nulla è stato scritto`,
+          tr('{why}. La CPU è rimasta in STOP, nulla è stato scritto', { why: tr(JOBS_ACTIVE) }),
           stopConfirmed,
         );
       }
@@ -1161,7 +1176,9 @@ export class PlcWriteService {
             );
       if (!live || !live.ok) {
         return fin(
-          'Elenco degli SDB della CPU non rileggibile. La CPU è rimasta in STOP, nulla è stato scritto',
+          tr(
+            'Elenco degli SDB della CPU non rileggibile. La CPU è rimasta in STOP, nulla è stato scritto',
+          ),
           stopConfirmed,
         );
       }
@@ -1169,7 +1186,9 @@ export class PlcWriteService {
       const now = [...live.value].sort((a, b) => a - b);
       if (now.length !== expected.length || now.some((n, i) => n !== expected[i])) {
         return fin(
-          'Gli SDB della CPU sono cambiati dopo la preparazione del ripristino: prepararlo di nuovo. La CPU è rimasta in STOP, nulla è stato scritto',
+          tr(
+            'Gli SDB della CPU sono cambiati dopo la preparazione del ripristino: prepararlo di nuovo. La CPU è rimasta in STOP, nulla è stato scritto',
+          ),
           stopConfirmed,
         );
       }
@@ -1191,7 +1210,10 @@ export class PlcWriteService {
             await c.start();
           } catch (err) {
             // il comando può essere arrivato: lo stato della CPU non è noto
-            startUnknown = `Avviamento inviato ma esito sconosciuto, lo stato della CPU non è noto (${errText(err)})`;
+            startUnknown = tr(
+              'Avviamento inviato ma esito sconosciuto, lo stato della CPU non è noto ({why})',
+              { why: errText(err) },
+            );
           }
           for (let waited = 0; !startUnknown && waited <= RUN_WAIT_MS; waited += POLL_MS) {
             if ((await mode()) === 'RUN') {
@@ -1247,7 +1269,7 @@ export class PlcWriteService {
     const bad = res.rows.find((r) => r.outcome === 'unknown' || r.outcome === 'rejected');
     if (bad) {
       res.ok = false;
-      res.error = `${bad.name}: ${bad.error ?? 'Esito sconosciuto'}`;
+      res.error = `${bad.name}: ${bad.error ?? tr('Esito sconosciuto')}`;
     }
   }
 
@@ -1264,7 +1286,10 @@ export class PlcWriteService {
       const name = stepName(s.type, s.number);
       const row = rows[i]!;
       if (owner.isDestroyed() || op.aborted) {
-        return `${op.aborted ? 'Interrotto' : 'Finestra chiusa'} prima di ${name}`;
+        return tr('{why} prima di {block}', {
+          why: op.aborted ? tr('Interrotto') : tr('Finestra chiusa'),
+          block: name,
+        });
       }
       try {
         if (s.kind === 'deleteSdb') await c.deleteSystemBlock(s.number);
@@ -1275,6 +1300,7 @@ export class PlcWriteService {
         const certain =
           err instanceof S7Error && (err.code === 'CPU_ERROR' || err.code === 'FORBIDDEN');
         row.outcome = certain ? 'rejected' : 'unknown';
+        // in italiano e senza tr: il renderer riconosce questi testi e li traduce (plcRestore.ts)
         row.error = !certain
           ? 'Esito sconosciuto'
           : err instanceof S7Error && err.code === 'FORBIDDEN'
@@ -1283,7 +1309,7 @@ export class PlcWriteService {
         return `${name}: ${row.error}`;
       }
       row.outcome = s.kind === 'deleteSdb' ? 'deleted' : 'loaded';
-      row.error = s.kind === 'deleteSdb' ? 'Cancellato' : 'Caricato';
+      row.error = s.kind === 'deleteSdb' ? tr('Cancellato') : tr('Caricato');
       const done = i + 1;
       const t = this.now();
       if ((done === steps.length || t - lastSent >= PROGRESS_MIN_MS) && !owner.isDestroyed()) {
@@ -1309,7 +1335,7 @@ export class PlcWriteService {
     for (const row of rows) {
       if (row.outcome === 'loaded' && !r.value.has(row.name)) {
         row.outcome = 'unknown';
-        row.error = 'Esito sconosciuto: il blocco non risulta nella CPU';
+        row.error = tr('Esito sconosciuto: il blocco non risulta nella CPU');
       }
     }
   }
@@ -1324,12 +1350,12 @@ export class PlcWriteService {
     onError: (err: unknown) => R,
     fn: (op: Op) => Promise<R>,
   ): Promise<R> {
-    if (this.closing) return onError(new Error('Chiusura in corso'));
-    if (this.ops.has(owner)) return busy('Operazione già in corso');
+    if (this.closing) return onError(new Error(tr('Chiusura in corso')));
+    if (this.ops.has(owner)) return busy(tr('Operazione già in corso'));
     const t = this.o.service.target(owner);
     const cpu = t && cpuKey(t.access);
     if (cpu !== undefined && this.busyCpus.has(cpu)) {
-      return busy('Operazione già in corso su questa CPU');
+      return busy(tr('Operazione già in corso su questa CPU'));
     }
     if (cpu !== undefined) this.busyCpus.add(cpu);
     let settle!: () => void;
@@ -1360,13 +1386,15 @@ export class PlcWriteService {
     texts: (target: Target) => WriteConfirmTexts,
   ): Promise<Prepared> {
     const target = this.o.service.target(owner);
-    if (!target) return { result: { ok: false, error: 'Nessun collegamento online' } };
+    if (!target) return { result: { ok: false, error: tr('Nessun collegamento online') } };
     const ok = await this.o.confirm(owner, texts(target));
     if (!ok || op.aborted) return { result: { ok: false, cancelled: true } };
-    if (owner.isDestroyed()) return { result: { ok: false, error: 'Finestra chiusa' } };
+    if (owner.isDestroyed()) return { result: { ok: false, error: tr('Finestra chiusa') } };
     const again = this.o.service.target(owner);
     if (!again || again.linkId !== target.linkId) {
-      return { result: { ok: false, error: 'Collegamento online cambiato: operazione annullata' } };
+      return {
+        result: { ok: false, error: tr('Collegamento online cambiato: operazione annullata') },
+      };
     }
     op.stage = 'running';
     const c = await this.open(target);
@@ -1393,11 +1421,13 @@ export class PlcWriteService {
         id.serialNumber !== want.serial;
       if (id.orderNumber !== want.orderNumber || serialDiffers) {
         await c.close().catch(() => undefined);
-        return 'La CPU raggiunta non è quella confermata (numero di ordinazione o di serie diverso): operazione annullata';
+        return tr(
+          'La CPU raggiunta non è quella confermata (numero di ordinazione o di serie diverso): operazione annullata',
+        );
       }
     } catch (err) {
       await c.close().catch(() => undefined);
-      return `Verifica della CPU non riuscita: ${errText(err)}`;
+      return tr('Verifica della CPU non riuscita: {why}', { why: errText(err) });
     }
     return c;
   }
@@ -1415,8 +1445,9 @@ export class PlcWriteService {
     try {
       for (const [i, s] of steps.entries()) {
         if (owner.isDestroyed() || op.aborted) {
-          const why = op.aborted ? "Uscita dall'app" : 'Finestra chiusa';
-          return { ok: false, loaded, deleted, error: `${why}: interrotto prima di ${s.name}` };
+          const why = op.aborted ? tr("Uscita dall'app") : tr('Finestra chiusa');
+          const error = tr('{why}: interrotto prima di {block}', { why, block: s.name });
+          return { ok: false, loaded, deleted, error };
         }
         try {
           await s.run(c);
@@ -1453,14 +1484,14 @@ const FORCE_UNREADABLE = 'Stato del forzamento non leggibile dalla CPU: ripristi
 /** Forzamento e protezione letti sul collegamento del ripristino; il testo del rifiuto, se c'è. */
 async function safetyRefusal(c: Pick<RestoreClient, 'readSzl'>): Promise<string | undefined> {
   try {
-    if (forceFrom(await c.readSzl(0x0174, FRCE_LED))) return FORCE_ACTIVE;
+    if (forceFrom(await c.readSzl(0x0174, FRCE_LED))) return tr(FORCE_ACTIVE);
   } catch {
-    return FORCE_UNREADABLE;
+    return tr(FORCE_UNREADABLE);
   }
   try {
-    if ((protectionFrom(await c.readSzl(0x0232, 4)).validLevel ?? 0) >= 2) return PROTECTED;
+    if ((protectionFrom(await c.readSzl(0x0232, 4)).validLevel ?? 0) >= 2) return tr(PROTECTED);
   } catch {
-    return PROTECTION_UNREADABLE;
+    return tr(PROTECTION_UNREADABLE);
   }
   return undefined;
 }

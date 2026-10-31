@@ -1,5 +1,6 @@
 import { findSystemBlock } from '@baaportal/catalog';
 import type { AwlBlockInfo } from '@baaportal/awl';
+import { layoutInstance } from '@baaportal/s7-types';
 import { describe, expect, it } from 'vitest';
 import { SimCpu, type SimCpuOptions } from '../src';
 import { buildProgram, el, m, named, sec, type BlockSpec } from './programHelpers';
@@ -31,7 +32,7 @@ function sfbInfo(number: number): AwlBlockInfo {
   } as unknown as AwlBlockInfo;
 }
 
-const SFBS = [0, 1, 2, 3, 4, 5].map(sfbInfo);
+const SFBS = [0, 1, 2, 3, 4, 5, 32].map(sfbInfo);
 const idb = (db: number, name: string): AwlBlockInfo =>
   ({ name: `IDB${db}`, kind: 'IDB', number: db, instanceOf: name }) as unknown as AwlBlockInfo;
 
@@ -347,5 +348,123 @@ describe('istanza troppo corta: nessuna uscita parziale, nessun fronte perso', (
     db.data = new Uint8Array(12);
     step(c, 2000, [0, 1]);
     expect(q(c)).toBe(1);
+  });
+});
+
+describe('DRUM (SFB 32)', () => {
+  const drum = findSystemBlock({ kind: 'SFB', number: 32 })!;
+  const lay = layoutInstance(
+    { input: drum.input, output: drum.output, inOut: [], static: drum.static ?? [] },
+    () => null,
+  );
+  if (!lay.ok) throw new Error('layout DRUM');
+  const at = (path: string) => lay.entries.find((e) => e.path === path)!;
+  type C = ReturnType<typeof makeCpu>;
+  const make = () => {
+    const c = makeCpu(
+      [
+        ob1(
+          '\tCALL SFB 32, DB 5 (RESET := M 0.0, JOG := M 0.1, DRUM_EN := M 0.2, LST_STEP := MB 2,' +
+            ' EVENT1 := M 0.3, EVENT2 := M 0.4, Q := M 1.0, OUT_WORD := MW 4, ERR_CODE := MW 6);',
+        ),
+      ],
+      [idb(5, 'DRUM')],
+      { 5: lay.sizeBytes },
+    );
+    c.cpu.memory.M[2] = 3;
+    c.cpu.run();
+    return c;
+  };
+  const db = (c: C) => c.cpu.memory.dbs.get(5)!.data;
+  const setWord = (c: C, path: string, v: number, index = 0) => {
+    const b = at(path).byte + index * 2;
+    db(c)[b] = v >> 8;
+    db(c)[b + 1] = v & 0xff;
+  };
+  /** Bit [passo, j] di OUT_VAL o S_MASK. */
+  const setBit = (c: C, path: string, stepNo: number, j: number) => {
+    const e = at(path);
+    const bit = e.byte * 8 + e.bit + (stepNo - 1) * 16 + j;
+    db(c)[bit >> 3]! |= 1 << (bit & 7);
+  };
+  const word = (c: C) => (c.cpu.memory.M[4]! << 8) | c.cpu.memory.M[5]!;
+  const errCode = (c: C) => (c.cpu.memory.M[6]! << 8) | c.cpu.memory.M[7]!;
+  const dsc = (c: C) => db(c)[at('DSC').byte]!;
+  const dcc = (c: C) => dword(db(c), at('DCC').byte) >>> 0;
+  const qOut = (c: C) => c.cpu.memory.M[1]! & 1;
+  /** Passo x: OUT(x-1) = 1 con maschera, gli altri bit restano; il passo 3 azzera OUT0 e OUT1. */
+  const program = (c: C) => {
+    db(c)[at('DSP').byte] = 1;
+    for (const x of [1, 2, 3]) {
+      setBit(c, 'OUT_VAL', x, x - 1);
+      setBit(c, 'S_MASK', x, x - 1);
+    }
+    setBit(c, 'S_MASK', 3, 0);
+    setBit(c, 'S_MASK', 3, 1);
+  };
+
+  it('JOG: un passo per fronte, maschera 0 = valore del passo precedente, Q/EOD a fine sequenza', () => {
+    const c = make();
+    program(c);
+    step(c, 0, [0, 1]); // RESET
+    expect([dsc(c), word(c), errCode(c), qOut(c)]).toEqual([1, 0x0001, 0, 0]);
+    step(c, 10, [0, 2]); // fronte di JOG
+    expect([dsc(c), word(c)]).toEqual([2, 0x0003]);
+    step(c, 20, [0, 2]); // JOG tenuto: nessun passo
+    expect(dsc(c)).toBe(2);
+    step(c, 30, [0, 0]);
+    step(c, 40, [0, 2]);
+    expect([dsc(c), word(c)]).toEqual([3, 0x0004]);
+    step(c, 50, [0, 0]);
+    step(c, 60, [0, 2]); // fronte nell'ultimo passo
+    expect([dsc(c), qOut(c), dcc(c)]).toEqual([3, 1, 0]);
+    step(c, 70, [0, 0]);
+    step(c, 80, [0, 2]); // resta fermo fino a RESET
+    expect([dsc(c), qOut(c)]).toEqual([3, 1]);
+    step(c, 90, [0, 1]);
+    expect([dsc(c), qOut(c)]).toEqual([1, 0]);
+    expect(c.cpu.mode).toBe('RUN');
+  });
+
+  it('DRUM_EN: il tempo DTBP × S_PRESET scorre solo con EVENT del passo a 1', () => {
+    const c = make();
+    program(c);
+    setWord(c, 'DTBP', 100);
+    setWord(c, 'S_PRESET', 10, 0); // passo 1: 1000 ms
+    setWord(c, 'S_PRESET', 3, 1); // passo 2: 300 ms
+    step(c, 0, [0, 1 | 4]); // RESET, DRUM_EN
+    expect(dcc(c)).toBe(1000);
+    step(c, 500, [0, 4]); // EVENT1 = 0: DCC fermo
+    expect([dsc(c), dcc(c)]).toEqual([1, 1000]);
+    step(c, 600, [0, 4 | 8]); // EVENT1 = 1
+    expect(dcc(c)).toBe(900);
+    step(c, 1500, [0, 4 | 8]);
+    expect([dsc(c), dcc(c)]).toEqual([2, 300]);
+    step(c, 1900, [0, 4 | 16]); // EVENT2: 400 ms ≥ 300
+    expect(dsc(c)).toBe(3);
+  });
+
+  it('DTBP = 0: avanzamento solo a eventi', () => {
+    const c = make();
+    program(c);
+    step(c, 0, [0, 1 | 4]);
+    step(c, 10, [0, 4]);
+    expect(dsc(c)).toBe(1);
+    step(c, 20, [0, 4 | 8]);
+    expect(dsc(c)).toBe(2);
+  });
+
+  it('ERR_CODE: DSC, LST_STEP e DSP non validi lasciano lo stato com’è', () => {
+    const c = make();
+    program(c);
+    step(c, 0, [0, 0]); // senza il RESET iniziale DSC vale 0
+    expect(errCode(c)).toBe(0x8082);
+    c.cpu.memory.M[2] = 17;
+    step(c, 10, [0, 1]);
+    expect(errCode(c)).toBe(0x8081);
+    c.cpu.memory.M[2] = 3;
+    db(c)[at('DSP').byte] = 0;
+    step(c, 20, [0, 1]);
+    expect([errCode(c), dsc(c), word(c)]).toEqual([0x8083, 0, 0]);
   });
 });

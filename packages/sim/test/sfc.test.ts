@@ -440,7 +440,7 @@ describe('SFC o SFB non simulati', () => {
 
   it('UC SFB senza gestore → SFB_NON_SIMULATA, BR = 0, CPU in RUN', () => {
     const { cpu } = makeCpu();
-    cpu.program.put(ob1Raw('\tSET;\n\t= M 1.0;', '\tUC SFB 32;', '\tA BR;\n\t= M 1.0;'));
+    cpu.program.put(ob1Raw('\tSET;\n\t= M 1.0;', '\tUC SFB 52;', '\tA BR;\n\t= M 1.0;'));
     cpu.run();
     cpu.cycle();
     cpu.cycle();

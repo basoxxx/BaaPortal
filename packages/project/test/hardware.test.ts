@@ -8,13 +8,15 @@ import {
   deleteModule,
   firstFreeSlot,
   insertModule,
+  insertStation,
+  insertStationModule,
   ioRanges,
   moveModule,
   readBaap,
   writeBaap,
   type PlcDevice,
 } from '../src/index';
-import { findModule } from '@baaportal/catalog';
+import { findCpu, findModule } from '@baaportal/catalog';
 import { cpu315pn, makeDevice, makeProject, ob1 } from './fixtures';
 
 const PS = '6ES7 307-1EA01-0AA0';
@@ -23,6 +25,8 @@ const DO16 = '6ES7 322-1BH01-0AA0';
 const AI8 = '6ES7 331-7KF02-0AB0';
 const IM360 = '6ES7 360-3AA01-0AA0';
 const IM361 = '6ES7 361-3CA01-0AA0';
+const ET200S = '6ES7 151-1AA05-0AB0';
+const ET_DI2 = '6ES7 131-4BB01-0AA0';
 
 function rack(): PlcDevice {
   const dev = makeDevice();
@@ -144,6 +148,77 @@ describe('configurazione hardware S7-300', () => {
         .flatMap((a) => a.rows)
         .every((r) => r.unconfigured === undefined),
     ).toBe(true);
+  });
+});
+
+describe("CPU compatta 31xC: l'I/O integrato occupa i suoi indirizzi", () => {
+  const cpu314c = findCpu('cpu-314c-2-dp')!;
+  const compact = () => {
+    const dev = makeDevice();
+    dev.cpu.typeId = cpu314c.id;
+    return dev;
+  };
+
+  it('negli intervalli occupati e nelle sovrapposizioni, segnalate sul modulo', () => {
+    const dev = compact();
+    expect(insertModule(dev, DI16, 0, 4, 'di')).toBe(true);
+    expect(ioRanges(dev).I.map((r) => `${r.name}:${r.from}-${r.to}`)).toEqual([
+      'DI 16x24VDC:0-1',
+      'DI24/DO16:124-126',
+      'AI5/AO2:752-761',
+    ]);
+    expect(checkHardware(dev, cpu314c)).toEqual([]);
+    for (const start of [124, 123]) {
+      dev.hardware!.modules[0]!.inputStart = start;
+      expect(checkHardware(dev, cpu314c)).toEqual([
+        { moduleId: 'di', code: 'HW_ADDRESS_OVERLAP', area: 'I', other: 'DI24/DO16' },
+      ]);
+    }
+  });
+
+  it('il posto 11 del rack 3 (indirizzi dell’I/O integrato) non si accetta', () => {
+    const dev = compact();
+    expect(insertModule(dev, DI16, 3, 11, 'x')).toBe(false);
+    expect(insertModule(makeDevice(), DI16, 3, 11, 'x')).toBe(true);
+    dev.hardware = {
+      modules: [{ id: 'x', rack: 3, slot: 11, orderNumber: DI16, name: 'x', comment: '' }],
+    };
+    expect(checkHardware(dev, cpu314c).map((i) => i.code)).toContain('HW_SLOT_INVALID');
+  });
+
+  it('ET 200: i moduli non prendono gli indirizzi dell’I/O integrato', () => {
+    const dev = compact();
+    dev.hardware = { modules: [] };
+    for (let i = 0; i < 62; i++)
+      dev.hardware.modules.push({
+        id: `d${i}`,
+        rack: 0,
+        slot: 4,
+        orderNumber: DI16,
+        name: 'DI',
+        comment: '',
+        inputStart: 2 * i,
+      }); // I 0..123
+    insertStation(dev, ET200S, 'st', 'ET200S_1');
+    expect(insertStationModule(dev, 'st', ET_DI2, 1, 'e1')).toBe(true);
+    expect(dev.hardware.stations![0]!.modules[0]!.inputStart).toBe(127);
+  });
+
+  it('tag sull’I/O integrato: nessun avviso; senza moduli di I/O nessun controllo', () => {
+    const dev = compact();
+    expect(insertModule(dev, PS, 0, 1, 'ps')).toBe(true);
+    dev.tagTables[0]!.tags.push(
+      { id: 'a', name: 'Integrato', type: 'Bool', address: '%I124.0', hmi: false, comment: '' },
+      { id: 'b', name: 'Analogico', type: 'Int', address: '%IW752', hmi: false, comment: '' },
+      { id: 'c', name: 'Fuori', type: 'Bool', address: '%I200.0', hmi: false, comment: '' },
+    );
+    const warned = () =>
+      checkDevice(dev, cpu314c)
+        .filter((d) => d.code === 'IO_NOT_CONFIGURED')
+        .map((d) => d.ref.kind === 'tag' && d.ref.id);
+    expect(warned()).toEqual([]); // solo PS: tutto il campo della CPU
+    expect(insertModule(dev, DI16, 0, 4, 'di')).toBe(true);
+    expect(warned()).toEqual(['c']);
   });
 });
 

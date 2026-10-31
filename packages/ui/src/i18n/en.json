@@ -1768,6 +1768,7 @@
       "deleted": "Deleted",
       "skipped": "Skipped",
       "kept": "Stays in the CPU",
+      "filtered": "Refused by BaaPortal (frame not allowed)",
       "rejected": "Rejected by the CPU: {{detail}}",
       "unknown": "Unknown result",
       "notDone": "Not loaded"

@@ -408,13 +408,16 @@ function Modules() {
                 ? t('ioPanel.moduleStation', { station: m.station, slot: m.slot })
                 : t('ioPanel.moduleRack', { rack: m.rack, slot: m.slot })}{' '}
               {m.name} {[range('I', m.inputs), range('Q', m.outputs)].filter(Boolean).join(', ')}{' '}
-              <button
-                type="button"
-                data-testid={`module-toggle-${m.id}`}
-                onClick={() => void ctrl.setModulePresent(m.id, out)}
-              >
-                {t(out ? 'ioPanel.modulePlug' : 'ioPanel.modulePull')}
-              </button>
+              {/* posto 2 del rack centrale = CPU: il suo I/O integrato (31xC) non si estrae */}
+              {(m.slot !== 2 || m.station !== undefined) && (
+                <button
+                  type="button"
+                  data-testid={`module-toggle-${m.id}`}
+                  onClick={() => void ctrl.setModulePresent(m.id, out)}
+                >
+                  {t(out ? 'ioPanel.modulePlug' : 'ioPanel.modulePull')}
+                </button>
+              )}
             </li>
           );
         })}

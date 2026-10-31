@@ -13,6 +13,7 @@ import type {
   PlcMode,
   PlcStatus,
 } from '@baaportal/ui';
+import { tr } from './dialogText';
 
 /** Quanto serve di una finestra: abbastanza per i test senza Electron. */
 export interface PlcOwner {
@@ -94,18 +95,20 @@ export const MPI_PAUSED =
 export function connectMessage(err: unknown, access: PlcAccess): string {
   if (err instanceof S7Error) {
     if (err.code === 'COTP_REJECTED')
-      return 'La CPU ha rifiutato il collegamento (rack/slot o TSAP)';
+      return tr('La CPU ha rifiutato il collegamento (rack/slot o TSAP)');
     // Adattatore MPI e porta seriale: il messaggio dice già che cosa controllare.
     if (err.code.startsWith('MPI_') || err.code.startsWith('SERIAL_')) return err.message;
     if (['CONNECT_REFUSED', 'CONNECT_TIMEOUT', 'TIMEOUT'].includes(err.code)) {
       const where =
         access.link?.kind === 'mpi' ? accessLabel(access) : `${access.host}:${access.port ?? 102}`;
-      return `Nessuna risposta da ${where}`;
+      return tr('Nessuna risposta da {where}', { where });
     }
-    if (err.code === 'ABORTED') return 'Collegamento annullato';
-    return `Collegamento non riuscito: ${err.message}`;
+    if (err.code === 'ABORTED') return tr('Collegamento annullato');
+    return tr('Collegamento non riuscito: {why}', { why: err.message });
   }
-  return `Collegamento non riuscito: ${err instanceof Error ? err.message : String(err)}`;
+  return tr('Collegamento non riuscito: {why}', {
+    why: err instanceof Error ? err.message : String(err),
+  });
 }
 
 /**
@@ -149,7 +152,7 @@ export class PlcService {
   private async doConnect(owner: PlcOwner, access: PlcAccess): Promise<PlcConnectResult> {
     const epoch = this.bump(owner);
     await this.drop(owner);
-    if (owner.isDestroyed()) return { ok: false, error: 'Finestra chiusa' };
+    if (owner.isDestroyed()) return { ok: false, error: tr('Finestra chiusa') };
     let client: Client;
     try {
       client = await this.connectFn({
@@ -162,7 +165,7 @@ export class PlcService {
     // Un connect più recente o la chiusura della finestra durante l'attesa: questo non serve più.
     if (this.epochs.get(owner) !== epoch || owner.isDestroyed()) {
       await client.close().catch(() => undefined);
-      return { ok: false, error: 'Collegamento annullato' };
+      return { ok: false, error: tr('Collegamento annullato') };
     }
     let identity: PlcIdentity;
     let mode: PlcMode;
@@ -182,7 +185,7 @@ export class PlcService {
     }
     if (this.epochs.get(owner) !== epoch || owner.isDestroyed()) {
       await client.close().catch(() => undefined);
-      return { ok: false, error: 'Collegamento annullato' };
+      return { ok: false, error: tr('Collegamento annullato') };
     }
     // LED FRCE: un di più, come la protezione; senza la lista non si chiede più
     let force: boolean | undefined;
@@ -194,7 +197,7 @@ export class PlcService {
     }
     if (this.epochs.get(owner) !== epoch || owner.isDestroyed()) {
       await client.close().catch(() => undefined);
-      return { ok: false, error: 'Collegamento annullato' };
+      return { ok: false, error: tr('Collegamento annullato') };
     }
     const link: Link = {
       id: ++this.linkSeq,
@@ -319,14 +322,17 @@ export class PlcService {
     deadlineMs = 60_000,
   ): Promise<{ ok: true; value: T } | { ok: false; error: string }> {
     const link = this.links.get(owner);
-    if (!link) return { ok: false, error: 'Nessun collegamento online' };
+    if (!link) return { ok: false, error: tr('Nessun collegamento online') };
     const end = Date.now() + deadlineMs;
     const run = <R>(fn: (client: ReadClient) => Promise<R>): Promise<R> =>
       this.exclusive(link, async () => {
         if (link.done) throw new S7Error('CLOSED', 'collegamento chiuso');
         if (link.paused > 0) throw new Error(MPI_PAUSED);
         if (Date.now() > end) {
-          throw new S7Error('ABORTED', `Lettura troppo lunga: oltre ${deadlineMs / 1000} s`);
+          throw new S7Error(
+            'ABORTED',
+            tr('Lettura troppo lunga: oltre {s} s', { s: deadlineMs / 1000 }),
+          );
         }
         return fn(link.client);
       });
@@ -453,7 +459,7 @@ export class PlcService {
     try {
       const timeout = new Promise<never>((_, reject) => {
         timer = setTimeout(
-          () => reject(new S7Error('TIMEOUT', 'nessuna risposta dalla CPU')),
+          () => reject(new S7Error('TIMEOUT', tr('nessuna risposta dalla CPU'))),
           this.readTimeoutMs,
         );
       });

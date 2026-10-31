@@ -75,7 +75,8 @@ export function outcomeText(r: RestoreOutcomeRow): string {
       return t('restore.outcome.notDone');
     case 'rejected': {
       // un rifiuto del nostro filtro il main lo scrive già per intero
-      if ((r.error ?? '').startsWith('Rifiutato da BaaPortal')) return r.error!;
+      if ((r.error ?? '').startsWith('Rifiutato da BaaPortal'))
+        return t('restore.outcome.filtered');
       // il main scrive «Rifiutato dalla CPU: …»; qui si tiene solo il dettaglio
       const detail = (r.error ?? '').replace(/^Rifiutato dalla CPU:\s*/, '');
       return t('restore.outcome.rejected', { detail });

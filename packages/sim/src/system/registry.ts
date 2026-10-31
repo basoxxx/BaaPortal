@@ -18,7 +18,7 @@ import {
 /** Gestori delle SFC simulate, per numero. Un numero assente dal registro dà l'avviso «non simulata». */
 export const SFC_HANDLERS: Record<number, SystemHandler> = SFC_TABLE;
 
-/** Gestori degli SFB simulati, per numero (SFB 0–5; leggono il DB di istanza in DI e AR2). */
+/** Gestori degli SFB simulati, per numero (SFB 0–5 e 32; leggono il DB di istanza in DI e AR2). */
 export const SFB_HANDLERS: Record<number, SystemHandler> = SFB_TABLE;
 
 /** Ordine dei puntatori nella lista di una SFC (come lo genera il compilatore): IN, RET_VAL, OUT, IN_OUT. */

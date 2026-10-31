@@ -5,6 +5,7 @@ import {
   MAX_RACKS,
   RACK_SLOTS,
   defaultStartAddress,
+  findCpu,
   findIoModule,
   findModule,
   findStation,
@@ -37,6 +38,8 @@ export interface IoRange {
   from: number;
   /** Ultimo byte compreso. */
   to: number;
+  /** I/O integrato di una CPU compatta 31xC (`moduleId` non è un modulo). */
+  integrated?: true;
 }
 
 export const moduleAt = (dev: PlcDevice, rack: number, slot: number): HwModule | undefined =>
@@ -52,7 +55,9 @@ export function canPlace(
 ): boolean {
   if (rack < 0 || rack >= MAX_RACKS) return false;
   const there = moduleAt(dev, rack, slot);
-  return slotAccepts(type, rack, slot) && (!there || there.id === ignoreId);
+  return (
+    slotAccepts(type, rack, slot, findCpu(dev.cpu.typeId)) && (!there || there.id === ignoreId)
+  );
 }
 
 /** Il primo posto libero che accetta il modulo nel rack, se c'è. */
@@ -123,9 +128,17 @@ const allModules = (dev: PlcDevice): HwModule[] => [
   ...(dev.hardware?.stations ?? []).flatMap((s) => s.modules),
 ];
 
-/** Intervalli di byte di ingresso (I) e di uscita (Q) occupati dai moduli, per indirizzo. */
+/**
+ * Intervalli di byte di ingresso (I) e di uscita (Q) occupati dai moduli, per indirizzo, con l'I/O
+ * integrato delle CPU compatte 31xC (indirizzi predefiniti).
+ */
 export function ioRanges(dev: PlcDevice): { I: IoRange[]; Q: IoRange[] } {
   const out = { I: [] as IoRange[], Q: [] as IoRange[] };
+  for (const [i, io] of (findCpu(dev.cpu.typeId)?.integratedIo ?? []).entries()) {
+    const r = { moduleId: `integrated-${i}`, name: io.name, integrated: true } as const;
+    out.I.push({ ...r, from: io.inputs.start, to: io.inputs.start + io.inputs.bytes - 1 });
+    out.Q.push({ ...r, from: io.outputs.start, to: io.outputs.start + io.outputs.bytes - 1 });
+  }
   for (const m of allModules(dev)) {
     const type = findIoModule(m.orderNumber);
     if (!type) continue;
@@ -150,7 +163,7 @@ export function ioCoverage(
   dev: PlcDevice,
 ): ((area: 'I' | 'Q', byte: number) => boolean) | undefined {
   const r = ioRanges(dev);
-  if (r.I.length === 0 && r.Q.length === 0) return undefined;
+  if (![...r.I, ...r.Q].some((x) => !x.integrated)) return undefined;
   return (area, byte) => r[area].some((x) => byte >= x.from && byte <= x.to);
 }
 
@@ -175,7 +188,7 @@ export function checkHardware(dev: PlcDevice, cpu: CpuType | undefined): HwIssue
       !Number.isInteger(m.rack) ||
       m.rack < 0 ||
       m.rack >= MAX_RACKS ||
-      !slotAccepts(type, m.rack, m.slot)
+      !slotAccepts(type, m.rack, m.slot, cpu)
     ) {
       out.push({ moduleId: m.id, code: 'HW_SLOT_INVALID' });
     } else if (seen.has(key)) {
@@ -216,7 +229,9 @@ export function checkHardware(dev: PlcDevice, cpu: CpuType | undefined): HwIssue
       // Ordinati per inizio: basta guardare i precedenti che finiscono dopo l'inizio di questo.
       const prev = list.slice(0, i).find((p) => p.to >= r.from);
       if (prev) {
-        out.push({ moduleId: r.moduleId, code: 'HW_ADDRESS_OVERLAP', area, other: prev.name });
+        // Con l'I/O integrato l'errore va sempre sul modulo.
+        const [mod, other] = r.integrated ? [prev, r] : [r, prev];
+        out.push({ moduleId: mod.moduleId, code: 'HW_ADDRESS_OVERLAP', area, other: other.name });
       }
     }
   }

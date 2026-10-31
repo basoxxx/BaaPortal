@@ -279,11 +279,19 @@ class Emitter {
     const instance = b.instance.trim();
     const bits = this.pinBits.get(b.id);
     const params: string[] = [];
+    const names: string[] = [];
     for (const name of callPinOrder(b, this.opts.callParams?.(normalizeInstance(instance)))) {
       const value = bits?.get(name) ?? (b.pins[name] ?? '').trim();
-      if (value) params.push(`${name} := ${value}`);
+      if (!value) continue;
+      params.push(`${name} := ${value}`);
+      names.push(name);
     }
-    this.push(b.id, ...callLines(instance, params));
+    // con parametri: `CALL`, `(`, un parametro per riga, `);`; ogni parametro è la riga del suo pin
+    callLines(instance, params).forEach((text, i) => {
+      const pin = names[i - 2];
+      if (pin === undefined) this.push(b.id, text);
+      else this.pushPin(b.id, pin, text);
+    });
   }
 
   /**

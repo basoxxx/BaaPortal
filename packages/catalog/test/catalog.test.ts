@@ -36,6 +36,24 @@ describe('catalogo CPU e OB', () => {
     });
     expect(cpu.limits).toMatchObject({ mBytes: 2048, timers: 256, counters: 256 });
   });
+  it('I/O integrato delle 31xC: indirizzi predefiniti dei dati tecnici, solo per le compatte', () => {
+    const io = (id: string) => findCpu(id)!.integratedIo?.map((m) => [m.name, m.inputs, m.outputs]);
+    expect(io('cpu-312c')).toEqual([
+      ['DI10/DO6', { start: 124, bytes: 2 }, { start: 124, bytes: 1 }],
+    ]);
+    expect(io('cpu-313c-2-dp')).toEqual([
+      ['DI16/DO16', { start: 124, bytes: 2 }, { start: 124, bytes: 2 }],
+    ]);
+    expect(io('cpu-314c-2-dp')).toEqual([
+      ['DI24/DO16', { start: 124, bytes: 3 }, { start: 124, bytes: 2 }],
+      ['AI5/AO2', { start: 752, bytes: 10 }, { start: 752, bytes: 4 }],
+    ]);
+    expect(io('cpu-314c-2-pn-dp')).toEqual([
+      ['DI24/DO16', { start: 136, bytes: 3 }, { start: 136, bytes: 2 }],
+      ['AI5/AO2', { start: 800, bytes: 10 }, { start: 800, bytes: 4 }],
+    ]);
+    for (const c of CPU_CATALOG) expect(!!c.integratedIo).toBe(c.group === 'compact');
+  });
   it('le informazioni di avvio di ogni OB occupano 20 byte', () => {
     for (const ob of OB_DEFINITIONS) {
       const r = layoutStruct(ob.startInfo, () => null);

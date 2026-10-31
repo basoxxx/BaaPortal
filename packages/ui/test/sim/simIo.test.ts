@@ -33,7 +33,46 @@ describe('simIoOf', () => {
     expect(simIoOf(device('cpu-315-2-dp')).map((m) => m.id)).toEqual(['m1']);
   });
 
-  it('CPU compatta 31xC: nessuna periferia dalla configurazione (I/O integrato non nel catalogo)', () => {
-    expect(simIoOf(device('cpu-314c-2-dp'))).toEqual([]);
+  it('CPU compatta 31xC: I/O integrato al posto 2 più i moduli della configurazione', () => {
+    expect(simIoOf(device('cpu-314c-2-dp'))).toEqual([
+      {
+        id: 'integrated-0',
+        name: 'DI24/DO16',
+        rack: 0,
+        slot: 2,
+        inputs: { start: 124, bytes: 3 },
+        outputs: { start: 124, bytes: 2 },
+      },
+      {
+        id: 'integrated-1',
+        name: 'AI5/AO2',
+        rack: 0,
+        slot: 2,
+        inputs: { start: 752, bytes: 10 },
+        outputs: { start: 752, bytes: 4 },
+      },
+      expect.objectContaining({ id: 'm1' }),
+    ]);
+  });
+
+  it('CPU compatta senza configurazione hardware: niente moduli (tutto il campo della CPU)', () => {
+    const dev = device('cpu-312c');
+    delete dev.hardware;
+    expect(simIoOf(dev)).toEqual([]);
+  });
+
+  it('CPU compatta senza moduli di I/O (indirizzo MPI, solo PS): tutto il campo della CPU', () => {
+    const dev = device('cpu-313c');
+    dev.hardware = { modules: [], interfaces: [{ port: 'X1', address: 2 }] };
+    expect(simIoOf(dev)).toEqual([]);
+    dev.hardware.modules.push({
+      id: 'ps',
+      rack: 0,
+      slot: 1,
+      orderNumber: '6ES7 307-1EA01-0AA0',
+      name: 'PS',
+      comment: '',
+    });
+    expect(simIoOf(dev)).toEqual([]);
   });
 });

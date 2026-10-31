@@ -28,6 +28,11 @@ export const NOTICE_INTERVAL_MS = 200;
 export const SLICE_MS = 10;
 /** Tetto di cicli per fetta, nel caso l'orologio non avanzi. */
 const MAX_CYCLES_PER_SLICE = 5000;
+/**
+ * Intervallo fra due controlli del tempo di ciclo oltre il quale il Worker è stato fermo (PC carico) e
+ * non ha eseguito: non conta per il tempo di ciclo massimo. 1024 istruzioni durano ben meno.
+ */
+const PAUSE_MS = 50;
 const MAX_WARNINGS = 100;
 export { MAX_WATCH_ITEMS };
 
@@ -165,6 +170,7 @@ export class SimHost {
       cpuTypeId: req.cpuTypeId,
       props: req.props,
       now: this.env.now,
+      pauseMs: PAUSE_MS,
       ...(req.io ? { io: req.io } : {}),
     });
     cpu.onEvent((e) => {

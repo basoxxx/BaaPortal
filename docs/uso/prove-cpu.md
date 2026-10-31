@@ -1,6 +1,6 @@
 # Prove su una CPU S7-300 reale
 
-Questa è la lista di prove per la versione 2.1.0. BaaPortal non è mai stato provato su una CPU reale: i test automatici girano contro un PLC finto e contro catture di rete pubbliche. Queste prove servono a sapere che cosa funziona davvero.
+Questa è la lista di prove per la versione 2.2.0. BaaPortal non è mai stato provato su una CPU reale: i test automatici girano contro un PLC finto e contro catture di rete pubbliche. Queste prove servono a sapere che cosa funziona davvero.
 
 **Regola fissa:** le prove della parte B scrivono nella CPU. Si fanno **solo su una CPU non in produzione**: una CPU di scorta o una comprata allo scopo, mai su quella di una macchina che lavora. La parte A legge soltanto.
 
@@ -16,7 +16,7 @@ In caso di problemi, salva anche il progetto (`.baap`) e, se è possibile, il fi
 
 - [ ] Annota il modello della CPU (numero d'ordine e firmware) e come è collegata: Ethernet integrata, CP 343-1, gateway RFC 1006 o adattatore MPI seriale/USB-COM (con marca e modello dell'adattatore).
 - [ ] Fai un backup del programma della CPU con lo strumento che usi di solito, prima di qualsiasi prova della parte B.
-- [ ] Installa BaaPortal 2.1.0 da _Releases_ su GitHub. Al primo avvio vanno autorizzati Windows («Esegui comunque») e macOS (vedi le note di rilascio).
+- [ ] Installa BaaPortal 2.2.0 da _Releases_ su GitHub. Al primo avvio vanno autorizzati Windows («Esegui comunque») e macOS (vedi le note di rilascio).
 
 ## M. Adattatore MPI (solo se colleghi la CPU con l'adattatore seriale o USB-COM)
 
@@ -62,6 +62,8 @@ Se qualcosa non va, annota il messaggio esatto, la variante e le impostazioni us
 24. [ ] **Funzioni STRING e DATE_AND_TIME in SCL (2.1).** Un FC SCL con `CONCAT`, `MID`, `FIND`, un confronto fra STRING e una costante `DT#`: caricalo e controlla i valori con una tabella di controllo.
 25. [ ] **Caricamento annullato (2.1).** Con la CPU in RUN, avvia _Carica nel dispositivo_ scegliendo di fermarla, poi annulla la conferma _Carica_: BaaPortal chiede se riavviarla (predefinito _No_), e il RUN passa comunque dalla conferma.
 26. [ ] **Ora in UTC (2.1).** _Imposta ora_ con l'opzione UTC: annota l'ora che la CPU mostra.
+
+27. [ ] **Valori dei parametri dei CALL in KOP (2.2).** Osserva il blocco KOP del punto 15 con un box CALL che ha un parametro INT o REAL: il valore compare accanto al pin.
 
 ## Che cosa rimandare
 
