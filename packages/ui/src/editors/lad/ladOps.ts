@@ -275,6 +275,17 @@ export function rangeBetween(net: LadNetwork, a: string, b: string): string[] | 
 }
 
 /** Copia profonda di un elemento con id nuovi (anche negli elementi che contiene). */
+/** Copia di un nodo (ramo a T) con id nuovi per lui, la sua serie e le sue uscite. */
+export function cloneNodeFresh(n: LadNode, newId: () => string): LadNode {
+  return {
+    id: newId(),
+    series: n.series.map((e) => cloneFresh(e, newId)),
+    outs: n.outs.map((o) =>
+      isNode(o) ? cloneNodeFresh(o, newId) : { ...structuredClone(o), id: newId() },
+    ),
+  };
+}
+
 export function cloneFresh(e: LadElem, newId: () => string): LadElem {
   const c = structuredClone(e);
   const renew = (x: LadElem): void => {

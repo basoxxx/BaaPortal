@@ -50,7 +50,8 @@ type Editing = { id: string; key: string };
 interface Ctx {
   sel: string | null;
   multi: readonly string[];
-  select: (id: string, extend: boolean) => void;
+  /** `range`: Maiusc (intervallo della serie); `toggle`: Ctrl/Cmd (aggiunge o toglie). */
+  select: (id: string, mode?: 'range' | 'toggle') => void;
   editing: Editing | null;
   edit: (id: string, key: string) => void;
   commit: (id: string, fld: LadField, value: string) => void;
@@ -111,11 +112,11 @@ function Sel({
       data-mon={fupMon(c.monitor, item)}
       onClick={(ev) => {
         ev.stopPropagation();
-        c.select(item.id, ev.shiftKey || ev.ctrlKey || ev.metaKey);
+        c.select(item.id, ev.shiftKey ? 'range' : ev.ctrlKey || ev.metaKey ? 'toggle' : undefined);
       }}
       onFocus={(ev) => {
         // Solo il proprio fuoco: l'evento deve risalire fino alla vista (tavolozza attiva).
-        if (ev.target === ev.currentTarget && c.sel !== item.id) c.select(item.id, false);
+        if (ev.target === ev.currentTarget && c.sel !== item.id) c.select(item.id);
       }}
     >
       {children}
@@ -434,8 +435,9 @@ export function FupNetworkView({
   const ctx: Ctx = {
     sel,
     multi: ed.multi?.ids ?? [],
-    select: (id, extend) => {
-      if (!extend || !ed.extendTo(id)) ed.setSel({ t: 'elem', id });
+    select: (id, mode) => {
+      if (mode === 'toggle') ed.toggle(id);
+      else if (mode !== 'range' || !ed.extendTo(id)) ed.setSel({ t: 'elem', id });
     },
     editing,
     edit: (id, key) => {
