@@ -60,4 +60,19 @@ describe('simIoOf', () => {
     delete dev.hardware;
     expect(simIoOf(dev)).toEqual([]);
   });
+
+  it('CPU compatta senza moduli di I/O (indirizzo MPI, solo PS): tutto il campo della CPU', () => {
+    const dev = device('cpu-313c');
+    dev.hardware = { modules: [], interfaces: [{ port: 'X1', address: 2 }] };
+    expect(simIoOf(dev)).toEqual([]);
+    dev.hardware.modules.push({
+      id: 'ps',
+      rack: 0,
+      slot: 1,
+      orderNumber: '6ES7 307-1EA01-0AA0',
+      name: 'PS',
+      comment: '',
+    });
+    expect(simIoOf(dev)).toEqual([]);
+  });
 });

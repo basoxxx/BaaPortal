@@ -208,7 +208,19 @@ describe('pannello I/O del simulatore', () => {
     const app = await renderApp({ view: 'project', withProject: true, withPlc: true });
     const dev = findDevice(app.store.getState().doc!.project, PLC)!;
     dev.cpu.typeId = 'cpu-312c';
-    dev.hardware = { modules: [] };
+    dev.hardware = {
+      modules: [
+        {
+          id: 'm1',
+          rack: 0,
+          slot: 4,
+          orderNumber: '6ES7 321-1BH02-0AA0',
+          name: 'DI16',
+          comment: '',
+          inputStart: 0,
+        },
+      ],
+    };
     act(() => app.store.getState().setTaskCard('test'));
     act(() =>
       app.store.getState().setSim({

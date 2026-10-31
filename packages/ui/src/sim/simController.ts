@@ -97,14 +97,11 @@ export function addIoByte(
 
 /**
  * Moduli di I/O della configurazione hardware (rack e stazioni ET 200) per il simulatore, con l'I/O
- * integrato delle 31xC al posto 2 (indirizzi predefiniti); vuoto se non ce n'è nessuno (progetti
- * senza configurazione: tutto il campo della CPU).
+ * integrato delle 31xC al posto 2 (indirizzi predefiniti); vuoto se non c'è nessun modulo di I/O
+ * (progetti senza configurazione, o solo PS, IM e interfacce: tutto il campo della CPU, come `ioCoverage`).
  */
 export function simIoOf(dev: PlcDevice): SimIoModule[] {
   const out: SimIoModule[] = [];
-  if (dev.hardware)
-    for (const [i, m] of (findCpu(dev.cpu.typeId)?.integratedIo ?? []).entries())
-      out.push({ id: `integrated-${i}`, rack: 0, slot: 2, ...m });
   const add = (m: HwModule, station?: number) => {
     const type = findIoModule(m.orderNumber);
     if (!type) return;
@@ -126,6 +123,15 @@ export function simIoOf(dev: PlcDevice): SimIoModule[] {
   for (const m of dev.hardware?.modules ?? []) add(m);
   for (const st of dev.hardware?.stations ?? [])
     for (const m of st.modules) add(m, st.address ?? 0);
+  if (out.length > 0)
+    out.unshift(
+      ...(findCpu(dev.cpu.typeId)?.integratedIo ?? []).map((m, i) => ({
+        id: `integrated-${i}`,
+        rack: 0,
+        slot: 2,
+        ...m,
+      })),
+    );
   return out;
 }
 
