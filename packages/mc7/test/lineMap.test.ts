@@ -112,3 +112,43 @@ describe('tabella delle righe', () => {
     expect(lines.filter((l) => l.network === 1).map((l) => l.line)).toEqual([1, 2]);
   });
 });
+
+describe('tabella delle righe: parametri di una CALL', () => {
+  const el = (name: string) => ({ kind: 'elementary', name });
+  const FC3 = {
+    name: 'FC3',
+    kind: 'FC',
+    number: 3,
+    iface: {
+      ...IFACE,
+      input: [
+        { name: 'A', type: el('Int') },
+        { name: 'X', type: el('Bool') },
+      ],
+      output: [{ name: 'B', type: el('Real') }],
+      inOut: [{ name: 'C', type: el('Int') }],
+    },
+  } as unknown as AwlBlockInfo;
+
+  it('le copie dei parametri di dati vanno sulla riga del parametro, i puntatori no', () => {
+    INFOS.push(FC3);
+    try {
+      // riga 0 CALL, 1 (, 2 A, 3 X, 4 B, 5 C, 6 );
+      const src = 'CALL FC 3\n(\nA := 5,\nX := M 0.0,\nB := DB1.DBD 0,\nC := MW 4\n);';
+      const r = compile([src]);
+      expect(r.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
+      const at = (line: number) => r.lines!.filter((l) => l.line === line);
+      expect(at(2).length).toBeGreaterThan(0); // L 5; T L… (costante copiata)
+      expect(at(4).length).toBeGreaterThan(0); // L L…; T DB1.DBD 0 dopo la chiamata
+      expect(at(3)).toEqual([]); // BOOL di M: solo puntatore
+      expect(at(5)).toEqual([]); // MW 4: solo puntatore, il valore non passa da ACCU1
+      // la CALL tiene la sua riga, con l'ultima istruzione (BLD 2)
+      expect(at(0).length).toBeGreaterThan(1);
+      expect(r.lines!.at(-1)!.line).toBe(0);
+      // la copia di A precede UC, quella di B la segue
+      expect(at(2)[0]!.offset).toBeLessThan(at(4)[0]!.offset);
+    } finally {
+      INFOS.pop();
+    }
+  });
+});

@@ -2,9 +2,17 @@
 import { BOX_CATALOG } from '@baaportal/ladfbd';
 import type { ElemStatus, LadElem, LadOut } from '@baaportal/ladfbd';
 import { formatAccu } from '../awl/monitorExtension';
+import type { CallParams } from './ladOps';
 
-/** Stato osservato di un segmento: per elemento (assente = sconosciuto) e formato degli ACCU. */
-export type LadMonitor = { status: ReadonlyMap<string, ElemStatus>; hex: boolean };
+/**
+ * Stato osservato di un segmento: per elemento (assente = sconosciuto) e formato degli ACCU;
+ * `callParams` dà i tipi dei pin dei box CALL.
+ */
+export type LadMonitor = {
+  status: ReadonlyMap<string, ElemStatus>;
+  hex: boolean;
+  callParams?: CallParams;
+};
 
 /**
  * `data-mon`: «1» flusso, «0» niente flusso, «off» non elaborato; `undefined` senza osservazione o
@@ -36,7 +44,9 @@ export function formatPinValue(v: number, type: string, hex: boolean): string {
 }
 
 /** Tipo del pin (o del campo `in1`/`in2`/`value`) di un elemento, per il formato del valore. */
-export function pinType(e: LadElem | LadOut, pin: string): string {
+export function pinType(e: LadElem | LadOut, pin: string, callParams?: CallParams): string {
+  if (e.k === 'box' && e.box === 'CALL')
+    return callParams?.(e.instance)?.find((p) => p.name === pin)?.type ?? '';
   if (e.k === 'cmp') return e.fn.endsWith('R') ? 'REAL' : e.fn.endsWith('D') ? 'DINT' : 'INT';
   if (e.k === 'tcoil') return 'S5TIME';
   if (e.k === 'ccoil') return 'WORD';
@@ -57,7 +67,7 @@ export function pinValues(
   const out = Object.fromEntries(
     Object.entries(st?.values ?? {}).map(([pin, x]) => [
       pin,
-      formatPinValue(x, pinType(e, pin), mon!.hex),
+      formatPinValue(x, pinType(e, pin, mon!.callParams), mon!.hex),
     ]),
   );
   if (e.k === 'box' && st && !st.notRun)

@@ -68,6 +68,11 @@ export interface EncodeCodeOptions {
  */
 export interface CompiledStatement extends Statement {
   encode?: Pick<EncodeOptions, 'pointers' | 'constantType'>;
+  /**
+   * Riga sorgente (da 0) per la tabella delle righe, se diversa da quella dell'istruzione espansa:
+   * le copie di un parametro di una CALL vanno sulla riga del parametro (osservazione).
+   */
+  line?: number;
 }
 
 const RAW_LINE = /^\s*\/\/\s*MC7 grezzo:(.*)$/;
@@ -106,6 +111,8 @@ type Entry = {
   rawJump?: boolean;
   /** Grezzo che è un salto: destinazione in byte dall'inizio della sua istruzione. */
   rawTo?: number;
+  /** Riga (da 0) nella tabella delle righe, se non è `line - 1` (`CompiledStatement.line`). */
+  mapLine?: number;
 };
 
 /** Nome `#PARn` / `#PARWn` → offset del campo `wwww` (mc7 §2.2.6). */
@@ -422,7 +429,13 @@ export function encodeCode(
         const ct = same && id !== 'CALL' ? meta?.constantTypes[key] : undefined;
         if (ct !== undefined) o.constantType = ct;
         try {
-          entries.push({ line, ...(label ? { label } : {}), bytes: encodeInstruction(st, o) });
+          const mapLine = (st as CompiledStatement).line;
+          entries.push({
+            line,
+            ...(label ? { label } : {}),
+            ...(mapLine !== undefined ? { mapLine } : {}),
+            bytes: encodeInstruction(st, o),
+          });
         } catch (e) {
           if (unresolvedFormal !== undefined && formalOffset(unresolvedFormal) !== undefined) {
             diag(
@@ -523,7 +536,8 @@ export function encodeCode(
       entries.forEach((e, i) => {
         const at = starts[i]!;
         const length = (starts[i + 1] ?? pos) - at;
-        if (length > 0) lines.push({ offset: base + at, length, network: k, line: e.line - 1 });
+        if (length > 0)
+          lines.push({ offset: base + at, length, network: k, line: e.mapLine ?? e.line - 1 });
         if (e.rawJump || e.jump) codeJumps.push((base + at) >> 1);
         if (e.rawJump && e.rawTo !== undefined) checkRawJump(k, at, e.rawTo, e.line);
         if (!e.jump) {

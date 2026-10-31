@@ -147,9 +147,10 @@ export function NetworksView({ deviceId, blockId }: Props) {
         const r = kop?.[i];
         if (!m || !r || !n.lad) return undefined;
         const nullUnknown = plcLinesShown !== null && plcUnsure;
-        return { status: networkStatus(n.lad, r.lines, m.cells, { nullUnknown }), hex: m.hex };
+        const status = networkStatus(n.lad, r.lines, m.cells, { nullUnknown });
+        return { status, hex: m.hex, ...(callParams ? { callParams } : {}) };
       }),
-    [blockNets, monShown, kop, plcLinesShown, plcUnsure],
+    [blockNets, monShown, kop, plcLinesShown, plcUnsure, callParams],
   );
   // Osservazione di un blocco SCL (un solo testo, segmento 0): i valori per riga SCL.
   const sclLines = kop?.[0]?.scl?.lines;

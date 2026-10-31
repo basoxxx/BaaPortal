@@ -5,7 +5,9 @@ import { SimCpu } from '@baaportal/sim';
 import {
   blockToMc7File,
   createCodeBlock,
+  createInstanceDb,
   createPlcDevice,
+  kopCallParams,
   kopSources,
   createProject,
   findDevice,
@@ -17,6 +19,7 @@ import { simControllerFor } from '../../src/sim/simController';
 import { SimSession } from '../../src/sim/session';
 import { createAppStore } from '../../src/state/store';
 import { monitorLinesByNetwork } from '../../src/editors/awl/monitorExtension';
+import { pinValues } from '../../src/editors/lad/ladMonitor';
 import { initI18n } from '../../src/i18n';
 import { FakeBridge } from '../fakeBridge';
 import { PROPS, fakeWorker } from './simFixtures';
@@ -346,5 +349,69 @@ describe('osservazione di un blocco KOP', () => {
     expect(status.get('a')).toEqual({ in: true, sta: true, out: true });
     expect(status.get('b')).toEqual({ in: true, sta: true, out: true });
     expect(status.get('q')).toEqual({ in: true, out: true });
+  });
+
+  it('box CALL: i parametri di dati hanno il valore del ciclo; quelli per puntatore restano vuoti', () => {
+    const dev = findDevice(setup().store.getState().doc!.project, DEV)!;
+    const member = (name: string, type: string) => ({ id: `m-${name}`, name, type, comment: '' });
+    const ob = dev.blocks.find((b) => b.kind === 'OB' && b.number === 1) as CodeBlock;
+    ob.networks[0]!.source = 'L 1234\nT MW 10\nL -5\nT MW 30\nCALL FC 1';
+    const fb = createCodeBlock({ kind: 'FB', number: 10, name: 'Scala', language: 'AWL' });
+    fb.interface.input.push(member('SP', 'Int'));
+    fb.interface.output.push(member('Y', 'Real'));
+    // SET; SAVE: BR = 1, l'ENO del box è 1 e la FC 3 dopo il box si esegue
+    fb.networks[0]!.source = 'L #SP\nITD\nDTR\nT #Y\nSET\nSAVE';
+    const fc3 = createCodeBlock({ kind: 'FC', number: 3, name: 'Usa', language: 'AWL' });
+    fc3.interface.input.push(member('A', 'Int'));
+    fc3.networks[0]!.source = 'L #A\nT MW 40';
+    const fc = createCodeBlock({ kind: 'FC', number: 1, name: 'Logica', language: 'KOP' });
+    const call = (id: string, instance: string, pins: Record<string, string>) => ({
+      id,
+      k: 'box' as const,
+      box: 'CALL' as const,
+      instance,
+      pins,
+      boolPins: {},
+    });
+    const lad = {
+      root: {
+        id: 'n0',
+        series: [
+          call('fb', 'FB 10, DB 10', { SP: 'MW 10', Y: 'MD 20' }),
+          call('fc', 'FC 3', { A: 'MW 30' }),
+        ],
+        outs: [],
+      },
+    };
+    fc.networks[0]!.lad = lad;
+    dev.blocks = dev.blocks.filter((b) => b.kind !== 'FC');
+    dev.blocks.push(
+      fb,
+      fc3,
+      fc,
+      createInstanceDb({ number: 10, name: 'DB10', instanceOf: 'Scala' }),
+    );
+    const cpuType = findCpu(dev.cpu.typeId)!;
+    const cpu = new SimCpu({ cpuTypeId: cpuType.id, props: PROPS });
+    let lines;
+    for (const b of dev.blocks) {
+      const r = blockToMc7File(b, dev, cpuType);
+      expect(r.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
+      cpu.loadBlock(r.file!);
+      if (b === fc) lines = r.lines;
+    }
+    cpu.setMonitor({ kind: 'FC', number: 1 });
+    cpu.run();
+    cpu.cycle();
+    expect(cpu.memory.M[40]! * 256 + cpu.memory.M[41]!).toBe(0xfffb); // FC 3 ha letto MW 30
+    const cells = monitorLinesByNetwork(lines!, cpu.monitorSnapshot()!, false).get(0)!.cells;
+    const status = networkStatus(lad, kopSources(fc, dev)[0]!.lines, cells);
+    const v = status.get('fb')!.values!;
+    expect(v.SP).toBe(1234);
+    const params = kopCallParams(fc, dev);
+    const mon = { status, hex: false, callParams: params };
+    expect(pinValues(mon, call('fb', 'FB 10, DB 10', {}))).toEqual({ SP: '1234', Y: '1234' });
+    // MW 30 passa alla FC con un puntatore: nessun passo porta il valore
+    expect(status.get('fc')!.values).toBeUndefined();
   });
 });
