@@ -85,7 +85,15 @@ class TooMany extends Error {}
  */
 export function parse(text: string): { stmts: Stmt[]; errors: SclError[] } {
   const errors: SclError[] = [];
-  const toks = lex(text, { errors });
+  // `AW1`, `EB2`: dopo `.`, come nome di parametro o di FC chiamata sono nomi, non indirizzi
+  const toks = lex(text, { errors }).map((t, i, all) =>
+    t.kind === 'addr' &&
+    (all[i - 1]?.text === '.' ||
+      all[i + 1]?.text === '(' ||
+      (['(', ','].includes(all[i - 1]?.text ?? '') && ARROWS.includes(all[i + 1]?.text ?? '')))
+      ? { ...t, kind: 'id' as const }
+      : t,
+  );
   // Su una riga con un errore del lexer, quelli del parser ne sono di solito la conseguenza.
   const lexLines = new Set(errors.map((e) => e.line));
   const record = (e: unknown) => {

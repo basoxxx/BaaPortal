@@ -269,3 +269,71 @@ describe('SCL 2.1: DATE_AND_TIME', () => {
     expect(d('d1 := DT#2090-01-01-00:00:00;')).toContain('Costante non valida');
   });
 });
+
+describe('SCL 2.1: nomi che sembrano indirizzi tedeschi e IN_OUT di periferia', () => {
+  const extra = [
+    {
+      name: 'Inc',
+      kind: 'FC' as const,
+      number: 20,
+      iface: emptyIface({ inOut: [m('v', el('Int'))], returnType: { kind: 'void' } }),
+    },
+    {
+      name: 'Scala',
+      kind: 'FC' as const,
+      number: 21,
+      iface: emptyIface({
+        input: [m('EW1', el('Int'))],
+        output: [m('AW1', el('Int'))],
+        returnType: { kind: 'void' },
+      }),
+    },
+    {
+      name: 'AW1',
+      kind: 'FC' as const,
+      number: 22,
+      iface: emptyIface({ input: [m('X', el('Int'))], returnType: el('Int') }),
+    },
+  ];
+  const withBlocks = (name: string | undefined, iface: Parameters<typeof makeCtx>[1]) => {
+    const base = makeCtx('FC', iface);
+    return {
+      ...base,
+      owner: { ...base.owner, ...(name ? { name } : {}) },
+      block: (ref: Parameters<typeof base.block>[0]) =>
+        extra.find((b) =>
+          'name' in ref ? b.name === ref.name : b.kind === ref.kind && b.number === ref.number,
+        ) ?? base.block(ref),
+    };
+  };
+  const ctx = withBlocks(
+    undefined,
+    emptyIface({
+      temp: [
+        m('x', el('Int')),
+        m('s', { kind: 'struct', members: [m('AW1', el('Int')), m('EB2', el('Byte'))] }),
+      ],
+      returnType: { kind: 'void' },
+    }),
+  );
+
+  it('una FC di nome AW2 scrive il suo valore di ritorno, non QW2', () => {
+    const own = withBlocks('AW2', emptyIface({ returnType: el('Int') }));
+    const s = ok('AW2 := 5;', own);
+    expect(s).toContain('T #RET_VAL');
+    expect(s).not.toContain('QW');
+  });
+
+  it('IN_OUT: PIW e PQW rifiutati', () => {
+    expect(diag('"Inc"(v := PQW256);', ctx)).toContain('periferia');
+    expect(diag('"Inc"(v := PIW256);', ctx)).toContain('periferia');
+    expect(ok('"Inc"(v := MW0);', ctx)).toContain('v := %MW0');
+  });
+
+  it('mnemonici tedeschi come membri, parametri e FC chiamate senza virgolette', () => {
+    expect(ok('#s.AW1 := 1; s.EB2 := B#16#2;', ctx)).toContain('#s.AW1');
+    expect(ok('"Scala"(EW1 := 5, AW1 => #x);', ctx)).toContain('AW1 := #x');
+    expect(ok('x := AW1(X := 2);', ctx)).toContain('CALL');
+    expect(ok('x := AW1(2);', ctx)).toContain('CALL');
+  });
+});

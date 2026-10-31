@@ -333,7 +333,7 @@ class Gen {
   private resolve(o: Operand, hint?: Ty, dest = false): { awl: string; ty: Ty; constant: boolean } {
     if (o.k === 'temp') return { awl: o.text, ty: o.ty as Ty, constant: false };
     if (o.k === 'addr') {
-      if (isNewAddress(o.text) && this.ownMember(o.text))
+      if (isNewAddress(o.text) && (this.ownMember(o.text) || this.ownReturn(o.text)))
         return this.resolve({ ...o, k: 'id' }, hint, dest);
       const a = parseAddress(o.text);
       if (a.area === 'PI' && dest)
@@ -367,6 +367,17 @@ class Gen {
     const i = this.ctx.owner.iface;
     return [...i.input, ...i.output, ...i.inOut, ...i.static, ...i.temp].some((x) =>
       sameName(x.name, name),
+    );
+  }
+
+  /** Il nome della FC proprietaria come valore di ritorno (`AW2 := …` in una FC `AW2`). */
+  private ownReturn(name: string): boolean {
+    const own = this.ctx.owner;
+    return (
+      own.kind === 'FC' &&
+      own.iface.returnType?.kind !== 'void' &&
+      own.name !== undefined &&
+      sameName(own.name, name)
     );
   }
 
@@ -878,7 +889,7 @@ class Gen {
         continue;
       }
       params.push(
-        `${m.name} := ${dir === 'in' ? this.actual(a.e, ty) : this.variable(a.e, ty, m.name)}`,
+        `${m.name} := ${dir === 'in' ? this.actual(a.e, ty) : this.variable(a.e, ty, m.name, dir === 'inout')}`,
       );
     }
     if (formals.every((f) => f.dir === 'in')) retParam();
@@ -942,9 +953,14 @@ class Gen {
   }
 
   /** Il parametro attuale di un'uscita o di un ingresso/uscita: una variabile del tipo giusto. */
-  private variable(e: Expr, ty: Ty, formal: string): string {
+  private variable(e: Expr, ty: Ty, formal: string, inout = false): string {
     if (!isOperand(e) || e.k === 'temp') return fail(e, `Per ${formal} serve una variabile`);
     const r = this.resolve(e, ty, true);
+    if (inout && /^P[IQ]/.test(r.awl))
+      fail(
+        e,
+        `${e.text} è periferia: ${formal} è IN_OUT, si legge e si scrive (usa una variabile)`,
+      );
     if (r.constant) fail(e, `Non si può scrivere in una costante: ${e.text}`);
     if (r.ty !== ty) mismatch(e, ty, r.ty);
     return r.awl;
@@ -979,7 +995,16 @@ class Gen {
         return h;
       }
       case 'call': {
-        if (e.name === 'LEN') return e;
+        if (e.name === 'LEN') {
+          // LEN(CONCAT(…)): la funzione e i suoi cicli prima, la lunghezza in una TEMP
+          const side = this.strSide(e.arg);
+          if (!side || !('call' in side)) return e;
+          const s = this.materialize(side, e);
+          const text = this.temp('INT');
+          this.opn(s.loc);
+          this.emit(`L ${this.at(s.loc, 'B', 1)}`, `T ${text}`);
+          return { k: 'temp', text, ty: 'INT', line: e.line, col: e.col };
+        }
         if (!CONV[e.name]) return this.hoist(this.blockCall(e));
         const c = { ...e, arg: this.hoist(e.arg) };
         if (e.name === 'S5TIME_TO_TIME' || e.name === 'TIME_TO_S5TIME') return this.s5Conv(c);

@@ -102,10 +102,9 @@ function sclEdits(
         // la chiamata di una FC senza virgolette: `Fc(…)`
         else if (t.kind === 'id' && at(i + 1) === '(' && sameName(t.text, target.oldName))
           edits.set(t, bare);
-        else if (opts.ownFc && t.kind !== 'symbol' && isLocal(i, target.oldName)) {
-          const name = IDENT.test(newName) ? newName : 'RET_VAL';
-          edits.set(t, t.kind === 'local' ? `#${name}` : name);
-        }
+        // il nome nuovo potrebbe essere una TEMP o un indirizzo (`x`, `AW2`): sempre RET_VAL
+        else if (opts.ownFc && t.kind !== 'symbol' && isLocal(i, target.oldName))
+          edits.set(t, t.kind === 'local' ? '#RET_VAL' : 'RET_VAL');
         break;
       case 'local':
         // `Nome(…)` senza `#` chiama un blocco (come in sclToAwl), anche se c'è un locale `Nome`.

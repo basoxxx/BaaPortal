@@ -212,3 +212,27 @@ describe('SCL 2.1: funzioni STRING, diagnostiche', () => {
     expect(diag('MW0 := FIND(a, MW0);')).toContain('vuole una STRING');
   });
 });
+
+describe('SCL 2.1: LEN di una funzione STRING in una condizione', () => {
+  it('la funzione si calcola prima, fuori da A( … )', () => {
+    const r = sclToAwl(
+      'M1.0 := M0.0 AND LEN(CONCAT(a, LEFT(b, "ConRet"(1.0)))) > 3;',
+      ctx,
+      tempEnd,
+    );
+    expect(r.diagnostics).toEqual([]);
+    expect(checkBlockCode([r.source], ctx, 'international')).toEqual([]);
+    const inner = r.source.slice(r.source.indexOf('A('));
+    expect(inner.slice(0, inner.indexOf('\n)'))).not.toMatch(/CALL|\bJ[A-Z]*\b|LOOP/);
+  });
+
+  it('nel simulatore', () => {
+    for (const [a, b, want] of [
+      ['ab', 'XYZ', 1],
+      ['a', 'XYZ', 0],
+    ] as const) {
+      const res = run(`M0.0 := TRUE;\nM1.0 := M0.0 AND LEN(CONCAT(a, LEFT(b, 2))) > 3;`, a, b);
+      expect(res.M[1]! & 1, `${a}+${b}`).toBe(want);
+    }
+  });
+});
